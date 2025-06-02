@@ -148,7 +148,8 @@ def recibir_data(request):
                 depend_h=depend_h,
                 desc_cred_nec=desc_cred_nec,
                 redes_soc=redes_soc,
-                fotos_prod=fotos_prod
+                fotos_prod=fotos_prod,
+                puntaje=suma_estimaciones
             )
 
             # Guardar en la base de datos
