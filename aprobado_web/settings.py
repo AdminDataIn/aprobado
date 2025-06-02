@@ -31,7 +31,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY')
 
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['aprobado.com.co', 'www.aprobado.com.co', '127.0.0.1', '.onrender.com']
+ALLOWED_HOSTS = ['aprobado.com.co', 'www.aprobado.com.co', '127.0.0.1', '.onrender.com', 'aprobado-proj.onrender.com']
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
@@ -192,3 +192,7 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
