@@ -22,7 +22,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-jcc=(5$vyhtl%1*groq3t3a!49hsj(b$4j*&w=_7yp5&_0*b^g'
+#SECRET_KEY = 'django-insecure-jcc=(5$vyhtl%1*groq3t3a!49hsj(b$4j*&w=_7yp5&_0*b^g'
+SECRET_KEY = os.environ.get('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 #DEBUG = True
@@ -32,7 +33,7 @@ DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = ['aprobado.com.co', 'www.aprobado.com.co', '127.0.0.1', '.onrender.com']
 
-OPENAI_API_KEY = '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'
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 # Application definition
 
