@@ -66,7 +66,8 @@ SITE_ID = 1
 # Configuración de autenticación
 LOGIN_URL = '/accounts/google/login/'
 #LOGIN_URL = '/accounts/login/'  # Temporalmente para ver tu template
-LOGIN_REDIRECT_URL = '/'
+#LOGIN_REDIRECT_URL = '/'
+LOGIN_REDIRECT_URL = '/usuarios/aplicar/'
 ACCOUNT_LOGOUT_REDIRECT_URL = '/usuarios/inicio/'
 
 # Configuración específica para Google
@@ -196,3 +197,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 SECURE_SSL_REDIRECT = True
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
+
+SOCIALACCOUNT_AUTO_SIGNUP = True
