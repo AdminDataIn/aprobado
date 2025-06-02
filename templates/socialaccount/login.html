@@ -1,0 +1,26 @@
+{% extends "base/base.html" %}
+{% load socialaccount %}
+
+{% block content %}
+<main class="section-main">
+    <section class="hero-section-account">
+        <div class="container-account">
+            <div class="div-card-agent-account">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                     alt="Google" style="height: 40px; margin-bottom: 1rem;">
+                <h2 class="mb-3">Inicio de sesión con Google</h2>
+                <p>Debes iniciar sesión con tu cuenta de Google para acceder al formulario de crédito</p>
+
+                <form method="post" class="form-account">
+                    {% csrf_token %}
+                    <button type="submit" class="btn-account">
+                        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                             alt="Google" style="height: 20px;">
+                        <span>Continuar con Google</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </section>
+</main>
+{% endblock %}

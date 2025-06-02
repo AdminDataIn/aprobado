@@ -1,0 +1,34 @@
+{% load static %}
+<section class="testimonial-section">
+    <div class="testimonial-container">
+        <div class="testimonial-header">
+            <p class="highlight">Empoderamos emprendedores</p>
+            <h2> Nuestro <span class="highlight-color">impacto social</span></h2>
+            <p class="description">
+                Cada crédito entregado es una historia de superación. Creemos en el poder de las mujeres emprendedoras
+                para transformar comunidades y construir un futuro con más oportunidades.
+            </p>
+        </div>
+
+        <div class="floating-icon">
+            <img src="{% static 'images/check-icon.png' %}" alt="Check"/>
+        </div>
+
+        <div class="carousel-wrapper">
+            <div class="carousel" id="testimonialCarousel">
+                <!-- Las tarjetas serán insertadas por JS -->
+            </div>
+
+            <div class="controls">
+                <button id="prevBtn" aria-label="Anterior testimonio">&#10094;</button>
+                <button id="nextBtn" aria-label="Siguiente testimonio">&#10095;</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+    const staticBaseUrl = "{% static '' %}";
+</script>
+
+<script src="{% static 'js/testimonials.js' %}"></script>

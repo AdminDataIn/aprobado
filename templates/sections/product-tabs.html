@@ -1,0 +1,91 @@
+{% load static %}
+<section class="section-productos">
+    <div class="container-productos">
+        <div class="titulo-productos">
+            <h2>
+                La <span class="highlight-cyan">alternativa segura</span> y sin complicaciones para financiar tu
+                emprendimiento.
+            </h2>
+            <p>
+                Sin importar tu historial crediticio, Aprobado te acompaña con créditos rápidos, 100% digitales y
+                diseñados para emprendedoras como tú.
+            </p>
+        </div>
+
+        <div class="tab-botones">
+            <button onclick="setTab('nanoCred_iniciales')" id="btn_nanoCred_iniciales" class="tab-btn">
+                Nanocréditos Iniciales
+            </button>
+            <button onclick="setTab('nanoCred_recurrentes')" id="btn_nanoCred_recurrentes" class="tab-btn">
+                Nanocréditos Recurrentes
+            </button>
+            <button onclick="setTab('cred_solidarios')" id="btn_cred_solidarios" class="tab-btn">
+                Créditos Solidarios
+            </button>
+        </div>
+
+        <div class="contenido-productos">
+            <!-- Contenido -->
+            <div class="contenido-texto">
+                <div id="tab_nanoCred_iniciales" class="tab-content">
+                    <h3>Nanocréditos Iniciales</h3>
+                    <p>Créditos digitales individuales de hasta $800.000, ideales para empezar o fortalecer tu negocio. Beneficios:</p>
+                    <ul>
+                        <li><span class="icono">💧</span> Sin historial crediticio ni papeleos.</li>
+                        <li><span class="icono">💳</span> 100% digital y aprobado en minutos.</li>
+                        <li><span class="icono">💡</span> Plazos flexibles y adaptados a tu flujo de caja.</li>
+                    </ul>
+                </div>
+
+                <div id="tab_nanoCred_recurrentes" class="tab-content hidden">
+                    <h3>Nanocréditos Recurrentes</h3>
+                    <p>Créditos para clientas que ya han cumplido y desean seguir creciendo, con mejores condiciones. Beneficios:</p>
+                    <ul>
+                        <li><span class="icono">💧</span> Montos mayores según tu buen comportamiento.</li>
+                        <li><span class="icono">💳</span> Tasas preferenciales y plazos más amplios.</li>
+                        <li><span class="icono">💡</span> Recompensa tu cumplimiento con acceso rápido.</li>
+                    </ul>
+                </div>
+
+                <div id="tab_cred_solidarios" class="tab-content hidden">
+                    <h3>Créditos Solidarios</h3>
+                    <p>Financiamiento para grupos de 3 o más mujeres que quieren emprender juntas, apoyándose mutuamente. Beneficios:</p>
+                    <ul>
+                        <li><span class="icono">💧</span> Montos mayores para trabajar en equipo.</li>
+                        <li><span class="icono">💳</span> Garantía compartida.</li>
+                        <li><span class="icono">💡</span> Fomenta el trabajo colaborativo y fortalece redes locales.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Imagen -->
+            <div class="contenido-imagen">
+                <img src="{% static 'images/business-man.png' %}" alt="Hombre de negocios"/>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+    function setTab(tab) {
+        const tabs = ['nanoCred_iniciales', 'nanoCred_recurrentes', 'cred_solidarios'];
+        if (!tabs.includes(tab)) return;
+
+        tabs.forEach(t => {
+            const tabContent = document.getElementById(`tab_${t}`);
+            const tabButton = document.getElementById(`btn_${t}`);
+            if (tabContent) tabContent.classList.add('hidden');
+            if (tabButton) tabButton.classList.remove('active-tab');
+        });
+
+        const selectedTab = document.getElementById(`tab_${tab}`);
+        const selectedButton = document.getElementById(`btn_${tab}`);
+        if (selectedTab) selectedTab.classList.remove('hidden');
+        if (selectedButton) selectedButton.classList.add('active-tab');
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        setTab('nanoCred_iniciales');
+    });
+
+</script>

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% load socialaccount %}
+
+{% block content %}
+<div style="max-width: 500px; margin: 2rem auto; padding: 2rem; box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 8px; text-align: center;">
+    {% if 'google' in request.path %}
+        {# Estilo para cuando viene de Google #}
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+             alt="Google" style="height: 40px; margin-bottom: 1rem;">
+        <h2 style="color: #202124; margin-bottom: 0.5rem;">Inicio de sesión con Google</h2>
+        <p style="color: #5f6368; margin-bottom: 2rem;">Para acceder al formulario de crédito</p>
+
+        <form method="post" style="margin-top: 1.5rem;">
+            {% csrf_token %}
+            <button type="submit"
+                    style="display: flex; align-items: center; justify-content: center;
+                           background: #4285F4; color: white; border: none; border-radius: 4px;
+                           padding: 12px 24px; font-size: 1rem; cursor: pointer; width: 100%;">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                     alt="Google" style="height: 20px; margin-right: 12px;">
+                Continuar con Google
+            </button>
+        </form>
+    {% else %}
+        {# Estilo para login normal (por si lo necesitas) #}
+        <h2 style="margin-bottom: 1.5rem;">Inicia sesión</h2>
+        <a href="{% provider_login_url 'google' %}"
+           style="display: inline-flex; align-items: center; padding: 10px 20px;
+                  background: #4285F4; color: white; text-decoration: none;
+                  border-radius: 4px; margin-top: 1rem;">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                 alt="Google" style="height: 20px; margin-right: 10px;">
+            Continuar con Google
+        </a>
+    {% endif %}
+</div>
+{% endblock %}

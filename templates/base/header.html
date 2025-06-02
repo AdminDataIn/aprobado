@@ -1,0 +1,186 @@
+{% load static %}
+<!--<header>-->
+<!--<nav class="navbar">
+  <div class="container">
+    <a href="/" class="logo">
+      <img src="https://cdn.prod.website-files.com/670f349587d182fd0d7e63f9/670f356dcabf0942be108962_Aprobado.png" alt="Logo" />
+    </a>
+    <ul class="nav-links">
+      {% if request.user.is_authenticated %}
+        <li><a href="#">Inicio</a></li>
+        <li><a href="{% url 'simulador' %}">Simulador</a></li>
+        <li><a href="#">Mis aplicados</a></li>
+        <li>
+          <a href="{% url 'aplicar' %}" target="_blank" class="btn">Aplicar ahora</a>
+        </li>
+        <li class="dropdown menu-us">
+          <a href="#">
+            <img alt="icon-user" class="icon-user"
+                 src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAp9JREFUSEu1lU1IFVEUx//n3Jk714W1iMigLygqCqpFVBCuLChppbVOAkEoCQoiqDYVtc6KCoI+dkERBmFEBFG0MBTERQp9UIuKiBDx4dzxzZx6r/ceM/NmnmI4u8s59/87X/cMYYE/WmB9NASIiBsGQQcB+wFsA7CmEtBnAMMCPFNaPyaiYl6guYAZ39/DRDcBrJ0lyzFm7iHXfZXllwkIrT0D4ALQOMOYYAiRk8qYK2lIHSC09hyA8/PqjUivMuZa/G4CMOP7e5no+bzE/12KmGgXaf2uqlEDiAhHQTAKYFMGYAJEpzkI+ssqjnMQRJcANKd9ReSNY0xrHaBobWlaHmVFL0Rdjtb34rbQ94+CKFGOqp2Zd5Prvi2daxlE1j4UoDMLwFovJaJfcZsUCssjx/mWWU6iPqX18QQgtPYrgJWZgCBYRs3NPxOAqamWyHW/5/RrSHne9jRgGoDJKdERR+s7iRIFQQ9EbuQAfivPW5IGTGY1rSIwIUSnlLX9IOJI6w6IXAawKAcwqTxvcRowDmD9f4xo/Op75Xnlaaw1ObT2LoDDGYAIwAhEBkH0o2wXaQHRDgBb/z5KrrsjclsZ050AFH2/nYieppzHWeQAGfMhszfWboyAgdgSLLtFUdTmNjW9TABKh9DaEQBbKmLCIuvImE+Nyia+vyEiGqv6CDDoeN7O6jm5Kqan25j5RUzwAWvdRUR+ZgYiRoLgvgCHKvaImVurj6wug0oWpU16MSb4BSJXI5Fhx5hRFAqqqNRmZi7NeS+AFTVfkWPKmOvxYPLW9dnKRp3rH6+0rk8oY/rSmTb64exjolsAVs0yuuPM3E2u+zrLb7ZfphcGQScB7ZXmry4NKYCPEBkSogGl9RMiCvOCmGsJ5v3+FhzwBzyE6xmYN6xBAAAAAElFTkSuQmCC"/>
+            <span class="name-us">{{ request.user.first_name|default:request.user.email }}</span>
+          </a>
+          <ul class="dropdown-menu">
+            <form id="logout-form" method="post" action="{% url 'account_logout' %}" style="display: none;">
+              {% csrf_token %}
+            </form>
+            <li><a href="#" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+              Cerrar sesión
+            </a></li>
+          </ul>
+        </li>
+      {% else %}
+        <li><a href="#">Inicio</a></li>
+        <li><a href="{% url 'simulador' %}">Simulador</a></li>
+        <li><a href="#">Nosotros</a></li>
+        <li><a href="#">Pagos</a></li>
+        <li><a href="#">Requisitos</a></li>
+        <li>
+          <a href="{% url 'aplicar' %}" target="_blank" class="btn">Aplicar ahora</a>
+        </li>
+      {% endif %}
+    </ul>-->
+<!-- Botón para menú móvil -->
+<!--<div class="menu-toggle" aria-label="menu" role="button" tabindex="0">
+  <span></span>
+  <span></span>
+  <span></span>
+</div>-->
+<!--</div>-->
+<!-- Script para manejar el toggle del menú móvil -->
+<!--<script type="text/javascript">
+  document.addEventListener('DOMContentLoaded', () => {
+    const menuToggle = document.querySelector('.menu-toggle');
+    const navLinks = document.querySelector('.nav-links');
+
+    menuToggle.addEventListener('click', () => {
+      navLinks.classList.toggle('active');
+      menuToggle.classList.toggle('active');
+    });
+  });
+</script>-->
+<!--</nav>-->
+<!--</header>-->
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Navbar Responsive</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<header id="navbar" class="navbar">
+    <div class="container">
+        <div class="logo-container">
+            <a href="/" class="logo-link">
+                <img src="{% static 'images/logo.png' %}" alt="Aprobado Logo" class="logo-img" id="logo-img">
+            </a>
+        </div>
+
+        <!-- Navegación desktop -->
+        <nav class="desktop-nav">
+            <a href="/" class="nav-link active">Inicio</a>
+            <a href="/productos" class="nav-link">Productos</a>
+            <a href="/nosotros" class="nav-link">Nosotros</a>
+            <a href="/alianzas" class="nav-link">Alianzas</a>
+            <a href="/blog" class="nav-link">Blog</a>
+        </nav>
+
+        <div class="actions">
+            <a href="/aplicar" class="apply-btn" id="apply-btn">Aplicar ahora</a>
+
+            <!-- Botón menú móvil -->
+            <button id="menu-toggle" class="menu-toggle">
+                <svg class="menu-icon" viewBox="0 0 24 24" width="24" height="24">
+                    <path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/>
+                </svg>
+                <span class="sr-only">Abrir menú</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Menú móvil -->
+    <div id="mobile-menu" class="mobile-menu">
+        <div class="mobile-menu-header">
+            <img src="/logo.png" alt="Aprobado Logo" class="mobile-logo">
+            <button id="close-menu" class="close-menu">&times;</button>
+        </div>
+
+        <nav class="mobile-nav">
+            <a href="/" class="mobile-nav-link active">Inicio</a>
+            <a href="/productos" class="mobile-nav-link">Productos</a>
+            <a href="/nosotros" class="mobile-nav-link">Nosotros</a>
+            <a href="/alianzas" class="mobile-nav-link">Alianzas</a>
+            <a href="/blog" class="mobile-nav-link">Blog</a>
+        </nav>
+
+        <div class="mobile-actions">
+            <a href="/aplicar" class="mobile-apply-btn">Aplicar ahora</a>
+        </div>
+    </div>
+</header>
+
+<!--<script src="script.js"></script>-->
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const navbar = document.getElementById('navbar');
+        const logoImg = document.getElementById('logo-img');
+        const applyBtn = document.getElementById('apply-btn');
+        const menuToggle = document.getElementById('menu-toggle');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const closeMenuBtn = document.getElementById('close-menu');
+
+        // Efecto de scroll
+        window.addEventListener('scroll', function () {
+            if (window.scrollY > 10) {
+                navbar.classList.add('scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
+            }
+        });
+
+        // Menú móvil
+        menuToggle.addEventListener('click', function () {
+            mobileMenu.classList.add('open');
+            // Crear overlay
+            const overlay = document.createElement('div');
+            overlay.classList.add('menu-overlay', 'open');
+            overlay.id = 'menu-overlay';
+            document.body.appendChild(overlay);
+
+            // Cerrar menú al hacer clic en overlay
+            overlay.addEventListener('click', function () {
+                mobileMenu.classList.remove('open');
+                overlay.classList.remove('open');
+                setTimeout(() => {
+                    overlay.remove();
+                }, 300);
+            });
+        });
+
+        closeMenuBtn.addEventListener('click', function () {
+            mobileMenu.classList.remove('open');
+            const overlay = document.getElementById('menu-overlay');
+            if (overlay) {
+                overlay.classList.remove('open');
+                setTimeout(() => {
+                    overlay.remove();
+                }, 300);
+            }
+        });
+
+        // Cerrar menú al hacer clic en un enlace
+        const mobileLinks = document.querySelectorAll('.mobile-nav-link');
+        mobileLinks.forEach(link => {
+            link.addEventListener('click', function () {
+                mobileMenu.classList.remove('open');
+                const overlay = document.getElementById('menu-overlay');
+                if (overlay) {
+                    overlay.classList.remove('open');
+                    setTimeout(() => {
+                        overlay.remove();
+                    }, 300);
+                }
+            });
+        });
+    });
+</script>

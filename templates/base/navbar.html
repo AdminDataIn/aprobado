@@ -1,0 +1,111 @@
+{% load static %}
+<header id="main-navbar" class="navbar">
+    <div class="container">
+        <div class="logo">
+            <a href="/">
+                <img src="{% static 'images/logo.png' %}" alt="Aprobado Logo" id="navbar-logo"/>
+            </a>
+        </div>
+
+        <!-- Desktop Navigation -->
+        <nav class="nav-links">
+            <a href="/" class="nav-link">Inicio</a>
+            <a href="{% url 'simulador' %}" class="nav-link">Simulador</a>
+            <a href="#" class="nav-link">Productos</a>
+            <a href="#" class="nav-link">Nosotros</a>
+            <a href="#" class="nav-link">Alianzas</a>
+            <a href="#" class="nav-link">Blog</a>
+            {% if request.user.is_authenticated %}
+            <a href="#" class="nav-link">Mis aplicados</a>
+            <li class="dropdown menu-us">
+                <a href="#">
+                    <img alt="icon-user" class="icon-user"
+                         src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAp9JREFUSEu1lU1IFVEUx//n3Jk714W1iMigLygqCqpFVBCuLChppbVOAkEoCQoiqDYVtc6KCoI+dkERBmFEBFG0MBTERQp9UIuKiBDx4dzxzZx6r/ceM/NmnmI4u8s59/87X/cMYYE/WmB9NASIiBsGQQcB+wFsA7CmEtBnAMMCPFNaPyaiYl6guYAZ39/DRDcBrJ0lyzFm7iHXfZXllwkIrT0D4ALQOMOYYAiRk8qYK2lIHSC09hyA8/PqjUivMuZa/G4CMOP7e5no+bzE/12KmGgXaf2uqlEDiAhHQTAKYFMGYAJEpzkI+ssqjnMQRJcANKd9ReSNY0xrHaBobWlaHmVFL0Rdjtb34rbQ94+CKFGOqp2Zd5Prvi2daxlE1j4UoDMLwFovJaJfcZsUCssjx/mWWU6iPqX18QQgtPYrgJWZgCBYRs3NPxOAqamWyHW/5/RrSHne9jRgGoDJKdERR+s7iRIFQQ9EbuQAfivPW5IGTGY1rSIwIUSnlLX9IOJI6w6IXAawKAcwqTxvcRowDmD9f4xo/Op75Xnlaaw1ObT2LoDDGYAIwAhEBkH0o2wXaQHRDgBb/z5KrrsjclsZ050AFH2/nYieppzHWeQAGfMhszfWboyAgdgSLLtFUdTmNjW9TABKh9DaEQBbKmLCIuvImE+Nyia+vyEiGqv6CDDoeN7O6jm5Kqan25j5RUzwAWvdRUR+ZgYiRoLgvgCHKvaImVurj6wug0oWpU16MSb4BSJXI5Fhx5hRFAqqqNRmZi7NeS+AFTVfkWPKmOvxYPLW9dnKRp3rH6+0rk8oY/rSmTb64exjolsAVs0yuuPM3E2u+zrLb7ZfphcGQScB7ZXmry4NKYCPEBkSogGl9RMiCvOCmGsJ5v3+FhzwBzyE6xmYN6xBAAAAAElFTkSuQmCC"/>
+                    <span class="name-us">{{ request.user.first_name|default:request.user.email }}</span>
+                </a>
+                <ul class="dropdown-menu">
+                    <form id="logout-form" method="post" action="{% url 'account_logout' %}" style="display: none;">
+                        {% csrf_token %}
+                    </form>
+                    <li><a href="#" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+                        Cerrar sesión
+                    </a></li>
+                </ul>
+            </li>
+            {% endif %}
+        </nav>
+
+        <!-- Buttons & Mobile Menu Toggle -->
+        <div class="navbar-right">
+            {% if not request.user.is_authenticated %}
+                <a href="{% url 'aplicar' %}" class="btn btn-apply">Aplicar ahora</a>
+            {% endif %}
+            <button id="menu-toggle" class="menu-toggle" aria-label="Abrir menú">
+                &#9776;
+            </button>
+        </div>
+    </div>
+
+    <!-- Mobile Menu Sheet -->
+    <div id="mobile-menu" class="mobile-menu">
+        <div class="mobile-menu-header">
+            <img src="/static/images/logo.png" alt="Aprobado Logo"/>
+            <button id="menu-close" class="menu-close">&times;</button>
+        </div>
+        <nav class="mobile-nav-links">
+            <a href="/" class="mobile-nav-link">Inicio</a>
+            <a href="{% url 'simulador' %}" class="nav-link">Simulador</a>
+            <a href="#" class="mobile-nav-link">Productos</a>
+            <a href="#" class="mobile-nav-link">Nosotros</a>
+            <a href="#" class="mobile-nav-link">Alianzas</a>
+            <a href="#" class="mobile-nav-link">Blog</a>
+            {% if request.user.is_authenticated %}
+            <a href="#" class="mobile-nav-link">Mis aplicados</a>
+            <a href="#" class="mobile-nav-link"
+               onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+                Cerrar sesión
+            </a>
+            {% endif %}
+        </nav>
+        <div class="mobile-apply">
+            <a href="{% url 'aplicar' %}" class="btn btn-apply-full">Aplicar ahora</a>
+        </div>
+    </div>
+</header>
+
+<script>
+    // navbar.js
+    document.addEventListener("DOMContentLoaded", function () {
+        const navbar = document.getElementById("main-navbar");
+        const mobileMenu = document.getElementById("mobile-menu");
+        const menuToggle = document.getElementById("menu-toggle");
+        const menuClose = document.getElementById("menu-close");
+
+        // Scroll effect
+        window.addEventListener("scroll", function () {
+            if (window.scrollY > 10) {
+                navbar.classList.add("scrolled");
+            } else {
+                navbar.classList.remove("scrolled");
+            }
+        });
+
+        // Open menu
+        menuToggle.addEventListener("click", function () {
+            mobileMenu.classList.add("open");
+        });
+
+        // Close menu
+        menuClose.addEventListener("click", function () {
+            mobileMenu.classList.remove("open");
+        });
+
+        // Close menu when clicking any link inside it
+        document.querySelectorAll(".mobile-nav-link").forEach((link) => {
+            link.addEventListener("click", function () {
+                mobileMenu.classList.remove("open");
+            });
+        });
+    });
+
+</script>

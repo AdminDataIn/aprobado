@@ -1,0 +1,26 @@
+{% load static %}
+<section class="section-faqs">
+  <div class="container-faqs">
+    <div class="faq-header">
+      <h2>
+        Algunas <span class="highlight-cyan">preguntas frecuentes</span>
+      </h2>
+    </div>
+
+    <!-- Tabs de categorías -->
+    <div class="faq-tabs">
+      <button class="tab-button active" data-category="general">General</button>
+      <button class="tab-button" data-category="financiacion">Financiación</button>
+      <button class="tab-button" data-category="seguridad">Seguridad</button>
+      <button class="tab-button" data-category="intereses">Intereses</button>
+      <button class="tab-button" data-category="ayudas">Ayudas</button>
+    </div>
+
+    <!-- Grid de FAQs -->
+    <div class="faq-grid" id="faq-grid">
+      <!-- Se llenará dinámicamente desde JS -->
+    </div>
+  </div>
+</section>
+
+<script src="{% static 'js/faqs.js' %}"></script>

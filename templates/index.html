@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <title>Aprobado</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+    <!--<script src="{% static 'usuarios/Js/configApp.js' %}"></script>-->
+</head>
+
+<body>
+    {% include 'base/navbar.html' %}
+
+    {% include 'sections/hero.html' %}
+
+    {% include 'sections/product-tabs.html' %}
+
+    {% include 'sections/features-grid.html' %}
+
+    {% include 'sections/testimonials-carousel.html' %}
+
+    {% include 'sections/faq-section.html' %}
+
+    {% include 'sections/cta-section.html' %}
+
+    {% include 'base/footer.html' %}
+
+</body>
+</html>

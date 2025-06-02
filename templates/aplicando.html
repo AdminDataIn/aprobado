@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <title>Aprobado</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+</head>
+
+<body class="body-index">
+<div class="div-body-main">
+    {% include 'base/navbar.html' %}
+
+    <main class="form-container">
+        <div class="form-content">
+            <!-- Panel lateral con pasos -->
+            <div class="form-sidebar">
+                <div class="form-title">
+                    <h1>Solicitud de crédito</h1>
+                    <p>Rellena el formulario para iniciar tu solicitud de crédito.</p>
+                </div>
+
+                <div class="step-list">
+                    <!-- Paso 1 -->
+                    <div class="step-item">
+                        <div class="step-content">
+                            <div class="step-number active" id="step-indicator-1">1</div>
+                            <div class="step-name active">Información del Crédito</div>
+                        </div>
+                        <div class="step-connector"></div>
+                    </div>
+
+                    <!-- Paso 2 -->
+                    <div class="step-item">
+                        <div class="step-content">
+                            <div class="step-number inactive" id="step-indicator-2">2</div>
+                            <div class="step-name inactive">Información Personal</div>
+                        </div>
+                        <div class="step-connector"></div>
+                    </div>
+
+                    <!-- Paso 3 -->
+                    <div class="step-item">
+                        <div class="step-content">
+                            <div class="step-number inactive" id="step-indicator-3">3</div>
+                            <div class="step-name inactive">Información del Negocio</div>
+                        </div>
+                        <div class="step-connector"></div>
+                    </div>
+
+                    <!-- Paso 4 -->
+                    <div class="step-item">
+                        <div class="step-content">
+                            <div class="step-number inactive" id="step-indicator-4">4</div>
+                            <div class="step-name inactive">Referencias</div>
+                        </div>
+                        <div class="step-connector"></div>
+                    </div>
+
+                    <!-- Paso 5 -->
+                    <div class="step-item">
+                        <div class="step-content">
+                            <div class="step-number inactive" id="step-indicator-5">5</div>
+                            <div class="step-name inactive">Validaciones y Perfil</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contenido principal del formulario -->
+            <div class="form-main">
+                <form id="formularioCredito" method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+
+                    <!-- Paso 1: Información del Crédito -->
+                    <div class="form-step active" id="step-1">
+                        <h2 class="step-title">Información del Crédito</h2>
+
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label for="valor_cred" class="form-label required">Valor crédito solicitado:</label>
+                                <input type="text" id="valor_cred" name="valor_cred" class="form-input" required>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="plazo" class="form-label required">Plazo:</label>
+                                <select id="plazo" name="plazo" class="form-select" required>
+                                    <option value="">Seleccione una opción</option>
+                                    <option value="1">1 mes</option>
+                                    <option value="2">2 meses</option>
+                                    <option value="3">3 meses</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <div></div> <!-- Espacio vacío para alinear el botón a la derecha -->
+                            <button type="button" class="form-button next" onclick="nextStep(1)">Siguiente</button>
+                        </div>
+                    </div>
+
+                    <!-- Paso 2: Información Personal -->
+                    <div class="form-step" id="step-2">
+                        <h2 class="step-title">Información Personal</h2>
+
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label for="nombre" class="form-label required">Nombres y apellidos:</label>
+                                <input type="text" id="nombre" name="nombre" class="form-input" required>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="numero_cedula" class="form-label required">Número de cédula:</label>
+                                <input type="text" id="numero_cedula" name="numero_cedula" class="form-input" required>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="fecha_nac" class="form-label required">Fecha de nacimiento:</label>
+                                <input type="date" id="fecha_nac" name="fecha_nac" class="form-input" required>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="celular_wh" class="form-label required">Celular (WhatsApp):</label>
+                                <input type="text" id="celular_wh" name="celular_wh" class="form-input" required>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="direccion" class="form-label required">Dirección:</label>
+                                <input type="text" id="direccion" name="direccion" class="form-input" required>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="estado_civil" class="form-label required">Estado civil:</label>
+                                <select id="estado_civil" name="estado_civil" class="form-select" required>
+                                    <option value="">Seleccione una opción</option>
+                                    <option value="Soltero">Soltero</option>
+                                    <option value="Unión Libre">Unión Libre</option>
+                                    <option value="Casado">Casado</option>
+                                    <option value="Divorciado">Divorciado</option>
+                                    <option value="Viudo">Viudo</option>
+                                </select>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="numero_personas_cargo" class="form-label required">Número de persona a cargo:</label>
+                                <select id="numero_personas_cargo" name="numero_personas_cargo" class="form-select" required>
+                                    <option value="">Seleccione una opción</option>
+                                    <option value="0">0</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="form-button previous" onclick="previousStep(2)">Anterior</button>
+                            <button type="button" class="form-button next" onclick="nextStep(2)">Siguiente</button>
+                        </div>
+                    </div>
+
+                    <!-- Paso 3: Información del Negocio -->
+                    <div class="form-step" id="step-3">
+                        <h2 class="step-title">Información del Negocio</h2>
+
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label for="nombre_negocio" class="form-label required">Nombre del negocio:</label>
+                                <input type="text" id="nombre_negocio" name="nombre_negocio" class="form-input" required>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="ubicacion_negocio" class="form-label required">Ubicación del negocio:</label>
+                                <select id="ubicacion_negocio" name="ubicacion_negocio" class="form-select" required>
+                                    <option value="">Seleccione una opción</option>
+                                    <option value="Casa">Casa</option>
+                                    <option value="Calle">Calle</option>
+                                    <option value="Local">Local</option>
+                                </select>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="tiempo_operando" class="form-label required">Tiempo operando:</label>
+                                <select id="tiempo_operando" name="tiempo_operando" class="form-select" required>
+                                    <option value="">Seleccione una opción</option>
+                                    <option value="Menor un año">Menor un año</option>
+                                    <option value="Mayor a un año">Mayor a un año</option>
+                                </select>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="dias_trabajados_sem" class="form-label required">Días trabajados a la semana:</label>
+                                <input type="text" id="dias_trabajados_sem" name="dias_trabajados_sem" class="form-input" required>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="prod_serv_ofrec" class="form-label required">Productos o servicios ofrecidos:</label>
+                                <input type="text" id="prod_serv_ofrec" name="prod_serv_ofrec" class="form-input" required>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="ingresos_prom_mes" class="form-label required">Ingresos promedio mensuales:</label>
+                                <select id="ingresos_prom_mes" name="ingresos_prom_mes" class="form-select" required>
+                                    <option value="">Seleccione una opción</option>
+                                    <option value="Menor a ($1,000,000)">Menor a ($1,000,000)</option>
+                                    <option value="($1,000,000 - $2,000,000)">($1,000,000 - $2,000,000)</option>
+                                    <option value="($2,000,000 - $3,000,000)">($2,000,000 - $3,000,000)</option>
+                                    <option value="Más de $3.000.000">Más de $3.000.000</option>
+                                </select>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="cli_aten_day" class="form-label required">Cuántos clientes atiende al día?</label>
+                                <input type="text" id="cli_aten_day" name="cli_aten_day" class="form-input" required>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="inventario" class="form-label required">¿Tiene inventario actualmente?</label>
+                                <select id="inventario" name="inventario" class="form-select" required>
+                                    <option value="">Seleccione una opción</option>
+                                    <option value="Si">Si</option>
+                                    <option value="No">No</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="form-button previous" onclick="previousStep(3)">Anterior</button>
+                            <button type="button" class="form-button next" onclick="nextStep(3)">Siguiente</button>
+                        </div>
+                    </div>
+
+                    <!-- Paso 4: Referencias -->
+                    <div class="form-step" id="step-4">
+                        <h2 class="step-title">Referencias</h2>
+
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label for="nomb_ref_per1" class="form-label required">Nombres y Apellidos (Referencia personal):</label>
+                                <input type="text" id="nomb_ref_per1" name="nomb_ref_per1" class="form-input" required>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="cel_ref_per1" class="form-label required">Celular (Referencia personal):</label>
+                                <input type="text" id="cel_ref_per1" name="cel_ref_per1" class="form-input" required>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="rel_ref_per1" class="form-label required">Relación (Referencia personal):</label>
+                                <input type="text" id="rel_ref_per1" name="rel_ref_per1" class="form-input" required>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="nomb_ref_cl1" class="form-label required">Nombres y Apellidos (Referencia cliente/vecino):</label>
+                                <input type="text" id="nomb_ref_cl1" name="nomb_ref_cl1" class="form-input" required>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="cel_ref_cl1" class="form-label required">Celular (Referencia cliente/vecino):</label>
+                                <input type="text" id="cel_ref_cl1" name="cel_ref_cl1" class="form-input" required>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="rel_ref_cl1" class="form-label required">Relación (Referencia cliente/vecino):</label>
+                                <input type="text" id="rel_ref_cl1" name="rel_ref_cl1" class="form-input" required>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="ref_conoc_lid_com" class="form-label required">¿Te conoce alguna líder comunitaria?</label>
+                                <select id="ref_conoc_lid_com" name="ref_conoc_lid_com" class="form-select" required>
+                                    <option value="">Seleccione una opción</option>
+                                    <option value="Si">Si</option>
+                                    <option value="No">No</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="form-button previous" onclick="previousStep(4)">Anterior</button>
+                            <button type="button" class="form-button next" onclick="nextStep(4)">Siguiente</button>
+                        </div>
+                    </div>
+
+                    <!-- Paso 5: Validaciones y Perfil -->
+                    <div class="form-step" id="step-5">
+                        <h2 class="step-title">Validaciones y Perfil</h2>
+
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label for="fotos_neg" class="form-label required">Sube foto del negocio:</label>
+                                <div class="file-input-container">
+                                    <input type="file" id="fotos_neg" name="fotos_neg" class="form-input" accept=".pdf, application/pdf" required>
+                                    <span class="file-input-info">Solo se permiten archivos PDF</span>
+                                </div>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="desc_fotos_neg" class="form-label required">¿Qué se ve en la foto?(Descripción breve)</label>
+                                <textarea id="desc_fotos_neg" name="desc_fotos_neg" class="form-textarea" required></textarea>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="tipo_cta_mno" class="form-label required">¿Usas Nequi, Daviplata o Movii?</label>
+                                <select id="tipo_cta_mno" name="tipo_cta_mno" class="form-select" required>
+                                    <option value="">Seleccione una opción</option>
+                                    <option value="Nequi">Nequi</option>
+                                    <option value="Daviplata">Daviplata</option>
+                                    <option value="Movii">Movii</option>
+                                    <option value="No uso">No uso</option>
+                                </select>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="ahorro_tand_alc" class="form-label required">¿Ahorras en tandas, alcancías u otro medio?</label>
+                                <select id="ahorro_tand_alc" name="ahorro_tand_alc" class="form-select" required>
+                                    <option value="">Seleccione una opción</option>
+                                    <option value="Si">Si</option>
+                                    <option value="No">No</option>
+                                </select>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="depend_h" class="form-label required">¿Tienes hijos o dependientes?</label>
+                                <select id="depend_h" name="depend_h" class="form-select" required>
+                                    <option value="">Seleccione una opción</option>
+                                    <option value="Si">Si</option>
+                                    <option value="No">No</option>
+                                </select>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="desc_cred_nec" class="form-label required">¿Por qué necesitas este crédito?</label>
+                                <textarea id="desc_cred_nec" name="desc_cred_nec" class="form-textarea" required></textarea>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="redes_soc" class="form-label required">¿Tienes Facebook o Instagram del negocio?</label>
+                                <select id="redes_soc" name="redes_soc" class="form-select" required>
+                                    <option value="">Seleccione una opción</option>
+                                    <option value="Si">Si</option>
+                                    <option value="No">No</option>
+                                </select>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="fotos_prod" class="form-label required">¿Has publicado fotos de tus productos?</label>
+                                <select id="fotos_prod" name="fotos_prod" class="form-select" required>
+                                    <option value="">Seleccione una opción</option>
+                                    <option value="Si">Si</option>
+                                    <option value="No">No</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Términos y condiciones -->
+                        <div class="terms-container">
+                            <div class="terms-content">
+                                <input type="checkbox" id="terms" required>
+                                <label for="terms" class="terms-text">
+                                    Acepto los <a href="#" class="terms-link">términos y condiciones</a> y autorizo el tratamiento de mis datos personales de acuerdo con la <a href="#" class="terms-link">política de privacidad</a>.
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="form-button previous" onclick="previousStep(5)">Anterior</button>
+                            <button type="submit" class="form-button submit">Enviar Solicitud</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    {% include 'base/footer.html' %}
+    
+</div>
+
+<!-- Modal -->
+<div id="modalMensaje" class="div-prin-modal">
+    <div class="modal-contenido">
+        <span class="close-span" id="cerrarModal">&times;</span>
+        <div class="div-log-mod">
+            <a href="/" class="logo">
+                <img src="https://cdn.prod.website-files.com/670f349587d182fd0d7e63f9/670f356dcabf0942be108962_Aprobado.png"
+                     alt="Logo"/>
+            </a>
+        </div>
+        <p id="mensajeModal"></p>
+    </div>
+</div>
+
+<script>
+// Función para manejar la navegación entre pasos
+function nextStep(currentStep) {
+    // Validar campos requeridos del paso actual
+    const step = document.getElementById(`step-${currentStep}`);
+    const requiredFields = step.querySelectorAll('[required]');
+    let isValid = true;
+
+    requiredFields.forEach(field => {
+        if (!field.value.trim()) {
+            field.style.borderColor = 'red';
+            isValid = false;
+
+            // Mostrar mensaje de error si no existe
+            if (!field.nextElementSibling || !field.nextElementSibling.classList.contains('error-message')) {
+                const errorMessage = document.createElement('div');
+                errorMessage.className = 'error-message';
+                errorMessage.textContent = 'Este campo es requerido';
+                field.parentNode.insertBefore(errorMessage, field.nextSibling);
+            }
+        } else {
+            field.style.borderColor = '';
+            // Eliminar mensaje de error si existe
+            if (field.nextElementSibling && field.nextElementSibling.classList.contains('error-message')) {
+                field.nextElementSibling.remove();
+            }
+        }
+    });
+
+    if (!isValid) {
+        return;
+    }
+
+    // Ocultar paso actual
+    step.classList.remove('active');
+
+    // Mostrar siguiente paso
+    const nextStep = currentStep + 1;
+    document.getElementById(`step-${nextStep}`).classList.add('active');
+
+    // Actualizar indicadores de pasos
+    updateStepIndicators(currentStep, nextStep);
+
+    // Guardar datos en localStorage
+    saveFormData();
+}
+
+function previousStep(currentStep) {
+    // Ocultar paso actual
+    document.getElementById(`step-${currentStep}`).classList.remove('active');
+
+    // Mostrar paso anterior
+    const prevStep = currentStep - 1;
+    document.getElementById(`step-${prevStep}`).classList.add('active');
+
+    // Actualizar indicadores de pasos
+    updateStepIndicators(currentStep, prevStep);
+}
+
+function updateStepIndicators(currentStep, newStep) {
+    // Resetear todos los indicadores a inactive
+    for (let i = 1; i <= 5; i++) {
+        const indicator = document.getElementById(`step-indicator-${i}`);
+        const name = indicator.parentElement.nextElementSibling;
+
+        indicator.classList.remove('active', 'completed');
+        indicator.classList.add('inactive');
+        name.classList.remove('active');
+        name.classList.add('inactive');
+    }
+
+    // Marcar pasos anteriores como completados
+    for (let i = 1; i < newStep; i++) {
+        const indicator = document.getElementById(`step-indicator-${i}`);
+        const name = indicator.parentElement.nextElementSibling;
+
+        indicator.classList.remove('inactive');
+        indicator.classList.add('completed');
+        name.classList.remove('inactive');
+        name.classList.add('active');
+    }
+
+    // Marcar paso actual como activo
+    const newIndicator = document.getElementById(`step-indicator-${newStep}`);
+    const newName = newIndicator.parentElement.nextElementSibling;
+
+    newIndicator.classList.remove('inactive', 'completed');
+    newIndicator.classList.add('active');
+    newName.classList.remove('inactive');
+    newName.classList.add('active');
+}
+
+function saveFormData() {
+    if (typeof(Storage) !== "undefined") {
+        const formData = {};
+        const form = document.getElementById('formularioCredito');
+        const inputs = form.querySelectorAll('input, select, textarea');
+
+        inputs.forEach(input => {
+            if (input.type !== 'submit' && input.type !== 'button') {
+                formData[input.name] = input.value;
+            }
+        });
+
+        localStorage.setItem('formularioCreditoData', JSON.stringify(formData));
+    }
+}
+
+function loadFormData() {
+    if (typeof(Storage) !== "undefined") {
+        const savedData = localStorage.getItem('formularioCreditoData');
+        if (savedData) {
+            const formData = JSON.parse(savedData);
+            const form = document.getElementById('formularioCredito');
+
+            for (const name in formData) {
+                const input = form.querySelector(`[name="${name}"]`);
+                if (input) {
+                    // Manejar casos especiales para checkboxes y radios
+                    if (input.type === 'checkbox' || input.type === 'radio') {
+                        input.checked = formData[name] === 'on';
+                    } else {
+                        input.value = formData[name];
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Cargar datos guardados al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+    loadFormData();
+
+    const formulario = document.getElementById('formularioCredito');
+    const modal = document.getElementById("modalMensaje");
+    const closeButton = document.getElementById("cerrarModal");
+
+    if (!formulario) {
+        console.error('No se encontró el formulario con ID "formularioCredito"');
+        return;
+    }
+
+    formulario.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (validarFormularioCompleto()) {
+            enviarFormulario();
+        }
+    });
+
+    function validarFormularioCompleto() {
+        const camposRequeridos = formulario.querySelectorAll('[required]');
+        let valido = true;
+
+        camposRequeridos.forEach(campo => {
+            // Ignorar campos ocultos (de otros pasos)
+            if (campo.closest('.form-step') && !campo.closest('.form-step').classList.contains('active')) {
+                return;
+            }
+
+            if (!campo.value.trim() && campo.type !== 'file') {
+                mostrarError(campo, 'Este campo es requerido');
+                valido = false;
+            } else if (campo.type === 'file' && campo.files.length === 0) {
+                mostrarError(campo, 'Debes subir un archivo');
+                valido = false;
+            } else {
+                limpiarError(campo);
+            }
+        });
+
+        // Validar checkbox de términos
+        const termsCheckbox = document.getElementById('terms');
+        if (!termsCheckbox.checked) {
+            mostrarError(termsCheckbox, 'Debes aceptar los términos y condiciones');
+            valido = false;
+        } else {
+            limpiarError(termsCheckbox);
+        }
+
+        return valido;
+    }
+
+    function mostrarError(campo, mensaje) {
+        campo.style.borderColor = 'red';
+        let errorElement = campo.nextElementSibling;
+
+        // Si es un checkbox, el mensaje va después del label
+        if (campo.type === 'checkbox') {
+            errorElement = campo.closest('.terms-content').nextElementSibling;
+            if (!errorElement || !errorElement.classList.contains('error-message')) {
+                errorElement = document.createElement('div');
+                errorElement.className = 'error-message';
+                campo.closest('.terms-container').appendChild(errorElement);
+            }
+        }
+        // Para otros campos
+        else if (!errorElement || !errorElement.classList.contains('error-message')) {
+            errorElement = document.createElement('div');
+            errorElement.className = 'error-message';
+            campo.parentNode.insertBefore(errorElement, campo.nextSibling);
+        }
+
+        errorElement.textContent = mensaje;
+    }
+
+    function limpiarError(campo) {
+        campo.style.borderColor = '';
+        let errorElement;
+
+        if (campo.type === 'checkbox') {
+            errorElement = campo.closest('.terms-content').nextElementSibling;
+        } else {
+            errorElement = campo.nextElementSibling;
+        }
+
+        if (errorElement && errorElement.classList.contains('error-message')) {
+            errorElement.remove();
+        }
+    }
+
+    function enviarFormulario() {
+        const submitButton = formulario.querySelector('button[type="submit"]');
+        submitButton.disabled = true;
+        submitButton.textContent = 'Enviando...';
+
+        const formData = new FormData(formulario);
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        formData.append('user_id', '{{ user.id }}');
+
+        fetch('/configuraciones/recibir_data/', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+        })
+        .then(response => {
+            if (response.status === 403) {
+                window.location.reload();
+                return Promise.reject('Authentication required');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                const suma_estimaciones = data.suma_estimaciones || 0;
+                let mensaje = "Tu solicitud ha sido procesada.";
+
+                if (suma_estimaciones >= 40 && suma_estimaciones <= 59) {
+                    mensaje = "💜Riesgo alto — Rechazo temporal + Orientación\n\nSabemos que emprender no es fácil...";
+                } else if (suma_estimaciones >= 60 && suma_estimaciones <= 79) {
+                    mensaje = "💛Riesgo medio — Aprobación limitada / Validación adicional\n\n¡Gracias por confiar en nosotros!";
+                } else if (suma_estimaciones > 79) {
+                    mensaje = "💖Felicidades! Tu crédito ha sido aprobado ✨\n\nPronto llegará a tu correo la formalización.";
+                }
+
+                mostrarModal(mensaje);
+
+                // Limpiar el formulario después de enviar exitosamente
+                formulario.reset();
+                localStorage.removeItem('formularioCreditoData');
+            } else {
+                alert('Error en la solicitud: ' + (data.error || 'Error desconocido'));
+            }
+        })
+        .catch(error => {
+            if (error !== 'Authentication required') {
+                console.error('Error:', error);
+                alert('Ocurrió un error al enviar el formulario: ' + error.message);
+            }
+        })
+        .finally(() => {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Enviar Solicitud';
+        });
+    }
+
+    function mostrarModal(mensaje) {
+        document.getElementById("mensajeModal").textContent = mensaje;
+        document.getElementById("modalMensaje").style.display = "flex";
+
+        // Desplazarse al modal
+        document.getElementById("modalMensaje").scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function cerrarModal() {
+        modal.style.display = "none";
+    }
+
+    closeButton.addEventListener("click", cerrarModal);
+
+    // Cerrar modal al hacer clic fuera del contenido
+    modal.addEventListener("click", function(e) {
+        if (e.target === modal) {
+            cerrarModal();
+        }
+    });
+});
+</script>
+
+</body>
+</html>

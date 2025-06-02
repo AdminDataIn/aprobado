@@ -1,0 +1,86 @@
+{% load static %}
+<section class="section-features">
+    <div class="container-features">
+        <div class="features-header">
+            <h2>
+                Impulsamos y respaldamos tu negocio con un sistema
+                <span class="highlight-cyan">práctico y eficiente</span>.
+            </h2>
+        </div>
+
+        <div class="features-grid">
+            <!-- Columna izquierda -->
+            <div class="features-col">
+                <!-- Card 1 -->
+                <div class="feature-card card-with-image">
+                    <div class="card-text">
+                        <h3>Asesoramiento experto y soporte</h3>
+                        <p>
+                            Te acompañamos en cada paso para que nunca estés sola en tu camino financiero.
+                        </p>
+                    </div>
+                    <div class="card-image">
+                        <img src="{% static 'images/advisor.png' %}" alt="Asesoramiento experto">
+                    </div>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="feature-card">
+                    <h3>Microcrédito adaptado para tu negocio</h3>
+                    <p>
+                        Flexible, rápido y sin complicaciones, justo como lo necesitas para crecer.
+                    </p>
+                </div>
+
+                <!-- Card 4 -->
+                <div class="feature-card feature-card-dark">
+                    <h3>
+                        Tus datos siempre <span class="highlight-yellow">protegidos</span>
+                    </h3>
+                    <div class="icon-protection">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                             class="lucide lucide-fingerprint">
+                            <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"></path>
+                            <path d="M14 13.12c0 2.38 0 6.38-1 8.88"></path>
+                            <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"></path>
+                            <path d="M2 12a10 10 0 0 1 18-6"></path>
+                            <path d="M2 16h.01"></path>
+                            <path d="M21.8 16c.2-2 .131-5.354 0-6"></path>
+                            <path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"></path>
+                            <path d="M8.65 22c.21-.66.45-1.32.57-2"></path>
+                            <path d="M9 6.8a6 6 0 0 1 9 5.2v2"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna derecha -->
+            <div class="features-col">
+                <!-- Card 2 -->
+                <div class="feature-card">
+                    <div class="img-top">
+                        <img src="{% static 'images/approval-process.png' %}" alt="Proceso de aprobación">
+                    </div>
+                    <h3>Proceso de aprobación rápido</h3>
+                    <p>
+                        Solicita hoy y recibe respuesta en minutos, sin papeleo ni filas.
+                    </p>
+                </div>
+
+                <!-- Card 5 -->
+                <div class="feature-card card-with-image">
+                    <div class="card-text">
+                        <h3>Facilidades de pago y tiempos</h3>
+                        <p>
+                            Elige el plazo que mejor se ajuste a tu negocio y paga a tu ritmo, sin presiones.
+                        </p>
+                    </div>
+                    <div class="card-image">
+                        <img src="{% static 'images/payment-facilities.png' %}" alt="Facilidades de pago">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

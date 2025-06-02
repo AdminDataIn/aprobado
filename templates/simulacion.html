@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aprobado</title>
+    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>
+<body class="body-index">
+<div class="div-body-main">
+    {% include 'base/navbar.html' %}
+
+    <main class="simulador-main">
+        <section class="simulador-hero-section">
+            <div class="simulador-container">
+                <div class="simulador-hero">
+                    <div class="simulador-text-content">
+                        <h1>Una solución financiera segura para tu negocio</h1>
+                        <p>Accede a financiamiento ágil y confiable, diseñado específicamente para las necesidades de tu
+                            negocio, sin trámites complicados.</p>
+                        <a href="{% url 'aplicar' %}" target="_blank" class="simulador-cta-button">Aplicar ahora</a>
+                    </div>
+
+                    <div class="simulador-card">
+                        <form action="#" class="simulador-form">
+                            <div class="simulador-form-step active">
+                                <!-- Primer slider - Monto del crédito -->
+                                <div class="simulador-slider-container">
+                                    <div class="simulador-slider-title">¿Cuánto necesitas?</div>
+                                    <div class="simulador-range-container">
+                                        <div class="simulador-range-progress" id="simulador-progress-1"></div>
+                                        <input type="range" min="200000" max="800000" step="10000" value="500000"
+                                               class="simulador-range-input" id="simulador-range-1">
+                                        <div class="simulador-range-tooltip" id="simulador-tooltip-1">$ 500.000</div>
+                                    </div>
+                                    <div class="simulador-range-labels">
+                                        <span>$ 200.000</span>
+                                        <span>$ 800.000</span>
+                                    </div>
+                                </div>
+
+                                <!-- Segundo slider - Plazo (1-3 meses) -->
+                                <div class="simulador-slider-container">
+                                    <div class="simulador-slider-title">¿Cuándo lo puedes pagar?</div>
+                                    <div class="simulador-range-container">
+                                        <div class="simulador-range-progress" id="simulador-progress-2"></div>
+                                        <input type="range" min="1" max="3" step="1" value="2"
+                                               class="simulador-range-input" id="simulador-range-2">
+                                        <div class="simulador-range-tooltip" id="simulador-tooltip-2">2 meses</div>
+                                    </div>
+                                    <div class="simulador-range-labels">
+                                        <span>1 mes</span>
+                                        <span>3 meses</span>
+                                    </div>
+                                </div>
+
+                                <!-- Resultados del cálculo -->
+                                <div class="simulador-results-container">
+                                    <div class="simulador-result-row">
+                                        <label for="total-pr" class="simulador-result-label">Total de préstamo:</label>
+                                        <input type="text" id="total-pr" name="total-pr" value="500.000,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label for="cuotaAdIva" class="simulador-result-label">Cuota de administración +
+                                            IVA:</label>
+                                        <input type="text" id="cuotaAdIva" name="cuotaAdIva" value="71.400,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label for="afianzad" class="simulador-result-label">Afianzadora:</label>
+                                        <input type="text" id="afianzad" name="afianzad" value="25.000,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label for="valCuota" class="simulador-result-label">Cuota mensual:</label>
+                                        <input type="text" id="valCuota" name="valCuota" value="298.200,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label for="totalPag" class="simulador-result-label">Total a pagar:</label>
+                                        <input type="text" id="totalPag" name="totalPag" value="596.400,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    {% include 'base/footer.html' %}
+
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        // Elementos de resultado
+        const totalPrestamoInput = document.getElementById("total-pr");
+        const cuotaAdIvaInput = document.getElementById("cuotaAdIva");
+        const afianzadInput = document.getElementById("afianzad");
+        const totalPagInput = document.getElementById("totalPag");
+        const valCuotaInput = document.getElementById("valCuota");
+
+        // Configuración del primer slider (monto)
+        const slider1 = document.getElementById("simulador-range-1");
+        const tooltip1 = document.getElementById("simulador-tooltip-1");
+        const progress1 = document.getElementById("simulador-progress-1");
+
+        // Configuración del segundo slider (plazo) - 1 a 3 meses
+        const slider2 = document.getElementById("simulador-range-2");
+        const tooltip2 = document.getElementById("simulador-tooltip-2");
+        const progress2 = document.getElementById("simulador-progress-2");
+
+        // Función para formatear números al estilo colombiano (1.000.000,00)
+        function formatColombianNumber(num) {
+            return new Intl.NumberFormat('es-CO', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(num);
+        }
+
+        // Función para resaltar cambios en los inputs
+        function highlightChange(element) {
+            element.classList.add('changed');
+            setTimeout(() => {
+                element.classList.remove('changed');
+            }, 1000);
+        }
+
+// Actualización del primer slider (monto)
+        function updateSlider1() {
+            const minVal = parseFloat(slider1.min);
+            const maxVal = parseFloat(slider1.max);
+            const val = parseFloat(slider1.value);
+
+            // Calcular porcentaje (0-100)
+            const percent = ((val - minVal) / (maxVal - minVal)) * 100;
+
+            // Calcular posición del tooltip (ajustado para no salir de los límites)
+            const tooltipPosition = Math.max(5, Math.min(percent, 95)); // Limitar entre 5% y 95%
+
+            // Formatear el valor para el tooltip
+            tooltip1.innerText = `$ ${formatColombianNumber(val)}`;
+
+            // Posicionar el tooltip (centrado exactamente sobre el thumb)
+            tooltip1.style.left = `${percent}%`;
+            tooltip1.style.transform = 'translateX(-50%)'; // Centrar el tooltip
+
+            // Actualizar el progress (hasta la posición del thumb)
+            progress1.style.width = `${percent}%`;
+
+            // Actualizar cálculos
+            actualizarCalculos();
+        }
+
+        // Actualización del segundo slider (plazo)
+        function updateSlider2() {
+            const val = slider2.value;
+            const percent = ((val - slider2.min) / (slider2.max - slider2.min)) * 100;
+
+            tooltip2.innerText = `${val} ${val === "1" ? "mes" : "meses"}`;
+            tooltip2.style.left = `calc(${percent}% - 20px)`;
+            progress2.style.width = `${percent}%`;
+
+            // Actualizar cálculos
+            actualizarCalculos();
+        }
+
+        // Función para actualizar todos los cálculos
+        function actualizarCalculos() {
+            // Obtener valores de los sliders
+            const totalPrestamo = parseFloat(slider1.value);
+            const meses = parseFloat(slider2.value);
+
+            // Calcular valores
+            const cuotaAdIva = totalPrestamo * 0.1428;
+            const afianzad = totalPrestamo * 0.05;
+            const totalPag = totalPrestamo + cuotaAdIva + afianzad;
+            const cuotaMensual = totalPag / meses;
+
+            // Guardar valores anteriores para comparar
+            const oldValues = {
+                totalPrestamo: totalPrestamoInput.value,
+                cuotaAdIva: cuotaAdIvaInput.value,
+                afianzad: afianzadInput.value,
+                totalPag: totalPagInput.value,
+                valCuota: valCuotaInput.value
+            };
+
+            // Actualizar inputs con formato colombiano
+            totalPrestamoInput.value = formatColombianNumber(totalPrestamo);
+            cuotaAdIvaInput.value = formatColombianNumber(cuotaAdIva);
+            afianzadInput.value = formatColombianNumber(afianzad);
+            totalPagInput.value = formatColombianNumber(totalPag);
+            valCuotaInput.value = formatColombianNumber(cuotaMensual);
+
+            // Resaltar cambios si los valores son diferentes
+            if (oldValues.totalPrestamo !== totalPrestamoInput.value) highlightChange(totalPrestamoInput);
+            if (oldValues.cuotaAdIva !== cuotaAdIvaInput.value) highlightChange(cuotaAdIvaInput);
+            if (oldValues.afianzad !== afianzadInput.value) highlightChange(afianzadInput);
+            if (oldValues.totalPag !== totalPagInput.value) highlightChange(totalPagInput);
+            if (oldValues.valCuota !== valCuotaInput.value) highlightChange(valCuotaInput);
+        }
+
+        // Event listeners para cambios en los sliders
+        slider1.addEventListener("input", function () {
+            updateSlider1();
+            // Actualización instantánea del tooltip mientras se mueve
+            tooltip1.innerText = `$ ${formatColombianNumber(slider1.value)}`;
+        });
+
+        slider2.addEventListener("input", function () {
+            updateSlider2();
+            // Actualización instantánea del tooltip mientras se mueve
+            const val = slider2.value;
+            tooltip2.innerText = `${val} ${val === "1" ? "mes" : "meses"}`;
+        });
+
+        // Event listeners para cambios finales (al soltar el slider)
+        slider1.addEventListener("change", updateSlider1);
+        slider2.addEventListener("change", updateSlider2);
+
+        // Inicializar
+        updateSlider1();
+        updateSlider2();
+        actualizarCalculos();
+    });
+</script>
+
+</body>
+</html>
