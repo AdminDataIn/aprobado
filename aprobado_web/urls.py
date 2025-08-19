@@ -22,6 +22,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('allauth.urls')),  # Nueva línea
     path('usuarios/', include('usuarios.urls')),
+    path('mi-credito/', include('usuariocreditos.urls')),
     path('configuraciones/', include('configuraciones.urls')),
     path('', lambda request: redirect('inicio')),
 ]

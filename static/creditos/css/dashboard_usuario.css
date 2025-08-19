@@ -1,0 +1,296 @@
+:root {
+    --primary-color: #4A90E2; /* Azul amigable */
+    --accent-color: #F5A623;  /* Amarillo cálido */
+    --light-gray: #f4f7f6;
+    --text-dark: #333;
+    --text-light: #777;
+    --bs-primary: var(--primary-color);
+    --bs-warning: var(--accent-color);
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: var(--light-gray);
+    color: var(--text-dark);
+}
+
+/* Navbar */
+.navbar-brand {
+    font-weight: 700;
+    color: var(--primary-color) !important;
+}
+
+/* Cards */
+.card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+.card-summary .card-body {
+    padding: 1.5rem;
+}
+
+.card-subtitle {
+    color: var(--text-light);
+    font-weight: 400;
+    font-size: 0.9rem;
+}
+
+.card-title {
+    font-weight: 700;
+}
+
+/* Iconos */
+.icon-circle {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-circle i {
+    font-size: 1.5rem;
+}
+
+/* Fondos de colores claros */
+.bg-primary-light { background-color: rgba(74, 144, 226, 0.1); }
+.bg-warning-light { background-color: rgba(245, 166, 35, 0.1); }
+.bg-info-light { background-color: rgba(23, 162, 184, 0.1); }
+.bg-success-light { background-color: rgba(40, 167, 69, 0.1); }
+.bg-danger-light { background-color: rgba(220, 53, 69, 0.1); }
+
+/* Tablas */
+.table-hover tbody tr:hover {
+    background-color: var(--light-gray);
+}
+
+/* Colores de texto */
+.text-success { color: #198754 !important; }
+.text-danger { color: #dc3545 !important; }
+
+/* Card Header */
+.card-header {
+    background-color: white;
+    border-bottom: 1px solid #dee2e6;
+}
+
+/* Badges */
+.badge.bg-success-light {
+    background-color: rgba(25, 135, 84, 0.1) !important;
+}
+.badge.bg-danger-light {
+    background-color: rgba(220, 53, 69, 0.1) !important;
+}
+
+/* Barra de progreso */
+.progress-card {
+    border: none;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    border-radius: 15px;
+}
+
+.progress-custom {
+    height: 20px;
+    border-radius: 10px;
+    background-color: #e9ecef;
+}
+
+.progress-bar-custom {
+    background-color: var(--primary-color);
+    border-radius: 10px;
+    transition: width 1s ease-in-out;
+}
+
+.progress-text {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+.progress-percentage {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+/* Botón de ayuda flotante */
+.help-button {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 25px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 4px 15px rgba(74, 144, 226, 0.3);
+    transition: all 0.3s ease;
+    z-index: 1000;
+}
+
+.help-button:hover {
+    background-color: #0b5ed7;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(13, 110, 253, 0.4);
+    color: white;
+}
+
+/* Indicadores de incentivos */
+.incentive-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-left: 8px;
+}
+
+.incentive-available {
+    background-color: #28a745;
+    animation: pulse 2s infinite;
+}
+
+.incentive-upcoming {
+    background-color: #ffc107;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.7; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* Información adicional sobre incentivos */
+.incentives-info {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-left: 4px solid var(--primary-color);
+    border-radius: 8px;
+}
+
+/* Estilos adicionales para las tablas */
+
+/* Estilos minimalistas para las tablas */
+
+/* Encabezados de tabla */
+.table thead th {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: 500;
+    font-size: 0.85rem;
+    border: none;
+    padding: 0.75rem 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.table thead th:first-child {
+    border-top-left-radius: 8px;
+}
+
+.table thead th:last-child {
+    border-top-right-radius: 8px;
+}
+
+/* Filas de la tabla */
+.table tbody td {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+    border-bottom: 1px solid #e9ecef;
+    font-size: 0.9rem;
+}
+
+.table tbody tr {
+    background-color: white;
+    transition: background-color 0.2s ease;
+}
+
+.table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Contenedor de tabla */
+.table-responsive {
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Badges en tablas */
+.table .badge {
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.3em 0.6em;
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+    .table thead th,
+    .table tbody td {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8rem;
+    }
+}
+
+/* Estilos para el selector de créditos */
+.credit-selector {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-left: 4px solid var(--primary-color);
+}
+
+.form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(74, 144, 226, 0.25);
+}
+
+/* Indicadores de estado en el select */
+.form-select optgroup {
+    font-weight: 600;
+    color: var(--text-light);
+}
+
+.credit-summary-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+
+/* Estilos para el botón de pagar */
+.btn-primary.btn-sm {
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.btn-primary.btn-sm:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(74, 144, 226, 0.3);
+}
+
+/* Responsivo: en móviles el botón va abajo */
+@media (max-width: 768px) {
+    .card-status .card-body {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .card-status .ms-2 {
+        margin-left: 0 !important;
+        margin-top: 0.75rem;
+    }
+}
