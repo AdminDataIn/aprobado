@@ -1,7 +1,14 @@
-from django.shortcuts import render, get_object_or_404
-from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
+from django.shortcuts import render, get_object_or_404 # type: ignore
+from django.contrib.auth.decorators import login_required # type: ignore
+from django.http import JsonResponse # type: ignore
 import datetime
+from django.template.loader import render_to_string # type: ignore
+from django.http import HttpResponse # type: ignore
+from weasyprint import HTML # type: ignore
+import os
+from django.conf import settings # type: ignore
+import tempfile
+import pathlib
 
 # @login_required
 def dashboard_view(request, credito_id=None):
@@ -115,8 +122,8 @@ def obtener_creditos_usuario(user=None):
             'fecha_inicio': datetime.date(2024, 5, 10),
             'proximo_vencimiento': datetime.date.today() + datetime.timedelta(days=18),
             'historial_pagos': [
-                {'fecha': datetime.date(2025, 7, 22), 'monto': 318080, 'referencia': '#AB789-07', 'estado': 'En Mora (Pagado)'},
-                {'fecha': datetime.date(2025, 6, 18), 'monto': 318080, 'referencia': '#AB789-04', 'estado': 'Completado'},
+                {'fecha': datetime.datetime(2025, 7, 22, 10, 30, 0), 'monto': 318080, 'referencia': '#AB789-07', 'estado': 'En Mora (Pagado)'},
+                {'fecha': datetime.datetime(2025, 6, 18, 15, 0, 0), 'monto': 318080, 'referencia': '#AB789-04', 'estado': 'Completado'},
             ],
             'tipo': 'Nanocredito'
         },
@@ -132,13 +139,13 @@ def obtener_creditos_usuario(user=None):
             'fecha_inicio': datetime.date(2023, 9, 20),
             'proximo_vencimiento': None,
             'historial_pagos': [
-                {'fecha': datetime.date(2024, 3, 15), 'monto': 100000, 'referencia': '#CR023-12', 'estado': 'Completado'},
-                {'fecha': datetime.date(2024, 2, 15), 'monto': 100000, 'referencia': '#CR023-11', 'estado': 'Completado'},
-                {'fecha': datetime.date(2024, 1, 15), 'monto': 100000, 'referencia': '#CR023-10', 'estado': 'Completado'},
+                {'fecha': datetime.datetime(2024, 3, 15, 9, 0, 0), 'monto': 100000, 'referencia': '#CR023-12', 'estado': 'Completado'},
+                {'fecha': datetime.datetime(2024, 2, 15, 11, 20, 0), 'monto': 100000, 'referencia': '#CR023-11', 'estado': 'Completado'},
+                {'fecha': datetime.datetime(2024, 1, 15, 14, 45, 0), 'monto': 100000, 'referencia': '#CR023-10', 'estado': 'Completado'},
             ],
             'tipo': 'Nanocredito'
         },
-        {
+        { 
             'id': 3,
             'numero_credito': 'CR-2024-078',
             'monto_total': 200000,
@@ -150,7 +157,7 @@ def obtener_creditos_usuario(user=None):
             'fecha_inicio': datetime.date(2024, 8, 15),
             'proximo_vencimiento': datetime.date.today() - datetime.timedelta(days=5),
             'historial_pagos': [
-                {'fecha': datetime.date(2024, 12, 10), 'monto': 79520, 'referencia': '#CR078-01', 'estado': 'Completado'},
+                {'fecha': datetime.datetime(2024, 12, 10, 18, 0, 0), 'monto': 79520, 'referencia': '#CR078-01', 'estado': 'Completado'},
             ],
             'tipo': 'Nanocredito'
         }
@@ -171,3 +178,46 @@ def cambiar_credito(request, credito_id):
         return dashboard_view(request, credito_id)
     else:
         return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+def extracto_pdf_view(request, credito_id):
+    """Genera y devuelve el extracto en PDF para el crédito especificado"""
+    # 1. Obtener los datos del crédito
+    creditos = obtener_creditos_usuario(request.user if hasattr(request, 'user') else None)
+    credito = next((c for c in creditos if c['id'] == int(credito_id)), None)
+
+    if not credito:
+        return HttpResponse("Crédito no encontrado", status=404)
+
+    # 2. Calcular valores adicionales
+    monto_pendiente = credito['monto_total'] - credito['monto_pagado']
+
+    # 3. Preparar el contexto para la plantilla
+    logo_path = os.path.join(settings.STATICFILES_DIRS[0], 'images', 'logo-dark.png')
+    logo_uri = pathlib.Path(logo_path).as_uri()
+
+    context = {
+        'usuario': {
+            'get_full_name': 'Maria Jose',
+            'direccion': 'Calle 32 # 29, Villavicencio, Colombia',
+            'id_cliente': '123456789'
+        },
+        'credito': credito,
+        'pagos': credito['historial_pagos'],
+        'logo_path': logo_uri,
+        'fecha_extracto': datetime.datetime.now(),
+        'numero_extracto': f'EXT-00{credito["id"]}-2025',
+        'monto_pendiente': monto_pendiente,
+    }
+
+    # 4. Renderizar la plantilla HTML a un string
+    html_string = render_to_string('usuariocreditos/extracto_pdf.html', context)
+
+    # 5. Generar el PDF con WeasyPrint
+    html = HTML(string=html_string, base_url=request.build_absolute_uri('/'))
+    pdf_file = html.write_pdf()
+
+    # 6. Crear y devolver la respuesta HTTP con el PDF
+    response = HttpResponse(pdf_file, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="extracto_{credito["numero_credito"]}.pdf"'
+    
+    return response
