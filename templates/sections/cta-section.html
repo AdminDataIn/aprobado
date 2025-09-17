@@ -18,7 +18,7 @@
           </p>
 
           <div class="cta-buttons">
-            <a href="/aplicar" class="cta-btn-primary">
+            <a href="{% if es_empleado %}{% url 'gestion_creditos:solicitud_libranza' %}{% else %}{% url 'usuarios:aplicar' %}{% endif %}" class="cta-btn-primary">
               Aplicar ahora
               <span class="arrow">→</span>
             </a>

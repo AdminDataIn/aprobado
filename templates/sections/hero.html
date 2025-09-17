@@ -11,7 +11,7 @@
                     Impulsa tu negocio con créditos digitales pensados para mujeres emprendedoras en Colombia.
                 </p>
                 <div class="hero-button-wrapper">
-                    <a href="{% url 'aplicar' %}" class="hero-button">
+                    <a href="{% if es_empleado %}{% url 'gestion_creditos:solicitud_libranza' %}{% else %}{% url 'usuarios:aplicar' %}{% endif %}" class="hero-button">
                         Aplicar ahora
                         <svg xmlns="http://www.w3.org/2000/svg" class="icon-arrow" viewBox="0 0 24 24" fill="none"
                              stroke="currentColor" stroke-width="2"

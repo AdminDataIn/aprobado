@@ -14,9 +14,11 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.contrib import admin
-from django.urls import path, include
-from django.shortcuts import redirect
+from django.contrib import admin #type: ignore
+from django.urls import path, include #type: ignore
+from django.shortcuts import redirect #type: ignore
+from django.conf import settings #type: ignore
+from django.conf.urls.static import static #type: ignore
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -24,5 +26,10 @@ urlpatterns = [
     path('usuarios/', include('usuarios.urls')),
     path('mi-credito/', include('usuariocreditos.urls')),
     path('configuraciones/', include('configuraciones.urls')),
-    path('', lambda request: redirect('inicio')),
+    path('', lambda request: redirect('usuarios:inicio')),
+    path('gestion-creditos/', include('gestion_creditos.urls')),
 ]
+
+# Servir archivos media en desarrollo
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

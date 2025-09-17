@@ -23,4 +23,16 @@
         </div>
     </section>
 </main>
+
+<script>
+    window.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('process') === 'login') {
+            const form = document.querySelector('.form-account');
+            if (form) {
+                form.submit();
+            }
+        }
+    });
+</script>
 {% endblock %}

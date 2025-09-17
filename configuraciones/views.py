@@ -1,7 +1,8 @@
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
-from configuraciones.models import SolicitudCredito, ConfiguracionPeso
+from configuraciones.models import ConfiguracionPeso
+from gestion_creditos.models import Credito, CreditoEmprendimiento
 from datetime import datetime
 from decimal import Decimal
 from django.core.exceptions import ObjectDoesNotExist
@@ -116,8 +117,16 @@ def recibir_data(request):
             print("Suma estimaciones completas con IA: ", suma_estimaciones)
 
 
-            # Crear instancia del modelo
-            nuevo_credito = SolicitudCredito(
+            # Crear instancia del modelo base Credito
+            credito_base = Credito.objects.create(
+                usuario=request.user,
+                linea=Credito.LineaCredito.EMPRENDIMIENTO,
+                estado=Credito.EstadoCredito.EN_REVISION 
+            )
+
+            # Crear instancia del modelo de detalle CreditoEmprendimiento
+            nuevo_credito_emprendimiento = CreditoEmprendimiento.objects.create(
+                credito=credito_base,
                 valor_credito=valor_credito,
                 plazo=plazo,
                 nombre=nombre,
@@ -152,12 +161,9 @@ def recibir_data(request):
                 puntaje=suma_estimaciones
             )
 
-            # Guardar en la base de datos
-            nuevo_credito.save()
-
             # Guardar archivo después de guardar el objeto
             if fotos_neg:
-                nuevo_credito.foto_negocio.save(fotos_neg.name, fotos_neg)
+                nuevo_credito_emprendimiento.foto_negocio.save(fotos_neg.name, fotos_neg)
 
             return JsonResponse({
                 'success': True,

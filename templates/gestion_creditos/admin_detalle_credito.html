@@ -1,0 +1,339 @@
+
+<!--
+    Archivo: templates/gestion_creditos/admin_detalle_credito.html
+    Descripción: Página detallada para que los administradores revisen y gestionen un crédito específico.
+-->
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalle de Crédito - Fintech Pro</title>
+    {% load static %}
+    {% load humanize %}
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Fintech Base Styles -->
+    <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+</head>
+<body class="theme-details">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="container-fluid py-3" style="max-width: 1400px;">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h1 class="page-title">Detalle de Crédito</h1>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item">
+                                <a href="{% url 'gestion_creditos:admin_dashboard' %}">
+                                    <i class="bi bi-house-door me-1"></i>Dashboard
+                                </a>
+                            </li>
+                            <li class="breadcrumb-item">
+                                <a href="{% url 'gestion_creditos:admin_creditos_activos' %}">Créditos Activos</a>
+                            </li>
+                            <li class="breadcrumb-item active">Detalle</li>
+                        </ol>
+                    </nav>
+                </div>
+                <a href="{% url 'gestion_creditos:admin_creditos_activos' %}" class="btn btn-outline-primary">
+                    <i class="bi bi-arrow-left me-2"></i>Volver
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-fluid" style="max-width: 1400px;">
+        <div class="main-grid">
+            <!-- Main Content -->
+            <div class="main-content">
+                <!-- Credit Information -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Información General del Crédito
+                        </h2>
+                    </div>
+                    <div class="card-content">
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">Usuario Solicitante</span>
+                                <span class="info-value">{{ credito.usuario.get_full_name|default:credito.usuario.username }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Línea de Crédito</span>
+                                <span class="info-value">{{ credito.get_linea_display }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Estado Actual</span>
+                                <span class="status-badge 
+                                    {% if credito.estado == 'ACTIVO' %}status-active
+                                    {% elif credito.estado == 'EN_MORA' %}status-overdue
+                                    {% elif credito.estado == 'PAGADO' %}status-paid
+                                    {% else %}status-pending{% endif %}">
+                                    <i class="bi bi-clock me-1"></i>
+                                    {{ credito.get_estado_display }}
+                                </span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Fecha de Solicitud</span>
+                                <span class="info-value">{{ credito.fecha_solicitud|date:"d/m/Y H:i" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Credit Details -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="bi bi-file-text me-2"></i>
+                            Detalles del Crédito
+                        </h2>
+                    </div>
+                    <div class="card-content">
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">Monto Aprobado</span>
+                                <span class="info-value large">${{ credito.monto_aprobado|intcomma }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Saldo Pendiente</span>
+                                <span class="info-value">${{ credito.saldo_pendiente|intcomma }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Plazo</span>
+                                <span class="info-value">{{ credito.plazo }} meses</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Tasa de Interés</span>
+                                <span class="info-value">{{ credito.tasa_interes }}%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment History -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="bi bi-clock-history me-2"></i>
+                            Historial de Pagos
+                        </h2>
+                    </div>
+                    <div class="card-content">
+                        {% if pagos %}
+                            {% for pago in pagos %}
+                            <div class="payment-item">
+                                <div class="payment-info">
+                                    <div class="payment-amount">${{ pago.monto|intcomma }}</div>
+                                    <div class="payment-date">{{ pago.fecha_pago|date:"d/m/Y" }}</div>
+                                </div>
+                                <span class="payment-status payment-success">
+                                    {{ pago.get_estado_display }}
+                                </span>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="bi bi-receipt"></i>
+                                <p>No hay pagos registrados</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Processing Form (if applicable) -->
+                {% if credito.estado == 'PENDIENTE' %}
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="bi bi-gear me-2"></i>
+                            Procesar Solicitud
+                        </h2>
+                    </div>
+                    <div class="card-content">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Esta solicitud requiere revisión y decisión de aprobación o rechazo.
+                        </div>
+
+                        <form id="processing-form" method="post">
+                            {% csrf_token %}
+                            <!-- Approval Fields -->
+                            <div id="approval-fields">
+                                <h3 style="margin-bottom: 1rem; color: var(--text-primary); font-size: 1.125rem;">
+                                    Datos para Aprobación
+                                </h3>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label class="form-label">Monto Aprobado</label>
+                                        <input type="number" name="approved_amount" class="form-control" 
+                                               placeholder="{{ credito.monto_solicitado }}" 
+                                               value="{{ credito.monto_solicitado }}">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Valor de la Cuota</label>
+                                        <input type="number" name="installment_amount" class="form-control" placeholder="0">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Fecha Próximo Pago</label>
+                                        <input type="date" name="next_payment_date" class="form-control">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Observaciones</label>
+                                <textarea name="observations" class="form-control" rows="4" 
+                                          placeholder="Ingrese observaciones sobre la decisión..."></textarea>
+                            </div>
+
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-danger" onclick="processCredit('reject')">
+                                    <i class="bi bi-x-circle me-2"></i>
+                                    Rechazar Solicitud
+                                </button>
+                                <button type="button" class="btn btn-success" onclick="processCredit('approve')">
+                                    <i class="bi bi-check-circle me-2"></i>
+                                    Aprobar Solicitud
+                                </button>
+                            </div>
+                            
+                            <input type="hidden" name="action" id="action-input">
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <!-- State Management -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="bi bi-pencil me-2"></i>
+                            Cambiar Estado
+                        </h2>
+                    </div>
+                    <div class="card-content">
+                        <form id="status-form" method="post">
+                            {% csrf_token %}
+                            <div class="form-group">
+                                <label class="form-label">Estado del Crédito</label>
+                                <select name="status" class="form-control form-select">
+                                    {% for value, label in estados_choices %}
+                                        <option value="{{ value }}" {% if value == credito.estado %}selected{% endif %}>
+                                            {{ label }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary" style="width: 100%;">
+                                <i class="bi bi-save me-2"></i>
+                                Actualizar Estado
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Manual Payment -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="bi bi-plus-circle me-2"></i>
+                            Agregar Abono Manual
+                        </h2>
+                    </div>
+                    <div class="card-content">
+                        <form action="{% url 'gestion_creditos:agregar_pago_manual' credito.id %}" method="post">
+                            {% csrf_token %}
+                            <div class="form-group">
+                                <label class="form-label">Monto del Abono</label>
+                                <input type="number" name="monto" class="form-control" placeholder="Ingrese el monto" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Referencia de Pago</label>
+                                <input type="text" name="referencia" class="form-control" placeholder="Ej: Consignación N° 123">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Clave de Autorización</label>
+                                <input type="password" name="auth_key" class="form-control" placeholder="Clave secreta" required>
+                            </div>
+                            <button type="submit" class="btn btn-success" style="width: 100%;">
+                                <i class="bi bi-check-circle me-2"></i>
+                                Registrar Abono
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="bi bi-lightning me-2"></i>
+                            Acciones Rápidas
+                        </h2>
+                    </div>
+                    <div class="card-content">
+                        <a href="#" class="btn btn-outline" style="width: 100%; margin-bottom: 0.75rem;">
+                            <i class="bi bi-download me-2"></i>
+                            Descargar Documentos
+                        </a>
+                        <button onclick="sendNotification()" class="btn btn-outline" style="width: 100%; margin-bottom: 0.75rem;">
+                            <i class="bi bi-envelope me-2"></i>
+                            Enviar Notificación
+                        </button>
+                        <a href="#" class="btn btn-outline" style="width: 100%;">
+                            <i class="bi bi-printer me-2"></i>
+                            Generar Reporte
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        function processCredit(action) {
+            document.getElementById('action-input').value = action;
+            const form = document.getElementById('processing-form');
+            const buttons = form.querySelectorAll('button');
+            
+            // Show processing state
+            buttons.forEach(btn => {
+                btn.classList.add('processing');
+                if (btn.textContent.includes(action === 'approve' ? 'Aprobar' : 'Rechazar')) {
+                    btn.innerHTML = '<span class="spinner"></span> Procesando...';
+                }
+            });
+
+            // Submit form
+            form.submit();
+        }
+
+        document.getElementById('status-form').addEventListener('submit', function(e) {
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            
+            submitBtn.innerHTML = '<span class="spinner"></span> Actualizando...';
+            submitBtn.disabled = true;
+        });
+
+        function sendNotification() {
+            // Implementar lógica de notificación
+            alert('Función de notificación enviada');
+        }
+    </script>
+</body>
+</html>

@@ -1,6 +1,5 @@
 {% load static %}
 {% load humanize %}
-
 <!-- filepath: templates/usuariocreditos/extracto_pdf.html -->
 <!DOCTYPE html>
 <html lang="es">
@@ -20,6 +19,7 @@
         .container {
             width: 90%;
             margin: 0 auto;
+            padding-top: 120px; /* Space for fixed header */
         }
 
         .header, .footer {
@@ -58,8 +58,8 @@
             color: #002366;
             font-size: 24px;
             font-weight: 700;
-            margin-top: 10px; /* Reduced margin-top */
-            margin-bottom: 40px; /* Increased margin-bottom */
+            margin-top: 0; /* Moved up */
+            margin-bottom: 50px; /* Increased space after title */
         }
 
         .details-grid {
@@ -119,6 +119,11 @@
 
         .summary-table td {
             font-weight: 500;
+        }
+        
+        .summary-table .pending-amount {
+            font-weight: bold;
+            background-color: #f2f2f2;
         }
 
         .summary-table .total {
@@ -211,7 +216,7 @@
                 <td>Monto Total Pagado:</td>
                 <td class="text-right">${{ credito.monto_pagado|intcomma }}</td>
             </tr>
-            <tr>
+            <tr class="pending-amount">
                 <td>Monto Pendiente:</td>
                 <td class="text-right">${{ monto_pendiente|intcomma }}</td>
             </tr>

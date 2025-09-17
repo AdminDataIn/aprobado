@@ -16,11 +16,98 @@
         <section class="simulador-hero-section">
             <div class="simulador-container">
                 <div class="simulador-hero">
+                    {% if es_empleado %}
+                    <!-- SIMULADOR DE LIBRANZA -->
+                    <div class="simulador-text-content">
+                        <h1>Simulador de Crédito de Libranza</h1>
+                        <p>Calcula tu cuota mensual y conoce las condiciones de tu crédito de libranza. 
+                           Financiamiento con descuento directo de nómina para empleados públicos y privados.</p>
+                        <a href="{% url 'gestion_creditos:solicitud_libranza' %}" target="_blank" class="simulador-cta-button">Aplicar ahora</a>
+                    </div>
+
+                    <div class="simulador-card">
+                        <form action="#" class="simulador-form">
+                            <div class="simulador-form-step active">
+                                <!-- Primer slider - Monto del crédito -->
+                                <div class="simulador-slider-container">
+                                    <div class="simulador-slider-title">¿Cuánto necesitas?</div>
+                                    <div class="simulador-range-container">
+                                        <div class="simulador-range-progress" id="simulador-progress-1"></div>
+                                        <input type="range" min="500000" max="2000000" step="50000" value="1000000"
+                                               class="simulador-range-input" id="simulador-range-1">
+                                        <div class="simulador-range-tooltip" id="simulador-tooltip-1">$ 1.000.000</div>
+                                    </div>
+                                    <div class="simulador-range-labels">
+                                        <span>$ 500.000</span>
+                                        <span>$ 2.000.000</span>
+                                    </div>
+                                </div>
+
+                                <!-- Segundo slider - Plazo (1-6 meses) -->
+                                <div class="simulador-slider-container">
+                                    <div class="simulador-slider-title">¿En cuántos meses deseas pagarlo?</div>
+                                    <div class="simulador-range-container">
+                                        <div class="simulador-range-progress" id="simulador-progress-2"></div>
+                                        <input type="range" min="1" max="6" step="1" value="3"
+                                               class="simulador-range-input" id="simulador-range-2">
+                                        <div class="simulador-range-tooltip" id="simulador-tooltip-2">3 meses</div>
+                                    </div>
+                                    <div class="simulador-range-labels">
+                                        <span>1 mes</span>
+                                        <span>6 meses</span>
+                                    </div>
+                                </div>
+
+                                <!-- Resultados del cálculo - LIBRANZA -->
+                                <div class="simulador-results-container">
+                                    <div class="simulador-result-row">
+                                        <label for="total-pr" class="simulador-result-label">Monto solicitado:</label>
+                                        <input type="text" id="total-pr" name="total-pr" value="1.000.000,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label for="comision" class="simulador-result-label">Comisión (10%):</label>
+                                        <input type="text" id="comision" name="comision" value="100.000,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label for="ivaComision" class="simulador-result-label">IVA sobre comisión (19%):</label>
+                                        <input type="text" id="ivaComision" name="ivaComision" value="19.000,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                    <!-- Afianzadora (próximamente - estructura lista) -->
+                                    <div class="simulador-result-row" style="opacity: 0.5;">
+                                        <label for="afianzadora" class="simulador-result-label">Afianzadora (4% + IVA) - Próximamente:</label>
+                                        <input type="text" id="afianzadora" name="afianzadora" value="47.600,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label for="totalPagar" class="simulador-result-label">Total a pagar:</label>
+                                        <input type="text" id="totalPagar" name="totalPagar" value="1.119.000,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label for="cuotaMensual" class="simulador-result-label">Cuota mensual:</label>
+                                        <input type="text" id="cuotaMensual" name="cuotaMensual" value="373.000,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                </div>
+
+                                <!-- Nota informativa - LIBRANZA (COMENTADO) -->
+                                {% comment %} <div class="simulador-info-note">
+                                    <p><strong>Nota:</strong> La cuota se calcula usando la fórmula de anualidad. Los valores mostrados son aproximados y pueden variar según las condiciones finales del crédito.</p>
+                                </div> {% endcomment %}
+                            </div>
+                        </form>
+                    </div>
+                    
+                    {% else %}
+                    <!-- SIMULADOR DE EMPRENDIMIENTO -->
                     <div class="simulador-text-content">
                         <h1>Una solución financiera segura para tu negocio</h1>
                         <p>Accede a financiamiento ágil y confiable, diseñado específicamente para las necesidades de tu
                             negocio, sin trámites complicados.</p>
-                        <a href="{% url 'aplicar' %}" target="_blank" class="simulador-cta-button">Aplicar ahora</a>
+                        <a href="{% url 'usuarios:aplicar' %}" target="_blank" class="simulador-cta-button">Aplicar ahora</a>
                     </div>
 
                     <div class="simulador-card">
@@ -56,11 +143,11 @@
                                     </div>
                                 </div>
 
-                                <!-- Resultados del cálculo -->
+                                <!-- Resultados del cálculo - EMPRENDIMIENTO -->
                                 <div class="simulador-results-container">
                                     <div class="simulador-result-row">
-                                        <label for="total-pr" class="simulador-result-label">Total de préstamo:</label>
-                                        <input type="text" id="total-pr" name="total-pr" value="500.000,00"
+                                        <label for="total-pr-emp" class="simulador-result-label">Total de préstamo:</label>
+                                        <input type="text" id="total-pr-emp" name="total-pr-emp" value="500.000,00"
                                                class="simulador-result-input" readonly>
                                     </div>
                                     <div class="simulador-result-row">
@@ -88,6 +175,7 @@
                             </div>
                         </form>
                     </div>
+                    {% endif %}
                 </div>
             </div>
         </section>
@@ -99,24 +187,79 @@
 
 <script>
     document.addEventListener("DOMContentLoaded", function () {
-        // Elementos de resultado
+        {% if es_empleado %}
+        // SCRIPT PARA SIMULADOR DE LIBRANZA
         const totalPrestamoInput = document.getElementById("total-pr");
+        const comisionInput = document.getElementById("comision");
+        const ivaComisionInput = document.getElementById("ivaComision");
+        const afianzadoraInput = document.getElementById("afianzadora");
+        const totalPagarInput = document.getElementById("totalPagar");
+        const cuotaMensualInput = document.getElementById("cuotaMensual");
+
+        function calcularCuotaAnualidad(monto, tasaMensual, meses) {
+            if (tasaMensual === 0) {
+                return monto / meses;
+            }
+            const factor = Math.pow(1 + tasaMensual, meses);
+            const cuota = monto * (tasaMensual * factor) / (factor - 1);
+            return cuota;
+        }
+
+        function actualizarCalculosLibranza() {
+            const montoSolicitado = parseFloat(slider1.value);
+            const meses = parseFloat(slider2.value);
+
+            const comision = montoSolicitado * 0.10;
+            const ivaComision = comision * 0.19;
+            const afianzadora = montoSolicitado * 0.04;
+            const ivaAfianzadora = afianzadora * 0.19;
+            const totalAfianzadora = afianzadora + ivaAfianzadora;
+            const totalSinAfianzadora = montoSolicitado + comision + ivaComision;
+            const tasaMensual = 0;
+            const cuotaMensual = calcularCuotaAnualidad(totalSinAfianzadora, tasaMensual, meses);
+
+            totalPrestamoInput.value = formatColombianNumber(montoSolicitado);
+            comisionInput.value = formatColombianNumber(comision);
+            ivaComisionInput.value = formatColombianNumber(ivaComision);
+            afianzadoraInput.value = formatColombianNumber(totalAfianzadora);
+            totalPagarInput.value = formatColombianNumber(totalSinAfianzadora);
+            cuotaMensualInput.value = formatColombianNumber(cuotaMensual);
+        }
+
+        {% else %}
+        // SCRIPT PARA SIMULADOR DE EMPRENDIMIENTO
+        const totalPrestamoInput = document.getElementById("total-pr-emp");
         const cuotaAdIvaInput = document.getElementById("cuotaAdIva");
         const afianzadInput = document.getElementById("afianzad");
         const totalPagInput = document.getElementById("totalPag");
         const valCuotaInput = document.getElementById("valCuota");
 
-        // Configuración del primer slider (monto)
+        function actualizarCalculosEmprendimiento() {
+            const totalPrestamo = parseFloat(slider1.value);
+            const meses = parseFloat(slider2.value);
+
+            const cuotaAdIva = totalPrestamo * 0.1428;
+            const afianzad = totalPrestamo * 0.05;
+            const totalPag = totalPrestamo + cuotaAdIva + afianzad;
+            const cuotaMensual = totalPag / meses;
+
+            totalPrestamoInput.value = formatColombianNumber(totalPrestamo);
+            cuotaAdIvaInput.value = formatColombianNumber(cuotaAdIva);
+            afianzadInput.value = formatColombianNumber(afianzad);
+            totalPagInput.value = formatColombianNumber(totalPag);
+            valCuotaInput.value = formatColombianNumber(cuotaMensual);
+        }
+        {% endif %}
+
+        // Configuración común de sliders
         const slider1 = document.getElementById("simulador-range-1");
         const tooltip1 = document.getElementById("simulador-tooltip-1");
         const progress1 = document.getElementById("simulador-progress-1");
 
-        // Configuración del segundo slider (plazo) - 1 a 3 meses
         const slider2 = document.getElementById("simulador-range-2");
         const tooltip2 = document.getElementById("simulador-tooltip-2");
         const progress2 = document.getElementById("simulador-progress-2");
 
-        // Función para formatear números al estilo colombiano (1.000.000,00)
         function formatColombianNumber(num) {
             return new Intl.NumberFormat('es-CO', {
                 minimumFractionDigits: 2,
@@ -124,113 +267,98 @@
             }).format(num);
         }
 
-        // Función para resaltar cambios en los inputs
-        function highlightChange(element) {
-            element.classList.add('changed');
-            setTimeout(() => {
-                element.classList.remove('changed');
-            }, 1000);
-        }
-
-// Actualización del primer slider (monto)
         function updateSlider1() {
             const minVal = parseFloat(slider1.min);
             const maxVal = parseFloat(slider1.max);
             const val = parseFloat(slider1.value);
-
-            // Calcular porcentaje (0-100)
             const percent = ((val - minVal) / (maxVal - minVal)) * 100;
 
-            // Calcular posición del tooltip (ajustado para no salir de los límites)
-            const tooltipPosition = Math.max(5, Math.min(percent, 95)); // Limitar entre 5% y 95%
-
-            // Formatear el valor para el tooltip
             tooltip1.innerText = `$ ${formatColombianNumber(val)}`;
-
-            // Posicionar el tooltip (centrado exactamente sobre el thumb)
             tooltip1.style.left = `${percent}%`;
-            tooltip1.style.transform = 'translateX(-50%)'; // Centrar el tooltip
-
-            // Actualizar el progress (hasta la posición del thumb)
+            tooltip1.style.transform = 'translateX(-50%)';
             progress1.style.width = `${percent}%`;
 
-            // Actualizar cálculos
-            actualizarCalculos();
+            {% if es_empleado %}
+            actualizarCalculosLibranza();
+            {% else %}
+            actualizarCalculosEmprendimiento();
+            {% endif %}
         }
 
-        // Actualización del segundo slider (plazo)
         function updateSlider2() {
             const val = slider2.value;
             const percent = ((val - slider2.min) / (slider2.max - slider2.min)) * 100;
 
             tooltip2.innerText = `${val} ${val === "1" ? "mes" : "meses"}`;
-            tooltip2.style.left = `calc(${percent}% - 20px)`;
+            tooltip2.style.left = `${percent}%`;
+            tooltip2.style.transform = 'translateX(-50%)';
             progress2.style.width = `${percent}%`;
 
-            // Actualizar cálculos
-            actualizarCalculos();
+            {% if es_empleado %}
+            actualizarCalculosLibranza();
+            {% else %}
+            actualizarCalculosEmprendimiento();
+            {% endif %}
         }
 
-        // Función para actualizar todos los cálculos
-        function actualizarCalculos() {
-            // Obtener valores de los sliders
-            const totalPrestamo = parseFloat(slider1.value);
-            const meses = parseFloat(slider2.value);
-
-            // Calcular valores
-            const cuotaAdIva = totalPrestamo * 0.1428;
-            const afianzad = totalPrestamo * 0.05;
-            const totalPag = totalPrestamo + cuotaAdIva + afianzad;
-            const cuotaMensual = totalPag / meses;
-
-            // Guardar valores anteriores para comparar
-            const oldValues = {
-                totalPrestamo: totalPrestamoInput.value,
-                cuotaAdIva: cuotaAdIvaInput.value,
-                afianzad: afianzadInput.value,
-                totalPag: totalPagInput.value,
-                valCuota: valCuotaInput.value
-            };
-
-            // Actualizar inputs con formato colombiano
-            totalPrestamoInput.value = formatColombianNumber(totalPrestamo);
-            cuotaAdIvaInput.value = formatColombianNumber(cuotaAdIva);
-            afianzadInput.value = formatColombianNumber(afianzad);
-            totalPagInput.value = formatColombianNumber(totalPag);
-            valCuotaInput.value = formatColombianNumber(cuotaMensual);
-
-            // Resaltar cambios si los valores son diferentes
-            if (oldValues.totalPrestamo !== totalPrestamoInput.value) highlightChange(totalPrestamoInput);
-            if (oldValues.cuotaAdIva !== cuotaAdIvaInput.value) highlightChange(cuotaAdIvaInput);
-            if (oldValues.afianzad !== afianzadInput.value) highlightChange(afianzadInput);
-            if (oldValues.totalPag !== totalPagInput.value) highlightChange(totalPagInput);
-            if (oldValues.valCuota !== valCuotaInput.value) highlightChange(valCuotaInput);
-        }
-
-        // Event listeners para cambios en los sliders
-        slider1.addEventListener("input", function () {
-            updateSlider1();
-            // Actualización instantánea del tooltip mientras se mueve
-            tooltip1.innerText = `$ ${formatColombianNumber(slider1.value)}`;
-        });
-
-        slider2.addEventListener("input", function () {
-            updateSlider2();
-            // Actualización instantánea del tooltip mientras se mueve
-            const val = slider2.value;
-            tooltip2.innerText = `${val} ${val === "1" ? "mes" : "meses"}`;
-        });
-
-        // Event listeners para cambios finales (al soltar el slider)
+        // Event listeners
+        slider1.addEventListener("input", updateSlider1);
+        slider2.addEventListener("input", updateSlider2);
         slider1.addEventListener("change", updateSlider1);
         slider2.addEventListener("change", updateSlider2);
 
         // Inicializar
         updateSlider1();
         updateSlider2();
-        actualizarCalculos();
     });
 </script>
+
+<style>
+    /* Estilos adicionales para el simulador de libranza
+    .simulador-highlight {
+        background-color: #f8f9fa;
+        border-left: 4px solid #0d6efd;
+        padding-left: 1rem;
+        margin: 0.5rem 0;
+        border-radius: 4px;
+    }
+    
+    .simulador-highlight .simulador-result-label {
+        font-weight: 600;
+        color: #0d6efd;
+    }
+    
+    .simulador-highlight .simulador-result-input {
+        font-weight: 600;
+        color: #0d6efd;
+        background-color: white;
+    }
+    
+    .simulador-info-note {
+        margin-top: 1.5rem;
+        padding: 1rem;
+        background-color: #e3f2fd;
+        border-radius: 8px;
+        border-left: 4px solid #2196f3;
+    }
+    
+    /* .simulador-info-note p {
+        margin: 0;
+        font-size: 0.875rem;
+        color: #1565c0;
+        line-height: 1.4;
+    } COMENTAMOS POR QUE NO SABEMOS SI VA A SER REQUERIDO*/
+    
+    /* Animación para campos que cambian */
+    .simulador-result-input.changed {
+        animation: highlight 1s ease-in-out;
+    }
+    
+    @keyframes highlight {
+        0% { background-color: #fff3cd; }
+        100% { background-color: white; }
+    }
+</style>
 
 </body>
 </html>
