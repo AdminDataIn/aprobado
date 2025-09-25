@@ -20,11 +20,20 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Fintech Base Styles -->
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+    <style>
+        .table-dashboard tbody td {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        .table-dashboard tbody strong {
+            color: var(--text-primary);
+        }
+    </style>
 </head>
 <body class="theme-dashboard">
     <!-- Header -->
     <header class="page-header">
-        <div class="container-fluid py-3" style="max-width: 1400px;">
+        <div class="container-fluid" style="max-width: 1400px;">
             <div class="d-flex align-items-center justify-content-between">
                 <a href="#" class="logo">
                     <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;" />
@@ -47,19 +56,29 @@
     </header>
 
     <div class="container-fluid py-4" style="max-width: 1400px;">
-        <!-- Page Title -->
-        <div class="d-flex align-items-center justify-content-between mb-4">
+        <!-- Page Title & Breadcrumb -->
+        <div class="d-flex align-items-center justify-content-between mb-4 px-4">
             <div>
                 <h1 class="page-title">Dashboard de Administrador</h1>
-                <p class="text-secondary m-0">Resumen ejecutivo de la cartera de créditos</p>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-house-door"></i> Dashboard</li>
+                    </ol>
+                </nav>
             </div>
             <div class="d-flex gap-2">
                 <button class="btn btn-outline-primary">
                     <i class="bi bi-download me-2"></i>Exportar Reporte
                 </button>
-                <button class="btn btn-primary">
-                    <i class="bi bi-plus-lg me-2"></i>Nuevo Crédito
-                </button>
+                <div class="dropdown">
+                    <button class="btn btn-primary dropdown-toggle" type="button" id="dropdownMenuButton1" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-plus-lg me-2"></i>Nuevo Crédito
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
+                        <li><a class="dropdown-item" href="{% url 'gestion_creditos:solicitud_emprendimiento' %}">Emprendimiento</a></li>
+                        <li><a class="dropdown-item" href="{% url 'gestion_creditos:solicitud_libranza' %}">Libranza</a></li>
+                    </ul>
+                </div>
             </div>
         </div>
 
@@ -183,7 +202,7 @@
                         <h3 class="table-title">Créditos por Línea</h3>
                     </div>
                     <div class="table-responsive">
-                        <table class="table">
+                        <table class="table table-dashboard">
                             <thead>
                                 <tr>
                                     <th>Línea de Crédito</th>
@@ -207,10 +226,10 @@
             <div class="col-12 col-lg-6">
                 <div class="table-container">
                     <div class="table-header">
-                        <h3 class="table-title">Créditos por Estado</h3>
+                        <h3 class="table-title">Créditos por estado</h3>
                     </div>
                     <div class="table-responsive">
-                        <table class="table">
+                        <table class="table table-dashboard">
                             <thead>
                                 <tr>
                                     <th>Estado</th>
@@ -251,10 +270,10 @@
         new Chart(portfolioCtx, {
             type: 'line',
             data: {
-                labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'],
+                labels: {{ portfolio_labels|safe }},
                 datasets: [{
                     label: 'Cartera Total',
-                    data: [2100000, 2150000, 2200000, 2180000, 2300000, 2400000],
+                    data: {{ portfolio_data|safe }},
                     borderColor: 'rgb(59, 130, 246)',
                     backgroundColor: 'rgba(59, 130, 246, 0.1)',
                     fill: true
@@ -270,11 +289,10 @@
         new Chart(distributionCtx, {
             type: 'doughnut',
             data: {
-                // SE COMENTA POR EL MOMENTO UNICAMENTE ES VISUAL, NO HAY DATOS
-                labels: ['Emprendimiento', 'Libranza'],
+                labels: {{ distribution_labels|safe }},
                 datasets: [{
-                    data: [0,1],
-                    backgroundColor: ['#f59e0b', '#10b981']
+                    data: {{ distribution_data|safe }},
+                    backgroundColor: ['#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6']
                 }]
             },
             options: {

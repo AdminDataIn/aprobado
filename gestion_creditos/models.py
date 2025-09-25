@@ -24,7 +24,9 @@ class Credito(models.Model):
         EN_REVISION = 'EN_REVISION', 'En Revisión'
         APROBADO = 'APROBADO', 'Aprobado'
         RECHAZADO = 'RECHAZADO', 'Rechazado'
-        FIRMADO = 'FIRMADO', 'Firmado' # Nuevo estado para la firma (conexion con autentic)
+        PENDIENTE_FIRMA = 'PENDIENTE_FIRMA', 'Pendiente Firma'
+        FIRMADO = 'FIRMADO', 'Firmado'
+        PENDIENTE_TRANSFERENCIA = 'PENDIENTE_TRANSFERENCIA', 'Pendiente por Transferencia'
         ACTIVO = 'ACTIVO', 'Activo'
         EN_MORA = 'EN_MORA', 'En Mora'
         PAGADO = 'PAGADO', 'Pagado'
@@ -32,8 +34,8 @@ class Credito(models.Model):
     # Campos comunes a todos los créditos
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='creditos')
     numero_credito = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-    linea = models.CharField(max_length=20, choices=LineaCredito.choices)
-    estado = models.CharField(max_length=20, choices=EstadoCredito.choices, default=EstadoCredito.SOLICITUD)
+    linea = models.CharField(max_length=30, choices=LineaCredito.choices)
+    estado = models.CharField(max_length=30, choices=EstadoCredito.choices, default=EstadoCredito.SOLICITUD)
     documento_enviado = models.BooleanField(default=False, help_text="Indica si el pagaré ha sido enviado para firma.")
     
     fecha_solicitud = models.DateTimeField(auto_now_add=True)
@@ -96,6 +98,7 @@ class CreditoEmprendimiento(models.Model):
 
     # --- Campos de Aprobación (existentes, pero ahora opcionales) ---
     monto_aprobado = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    tasa_interes = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Tasa de interés mensual")
     saldo_pendiente = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     valor_cuota = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     fecha_proximo_pago = models.DateField(null=True, blank=True)
@@ -112,7 +115,7 @@ class CreditoLibranza(models.Model):
     #!--- Relación con el Crédito Principal ---
     credito = models.OneToOneField(Credito, on_delete=models.CASCADE, related_name='detalle_libranza')
 
-    #? Información del crédito
+    #? Información de la solicitud
     valor_credito = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(100000)])
     plazo = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(12)])
 
@@ -133,6 +136,13 @@ class CreditoLibranza(models.Model):
     certificado_laboral = models.FileField(upload_to='credito_libranza/certificados_laborales/')
     desprendible_nomina = models.FileField(upload_to='credito_libranza/desprendibles_nomina/')
     certificado_bancario = models.FileField(upload_to='credito_libranza/certificados_bancarios/')
+
+    #? --- Campos de Aprobación ---
+    monto_aprobado = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    tasa_interes = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Tasa de interés mensual")
+    saldo_pendiente = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    valor_cuota = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    fecha_proximo_pago = models.DateField(null=True, blank=True)
 
     def __str__(self):
         return f"Detalle Libranza para Crédito {self.credito.id}"
@@ -158,3 +168,22 @@ class HistorialPago(models.Model):
 
     def __str__(self):
         return f"Pago {self.id} para Crédito {self.credito.id} - ${self.monto}"
+
+#? ----- Modelo de historial de estados -----
+class HistorialEstado(models.Model):
+    """Guarda un registro de cada cambio de estado de un crédito."""
+    credito = models.ForeignKey(Credito, on_delete=models.CASCADE, related_name='historial_estados')
+    estado_anterior = models.CharField(max_length=30, choices=Credito.EstadoCredito.choices, null=True, blank=True)
+    estado_nuevo = models.CharField(max_length=30, choices=Credito.EstadoCredito.choices)
+    fecha = models.DateTimeField(auto_now_add=True)
+    usuario_modificacion = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    motivo = models.TextField(blank=True, null=True, help_text="Razón o motivo del cambio de estado.")
+    comprobante_pago = models.FileField(upload_to='comprobantes_pago/', blank=True, null=True)
+
+    class Meta:
+        ordering = ['-fecha']
+        verbose_name = 'Historial de Estado'
+        verbose_name_plural = 'Historial de Estados'
+
+    def __str__(self):
+        return f"Crédito {self.credito.id}: {self.estado_anterior} -> {self.estado_nuevo}"

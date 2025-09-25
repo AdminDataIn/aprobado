@@ -1,8 +1,10 @@
 from django import forms
 from .models import CreditoLibranza, Empresa, CreditoEmprendimiento
+from decimal import Decimal
 
 #? --------- FORMULARIO DE CREDITO DE LIBRANZA ------------
 class CreditoLibranzaForm(forms.ModelForm):
+    valor_credito = forms.CharField(label='Valor crédito solicitado', required=True)
     class Meta:
         model = CreditoLibranza
         fields = [
@@ -73,9 +75,23 @@ class CreditoLibranzaForm(forms.ModelForm):
                 }
     
     def clean_valor_credito(self):
-        valor = self.cleaned_data.get('valor_credito')
-        if valor is not None and valor <= 0:
+        valor_str = self.cleaned_data.get('valor_credito')
+        if not valor_str:
+            raise forms.ValidationError(self.fields['valor_credito'].error_messages['required'])
+        
+        valor_str_cleaned = ''.join(filter(str.isdigit, valor_str))
+        
+        try:
+            valor = Decimal(valor_str_cleaned)
+        except (ValueError, TypeError):
+            raise forms.ValidationError(self.fields['valor_credito'].error_messages['invalid'])
+
+        if valor <= 0:
             raise forms.ValidationError('El valor del crédito debe ser mayor a 0.')
+        
+        if valor < 100000:
+            raise forms.ValidationError('El valor del crédito debe ser de al menos $100.000.')
+
         return valor
     
     def clean_cedula(self):

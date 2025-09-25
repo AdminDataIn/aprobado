@@ -1,9 +1,4 @@
 
-<!--
-    Archivo: templates/gestion_creditos/pagador_detalle_credito.html
-    Descripción: Página detallada para que los pagadores revisen el historial y estado de un crédito específico.
--->
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -12,33 +7,29 @@
     <title>Detalle de Crédito - Aprobado</title>
     {% load static %}
     {% load humanize %}
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" />
-    <!-- Base Styles -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
 </head>
-<body class="theme-dashboard">
-    <!-- Header -->
+<body class="theme-details">
     <header class="page-header">
-        <div class="container-fluid py-3" style="max-width: 1400px;">
+        <div class="container-fluid" style="max-width: 1400px;">
             <div class="d-flex align-items-center justify-content-between">
                 <a href="{% url 'gestion_creditos:pagador_dashboard' %}" class="logo">
                     <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;" />
                 </a>
                 <div class="d-flex align-items-center gap-3">
                     <div class="user-info">
-                        <div class="user-avatar">{{ request.user.username|slice:":1"|upper }}</div>
-                        <div class="user-details d-none d-md-block">
-                            <h6>{{ request.user.get_full_name|default:request.user.username }}</h6>
+                        <div class="user-details">
+                            <h6 class="mb-0">{{ request.user.get_full_name|default:request.user.username }}</h6>
                             <small>Pagador de {{ credito.detalle_libranza.empresa.nombre }}</small>
                         </div>
+                        <div class="user-avatar">{{ request.user.username|slice:":1"|upper }}</div>
                     </div>
-                     <form method="post" action="{% url 'account_logout' %}">
+                    <form method="post" action="{% url 'account_logout' %}">
                         {% csrf_token %}
-                        <button type="submit" class="btn btn-sm btn-outline-danger">
-                            <i class="bi bi-box-arrow-right me-1"></i>Cerrar Sesión
+                        <button type="submit" class="btn btn-outline">
+                            <i class="bi bi-box-arrow-right"></i>
                         </button>
                     </form>
                 </div>
@@ -47,87 +38,161 @@
     </header>
 
     <div class="container-fluid py-4" style="max-width: 1400px;">
-        <!-- Page Title -->
-        <div class="d-flex align-items-center justify-content-between mb-4">
+        <!-- Page Title & Breadcrumb -->
+        <div class="d-flex align-items-center justify-content-between mb-4 px-4">
             <div>
-                <a href="{% url 'gestion_creditos:pagador_dashboard' %}" class="btn btn-sm btn-outline-secondary mb-2">
-                    <i class="bi bi-arrow-left"></i> Volver al Dashboard
-                </a>
                 <h1 class="page-title">Detalle del Crédito</h1>
-                <p class="text-secondary m-0">Empleado: {{ credito.detalle_libranza.nombre_completo }}</p>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="{% url 'gestion_creditos:pagador_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Detalle del Crédito</li>
+                    </ol>
+                </nav>
             </div>
+            <a href="{% url 'gestion_creditos:pagador_dashboard' %}" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left me-2"></i>Volver al Dashboard
+            </a>
         </div>
 
-        <!-- Credit Details -->
-        <div class="row">
-            <div class="col-lg-8">
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="mb-0">Historial de Pagos</h5>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Fecha</th>
-                                    <th>Referencia</th>
-                                    <th class="text-end">Monto</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for pago in historial_pagos %}
-                                <tr>
-                                    <td>{{ pago.fecha_pago|date:"d/m/Y" }}</td>
-                                    <td>{{ pago.referencia_pago }}</td>
-                                    <td class="text-end">${{ pago.monto|intcomma }}</td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="3" class="text-center py-4">No se han registrado pagos.</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+        <div class="main-grid">
+            <div class="table-container">
+                <div class="table-header">
+                    <h3 class="table-title"><i class="bi bi-clock-history me-2"></i>Historial de Pagos</h3>
+                </div>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Referencia</th>
+                                <th class="text-end">Monto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pago in historial_pagos %}
+                            <tr>
+                                <td class="date-display">{{ pago.fecha_pago|date:"d/m/Y" }}</td>
+                                <td>{{ pago.referencia_pago }}</td>
+                                <td class="text-end amount-display">${{ pago.monto|intcomma }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" class="empty-row">
+                                    <div class="empty-state">
+                                        <i class="bi bi-receipt"></i>
+                                        <p>No se han registrado pagos.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
-            <div class="col-lg-4">
+
+            <div class="d-flex flex-column gap-4">
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="mb-0">Resumen del Crédito</h5>
+                        <h3 class="card-title"><i class="bi bi-file-text me-2"></i>Resumen del Crédito</h3>
                     </div>
-                    <div class="card-body">
-                        <ul class="list-group list-group-flush">
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                Monto Original:
-                                <span>${{ credito.detalle_libranza.valor_credito|intcomma }}</span>
-                            </li>
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                Total Pagado:
-                                <span class="text-success">${{ total_pagado|intcomma }}</span>
-                            </li>
-                            <li class="list-group-item d-flex justify-content-between align-items-center fw-bold">
-                                Saldo Pendiente:
-                                <span>${{ saldo_pendiente|intcomma }}</span>
-                            </li>
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                Estado:
-                                <span class="status-badge 
-                                    {% if credito.estado == 'ACTIVO' %}status-active
-                                    {% elif credito.estado == 'EN_MORA' %}status-overdue
-                                    {% elif credito.estado == 'PAGADO' %}status-paid
-                                    {% else %}status-pending{% endif %}">
-                                    {{ credito.get_estado_display }}
-                                </span>
-                            </li>
-                        </ul>
+                    <div class="card-content">
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">Monto Original</span>
+                                <span class="info-value">${{ credito.detalle_libranza.valor_credito|intcomma }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Total Pagado</span>
+                                <span class="info-value text-success">${{ total_pagado|intcomma }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Saldo Pendiente</span>
+                                <span class="info-value">${{ saldo_pendiente|intcomma }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Estado</span>
+                                <div class="info-value">
+                                    <span class="status-badge 
+                                        {% if credito.estado == 'ACTIVO' %}status-active
+                                        {% elif credito.estado == 'EN_MORA' %}status-overdue
+                                        {% elif credito.estado == 'PAGADO' %}status-paid
+                                        {% else %}status-pending{% endif %}">
+                                        {{ credito.get_estado_display }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="bi bi-lightning me-2"></i>
+                            Acciones Rápidas
+                        </h2>
+                    </div>
+                    <div class="card-content">
+                        <button type="button" class="btn btn-outline" data-bs-toggle="modal" data-bs-target="#infoCompletaModal" style="width: 100%; margin-bottom: 0.75rem;">
+                            <i class="bi bi-search me-2"></i>
+                            Ver Información Completa
+                        </button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Bootstrap JS -->
+    <!-- Modal Info Completa -->
+    <div class="modal fade" id="infoCompletaModal" tabindex="-1" aria-labelledby="infoCompletaModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="infoCompletaModalLabel">Información Completa de la Solicitud</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% if credito.linea == 'LIBRANZA' and credito.detalle_libranza %}
+                        {% with detalle=credito.detalle_libranza %}
+                            <h4>Detalles del Crédito de Libranza</h4>
+                            <p><strong>Nombres:</strong> {{ detalle.nombres }}</p>
+                            <p><strong>Apellidos:</strong> {{ detalle.apellidos }}</p>
+                            <p><strong>Cédula:</strong> {{ detalle.cedula }}</p>
+                            <p><strong>Dirección:</strong> {{ detalle.direccion }}</p>
+                            <p><strong>Teléfono:</strong> {{ detalle.telefono }}</p>
+                            <p><strong>Correo:</strong> {{ detalle.correo_electronico }}</p>
+                            <p><strong>Empresa:</strong> {{ detalle.empresa.nombre }}</p>
+                            <p><strong>Valor Solicitado:</strong> ${{ detalle.valor_credito|intcomma }}</p>
+                            <p><strong>Plazo:</strong> {{ detalle.plazo }} meses</p>
+                        {% endwith %}
+                    {% elif credito.linea == 'EMPRENDIMIENTO' and credito.detalle_emprendimiento %}
+                        {% with detalle=credito.detalle_emprendimiento %}
+                            <h4>Detalles del Crédito de Emprendimiento</h4>
+                            <p><strong>Nombre Completo:</strong> {{ detalle.nombre }}</p>
+                            <p><strong>Cédula:</strong> {{ detalle.numero_cedula }}</p>
+                            <p><strong>Fecha de Nacimiento:</strong> {{ detalle.fecha_nac }}</p>
+                            <p><strong>Celular:</strong> {{ detalle.celular_wh }}</p>
+                            <p><strong>Dirección:</strong> {{ detalle.direccion }}</p>
+                            <p><strong>Estado Civil:</strong> {{ detalle.estado_civil }}</p>
+                            <p><strong>Personas a Cargo:</strong> {{ detalle.numero_personas_cargo }}</p>
+                            <hr>
+                            <h5>Negocio</h5>
+                            <p><strong>Nombre:</strong> {{ detalle.nombre_negocio }}</p>
+                            <p><strong>Ubicación:</strong> {{ detalle.ubicacion_negocio }}</p>
+                            <p><strong>Tiempo Operando:</strong> {{ detalle.tiempo_operando }}</p>
+                            <p><strong>Días Trabajados/Semana:</strong> {{ detalle.dias_trabajados_sem }}</p>
+                            <p><strong>Productos/Servicios:</strong> {{ detalle.prod_serv_ofrec }}</p>
+                            <p><strong>Ingresos Promedio/Mes:</strong> {{ detalle.ingresos_prom_mes }}</p>
+                            <p><strong>Clientes Atendidos/Día:</strong> {{ detalle.cli_aten_day }}</p>
+                        {% endwith %}
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

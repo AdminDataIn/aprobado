@@ -131,8 +131,8 @@
         
         .divider span {
             padding: 0 1rem;
-            font-size: 0.75rem;
-            color: #9ca3af;
+            font-size: 0.85rem;
+            color: #8b919cff;
             font-weight: 500;
         }
         
@@ -212,7 +212,7 @@
             <div class="card-header">
                 <a href="/"><img src="{% static '/images/logo-dark.png' %}" alt="Logo Aprobado"></a>
                 <h3>Acceso para Empresas</h3>
-                <p>Inicia sesión para gestionar tus créditos de libranza.</p>
+                <p>Inicia sesión como <strong>pagador</strong> para gestionar tus créditos de libranza.</p>
             </div>
             <div class="card-body">
                 {% if messages %}
@@ -244,7 +244,7 @@
                 <div class="mt-4">
                     <div class="divider">
                         <hr>
-                        <span>o</span>
+                        <span><strong>O para ingresar como empleado</strong></span>
                         <hr>
                     </div>
                     {% load socialaccount %}

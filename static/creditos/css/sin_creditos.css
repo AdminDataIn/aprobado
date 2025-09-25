@@ -1,149 +1,57 @@
 body {
-            font-family: 'Poppins', sans-serif;
-            background-color: #f8f9fa;
-        }
+    font-family: 'Poppins', sans-serif;
+    background-color: #f8f9fa; /* Un fondo gris claro y limpio */
+}
 
-        .navbar {
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
+.navbar {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
 
-        .empty-state {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 20px;
-            color: white;
-            padding: 60px 40px;
-            text-align: center;
-            margin: 40px 0;
-            position: relative;
-            overflow: hidden;
-        }
+.empty-state-card {
+    border: none;
+    border-radius: 1rem; /* Bordes redondeados suaves */
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.07);
+    padding: 3rem;
+    margin-top: 2rem;
+}
 
-        .empty-state::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-            animation: floating 6s ease-in-out infinite;
-        }
+.icon-circle {
+    width: 80px;
+    height: 80px;
+    background-color: #e9ecef; /* Un color de fondo sutil para el ícono */
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem;
+}
 
-        @keyframes floating {
-            0%, 100% { transform: translate(0, 0) rotate(0deg); }
-            33% { transform: translate(30px, -30px) rotate(120deg); }
-            66% { transform: translate(-20px, 20px) rotate(240deg); }
-        }
+.icon-circle i {
+    font-size: 2.5rem;
+    color: #0d6efd; /* Color primario de Bootstrap */
+}
 
-        .empty-state-content {
-            position: relative;
-            z-index: 2;
-        }
+.card-title {
+    font-weight: 700;
+    color: #343a40; /* Texto oscuro principal */
+    margin-bottom: 1rem;
+}
 
-        .empty-state-icon {
-            width: 120px;
-            height: 120px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 30px;
-            backdrop-filter: blur(10px);
-            border: 2px solid rgba(255,255,255,0.3);
-        }
+.card-text {
+    color: #6c757d; /* Texto secundario gris */
+    max-width: 550px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 2rem;
+    line-height: 1.6;
+}
 
-        .empty-state-icon i {
-            font-size: 3rem;
-            color: white;
-        }
+/* El botón usará los estilos de Bootstrap por defecto, pero podemos añadir una transición */
+.btn-primary {
+    transition: all 0.3s ease;
+}
 
-        .empty-state h2 {
-            font-size: 2.2rem;
-            font-weight: 700;
-            margin-bottom: 20px;
-        }
-
-        .empty-state p {
-            font-size: 1.1rem;
-            opacity: 0.9;
-            margin-bottom: 40px;
-            max-width: 600px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        .btn-apply {
-            background: linear-gradient(45deg, #28a745, #20c997);
-            border: none;
-            padding: 15px 40px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            border-radius: 50px;
-            color: white;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.3);
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .btn-apply:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 12px 35px rgba(40, 167, 69, 0.4);
-            color: white;
-        }
-
-        .btn-apply::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-            transition: left 0.5s;
-        }
-
-        .btn-apply:hover::before {
-            left: 100%;
-        }
-
-        @media (max-width: 768px) {
-            .empty-state {
-                padding: 40px 20px;
-                margin: 20px 0;
-            }
-
-            .empty-state h2 {
-                font-size: 1.8rem;
-            }
-
-            .empty-state-icon {
-                width: 80px;
-                height: 80px;
-            }
-
-            .empty-state-icon i {
-                font-size: 2rem;
-            }
-
-            .btn-apply {
-                padding: 12px 30px;
-                font-size: 1rem;
-            }
-
-            .feature-card {
-                padding: 20px;
-                margin-bottom: 20px;
-            }
-
-            .stats-section {
-                padding: 20px;
-            }
-
-            .stat-number {
-                font-size: 2rem;
-            }
-        }
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 123, 255, 0.2);
+}

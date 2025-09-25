@@ -81,7 +81,7 @@ body {
     border: 1px solid var(--border);
     border-radius: var(--border-radius-lg);
     padding: 2rem;
-    margin-bottom: 2rem;
+    margin-bottom: 1rem;
     box-shadow: var(--shadow);
     position: sticky;
     top: 0;
@@ -928,6 +928,117 @@ body {
     border-radius: 50%;
 }
 
+/* ===== MODALES - INFORMACIÓN COMPLETA ===== */
+#infoCompletaModal .modal-dialog {
+    max-width: 800px;
+    margin: 1.75rem auto;
+}
+
+#infoCompletaModal .modal-content {
+    border: none;
+    border-radius: var(--border-radius-xl);
+    box-shadow: var(--shadow-xl);
+    overflow: hidden;
+}
+
+#infoCompletaModal .modal-header {
+    background: linear-gradient(135deg, var(--accent-blue), var(--purple));
+    color: var(--text-inverse);
+    border-bottom: none;
+    padding: 1.5rem 2rem;
+}
+
+#infoCompletaModal .modal-title {
+    font-weight: 600;
+    font-size: 1.25rem;
+    margin: 0;
+    color: var(--text-inverse);
+}
+
+#infoCompletaModal .btn-close {
+    filter: brightness(0) invert(1);
+    opacity: 0.8;
+    transition: var(--transition);
+}
+
+#infoCompletaModal .btn-close:hover {
+    opacity: 1;
+}
+
+#infoCompletaModal .modal-body {
+    padding: 2rem;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+#infoCompletaModal .modal-body h4 {
+    color: var(--primary-dark);
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border);
+    font-size: 1.1rem;
+}
+
+#infoCompletaModal .modal-body h5 {
+    color: var(--text-secondary);
+    font-weight: 500;
+    margin: 1.5rem 0 1rem 0;
+    font-size: 1rem;
+}
+
+#infoCompletaModal .modal-body p {
+    margin-bottom: 0.75rem;
+    line-height: 1.6;
+    font-size: 0.95rem;
+}
+
+#infoCompletaModal .modal-body p strong {
+    color: var(--text-secondary);
+    font-weight: 600;
+    display: inline-block;
+    min-width: 140px;
+}
+
+#infoCompletaModal .modal-body hr {
+    margin: 2rem 0 1.5rem 0;
+    border: none;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--border), transparent);
+}
+
+#infoCompletaModal .modal-footer {
+    background-color: var(--bg-tertiary);
+    border-top: 1px solid var(--border);
+    padding: 1rem 2rem;
+    justify-content: center;
+}
+
+#infoCompletaModal .modal-footer .btn-secondary {
+    background: linear-gradient(135deg, var(--accent-blue), var(--purple));
+    border: none;
+    padding: 0.5rem 2rem;
+    font-weight: 500;
+    border-radius: var(--border-radius);
+    transition: var(--transition);
+    color: var(--text-inverse);
+}
+
+#infoCompletaModal .modal-footer .btn-secondary:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+/* Animaciones de entrada para modales */
+#infoCompletaModal.fade .modal-dialog {
+    transform: translate(0, -50px);
+    transition: transform 0.3s ease-out;
+}
+
+#infoCompletaModal.show .modal-dialog {
+    transform: translate(0, 0);
+}
+
 /* ===== VARIACIONES DE TEMA ===== */
 .theme-dashboard {
     --primary-accent: var(--accent-blue);
@@ -1048,6 +1159,24 @@ body {
     
     .card-header, .card-content {
         padding: 1rem;
+    }
+
+    /* Responsive para modales */
+    #infoCompletaModal .modal-dialog {
+        margin: 1rem;
+        max-width: calc(100% - 2rem);
+    }
+    
+    #infoCompletaModal .modal-header,
+    #infoCompletaModal .modal-body,
+    #infoCompletaModal .modal-footer {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+    }
+    
+    #infoCompletaModal .modal-body p strong {
+        min-width: 120px;
+        font-size: 0.9rem;
     }
 }
 

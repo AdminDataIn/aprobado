@@ -20,29 +20,46 @@
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
 </head>
 <body class="theme-applications">
-    <!-- Page Header -->
-    <div class="page-header">
-        <div class="container-fluid py-3" style="max-width: 1400px;">
+    <!-- Header -->
+    <header class="page-header">
+        <div class="container-fluid" style="max-width: 1400px;">
             <div class="d-flex align-items-center justify-content-between">
-                <div>
-                    <h1 class="page-title">Solicitudes de Crédito</h1>
-                    <nav aria-label="breadcrumb">
-                        <ol class="breadcrumb">
-                            <li class="breadcrumb-item">
-                                <a href="{% url 'gestion_creditos:admin_dashboard' %}">
-                                    <i class="bi bi-house-door me-1"></i>Dashboard
-                                </a>
-                            </li>
-                            <li class="breadcrumb-item active">Solicitudes</li>
-                        </ol>
-                    </nav>
-                </div>
-                <a href="{% url 'gestion_creditos:admin_dashboard' %}" class="btn btn-outline-primary">
-                    <i class="bi bi-arrow-left me-2"></i>Volver al Dashboard
+                <a href="{% url 'gestion_creditos:admin_dashboard' %}" class="logo">
+                    <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;" />
                 </a>
+                <div class="d-flex align-items-center gap-3">
+                    <button class="btn btn-sm btn-outline-primary position-relative">
+                        <i class="bi bi-bell"></i>
+                        <div class="notification-badge"></div>
+                    </button>
+                    <div class="user-info">
+                        <div class="user-avatar">AU</div>
+                        <div class="user-details d-none d-md-block">
+                            <h6>Admin User</h6>
+                            <small>Administrador</small>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
+    </header>
+
+    <div class="container-fluid py-4" style="max-width: 1400px;">
+        <!-- Page Title & Breadcrumb -->
+        <div class="d-flex align-items-center justify-content-between mb-4 px-4">
+            <div>
+                <h1 class="page-title">Solicitudes de Crédito</h1>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="{% url 'gestion_creditos:admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Solicitudes</li>
+                    </ol>
+                </nav>
+            </div>
+            <a href="{% url 'gestion_creditos:admin_dashboard' %}" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left me-2"></i>Volver al Dashboard
+            </a>
+        </div>
 
     <div class="container-fluid" style="max-width: 1400px;">
         <!-- Filters Section -->
@@ -124,7 +141,7 @@
         <div class="table-container">
             <div class="table-header">
                 <h3 class="table-title">
-                    <i class="bi bi-table me-2"></i>Lista de Solicitudes
+                    <i class="bi bi-table me-2"></i>Lista de solicitudes
                     {% if solicitudes.paginator.count %}
                     <span class="badge bg-primary ms-2">{{ solicitudes.paginator.count }}</span>
                     {% endif %}
@@ -138,7 +155,7 @@
                 <table class="table">
                     <thead>
                         <tr>
-                            <th>Usuario</th>
+                            <th>Solicitante</th>
                             <th>Línea de Crédito</th>
                             <th>Monto Solicitado</th>
                             <th>Estado</th>
@@ -152,11 +169,11 @@
                             <td>
                                 <div class="user-info">
                                     <div class="user-avatar">
-                                        {{ solicitud.usuario.first_name|first|default:"U" }}{{ solicitud.usuario.last_name|first|default:"" }}
+                                        {{ solicitud.nombre_solicitante|first|default:"S" }}
                                     </div>
                                     <div class="user-details">
-                                        <h6>{{ solicitud.usuario.get_full_name|default:solicitud.usuario.username }}</h6>
-                                        <small>{{ solicitud.usuario.email|default:"Sin email" }}</small>
+                                        <h6>{{ solicitud.nombre_solicitante }}</h6>
+                                        <small>C.C. {{ solicitud.documento_solicitante }}</small>
                                     </div>
                                 </div>
                             </td>

@@ -1,108 +1,105 @@
-
-<!--
-    Archivo: templates/gestion_creditos/admin_creditos_activos.html
-    Descripción: Página para que los administradores gestionen y visualicen créditos activos.
--->
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Créditos Activos - Fintech Pro</title>
+    <title>Gestión de Créditos - Fintech Pro</title>
     {% load static %}
+    {% load humanize %}
     <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <!-- Fintech Base Styles -->
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
 </head>
-<body class="theme-credits">
-    {% load humanize %}
-    
-    <!-- Page Header -->
-    <div class="page-header">
-        <div class="container-fluid py-3" style="max-width: 1400px;">
+<body class="theme-applications">
+    <!-- Header -->
+    <header class="page-header">
+        <div class="container-fluid" style="max-width: 1400px;">
             <div class="d-flex align-items-center justify-content-between">
-                <div>
-                    <h1 class="page-title">Gestión de Créditos Activos</h1>
-                    <nav aria-label="breadcrumb">
-                        <ol class="breadcrumb">
-                            <li class="breadcrumb-item">
-                                <a href="{% url 'gestion_creditos:admin_dashboard' %}">
-                                    <i class="bi bi-house-door me-1"></i>Dashboard
-                                </a>
-                            </li>
-                            <li class="breadcrumb-item active">Créditos Activos</li>
-                        </ol>
-                    </nav>
-                </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-outline-primary">
-                        <i class="bi bi-download me-2"></i>Exportar
+                <a href="{% url 'gestion_creditos:admin_dashboard' %}" class="logo">
+                    <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;" />
+                </a>
+                <div class="d-flex align-items-center gap-3">
+                    <button class="btn btn-sm btn-outline-primary position-relative">
+                        <i class="bi bi-bell"></i>
+                        <div class="notification-badge"></div>
                     </button>
-                    <button class="btn btn-primary">
-                        <i class="bi bi-plus-lg me-2"></i>Nuevo Crédito
-                    </button>
+                    <div class="user-info">
+                        <div class="user-avatar">AU</div>
+                        <div class="user-details d-none d-md-block">
+                            <h6>Admin User</h6>
+                            <small>Administrador</small>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
+    </header>
 
-    <div class="container-fluid" style="max-width: 1400px;">
-        <!-- Summary Cards -->
-        <div class="row g-4 mb-4">
-            <div class="col-12 col-md-6 col-xl-3">
-                <div class="card metric-card">
-                    <div class="metric-icon" style="background-color: var(--success);">
-                        <i class="bi bi-credit-card-2-front"></i>
-                    </div>
-                    <div class="metric-value">{{ creditos.count|default:"0" }}</div>
-                    <div class="metric-label">Total Créditos Activos</div>
-                </div>
+    <div class="container-fluid py-4" style="max-width: 1400px;">
+        <!-- Page Title & Breadcrumb -->
+        <div class="d-flex align-items-center justify-content-between mb-4 px-4">
+            <div>
+                <h1 class="page-title">Gestión de Créditos</h1>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="{% url 'gestion_creditos:admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Créditos Activos</li>
+                    </ol>
+                </nav>
             </div>
-            <div class="col-12 col-md-6 col-xl-3">
-                <div class="card metric-card">
-                    <div class="metric-icon" style="background-color: var(--accent-blue);">
-                        <i class="bi bi-wallet2"></i>
-                    </div>
-                    <div class="metric-value">$2,450,000</div>
-                    <div class="metric-label">Valor Total Cartera</div>
+            <a href="{% url 'gestion_creditos:admin_solicitudes' %}" class="btn btn-outline-primary">
+                <i class="bi bi-journal-text me-2"></i>Ver Solicitudes
+            </a>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <a href="#" class="action-card">
+                <div class="action-icon" style="background-color: var(--success);">
+                    <i class="bi bi-credit-card"></i>
                 </div>
-            </div>
-            <div class="col-12 col-md-6 col-xl-3">
-                <div class="card metric-card">
-                    <div class="metric-icon" style="background-color: var(--warning);">
-                        <i class="bi bi-exclamation-triangle"></i>
-                    </div>
-                    <div class="metric-value text-warning">15</div>
-                    <div class="metric-label">En Mora</div>
+                <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">{{ creditos.paginator.count|default:"0" }}</h3>
+                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Total Créditos en Cartera</p>
+            </a>
+            <a href="#" class="action-card">
+                <div class="action-icon" style="background-color: var(--accent-blue);">
+                    <i class="bi bi-wallet2"></i>
                 </div>
-            </div>
-            <div class="col-12 col-md-6 col-xl-3">
-                <div class="card metric-card">
-                    <div class="metric-icon" style="background-color: var(--info);">
-                        <i class="bi bi-graph-up-arrow"></i>
-                    </div>
-                    <div class="metric-value">94.2%</div>
-                    <div class="metric-label">Tasa de Recuperación</div>
+                <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">$0</h3>
+                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Valor Total Cartera</p>
+            </a>
+            <a href="#" class="action-card">
+                <div class="action-icon" style="background-color: var(--warning);">
+                    <i class="bi bi-exclamation-triangle"></i>
                 </div>
-            </div>
+                <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">0</h3>
+                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Créditos en Mora</p>
+            </a>
+            <a href="#" class="action-card">
+                <div class="action-icon" style="background-color: var(--info);">
+                    <i class="bi bi-graph-up-arrow"></i>
+                </div>
+                <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">0%</h3>
+                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Tasa de Recuperación</p>
+            </a>
         </div>
 
         <!-- Filters Section -->
         <div class="filter-section">
+            <h3 class="section-title">Filtros y Búsqueda</h3>
             <form method="get" id="filterForm">
-                <div class="row g-3 align-items-end">
-                    <div class="col-12 col-md-6 col-lg-3">
+                <div class="filter-grid">
+                    <div class="form-group">
                         <label for="search" class="form-label">
                             <i class="bi bi-search me-1"></i>Buscar Cliente
                         </label>
                         <input type="text" name="search" id="search" value="{{ search }}" 
-                               class="form-control" placeholder="Nombre o documento...">
+                               class="form-control" placeholder="Nombre, usuario o documento...">
                     </div>
-                    <div class="col-12 col-md-6 col-lg-2">
+                    <div class="form-group">
                         <label for="linea" class="form-label">
                             <i class="bi bi-tag me-1"></i>Línea de Crédito
                         </label>
@@ -113,7 +110,7 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-12 col-md-6 col-lg-2">
+                    <div class="form-group">
                         <label for="estado" class="form-label">
                             <i class="bi bi-flag me-1"></i>Estado
                         </label>
@@ -124,37 +121,32 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-12 col-lg-3">
+                    <div class="form-group">
                         <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-primary">
+                            <button type="submit" class="btn btn-primary filter-btn">
                                 <i class="bi bi-funnel me-1"></i>Filtrar
                             </button>
-                            <button type="button" class="btn btn-outline-secondary" onclick="clearFilters()">
-                                <i class="bi bi-x-lg"></i>
-                            </button>
+                            <a href="{% url 'gestion_creditos:admin_creditos_activos' %}" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
                         </div>
                     </div>
                 </div>
             </form>
-            
-            <!-- Active Filters Display -->
-            <div id="activeFilters" class="mt-3"></div>
         </div>
 
         <!-- Credits Table -->
-        <div class="table-container">
+        <div class="table-container mt-4">
             <div class="table-header">
                 <h3 class="table-title">
-                    <i class="bi bi-table me-2"></i>Lista de Créditos
-                    <span class="badge bg-primary ms-2">{{ creditos.count|default:"0" }}</span>
+                    <i class="bi bi-table me-2"></i>Lista de créditos
+                    <span class="badge bg-primary ms-2">{{ creditos.paginator.count }}</span>
                 </h3>
-                <button class="btn btn-sm btn-outline-primary" onclick="refreshTable()">
+                <button class="btn btn-sm btn-outline-primary" onclick="location.reload()">
                     <i class="bi bi-arrow-clockwise"></i>
                 </button>
             </div>
             
             <div class="table-responsive">
-                <table class="table">
+                <table class="table table-hover">
                     <thead>
                         <tr>
                             <th>Cliente</th>
@@ -162,8 +154,8 @@
                             <th>Monto Aprobado</th>
                             <th>Saldo Pendiente</th>
                             <th>Estado</th>
-                            <th>Fecha</th>
-                            <th>Acciones</th>
+                            <th>Fecha Solicitud</th>
+                            <th style="text-align: center;">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -175,22 +167,24 @@
                                         {{ credito.usuario.first_name|first|default:"U" }}{{ credito.usuario.last_name|first|default:"" }}
                                     </div>
                                     <div class="user-details">
-                                        <h6>{{ credito.usuario.get_full_name|default:credito.usuario.username }}</h6>
-                                        <small>{{ credito.usuario.email|default:"Sin email" }}</small>
+                                        <h6 class="mb-0">
+                                            {% if credito.linea == 'LIBRANZA' %}
+                                                {{ credito.detalle_libranza.nombre_completo }}
+                                            {% elif credito.linea == 'EMPRENDIMIENTO' %}
+                                                {{ credito.detalle_emprendimiento.nombre }}
+                                            {% else %}
+                                                {{ credito.usuario.get_full_name|default:credito.usuario.username }}
+                                            {% endif %}
+                                        </h6>
+                                        <small class="text-muted">{{ credito.detalle_libranza.cedula|default:credito.detalle_emprendimiento.numero_cedula }}</small>
                                     </div>
                                 </div>
                             </td>
+                            <td><span class="line-badge">{{ credito.get_linea_display }}</span></td>
+                            <td><strong class="text-primary">${{ credito.monto_aprobado|intcomma }}</strong></td>
+                            <td>${{ credito.saldo_pendiente|intcomma }}</td>
                             <td>
-                                <span class="line-badge">{{ credito.get_linea_display }}</span>
-                            </td>
-                            <td>
-                                <strong class="text-primary">${{ credito.monto_aprobado|intcomma }}</strong>
-                            </td>
-                            <td>
-                                <strong class="text-warning">${{ credito.saldo_pendiente|intcomma }}</strong>
-                            </td>
-                            <td>
-                                <span class="status-badge
+                                <span class="status-badge 
                                     {% if credito.estado == 'ACTIVO' %}status-active
                                     {% elif credito.estado == 'EN_MORA' %}status-overdue
                                     {% elif credito.estado == 'PAGADO' %}status-paid
@@ -199,25 +193,10 @@
                                 </span>
                             </td>
                             <td>{{ credito.fecha_solicitud|date:"d/m/Y" }}</td>
-                            <td>
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" 
-                                            data-bs-toggle="dropdown">
-                                        <i class="bi bi-three-dots"></i>
-                                    </button>
-                                    <ul class="dropdown-menu">
-                                        <li>
-                                            <a class="dropdown-item" href="{% url 'gestion_creditos:admin_detalle_credito' credito.id %}">
-                                                <i class="bi bi-eye me-2"></i>Ver Detalles
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a class="dropdown-item" href="#">
-                                                <i class="bi bi-credit-card me-2"></i>Registrar Pago
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </div>
+                            <td style="text-align: center;">
+                                <a href="{% url 'gestion_creditos:admin_detalle_credito' credito.id %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye me-1"></i>Ver
+                                </a>
                             </td>
                         </tr>
                         {% empty %}
@@ -238,7 +217,7 @@
 
         <!-- Pagination -->
         {% if creditos.has_other_pages %}
-        <div class="d-flex justify-content-center mt-4">
+        <div class="pagination-container">
             <nav aria-label="Pagination">
                 <ul class="pagination">
                     {% if creditos.has_previous %}
@@ -270,39 +249,20 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
-        // Filter functionality
-        function clearFilters() {
-            document.querySelectorAll('#filterForm input, #filterForm select').forEach(input => {
-                if (input.type === 'select-one') {
-                    input.selectedIndex = 0;
-                } else {
-                    input.value = '';
-                }
-            });
-            document.getElementById('filterForm').submit();
-        }
-
-        // Refresh functionality
-        function refreshTable() {
-            const btn = event.target.closest('button');
-            const originalContent = btn.innerHTML;
-            btn.innerHTML = '<span class="loading"></span>';
-            btn.disabled = true;
-            
-            setTimeout(() => {
-                btn.innerHTML = originalContent;
-                btn.disabled = false;
-            }, 1000);
-        }
-
-        // Row hover effects
-        document.querySelectorAll('tbody tr').forEach(row => {
-            row.addEventListener('mouseenter', function() {
-                this.style.backgroundColor = 'rgba(16, 185, 129, 0.05)';
-            });
-            row.addEventListener('mouseleave', function() {
-                this.style.backgroundColor = '';
-            });
+        // Auto-submit del formulario cuando cambian los selects
+        document.getElementById('linea').addEventListener('change', function() {
+            this.form.submit();
+        });
+        
+        document.getElementById('estado').addEventListener('change', function() {
+            this.form.submit();
+        });
+        
+        // Búsqueda con Enter
+        document.getElementById('search').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                this.form.submit();
+            }
         });
     </script>
 </body>

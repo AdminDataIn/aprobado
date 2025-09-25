@@ -1,10 +1,17 @@
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+
+@csrf_exempt
+def webhook_firma_documento(request, numero_credito):
+    # Esta es una vista temporal. La lógica real se implementará aquí.
+    return JsonResponse({'status': 'ok'})
+
+
 from django.shortcuts import get_object_or_404, render, redirect
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.conf import settings
-from .models import Credito, CreditoLibranza, CreditoEmprendimiento, Empresa, HistorialPago
+from .models import Credito, CreditoLibranza, CreditoEmprendimiento, Empresa, HistorialPago, HistorialEstado
 from .forms import CreditoLibranzaForm, CreditoEmprendimientoForm
 from configuraciones.models import ConfiguracionPeso
 from openai import OpenAI
@@ -13,10 +20,12 @@ from decimal import Decimal
 import logging
 import csv
 import io
+import json
+import zipfile
 from django.db import transaction
 from django.contrib import messages
-from django.db.models import Q, Count, Sum, Case, When, DecimalField, F, Subquery, Value
-from django.db.models.functions import Coalesce
+from django.db.models import Q, Count, Sum, Case, When, DecimalField, F, Subquery, Value, CharField
+from django.db.models.functions import Coalesce, TruncMonth, Concat
 from django.utils import timezone
 from django.core.paginator import Paginator
 from usuarios.models import PerfilPagador
@@ -150,11 +159,10 @@ def admin_dashboard_view(request):
         estado__in=['ACTIVO', 'EN_MORA']
     ).aggregate(total=Sum('detalle_emprendimiento__saldo_pendiente'))['total'] or 0
 
-    saldo_libranza_cartera = 0
-    creditos_libranza_cartera = Credito.objects.filter(linea='LIBRANZA', estado__in=['ACTIVO', 'EN_MORA'])
-    for credito in creditos_libranza_cartera:
-        pagos = HistorialPago.objects.filter(credito=credito, estado='EXITOSO').aggregate(total=Sum('monto'))['total'] or 0
-        saldo_libranza_cartera += (credito.detalle_libranza.valor_credito - pagos)
+    saldo_libranza_cartera = Credito.objects.filter(
+        linea='LIBRANZA',
+        estado__in=['ACTIVO', 'EN_MORA']
+    ).aggregate(total=Sum('detalle_libranza__saldo_pendiente'))['total'] or 0
 
     saldo_cartera_total = saldo_emprendimiento_cartera + saldo_libranza_cartera
 
@@ -163,11 +171,10 @@ def admin_dashboard_view(request):
         estado='EN_MORA'
     ).aggregate(total=Sum('detalle_emprendimiento__saldo_pendiente'))['total'] or 0
 
-    monto_libranza_en_mora = 0
-    creditos_libranza_mora = Credito.objects.filter(linea='LIBRANZA', estado='EN_MORA')
-    for credito in creditos_libranza_mora:
-        pagos = HistorialPago.objects.filter(credito=credito, estado='EXITOSO').aggregate(total=Sum('monto'))['total'] or 0
-        monto_libranza_en_mora += (credito.detalle_libranza.valor_credito - pagos)
+    monto_libranza_en_mora = Credito.objects.filter(
+        linea='LIBRANZA',
+        estado='EN_MORA'
+    ).aggregate(total=Sum('detalle_libranza__saldo_pendiente'))['total'] or 0
 
     monto_total_en_mora = monto_emprendimiento_en_mora + monto_libranza_en_mora
     
@@ -175,15 +182,41 @@ def admin_dashboard_view(request):
         count=Count('id')
     )
     
-    creditos_por_estado = Credito.objects.values('estado').annotate(
-        count=Count('id')
-    )
-    
+    creditos_por_estado_list = list(Credito.objects.values('estado').annotate(count=Count('id')))
+    for item in creditos_por_estado_list:
+        if total_creditos > 0:
+            item['porcentaje'] = (item['count'] / total_creditos) * 100
+        else:
+            item['porcentaje'] = 0
+
     proximos_vencer = Credito.objects.filter(
         linea='EMPRENDIMIENTO',
         estado='ACTIVO',
         detalle_emprendimiento__fecha_proximo_pago__lte=timezone.now().date() + timedelta(days=7)
     ).count()
+
+    # Datos para gráficos
+    six_months_ago = timezone.now() - timedelta(days=180)
+    portfolio_evolution = Credito.objects.filter(
+        fecha_solicitud__gte=six_months_ago
+    ).annotate(
+        month=TruncMonth('fecha_solicitud')
+    ).values('month').annotate(
+        total_value=Sum(
+            Case(
+                When(linea='EMPRENDIMIENTO', then='detalle_emprendimiento__monto_aprobado'),
+                When(linea='LIBRANZA', then='detalle_libranza__monto_aprobado'),
+                default=0,
+                output_field=DecimalField()
+            )
+        )
+    ).order_by('month')
+
+    portfolio_labels = [item['month'].strftime('%b %Y') for item in portfolio_evolution]
+    portfolio_data = [float(item['total_value']) for item in portfolio_evolution if item['total_value'] is not None]
+
+    distribution_labels = [item['linea'] for item in creditos_por_linea]
+    distribution_data = [item['count'] for item in creditos_por_linea]
     
     context = {
         'total_creditos': total_creditos,
@@ -192,8 +225,12 @@ def admin_dashboard_view(request):
         'saldo_cartera_total': saldo_cartera_total,
         'monto_total_en_mora': monto_total_en_mora,
         'creditos_por_linea': creditos_por_linea,
-        'creditos_por_estado': creditos_por_estado,
+        'creditos_por_estado': creditos_por_estado_list,
         'proximos_vencer': proximos_vencer,
+        'portfolio_labels': json.dumps(portfolio_labels),
+        'portfolio_data': json.dumps(portfolio_data),
+        'distribution_labels': json.dumps(distribution_labels),
+        'distribution_data': json.dumps(distribution_data),
     }
     
     return render(request, 'gestion_creditos/admin_dashboard.html', context)
@@ -207,7 +244,7 @@ def admin_solicitudes_view(request):
     linea_filter = request.GET.get('linea', '')
     search = request.GET.get('search', '')
     
-    solicitudes = Credito.objects.filter(estado__in=['SOLICITUD', 'EN_REVISION'])
+    solicitudes = Credito.objects.exclude(estado__in=['ACTIVO', 'PAGADO'])
     
     if estado_filter:
         solicitudes = solicitudes.filter(estado=estado_filter)
@@ -220,15 +257,32 @@ def admin_solicitudes_view(request):
             Q(usuario__username__icontains=search) |
             Q(usuario__first_name__icontains=search) |
             Q(usuario__last_name__icontains=search) |
-            Q(numero_credito__icontains=search)
+            Q(numero_credito__icontains=search) |
+            Q(detalle_libranza__nombres__icontains=search) |
+            Q(detalle_libranza__apellidos__icontains=search) |
+            Q(detalle_emprendimiento__nombre__icontains=search)
         )
     
-    solicitudes = solicitudes.select_related('usuario').annotate(
+    solicitudes = solicitudes.select_related(
+        'usuario', 'detalle_libranza', 'detalle_emprendimiento'
+    ).annotate(
         monto_solicitado=Case(
             When(linea='EMPRENDIMIENTO', then=F('detalle_emprendimiento__valor_credito')),
             When(linea='LIBRANZA', then=F('detalle_libranza__valor_credito')),
             default=Decimal(0),
             output_field=DecimalField()
+        ),
+        nombre_solicitante=Case(
+            When(linea='LIBRANZA', then=Concat('detalle_libranza__nombres', Value(' '), 'detalle_libranza__apellidos')),
+            When(linea='EMPRENDIMIENTO', then=F('detalle_emprendimiento__nombre')),
+            default=Concat('usuario__first_name', Value(' '), 'usuario__last_name'),
+            output_field=CharField()
+        ),
+        documento_solicitante=Case(
+            When(linea='LIBRANZA', then=F('detalle_libranza__cedula')),
+            When(linea='EMPRENDIMIENTO', then=F('detalle_emprendimiento__numero_cedula')),
+            default=Value(''),
+            output_field=CharField()
         )
     ).order_by('-fecha_solicitud')
     
@@ -250,13 +304,14 @@ def admin_solicitudes_view(request):
 
 @staff_member_required
 def admin_creditos_activos_view(request):
-    """Vista para gestionar créditos activos"""
+    """Vista para gestionar créditos activos y pagados"""
     
     linea_filter = request.GET.get('linea', '')
     estado_filter = request.GET.get('estado', '')
     search = request.GET.get('search', '')
     
-    creditos = Credito.objects.exclude(estado__in=['SOLICITUD', 'EN_REVISION', 'RECHAZADO'])
+    # Mostrar solo créditos en estado ACTIVO o PAGADO
+    creditos = Credito.objects.filter(estado__in=['ACTIVO', 'PAGADO'])
     
     if linea_filter:
         creditos = creditos.filter(linea=linea_filter)
@@ -276,13 +331,13 @@ def admin_creditos_activos_view(request):
     creditos = creditos.select_related('usuario').annotate(
         monto_aprobado=Case(
             When(linea='EMPRENDIMIENTO', then=F('detalle_emprendimiento__monto_aprobado')),
-            When(linea='LIBRANZA', then=F('detalle_libranza__valor_credito')),
+            When(linea='LIBRANZA', then=F('detalle_libranza__monto_aprobado')),
             default=Decimal(0),
             output_field=DecimalField()
         ),
         saldo_pendiente=Case(
             When(linea='EMPRENDIMIENTO', then=F('detalle_emprendimiento__saldo_pendiente')),
-            When(linea='LIBRANZA', then=F('detalle_libranza__valor_credito')),  # Calcular con pagos
+            When(linea='LIBRANZA', then=F('detalle_libranza__saldo_pendiente')), 
             default=Decimal(0),
             output_field=DecimalField()
         )
@@ -297,7 +352,7 @@ def admin_creditos_activos_view(request):
         'linea_filter': linea_filter,
         'estado_filter': estado_filter,
         'search': search,
-        'estados_choices': [choice for choice in Credito.EstadoCredito.choices if choice[0] not in ['SOLICITUD', 'EN_REVISION']],
+        'estados_choices': [choice for choice in Credito.EstadoCredito.choices if choice[0] in ['ACTIVO', 'PAGADO']],
         'lineas_choices': Credito.LineaCredito.choices,
     }
     
@@ -309,59 +364,51 @@ def procesar_solicitud_view(request, credito_id):
     """Aprobar o rechazar una solicitud"""
     
     if request.method != 'POST':
-        return JsonResponse({'error': 'Método no permitido'}, status=405)
-    
+        messages.error(request, "Método no permitido.")
+        return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito_id)
+
     credito = get_object_or_404(Credito, id=credito_id, estado__in=['SOLICITUD', 'EN_REVISION'])
-    accion = request.POST.get('accion')
-    observaciones = request.POST.get('observaciones', '')
+    action = request.POST.get('action')
     
-    if accion == 'aprobar':
-        if credito.linea == 'EMPRENDIMIENTO':
-            monto_aprobado = request.POST.get('monto_aprobado')
-            valor_cuota = request.POST.get('valor_cuota')
-            fecha_proximo_pago = request.POST.get('fecha_proximo_pago')
-            
-            if not all([monto_aprobado, valor_cuota, fecha_proximo_pago]):
-                return JsonResponse({'error': 'Faltan datos para aprobar crédito de emprendimiento'}, status=400)
-            
-            detalle = credito.detalle_emprendimiento
-            detalle.monto_aprobado = float(monto_aprobado)
-            detalle.saldo_pendiente = float(monto_aprobado)
-            detalle.valor_cuota = float(valor_cuota)
-            detalle.fecha_proximo_pago = datetime.strptime(fecha_proximo_pago, '%Y-%m-%d').date()
-            detalle.save()
-        
-        credito.estado = 'APROBADO'
+    with transaction.atomic():
+        estado_anterior = credito.estado
+        if action == 'approve':
+            credito.estado = Credito.EstadoCredito.APROBADO
+            messages.success(request, f'Crédito {credito.numero_credito} aprobado exitosamente.')
+        elif action == 'reject':
+            credito.estado = Credito.EstadoCredito.RECHAZADO
+            messages.warning(request, f'Crédito {credito.numero_credito} rechazado.')
+        else:
+            messages.error(request, "Acción no válida.")
+            return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito_id)
+
         credito.save()
-        
-        messages.success(request, f'Crédito {credito.numero_credito} aprobado exitosamente. Se enviará notificación para firma.')
-        
-    elif accion == 'rechazar':
-        credito.estado = 'RECHAZADO'
-        credito.save()
-        
-        messages.success(request, f'Crédito {credito.numero_credito} rechazado.')
-        
-    else:
-        return JsonResponse({'error': 'Acción no válida'}, status=400)
-    
-    return JsonResponse({'success': True})
+        HistorialEstado.objects.create(
+            credito=credito,
+            estado_anterior=estado_anterior,
+            estado_nuevo=credito.estado,
+            usuario_modificacion=request.user,
+            motivo=request.POST.get('observations', 'Decisión inicial de la solicitud.')
+        )
+
+    return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito_id)
 
 
 @staff_member_required
 def detalle_credito_view(request, credito_id):
     """Ver detalles completos de un crédito"""
     
-    credito = get_object_or_404(Credito, id=credito_id)
+    credito = get_object_or_404(Credito.objects.select_related('detalle_libranza', 'detalle_emprendimiento'), id=credito_id)
     
     historial_pagos = HistorialPago.objects.filter(credito=credito).order_by('-fecha_pago')
-    
-    pagos_exitosos = historial_pagos.filter(estado='EXITOSO')
-    monto_total_pagado = sum(p.monto for p in pagos_exitosos)
+    historial_estados = HistorialEstado.objects.filter(credito=credito).order_by('-fecha')
+
+    monto_total_pagado = historial_pagos.filter(estado='EXITOSO').aggregate(Sum('monto'))['monto__sum'] or 0
     
     context = {
         'credito': credito,
         'historial_pagos': historial_pagos,
+        'historial_estados': historial_estados,
         'monto_total_pagado': monto_total_pagado,
         'puede_procesar': credito.estado in ['SOLICITUD', 'EN_REVISION'],
         'estados_choices': Credito.EstadoCredito.choices,
@@ -370,27 +417,69 @@ def detalle_credito_view(request, credito_id):
     return render(request, 'gestion_creditos/admin_detalle_credito.html', context)
 
 
+
 @staff_member_required
+@require_POST
 def cambiar_estado_credito_view(request, credito_id):
-    """Cambiar estado de un crédito manualmente"""
-    
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Método no permitido'}, status=405)
-    
+    """Cambiar estado de un crédito manualmente, registrando el motivo y validando la transición."""
     credito = get_object_or_404(Credito, id=credito_id)
-    nuevo_estado = request.POST.get('estado')
-    observaciones = request.POST.get('observaciones', '')
-    
-    if nuevo_estado not in dict(Credito.EstadoCredito.choices):
-        return JsonResponse({'error': 'Estado no válido'}, status=400)
-    
+    nuevo_estado = request.POST.get('status')
+    motivo = request.POST.get('motivo', '')
+    comprobante_pago = request.FILES.get('comprobante_pago')
+
+    if not nuevo_estado or nuevo_estado not in dict(Credito.EstadoCredito.choices):
+        messages.error(request, "Estado no válido.")
+        return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
+
     estado_anterior = credito.estado
-    credito.estado = nuevo_estado
-    credito.save()
+
+    # Reglas de transición de estados válidas (estado_anterior: [estados_nuevos_permitidos])
+    transiciones_validas = {
+        Credito.EstadoCredito.EN_REVISION: [Credito.EstadoCredito.APROBADO, Credito.EstadoCredito.RECHAZADO],
+        Credito.EstadoCredito.SOLICITUD: [Credito.EstadoCredito.RECHAZADO],
+        Credito.EstadoCredito.PENDIENTE_FIRMA: [Credito.EstadoCredito.FIRMADO], # Transición manual temporal
+        Credito.EstadoCredito.FIRMADO: [Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA],
+        Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA: [Credito.EstadoCredito.ACTIVO],
+        Credito.EstadoCredito.ACTIVO: [Credito.EstadoCredito.EN_MORA, Credito.EstadoCredito.PAGADO],
+        Credito.EstadoCredito.EN_MORA: [Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.PAGADO],
+    }
+
+    if estado_anterior in transiciones_validas and nuevo_estado not in transiciones_validas[estado_anterior]:
+        estados_permitidos = ", ".join([dict(Credito.EstadoCredito.choices)[s] for s in transiciones_validas[estado_anterior]])
+        messages.error(request, f'No se puede cambiar de "{credito.get_estado_display()}" a "{dict(Credito.EstadoCredito.choices)[nuevo_estado]}". Estados permitidos: {estados_permitidos}.')
+        return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
     
-    messages.success(request, f'Estado del crédito {credito.numero_credito} cambiado de {estado_anterior} a {nuevo_estado}')
-    
-    return JsonResponse({'success': True})
+    # Si el estado anterior no está en las reglas, se asume que cualquier cambio es una acción administrativa especial (pero se puede restringir más si es necesario)
+    if estado_anterior not in transiciones_validas and estado_anterior != nuevo_estado:
+        pass # Permitir cambios no definidos explícitamente por ahora, o añadir una regla por defecto.
+
+    if not motivo:
+        messages.error(request, "El motivo del cambio de estado es obligatorio.")
+        return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
+
+    if estado_anterior == Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA and nuevo_estado == Credito.EstadoCredito.ACTIVO and not comprobante_pago:
+        messages.error(request, "Debe adjuntar el comprobante de pago para marcar el crédito como Activo.")
+        return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
+
+    try:
+        with transaction.atomic():
+            credito.estado = nuevo_estado
+            credito.save()
+
+            HistorialEstado.objects.create(
+                credito=credito,
+                estado_anterior=estado_anterior,
+                estado_nuevo=nuevo_estado,
+                motivo=motivo,
+                comprobante_pago=comprobante_pago,
+                usuario_modificacion=request.user
+            )
+            messages.success(request, f'Estado del crédito cambiado a {credito.get_estado_display()}.')
+    except Exception as e:
+        messages.error(request, f"Ocurrió un error inesperado: {e}")
+
+    return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
+
 
 
 @staff_member_required
@@ -414,24 +503,36 @@ def agregar_pago_manual_view(request, credito_id):
         if monto_decimal <= 0:
             raise ValueError("El monto debe ser positivo.")
 
-        HistorialPago.objects.create(
-            credito=credito,
-            monto=monto_decimal,
-            referencia_pago=referencia,
-            estado=HistorialPago.EstadoPago.EXITOSO
-        )
+        with transaction.atomic():
+            HistorialPago.objects.create(
+                credito=credito,
+                monto=monto_decimal,
+                referencia_pago=referencia,
+                estado=HistorialPago.EstadoPago.EXITOSO
+            )
 
-        if hasattr(credito, 'detalle_emprendimiento'):
-            detalle = credito.detalle_emprendimiento
-            if detalle.saldo_pendiente is not None:
+            detalle = None
+            if hasattr(credito, 'detalle_emprendimiento'):
+                detalle = credito.detalle_emprendimiento
+            elif hasattr(credito, 'detalle_libranza'):
+                detalle = credito.detalle_libranza
+
+            if detalle and detalle.saldo_pendiente is not None:
                 detalle.saldo_pendiente -= monto_decimal
                 if detalle.saldo_pendiente <= 0:
                     detalle.saldo_pendiente = 0
                     credito.estado = Credito.EstadoCredito.PAGADO
                     credito.save()
+                    HistorialEstado.objects.create(
+                        credito=credito,
+                        estado_anterior=credito.estado,
+                        estado_nuevo=Credito.EstadoCredito.PAGADO,
+                        motivo="Crédito saldado automáticamente por pago.",
+                        usuario_modificacion=request.user
+                    )
                 detalle.save()
-        
-        messages.success(request, f"Abono de ${monto_decimal:,.2f} registrado exitosamente.")
+            
+            messages.success(request, f"Abono de ${monto_decimal:,.2f} registrado exitosamente.")
 
     except (ValueError, TypeError) as e:
         messages.error(request, f"Error en el monto: {e}")
@@ -439,6 +540,37 @@ def agregar_pago_manual_view(request, credito_id):
         messages.error(request, f"Ocurrió un error inesperado: {e}")
 
     return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
+
+@staff_member_required
+def descargar_documentos_view(request, credito_id):
+    credito = get_object_or_404(Credito, id=credito_id)
+    buffer = io.BytesIO()
+
+    with zipfile.ZipFile(buffer, 'w') as zip_file:
+        document_fields = []
+        if credito.linea == Credito.LineaCredito.LIBRANZA:
+            detalle = credito.detalle_libranza
+            document_fields = [
+                'cedula_frontal', 'cedula_trasera', 'certificado_laboral', 
+                'desprendible_nomina', 'certificado_bancario'
+            ]
+        elif credito.linea == Credito.LineaCredito.EMPRENDIMIENTO:
+            detalle = credito.detalle_emprendimiento
+            document_fields = ['foto_negocio']
+
+        for field_name in document_fields:
+            if hasattr(detalle, field_name):
+                file_field = getattr(detalle, field_name)
+                if file_field:
+                    try:
+                        zip_file.write(file_field.path, file_field.name)
+                    except FileNotFoundError:
+                        logger.warning(f"Archivo no encontrado para el crédito {credito.id}: {file_field.path}")
+
+    buffer.seek(0)
+    response = HttpResponse(buffer, content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="documentos_credito_{credito.id}.zip"'
+    return response
 
 
 #! ==============================================================================
@@ -448,7 +580,7 @@ def agregar_pago_manual_view(request, credito_id):
 def pagador_dashboard_view(request):
     """
     Dashboard para el usuario pagador de una empresa.
-    Muestra todos los créditos de libranza de los empleados de su empresa.
+    Muestra todos los créditos de libranza de los empleados de su empresa, con filtros y ordenamiento.
     """
     try:
         perfil_pagador = request.user.perfil_pagador
@@ -457,13 +589,18 @@ def pagador_dashboard_view(request):
         messages.error(request, "No tiene permisos para acceder a esta página.")
         return redirect('index')
 
+    # --- Filtros y Búsqueda ---
+    search_query = request.GET.get('search', '')
+    estado_filter = request.GET.get('estado', '')
+    sort_by = request.GET.get('sort_by', '-detalle_libranza__valor_credito') # Ordenar por monto de crédito descendente por defecto
+
     # Subconsulta para calcular el total pagado por crédito
     total_pagado_subquery = HistorialPago.objects.filter(
         credito_id=F('pk'),
         estado=HistorialPago.EstadoPago.EXITOSO
     ).values('credito_id').annotate(total=Sum('monto')).values('total')
 
-    # Filtrar créditos y anotar el saldo pendiente
+    # Filtrar créditos base
     creditos_empresa = Credito.objects.filter(
         linea=Credito.LineaCredito.LIBRANZA,
         detalle_libranza__empresa=empresa
@@ -473,7 +610,28 @@ def pagador_dashboard_view(request):
         total_pagado=Coalesce(Subquery(total_pagado_subquery, output_field=DecimalField()), Value(Decimal(0))),
         saldo_pendiente=F('detalle_libranza__valor_credito') - F('total_pagado')
     )
-    
+
+    # Aplicar filtros de búsqueda
+    if search_query:
+        creditos_empresa = creditos_empresa.filter(
+            Q(detalle_libranza__nombre_completo__icontains=search_query) |
+            Q(detalle_libranza__cedula__icontains=search_query)
+        )
+
+    if estado_filter:
+        creditos_empresa = creditos_empresa.filter(estado=estado_filter)
+
+    # Aplicar ordenamiento
+    valid_sort_fields = [
+        'detalle_libranza__nombre_completo', '-detalle_libranza__nombre_completo',
+        'detalle_libranza__cedula', '-detalle_libranza__cedula',
+        'detalle_libranza__valor_credito', '-detalle_libranza__valor_credito',
+        'saldo_pendiente', '-saldo_pendiente',
+        'estado', '-estado'
+    ]
+    if sort_by in valid_sort_fields:
+        creditos_empresa = creditos_empresa.order_by(sort_by)
+
     # Obtener y limpiar errores de la sesión
     errores_pago_masivo = request.session.pop('errores_pago_masivo', None)
 
@@ -481,6 +639,10 @@ def pagador_dashboard_view(request):
         'empresa': empresa,
         'creditos': creditos_empresa,
         'errores_pago_masivo': errores_pago_masivo,
+        'search_query': search_query,
+        'estado_filter': estado_filter,
+        'sort_by': sort_by,
+        'estados_choices': [choice for choice in Credito.EstadoCredito.choices if choice[0] not in ['RECHAZADO', 'SOLICITUD']],
     }
     
     return render(request, 'gestion_creditos/pagador_dashboard.html', context)

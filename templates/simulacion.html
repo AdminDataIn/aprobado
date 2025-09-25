@@ -146,7 +146,7 @@
                                 <!-- Resultados del cálculo - EMPRENDIMIENTO -->
                                 <div class="simulador-results-container">
                                     <div class="simulador-result-row">
-                                        <label for="total-pr-emp" class="simulador-result-label">Total de préstamo:</label>
+                                        <label for="total-pr-emp" class="simulador-result-label">Monto solicitado:</label>
                                         <input type="text" id="total-pr-emp" name="total-pr-emp" value="500.000,00"
                                                class="simulador-result-input" readonly>
                                     </div>
@@ -262,6 +262,8 @@
 
         function formatColombianNumber(num) {
             return new Intl.NumberFormat('es-CO', {
+                style: 'currency',
+                currency: 'COP',
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
             }).format(num);
@@ -273,7 +275,7 @@
             const val = parseFloat(slider1.value);
             const percent = ((val - minVal) / (maxVal - minVal)) * 100;
 
-            tooltip1.innerText = `$ ${formatColombianNumber(val)}`;
+            tooltip1.innerText = formatColombianNumber(val);
             tooltip1.style.left = `${percent}%`;
             tooltip1.style.transform = 'translateX(-50%)';
             progress1.style.width = `${percent}%`;

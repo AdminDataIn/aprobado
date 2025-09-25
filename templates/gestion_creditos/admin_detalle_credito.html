@@ -20,32 +20,47 @@
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
 </head>
 <body class="theme-details">
-    <!-- Page Header -->
-    <div class="page-header">
-        <div class="container-fluid py-3" style="max-width: 1400px;">
+    <!-- Header -->
+    <header class="page-header">
+        <div class="container-fluid" style="max-width: 1400px;">
             <div class="d-flex align-items-center justify-content-between">
-                <div>
-                    <h1 class="page-title">Detalle de Crédito</h1>
-                    <nav aria-label="breadcrumb">
-                        <ol class="breadcrumb">
-                            <li class="breadcrumb-item">
-                                <a href="{% url 'gestion_creditos:admin_dashboard' %}">
-                                    <i class="bi bi-house-door me-1"></i>Dashboard
-                                </a>
-                            </li>
-                            <li class="breadcrumb-item">
-                                <a href="{% url 'gestion_creditos:admin_creditos_activos' %}">Créditos Activos</a>
-                            </li>
-                            <li class="breadcrumb-item active">Detalle</li>
-                        </ol>
-                    </nav>
-                </div>
-                <a href="{% url 'gestion_creditos:admin_creditos_activos' %}" class="btn btn-outline-primary">
-                    <i class="bi bi-arrow-left me-2"></i>Volver
+                <a href="{% url 'gestion_creditos:admin_dashboard' %}" class="logo">
+                    <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;" />
                 </a>
+                <div class="d-flex align-items-center gap-3">
+                    <button class="btn btn-sm btn-outline-primary position-relative">
+                        <i class="bi bi-bell"></i>
+                        <div class="notification-badge"></div>
+                    </button>
+                    <div class="user-info">
+                        <div class="user-avatar">AU</div>
+                        <div class="user-details d-none d-md-block">
+                            <h6>Admin User</h6>
+                            <small>Administrador</small>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
+    </header>
+
+    <div class="container-fluid py-4" style="max-width: 1400px;">
+        <!-- Page Title & Breadcrumb -->
+            <div class="d-flex align-items-center justify-content-between mb-4 px-4">
+            <div>
+                <h1 class="page-title">Detalle del Crédito</h1>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="{% url 'gestion_creditos:admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+                        <li class="breadcrumb-item"><a href="{% url 'gestion_creditos:admin_solicitudes' %}"><i class"="bi bi-journal-text"></i> Solicitudes</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Detalle del Crédito #{{ credito.id }}</li>
+                    </ol>
+                </nav>
+            </div>
+            <a href="{% url 'gestion_creditos:admin_dashboard' %}" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left me-2"></i>Volver al Dashboard
+            </a>
+        </div>
 
     <div class="container-fluid" style="max-width: 1400px;">
         <div class="main-grid">
@@ -63,7 +78,15 @@
                         <div class="info-grid">
                             <div class="info-item">
                                 <span class="info-label">Usuario Solicitante</span>
-                                <span class="info-value">{{ credito.usuario.get_full_name|default:credito.usuario.username }}</span>
+                                <span class="info-value">
+                                    {% if credito.linea == 'LIBRANZA' %}
+                                        {{ credito.detalle_libranza.nombre_completo }}
+                                    {% elif credito.linea == 'EMPRENDIMIENTO' %}
+                                        {{ credito.detalle_emprendimiento.nombre }}
+                                    {% else %}
+                                        {{ credito.usuario.get_full_name|default:credito.usuario.username }}
+                                    {% endif %}
+                                </span>
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Línea de Crédito</span>
@@ -89,6 +112,7 @@
                 </div>
 
                 <!-- Credit Details -->
+                {% if credito.estado in 'APROBADO,FIRMADO,PENDIENTE_TRANSFERENCIA,ACTIVO,EN_MORA,PAGADO' %}
                 <div class="card" style="margin-bottom: 2rem;">
                     <div class="card-header">
                         <h2 class="card-title">
@@ -100,116 +124,65 @@
                         <div class="info-grid">
                             <div class="info-item">
                                 <span class="info-label">Monto Aprobado</span>
-                                <span class="info-value large">${{ credito.monto_aprobado|intcomma }}</span>
+                                <span class="info-value large">${{ credito.detalle_emprendimiento.monto_aprobado|default:credito.detalle_libranza.monto_aprobado|intcomma }}</span>
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Saldo Pendiente</span>
-                                <span class="info-value">${{ credito.saldo_pendiente|intcomma }}</span>
+                                <span class="info-value">${{ credito.detalle_emprendimiento.saldo_pendiente|default:credito.detalle_libranza.saldo_pendiente|intcomma }}</span>
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Plazo</span>
-                                <span class="info-value">{{ credito.plazo }} meses</span>
+                                <span class="info-value">{{ credito.detalle_emprendimiento.plazo|default:credito.detalle_libranza.plazo }} meses</span>
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Tasa de Interés</span>
-                                <span class="info-value">{{ credito.tasa_interes }}%</span>
+                                <span class="info-value">{{ credito.detalle_emprendimiento.tasa_interes|default:credito.detalle_libranza.tasa_interes }}%</span>
                             </div>
                         </div>
                     </div>
                 </div>
+                {% else %}
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div class="card-body text-center">
+                        <p class="text-muted">El crédito aún no ha sido aprobado. No hay detalles financieros para mostrar.</p>
+                    </div>
+                </div>
+                {% endif %}
 
-                <!-- Payment History -->
+                <!-- Status History -->
                 <div class="card" style="margin-bottom: 2rem;">
                     <div class="card-header">
                         <h2 class="card-title">
                             <i class="bi bi-clock-history me-2"></i>
-                            Historial de Pagos
+                            Historial de Estados
                         </h2>
                     </div>
                     <div class="card-content">
-                        {% if pagos %}
-                            {% for pago in pagos %}
+                        {% if historial_estados %}
+                            {% for historial in historial_estados %}
                             <div class="payment-item">
                                 <div class="payment-info">
-                                    <div class="payment-amount">${{ pago.monto|intcomma }}</div>
-                                    <div class="payment-date">{{ pago.fecha_pago|date:"d/m/Y" }}</div>
+                                    <div class="payment-amount">{{ historial.get_estado_nuevo_display }}</div>
+                                    <div class="payment-date">{{ historial.fecha|date:"d/m/Y H:i" }} por {{ historial.usuario_modificacion.username|default:'Sistema' }}</div>
+                                    <small class="text-muted">Motivo: {{ historial.motivo }}</small>
+                                    {% if historial.comprobante_pago %}
+                                        <a href="{{ historial.comprobante_pago.url }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">Ver Comprobante</a>
+                                    {% endif %}
                                 </div>
                                 <span class="payment-status payment-success">
-                                    {{ pago.get_estado_display }}
+                                    {{ historial.get_estado_anterior_display }} -> {{ historial.get_estado_nuevo_display }}
                                 </span>
                             </div>
                             {% endfor %}
                         {% else %}
                             <div class="empty-state">
                                 <i class="bi bi-receipt"></i>
-                                <p>No hay pagos registrados</p>
+                                <p>No hay historial de estados.</p>
                             </div>
                         {% endif %}
                     </div>
                 </div>
 
-                <!-- Processing Form (if applicable) -->
-                {% if credito.estado == 'PENDIENTE' %}
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">
-                            <i class="bi bi-gear me-2"></i>
-                            Procesar Solicitud
-                        </h2>
-                    </div>
-                    <div class="card-content">
-                        <div class="alert alert-info">
-                            <i class="bi bi-info-circle me-2"></i>
-                            Esta solicitud requiere revisión y decisión de aprobación o rechazo.
-                        </div>
-
-                        <form id="processing-form" method="post">
-                            {% csrf_token %}
-                            <!-- Approval Fields -->
-                            <div id="approval-fields">
-                                <h3 style="margin-bottom: 1rem; color: var(--text-primary); font-size: 1.125rem;">
-                                    Datos para Aprobación
-                                </h3>
-                                <div class="form-grid">
-                                    <div class="form-group">
-                                        <label class="form-label">Monto Aprobado</label>
-                                        <input type="number" name="approved_amount" class="form-control" 
-                                               placeholder="{{ credito.monto_solicitado }}" 
-                                               value="{{ credito.monto_solicitado }}">
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="form-label">Valor de la Cuota</label>
-                                        <input type="number" name="installment_amount" class="form-control" placeholder="0">
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="form-label">Fecha Próximo Pago</label>
-                                        <input type="date" name="next_payment_date" class="form-control">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <label class="form-label">Observaciones</label>
-                                <textarea name="observations" class="form-control" rows="4" 
-                                          placeholder="Ingrese observaciones sobre la decisión..."></textarea>
-                            </div>
-
-                            <div class="btn-group">
-                                <button type="button" class="btn btn-danger" onclick="processCredit('reject')">
-                                    <i class="bi bi-x-circle me-2"></i>
-                                    Rechazar Solicitud
-                                </button>
-                                <button type="button" class="btn btn-success" onclick="processCredit('approve')">
-                                    <i class="bi bi-check-circle me-2"></i>
-                                    Aprobar Solicitud
-                                </button>
-                            </div>
-                            
-                            <input type="hidden" name="action" id="action-input">
-                        </form>
-                    </div>
-                </div>
-                {% endif %}
             </div>
 
             <!-- Sidebar -->
@@ -223,17 +196,25 @@
                         </h2>
                     </div>
                     <div class="card-content">
-                        <form id="status-form" method="post">
+                        <form id="status-form" method="post" action="{% url 'gestion_creditos:cambiar_estado_credito' credito.id %}" enctype="multipart/form-data">
                             {% csrf_token %}
                             <div class="form-group">
-                                <label class="form-label">Estado del Crédito</label>
-                                <select name="status" class="form-control form-select">
+                                <label class="form-label">Nuevo Estado</label>
+                                <select name="status" id="id_status" class="form-control form-select">
                                     {% for value, label in estados_choices %}
                                         <option value="{{ value }}" {% if value == credito.estado %}selected{% endif %}>
                                             {{ label }}
                                         </option>
                                     {% endfor %}
                                 </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="id_motivo" class="form-label">Motivo del Cambio</label>
+                                <textarea name="motivo" id="id_motivo" class="form-control" rows="3" placeholder="Escriba por qué cambia el estado..." required></textarea>
+                            </div>
+                            <div class="form-group" id="comprobante-group" style="display: none;">
+                                <label for="id_comprobante_pago" class="form-label">Comprobante de Pago</label>
+                                <input type="file" name="comprobante_pago" id="id_comprobante_pago" class="form-control">
                             </div>
                             <button type="submit" class="btn btn-primary" style="width: 100%;">
                                 <i class="bi bi-save me-2"></i>
@@ -247,26 +228,26 @@
                 <div class="card" style="margin-bottom: 2rem;">
                     <div class="card-header">
                         <h2 class="card-title">
-                            <i class="bi bi-plus-circle me-2"></i>
-                            Agregar Abono Manual
+                            <i class="bi bi-cash-coin me-2"></i>
+                            Registrar Pago Manual
                         </h2>
                     </div>
                     <div class="card-content">
-                        <form action="{% url 'gestion_creditos:agregar_pago_manual' credito.id %}" method="post">
+                        <form method="post" action="{% url 'gestion_creditos:agregar_pago_manual' credito.id %}">
                             {% csrf_token %}
                             <div class="form-group">
-                                <label class="form-label">Monto del Abono</label>
-                                <input type="number" name="monto" class="form-control" placeholder="Ingrese el monto" required>
+                                <label for="id_monto" class="form-label">Monto a Pagar</label>
+                                <input type="number" name="monto" id="id_monto" class="form-control" step="0.01" placeholder="Ej: 50000.00" required>
                             </div>
                             <div class="form-group">
-                                <label class="form-label">Referencia de Pago</label>
-                                <input type="text" name="referencia" class="form-control" placeholder="Ej: Consignación N° 123">
+                                <label for="id_referencia" class="form-label">Referencia (Opcional)</label>
+                                <input type="text" name="referencia" id="id_referencia" class="form-control" placeholder="Ej: Abono especial">
                             </div>
                             <div class="form-group">
-                                <label class="form-label">Clave de Autorización</label>
-                                <input type="password" name="auth_key" class="form-control" placeholder="Clave secreta" required>
+                                <label for="id_auth_key" class="form-label">Clave de Autorización</label>
+                                <input type="password" name="auth_key" id="id_auth_key" class="form-control" placeholder="Clave secreta" required>
                             </div>
-                            <button type="submit" class="btn btn-success" style="width: 100%;">
+                            <button type="submit" class="btn btn-secondary" style="width: 100%;">
                                 <i class="bi bi-check-circle me-2"></i>
                                 Registrar Abono
                             </button>
@@ -283,19 +264,66 @@
                         </h2>
                     </div>
                     <div class="card-content">
-                        <a href="#" class="btn btn-outline" style="width: 100%; margin-bottom: 0.75rem;">
+                        <a href="{% url 'gestion_creditos:descargar_documentos' credito.id %}" class="btn btn-outline" style="width: 100%; margin-bottom: 0.75rem;">
                             <i class="bi bi-download me-2"></i>
                             Descargar Documentos
                         </a>
-                        <button onclick="sendNotification()" class="btn btn-outline" style="width: 100%; margin-bottom: 0.75rem;">
-                            <i class="bi bi-envelope me-2"></i>
-                            Enviar Notificación
+                        <button type="button" class="btn btn-outline" data-bs-toggle="modal" data-bs-target="#infoCompletaModal" style="width: 100%; margin-bottom: 0.75rem;">
+                            <i class="bi bi-search me-2"></i>
+                            Ver Información Completa
                         </button>
-                        <a href="#" class="btn btn-outline" style="width: 100%;">
-                            <i class="bi bi-printer me-2"></i>
-                            Generar Reporte
-                        </a>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Info Completa -->
+    <div class="modal fade" id="infoCompletaModal" tabindex="-1" aria-labelledby="infoCompletaModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="infoCompletaModalLabel">Información Completa de la Solicitud</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% if credito.linea == 'LIBRANZA' and credito.detalle_libranza %}
+                        {% with detalle=credito.detalle_libranza %}
+                            <h4>Detalles del Crédito de Libranza</h4>
+                            <p><strong>Nombres:</strong> {{ detalle.nombres }}</p>
+                            <p><strong>Apellidos:</strong> {{ detalle.apellidos }}</p>
+                            <p><strong>Cédula:</strong> {{ detalle.cedula }}</p>
+                            <p><strong>Dirección:</strong> {{ detalle.direccion }}</p>
+                            <p><strong>Teléfono:</strong> {{ detalle.telefono }}</p>
+                            <p><strong>Correo:</strong> {{ detalle.correo_electronico }}</p>
+                            <p><strong>Empresa:</strong> {{ detalle.empresa.nombre }}</p>
+                            <p><strong>Valor Solicitado:</strong> ${{ detalle.valor_credito|intcomma }}</p>
+                            <p><strong>Plazo:</strong> {{ detalle.plazo }} meses</p>
+                        {% endwith %}
+                    {% elif credito.linea == 'EMPRENDIMIENTO' and credito.detalle_emprendimiento %}
+                        {% with detalle=credito.detalle_emprendimiento %}
+                            <h4>Detalles del Crédito de Emprendimiento</h4>
+                            <p><strong>Nombre Completo:</strong> {{ detalle.nombre }}</p>
+                            <p><strong>Cédula:</strong> {{ detalle.numero_cedula }}</p>
+                            <p><strong>Fecha de Nacimiento:</strong> {{ detalle.fecha_nac }}</p>
+                            <p><strong>Celular:</strong> {{ detalle.celular_wh }}</p>
+                            <p><strong>Dirección:</strong> {{ detalle.direccion }}</p>
+                            <p><strong>Estado Civil:</strong> {{ detalle.estado_civil }}</p>
+                            <p><strong>Personas a Cargo:</strong> {{ detalle.numero_personas_cargo }}</p>
+                            <hr>
+                            <h5>Negocio</h5>
+                            <p><strong>Nombre:</strong> {{ detalle.nombre_negocio }}</p>
+                            <p><strong>Ubicación:</strong> {{ detalle.ubicacion_negocio }}</p>
+                            <p><strong>Tiempo Operando:</strong> {{ detalle.tiempo_operando }}</p>
+                            <p><strong>Días Trabajados/Semana:</strong> {{ detalle.dias_trabajados_sem }}</p>
+                            <p><strong>Productos/Servicios:</strong> {{ detalle.prod_serv_ofrec }}</p>
+                            <p><strong>Ingresos Promedio/Mes:</strong> {{ detalle.ingresos_prom_mes }}</p>
+                            <p><strong>Clientes Atendidos/Día:</strong> {{ detalle.cli_aten_day }}</p>
+                        {% endwith %}
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
         </div>
@@ -305,35 +333,22 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
-        function processCredit(action) {
-            document.getElementById('action-input').value = action;
-            const form = document.getElementById('processing-form');
-            const buttons = form.querySelectorAll('button');
-            
-            // Show processing state
-            buttons.forEach(btn => {
-                btn.classList.add('processing');
-                if (btn.textContent.includes(action === 'approve' ? 'Aprobar' : 'Rechazar')) {
-                    btn.innerHTML = '<span class="spinner"></span> Procesando...';
+        document.addEventListener('DOMContentLoaded', function() {
+            const statusSelect = document.getElementById('id_status');
+            const comprobanteGroup = document.getElementById('comprobante-group');
+
+            function toggleComprobante() {
+                if (statusSelect.value === 'PAGADO') { // ACTIVAR EL CAMPO PARA SUBIR COMPROBANTE CUANDO SE ESCOJA PAGADO
+                    comprobanteGroup.style.display = 'block';
+                } else {
+                    comprobanteGroup.style.display = 'none';
                 }
-            });
+            }
 
-            // Submit form
-            form.submit();
-        }
-
-        document.getElementById('status-form').addEventListener('submit', function(e) {
-            const submitBtn = this.querySelector('button[type="submit"]');
-            const originalText = submitBtn.innerHTML;
-            
-            submitBtn.innerHTML = '<span class="spinner"></span> Actualizando...';
-            submitBtn.disabled = true;
+            statusSelect.addEventListener('change', toggleComprobante);
+            // Initial check
+            toggleComprobante();
         });
-
-        function sendNotification() {
-            // Implementar lógica de notificación
-            alert('Función de notificación enviada');
-        }
     </script>
 </body>
 </html>

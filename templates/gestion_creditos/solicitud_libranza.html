@@ -354,6 +354,25 @@ Su trabajo es hacer que la variable es_empleado esté disponible en todos los te
     document.addEventListener('DOMContentLoaded', function() {
         loadFormData();
 
+        const valorCreditoInput = document.getElementById('valor_credito');
+
+        if (valorCreditoInput) {
+            valorCreditoInput.addEventListener('input', function(e) {
+                let value = e.target.value.replace(/\D/g, '');
+                if (value) {
+                    const numberValue = parseInt(value, 10);
+                    e.target.value = new Intl.NumberFormat('es-CO', {
+                        style: 'currency',
+                        currency: 'COP',
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0
+                    }).format(numberValue);
+                } else {
+                    e.target.value = '';
+                }
+            });
+        }
+
         const formulario = document.getElementById('formularioLibranza');
         const modal = document.getElementById("modalMensaje");
         const closeButton = document.getElementById("cerrarModal");
@@ -455,6 +474,14 @@ Su trabajo es hacer que la variable es_empleado esté disponible en todos los te
 
             limpiarTodosLosErrores();
 
+            // Handle currency formatting before submission
+            const valorCreditoInput = document.getElementById('valor_credito');
+            const originalFormattedValue = valorCreditoInput.value;
+            if (originalFormattedValue) {
+                const numericValue = originalFormattedValue.replace(/\D/g, '');
+                valorCreditoInput.value = numericValue;
+            }
+
             const formData = new FormData(formulario);
 
             const csrfToken = getCookie('csrftoken');
@@ -513,6 +540,10 @@ Su trabajo es hacer que la variable es_empleado esté disponible en todos los te
             .finally(() => {
                 submitButton.disabled = false;
                 submitButton.textContent = 'Enviar Solicitud';
+                // Restore formatted value
+                if (originalFormattedValue) {
+                    valorCreditoInput.value = originalFormattedValue;
+                }
             });
         }
 

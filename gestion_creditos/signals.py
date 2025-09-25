@@ -8,27 +8,24 @@ from .models import Credito
 
 #! LOGICA PENSADA PERO NO IMPLEMENTADA AUN
 @receiver(post_save, sender=Credito)
-def gestionar_aprobacion_credito(sender, instance, created, **kwargs):
+def gestionar_aprobacion_credito(sender, instance, **kwargs):
     """
-    Señal para enviar correo de firma de pagaré cuando un crédito es aprobado.
+    Señal para enviar correo de firma de pagaré cuando un crédito es aprobado
+    y actualizar el estado a PENDIENTE_TRANSFERENCIA.
     """
-    # Verificar si el crédito fue aprobado y el documento aún no se ha enviado
     if instance.estado == Credito.EstadoCredito.APROBADO and not instance.documento_enviado:
         print(f"Crédito {instance.numero_credito} aprobado. Enviando correo para firma.")
 
-        # --- FALTA IMPLEMENTAR AUTENTIC ---
-        # 1. Generar el pagaré en formato PDF.
-        # 2. Enviar el documento al servicio de firma digital para crear una sesión de firma.
-        # 3. El servicio retornará una URL única para que el cliente firme.
-        
-        # URL de firma (simulada por ahora)
-        # En un caso real, esta URL vendría del servicio de firma digital.
-        # El webhook debería apuntar a una URL que creemos para recibir la notificación.
-        webhook_url = settings.SITE_URL + reverse('webhook_firma_documento', kwargs={'numero_credito': instance.numero_credito})
-        url_firma = f"https://servicio-firma.com/firmar?documento_id={instance.numero_credito}&callback_url={webhook_url}"
+        # --- Lógica de envío de correo y firma ---
+        try:
+            webhook_url = settings.SITE_URL + reverse('gestion_creditos:webhook_firma_documento', kwargs={'numero_credito': instance.numero_credito})
+        except AttributeError:
+            print("ERROR: La variable SITE_URL no está definida en el archivo de settings. Usando un valor temporal.")
+            webhook_url = "https://example.com" # Valor temporal para evitar que el programa falle
 
-        # Preparar y enviar el correo
-        asunto = f"¡Tu crédito ha sido aprobado! Firma el pagaré para continuar"
+        url_firma = f"https://servicio-firma.com/firmar?documento_id={instance.numero_credito}&callback_url={webhook_url}"
+        
+        asunto = "¡Tu crédito ha sido aprobado! Firma el pagaré para continuar"
         mensaje = (
             f"Hola {instance.usuario.get_full_name() or instance.usuario.username},<br><br>"
             f"¡Buenas noticias! Tu crédito con número {instance.numero_credito} ha sido aprobado.<br>"
@@ -38,16 +35,28 @@ def gestionar_aprobacion_credito(sender, instance, created, **kwargs):
             f"Gracias,<br>El equipo de Aprobado"
         )
         
-        send_mail(
-            subject=asunto,
-            message="", # El mensaje HTML se pasa en html_message
-            html_message=mensaje,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[instance.usuario.email],
-            fail_silently=False,
-        )
+        try:
+            send_mail(
+                subject=asunto,
+                message="",
+                html_message=mensaje,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[instance.usuario.email],
+                fail_silently=False,
+            )
+            print(f"Correo para firma del crédito {instance.numero_credito} enviado a {instance.usuario.email}.")
+        except Exception as e:
+            print(f"ERROR: No se pudo enviar el correo para el crédito {instance.numero_credito}. Error: {e}")
 
-        # Marcar el documento como enviado para no volver a enviarlo
-        instance.documento_enviado = True
-        instance.save(update_fields=['documento_enviado'])
-        print(f"Correo para firma del crédito {instance.numero_credito} enviado a {instance.usuario.email}.")
+        # Desconectar la señal temporalmente para evitar recursión
+        post_save.disconnect(gestionar_aprobacion_credito, sender=Credito)
+        
+        try:
+            # Actualizar el estado y marcar como documento enviado
+            instance.documento_enviado = True
+            instance.estado = Credito.EstadoCredito.PENDIENTE_FIRMA
+            instance.save(update_fields=['documento_enviado', 'estado'])
+            print(f"Crédito {instance.numero_credito} actualizado a PENDIENTE_FIRMA.")
+        finally:
+            # Reconectar la señal
+            post_save.connect(gestionar_aprobacion_credito, sender=Credito)

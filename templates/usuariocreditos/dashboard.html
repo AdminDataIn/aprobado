@@ -44,9 +44,9 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-4 text-end">
+                        {% comment %} <div class="col-md-4 text-end">
                             <a href="/" class="btn btn-primary btn-sm">Solicitar nuevo crédito</a>
-                        </div>
+                        </div> {% endcomment %}
                     </div>
                 </div>
             </div>
@@ -82,9 +82,16 @@
                 <!-- Contenido para solicitudes en revisión o rechazadas -->
                 <div class="card mb-4">
                     <div class="card-body text-center p-5">
-                        <i class="bi bi-hourglass-split display-3 text-primary"></i>
-                        <h3 class="mt-3">Tu solicitud está {{ credito_actual.get_estado_display }}</h3>
-                        <p class="text-muted">Recibimos tu solicitud para un crédito de {{ credito_actual.get_linea_display }} el {{ credito_actual.fecha_solicitud|date:"d M, Y" }}.<br>Nuestro equipo te notificará pronto con una respuesta.</p>
+                        {% if credito_actual.estado == 'RECHAZADO' %}
+                            <i class="bi bi-x-circle display-3 text-danger"></i>
+                            <h3 class="mt-3">Tu solicitud fue {{ credito_actual.get_estado_display }}</h3>
+                            <p class="text-muted">Lo sentimos, tu solicitud para un crédito de {{ credito_actual.get_linea_display }} no pudo ser aprobada en este momento.</p>
+                            <a href="/" class="btn btn-primary mt-3">Solicitar un nuevo crédito</a>
+                        {% else %}
+                            <i class="bi bi-hourglass-split display-3 text-primary"></i>
+                            <h3 class="mt-3">Tu solicitud está {{ credito_actual.get_estado_display }}</h3>
+                            <p class="text-muted">Recibimos tu solicitud para un crédito de {{ credito_actual.get_linea_display }} el {{ credito_actual.fecha_solicitud|date:"d M, Y" }}.<br>Nuestro equipo te notificará pronto con una respuesta.</p>
+                        {% endif %}
                     </div>
                 </div>
             {% endif %}
