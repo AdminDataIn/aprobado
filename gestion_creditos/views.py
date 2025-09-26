@@ -426,12 +426,19 @@ def cambiar_estado_credito_view(request, credito_id):
     nuevo_estado = request.POST.get('status')
     motivo = request.POST.get('motivo', '')
     comprobante_pago = request.FILES.get('comprobante_pago')
+    estado_anterior = credito.estado
+
+    # --- Lógica de automatización para desembolso ---
+    # Si el crédito está pendiente de transferencia y se sube un comprobante,
+    # se fuerza el estado a ACTIVO automáticamente.
+    if estado_anterior == Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA and comprobante_pago:
+        nuevo_estado = Credito.EstadoCredito.ACTIVO
+        if not motivo:
+            motivo = "Desembolso de crédito realizado por el administrador."
 
     if not nuevo_estado or nuevo_estado not in dict(Credito.EstadoCredito.choices):
         messages.error(request, "Estado no válido.")
         return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
-
-    estado_anterior = credito.estado
 
     # Reglas de transición de estados válidas (estado_anterior: [estados_nuevos_permitidos])
     transiciones_validas = {

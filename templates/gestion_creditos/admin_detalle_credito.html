@@ -45,14 +45,26 @@
     </header>
 
     <div class="container-fluid py-4" style="max-width: 1400px;">
+        <!-- Django Messages -->
+        {% if messages %}
+            <div class="container my-3">
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+        
         <!-- Page Title & Breadcrumb -->
-            <div class="d-flex align-items-center justify-content-between mb-4 px-4">
+        <div class="d-flex align-items-center justify-content-between mb-4 px-4">
             <div>
                 <h1 class="page-title">Detalle del Crédito</h1>
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
                         <li class="breadcrumb-item"><a href="{% url 'gestion_creditos:admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
-                        <li class="breadcrumb-item"><a href="{% url 'gestion_creditos:admin_solicitudes' %}"><i class"="bi bi-journal-text"></i> Solicitudes</a></li>
+                        <li class="breadcrumb-item"><a href="{% url 'gestion_creditos:admin_solicitudes' %}"><i class="bi bi-journal-text"></i> Solicitudes</a></li>
                         <li class="breadcrumb-item active" aria-current="page">Detalle del Crédito #{{ credito.id }}</li>
                     </ol>
                 </nav>
@@ -334,20 +346,16 @@
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const statusSelect = document.getElementById('id_status');
             const comprobanteGroup = document.getElementById('comprobante-group');
+            const currentStatus = "{{ credito.estado }}"; // Obtener el estado actual del crédito desde Django.
 
-            function toggleComprobante() {
-                if (statusSelect.value === 'PAGADO') { // ACTIVAR EL CAMPO PARA SUBIR COMPROBANTE CUANDO SE ESCOJA PAGADO
-                    comprobanteGroup.style.display = 'block';
-                } else {
-                    comprobanteGroup.style.display = 'none';
-                }
+            // Mostrar el campo para subir el comprobante únicamente cuando el crédito está
+            // en estado 'Pendiente por Transferencia', que es cuando se realiza el desembolso.
+            if (currentStatus === 'PENDIENTE_TRANSFERENCIA') {
+                comprobanteGroup.style.display = 'block';
+            } else {
+                comprobanteGroup.style.display = 'none';
             }
-
-            statusSelect.addEventListener('change', toggleComprobante);
-            // Initial check
-            toggleComprobante();
         });
     </script>
 </body>
