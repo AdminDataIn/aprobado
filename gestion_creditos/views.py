@@ -231,12 +231,12 @@ def admin_dashboard_view(request):
         month_key = month_date.strftime('%Y-%m')
         portfolio_labels.append(month_date.strftime('%b %Y'))
 
-        emprendimiento_monthly = data_by_month.get(month_key, {}).get('total_emprendimiento', 0)
-        libranza_monthly = data_by_month.get(month_key, {}).get('total_libranza', 0)
+        emprendimiento_monthly = data_by_month.get(month_key, {}).get('total_emprendimiento')
+        libranza_monthly = data_by_month.get(month_key, {}).get('total_libranza')
         
-        emprendimiento_data.append(float(emprendimiento_monthly))
-        libranza_data.append(float(libranza_monthly))
-        total_data.append(float(emprendimiento_monthly + libranza_monthly))
+        emprendimiento_data.append(float(emprendimiento_monthly or 0))
+        libranza_data.append(float(libranza_monthly or 0))
+        total_data.append(float((emprendimiento_monthly or 0) + (libranza_monthly or 0)))
 
     distribution_labels = [item['linea'] for item in creditos_por_linea]
     distribution_data = [item['count'] for item in creditos_por_linea]
