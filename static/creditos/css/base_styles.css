@@ -1216,3 +1216,17 @@ body {
         padding: 0.25rem 0.5rem;
     }
 }
+
+.btn-pagar {
+    background-color: #059669; /* Darker green */
+    border-color: #059669;
+    color: white;
+}
+
+.btn-pagar:hover {
+    background-color: #047857; /* Even darker green for hover */
+    border-color: #047857;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}

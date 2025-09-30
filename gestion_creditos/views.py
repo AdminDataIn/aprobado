@@ -102,7 +102,6 @@ def solicitud_credito_emprendimiento_view(request):
     
     return render(request, 'gestion_creditos/solicitud_emprendimiento.html', {'form': form})
 
-
 def evaluar_motivacion_credito(texto):
     if not texto or len(texto) < 10:
         return 3
@@ -195,25 +194,49 @@ def admin_dashboard_view(request):
         detalle_emprendimiento__fecha_proximo_pago__lte=timezone.now().date() + timedelta(days=7)
     ).count()
 
-    # Datos para gráficos
-    six_months_ago = timezone.now() - timedelta(days=180)
-    portfolio_evolution = Credito.objects.filter(
-        fecha_solicitud__gte=six_months_ago
+    # --- Lógica para Gráfica de Saldo de Cartera por Mes ---
+    six_months_ago = timezone.now().date().replace(day=1) - timedelta(days=150)
+
+    # Obtener el saldo pendiente total por mes y por línea para créditos nuevos
+    monthly_balance = Credito.objects.filter(
+        estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA],
+        fecha_actualizacion__gte=six_months_ago
     ).annotate(
-        month=TruncMonth('fecha_solicitud')
+        month=TruncMonth('fecha_actualizacion')
     ).values('month').annotate(
-        total_value=Sum(
+        total_emprendimiento=Sum(
             Case(
-                When(linea='EMPRENDIMIENTO', then='detalle_emprendimiento__monto_aprobado'),
-                When(linea='LIBRANZA', then='detalle_libranza__monto_aprobado'),
-                default=0,
-                output_field=DecimalField()
+                When(linea=Credito.LineaCredito.EMPRENDIMIENTO, then=F('detalle_emprendimiento__saldo_pendiente')),
+                default=Decimal(0), output_field=DecimalField()
+            )
+        ),
+        total_libranza=Sum(
+            Case(
+                When(linea=Credito.LineaCredito.LIBRANZA, then=F('detalle_libranza__saldo_pendiente')),
+                default=Decimal(0), output_field=DecimalField()
             )
         )
     ).order_by('month')
 
-    portfolio_labels = [item['month'].strftime('%b %Y') for item in portfolio_evolution]
-    portfolio_data = [float(item['total_value']) for item in portfolio_evolution if item['total_value'] is not None]
+    data_by_month = {item['month'].strftime('%Y-%m'): item for item in monthly_balance}
+
+    portfolio_labels = []
+    emprendimiento_data = []
+    libranza_data = []
+    total_data = []
+
+    for i in range(6):
+        from dateutil.relativedelta import relativedelta
+        month_date = (timezone.now() - relativedelta(months=5-i)).replace(day=1)
+        month_key = month_date.strftime('%Y-%m')
+        portfolio_labels.append(month_date.strftime('%b %Y'))
+
+        emprendimiento_monthly = data_by_month.get(month_key, {}).get('total_emprendimiento', 0)
+        libranza_monthly = data_by_month.get(month_key, {}).get('total_libranza', 0)
+        
+        emprendimiento_data.append(float(emprendimiento_monthly))
+        libranza_data.append(float(libranza_monthly))
+        total_data.append(float(emprendimiento_monthly + libranza_monthly))
 
     distribution_labels = [item['linea'] for item in creditos_por_linea]
     distribution_data = [item['count'] for item in creditos_por_linea]
@@ -228,7 +251,9 @@ def admin_dashboard_view(request):
         'creditos_por_estado': creditos_por_estado_list,
         'proximos_vencer': proximos_vencer,
         'portfolio_labels': json.dumps(portfolio_labels),
-        'portfolio_data': json.dumps(portfolio_data),
+        'emprendimiento_data': json.dumps(emprendimiento_data),
+        'libranza_data': json.dumps(libranza_data),
+        'total_data': json.dumps(total_data),
         'distribution_labels': json.dumps(distribution_labels),
         'distribution_data': json.dumps(distribution_data),
     }
@@ -404,7 +429,24 @@ def detalle_credito_view(request, credito_id):
     historial_estados = HistorialEstado.objects.filter(credito=credito).order_by('-fecha')
 
     monto_total_pagado = historial_pagos.filter(estado='EXITOSO').aggregate(Sum('monto'))['monto__sum'] or 0
-    
+
+    # Unificar el acceso a los detalles del crédito
+    detalle_credito = credito.detalle_emprendimiento if hasattr(credito, 'detalle_emprendimiento') and credito.detalle_emprendimiento else credito.detalle_libranza
+
+    # Calcular días en mora si el estado es EN_MORA
+    dias_en_mora = 0
+    if credito.estado == 'EN_MORA' and detalle_credito and detalle_credito.fecha_proximo_pago:
+        dias_en_mora = (timezone.now().date() - detalle_credito.fecha_proximo_pago).days
+
+    # Pasar datos unificados a la plantilla a través del objeto 'credito'
+    credito.monto_aprobado = detalle_credito.monto_aprobado if detalle_credito else 0
+    credito.saldo_pendiente = detalle_credito.saldo_pendiente if detalle_credito else 0
+    credito.plazo = detalle_credito.plazo if detalle_credito else 0
+    credito.tasa_interes = detalle_credito.tasa_interes if detalle_credito else 0
+    credito.valor_cuota = detalle_credito.valor_cuota if detalle_credito else 0
+    credito.proximo_vencimiento = detalle_credito.fecha_proximo_pago if detalle_credito else None
+    credito.dias_en_mora = dias_en_mora if dias_en_mora > 0 else 0
+
     context = {
         'credito': credito,
         'historial_pagos': historial_pagos,
@@ -429,8 +471,6 @@ def cambiar_estado_credito_view(request, credito_id):
     estado_anterior = credito.estado
 
     # --- Lógica de automatización para desembolso ---
-    # Si el crédito está pendiente de transferencia y se sube un comprobante,
-    # se fuerza el estado a ACTIVO automáticamente.
     if estado_anterior == Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA and comprobante_pago:
         nuevo_estado = Credito.EstadoCredito.ACTIVO
         if not motivo:
@@ -614,8 +654,7 @@ def pagador_dashboard_view(request):
     ).exclude(
         estado__in=[Credito.EstadoCredito.RECHAZADO, Credito.EstadoCredito.SOLICITUD]
     ).select_related('detalle_libranza', 'usuario').annotate(
-        total_pagado=Coalesce(Subquery(total_pagado_subquery, output_field=DecimalField()), Value(Decimal(0))),
-        saldo_pendiente=F('detalle_libranza__valor_credito') - F('total_pagado')
+        total_pagado=Coalesce(Subquery(total_pagado_subquery, output_field=DecimalField()), Value(Decimal(0)))
     )
 
     # Aplicar filtros de búsqueda
@@ -675,7 +714,9 @@ def pagador_detalle_credito_view(request, credito_id):
 
     historial_pagos = HistorialPago.objects.filter(credito=credito, estado=HistorialPago.EstadoPago.EXITOSO).order_by('-fecha_pago')
     total_pagado = historial_pagos.aggregate(total=Sum('monto'))['total'] or Decimal(0)
-    saldo_pendiente = credito.detalle_libranza.valor_credito - total_pagado
+    
+    # Usar el saldo pendiente del modelo que ya se actualiza correctamente
+    saldo_pendiente = credito.detalle_libranza.saldo_pendiente
 
     context = {
         'credito': credito,
@@ -736,7 +777,7 @@ def pagador_procesar_pagos_view(request):
                     detalle_libranza__empresa=empresa,
                     detalle_libranza__cedula=cedula,
                     estado=Credito.EstadoCredito.ACTIVO
-                ).first()
+                ).select_related('detalle_libranza').first()
 
                 if not credito:
                     errores.append(f"Fila {i}: No se encontró un crédito activo para la cédula {cedula}.")
@@ -750,17 +791,22 @@ def pagador_procesar_pagos_view(request):
                     estado=HistorialPago.EstadoPago.EXITOSO
                 )
 
-                # Actualizar el saldo del crédito (recalculando)
-                total_pagado_actual = HistorialPago.objects.filter(
-                    credito=credito,
-                    estado=HistorialPago.EstadoPago.EXITOSO
-                ).aggregate(total=Sum('monto'))['total'] or Decimal(0)
-
-                saldo_actual = credito.detalle_libranza.valor_credito - total_pagado_actual
-
-                if saldo_actual <= 0:
-                    credito.estado = Credito.EstadoCredito.PAGADO
-                    credito.save()
+                # Actualizar el saldo pendiente
+                detalle = credito.detalle_libranza
+                if detalle.saldo_pendiente is not None:
+                    detalle.saldo_pendiente -= monto_a_pagar
+                    if detalle.saldo_pendiente <= 0:
+                        detalle.saldo_pendiente = 0
+                        credito.estado = Credito.EstadoCredito.PAGADO
+                        credito.save()
+                        HistorialEstado.objects.create(
+                            credito=credito,
+                            estado_anterior=Credito.EstadoCredito.ACTIVO,
+                            estado_nuevo=Credito.EstadoCredito.PAGADO,
+                            motivo="Crédito saldado por pago masivo.",
+                            usuario_modificacion=request.user
+                        )
+                    detalle.save()
                 
                 pagos_exitosos += 1
 
@@ -775,5 +821,82 @@ def pagador_procesar_pagos_view(request):
         # Guardar errores en la sesión para mostrarlos
         request.session['errores_pago_masivo'] = errores
         messages.warning(request, f"Se encontraron {len(errores)} errores. Revise los detalles.")
+
+    return redirect('gestion_creditos:pagador_dashboard')
+
+@login_required
+def iniciar_pago_view(request, credito_id):
+    """Inicia el flujo de pago para una cuota de un crédito de libranza."""
+    credito = get_object_or_404(Credito, id=credito_id, linea=Credito.LineaCredito.LIBRANZA)
+    
+    # Asegurarse de que el pagador solo pueda pagar créditos de su empresa
+    try:
+        if credito.detalle_libranza.empresa != request.user.perfil_pagador.empresa:
+            messages.error(request, "No tiene permisos para pagar este crédito.")
+            return redirect('gestion_creditos:pagador_dashboard')
+    except PerfilPagador.DoesNotExist:
+        messages.error(request, "Acceso no autorizado.")
+        return redirect('index')
+
+    valor_cuota = credito.detalle_libranza.valor_cuota
+    if not valor_cuota or valor_cuota <= 0:
+        messages.error(request, "El crédito no tiene un valor de cuota válido para pagar.")
+        return redirect('gestion_creditos:pagador_dashboard')
+
+    context = {
+        'credito': credito,
+        'valor_cuota': valor_cuota,
+        'referencia_pago': f'PAGO-{credito.id}-{timezone.now().strftime("%Y%m%d%H%M%S")}'
+    }
+    return render(request, 'gestion_creditos/simulacion_pago.html', context)
+
+
+@login_required
+@require_POST
+def procesar_pago_callback_view(request):
+    """Procesa el callback de la pasarela de pagos simulada."""
+    status = request.POST.get('status')
+    credito_id = request.POST.get('credito_id')
+    monto = request.POST.get('monto')
+    referencia = request.POST.get('referencia')
+
+    credito = get_object_or_404(Credito, id=credito_id)
+
+    if status == 'success':
+        try:
+            with transaction.atomic():
+                monto_decimal = Decimal(monto)
+                
+                # Crear el registro del pago
+                HistorialPago.objects.create(
+                    credito=credito,
+                    monto=monto_decimal,
+                    referencia_pago=referencia,
+                    estado=HistorialPago.EstadoPago.EXITOSO
+                )
+
+                # Actualizar el saldo pendiente
+                detalle = credito.detalle_libranza
+                if detalle.saldo_pendiente is not None:
+                    detalle.saldo_pendiente -= monto_decimal
+                    if detalle.saldo_pendiente <= 0:
+                        detalle.saldo_pendiente = 0
+                        credito.estado = Credito.EstadoCredito.PAGADO
+                        credito.save()
+                        HistorialEstado.objects.create(
+                            credito=credito,
+                            estado_anterior=Credito.EstadoCredito.ACTIVO,
+                            estado_nuevo=Credito.EstadoCredito.PAGADO,
+                            motivo="Crédito saldado por pago de cuota.",
+                            usuario_modificacion=request.user
+                        )
+                    detalle.save()
+                
+                messages.success(request, f"Pago de ${monto_decimal:,.2f} para el crédito #{credito.id} procesado exitosamente.")
+
+        except Exception as e:
+            messages.error(request, f"Ocurrió un error al procesar el pago: {e}")
+    else:
+        messages.error(request, f"El pago para el crédito #{credito.id} fue fallido o cancelado.")
 
     return redirect('gestion_creditos:pagador_dashboard')

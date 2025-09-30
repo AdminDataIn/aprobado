@@ -82,3 +82,11 @@ def dashboard_view(request, credito_id=None):
         'historial_pagos': historial_pagos,
     }
     return render(request, 'usuariocreditos/dashboard.html', context)
+
+def billetera_digital(request):
+    """
+    Vista para la billetera digital del usuario.
+    """
+    return render(request, 'billetera/billetera_digital.html', {
+        'nombre_asociado': request.user.get_full_name() or request.user.username
+    })

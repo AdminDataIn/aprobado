@@ -144,6 +144,8 @@
                             <th>Cédula</th>
                             <th class="text-end">Monto Original</th>
                             <th class="text-end">Saldo Pendiente</th>
+                            <th class="text-end">Valor Cuota</th>
+                            <th class="text-center">Próximo Pago</th>
                             <th class="text-center">Estado</th>
                             <th>Acciones</th>
                         </tr>
@@ -156,7 +158,9 @@
                             </td>
                             <td>{{ credito.detalle_libranza.cedula }}</td>
                             <td class="text-end amount-display">${{ credito.detalle_libranza.valor_credito|intcomma }}</td>
-                            <td class="text-end amount-display">${{ credito.saldo_pendiente|intcomma }}</td>
+                            <td class="text-end amount-display">${{ credito.detalle_libranza.saldo_pendiente|intcomma }}</td>
+                            <td class="text-end amount-display">${{ credito.detalle_libranza.valor_cuota|intcomma }}</td>
+                            <td class="text-center date-display">{{ credito.detalle_libranza.fecha_proximo_pago|date:"d/m/Y" }}</td>
                             <td class="text-center">
                                 <span class="status-badge 
                                     {% if credito.estado == 'ACTIVO' %}status-active
@@ -174,7 +178,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="6" class="empty-row">
+                            <td colspan="8" class="empty-row">
                                 <div class="empty-state">
                                     <i class="bi bi-table"></i>
                                     <p>No hay créditos para mostrar.</p>

@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aprobado - Billetera Virtual</title>
+    {% load static %}
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        :root {
+            --primary-yellow: #FFD700;
+            --primary-blue: #003087;
+            --primary-red: #CE1126;
+            --gradient-primary: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            --gradient-secondary: linear-gradient(135deg, #003087 0%, #0066CC 100%);
+            --gradient-accent: linear-gradient(135deg, #CE1126 0%, #FF4757 100%);
+            --text-dark: #2c3e50;
+            --bg-light: #f8fafc;
+            --shadow-soft: 0 4px 20px rgba(0,0,0,0.08);
+            --shadow-card: 0 8px 30px rgba(0,0,0,0.12);
+        }
+
+        body {
+            background: linear-gradient(135deg, #f8fafc 0%, #e3f2fd 100%);
+            color: var(--text-dark);
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .logo {
+            font-weight: 700;
+            font-size: 1.5rem;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .balance-card {
+            background: var(--gradient-primary);
+            border-radius: 20px;
+            color: white;
+            box-shadow: var(--shadow-card);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+
+        .balance-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .balance-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: shimmer 3s ease-in-out infinite;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(180deg); }
+        }
+
+        .savings-card {
+            background: var(--gradient-secondary);
+            border-radius: 20px;
+            color: white;
+            box-shadow: var(--shadow-card);
+            transition: transform 0.3s ease;
+        }
+
+        .savings-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .action-btn {
+            border-radius: 15px;
+            border: none;
+            padding: 12px 20px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-receive {
+            background: var(--gradient-primary);
+            color: var(--primary-blue);
+        }
+
+        .btn-save {
+            background: var(--gradient-secondary);
+            color: white;
+        }
+
+        .btn-transfer {
+            background: var(--gradient-accent);
+            color: white;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        .transaction-card {
+            background: white;
+            border-radius: 15px;
+            border: 1px solid rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .transaction-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-card);
+        }
+
+        .impact-section {
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.1) 0%, rgba(206, 17, 38, 0.1) 100%);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 215, 0, 0.2);
+        }
+
+        .progress-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: conic-gradient(var(--primary-yellow) 0deg 252deg, #e9ecef 252deg 360deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .progress-circle::before {
+            content: '';
+            width: 80px;
+            height: 80px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+        }
+
+        .progress-text {
+            position: relative;
+            z-index: 1;
+            font-weight: 700;
+            color: var(--primary-blue);
+        }
+
+        .sidebar {
+            background: white;
+            border-radius: 20px;
+            box-shadow: var(--shadow-card);
+            height: fit-content;
+        }
+
+        .sidebar-item {
+            padding: 12px 20px;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin: 5px 0;
+        }
+
+        .sidebar-item:hover {
+            background: rgba(255, 215, 0, 0.1);
+            transform: translateX(5px);
+        }
+
+        .sidebar-item.active {
+            background: var(--gradient-primary);
+            color: var(--primary-blue);
+            font-weight: 600;
+        }
+
+        .stats-mini {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: var(--shadow-soft);
+            transition: transform 0.3s ease;
+        }
+
+        .stats-mini:hover {
+            transform: translateY(-3px);
+        }
+
+        .flag-colors {
+            background: linear-gradient(to right, var(--primary-yellow) 50%, var(--primary-blue) 50%, var(--primary-red) 100%);
+            height: 4px;
+            border-radius: 2px;
+        }
+
+        @media (max-width: 768px) {
+            .container-fluid {
+                padding: 10px;
+            }
+            
+            .balance-card, .savings-card {
+                margin-bottom: 20px;
+            }
+            
+            .action-btn {
+                width: 100%;
+                margin-bottom: 10px;
+            }
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.6s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .floating-icon {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg sticky-top">
+        <div class="container-fluid">
+            <a href="/">
+                <img src="{% static '/images/logo-dark.png' %}" alt="Logo Aprobado" height="40" class="me-2">
+            </a>
+            <div class="flag-colors mb-2"></div>
+            <div class="navbar-nav ms-auto d-flex flex-row">
+                <a class="nav-link me-3" href="#"><i class="fas fa-bell"></i></a>
+                <a class="nav-link me-3" href="#"><i class="fas fa-user-circle"></i></a>
+                <a class="nav-link" href="#"><i class="fas fa-cog"></i></a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid py-4">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-lg-2 mb-4">
+                <div class="sidebar p-3">
+                    <div class="sidebar-item active">
+                        <i class="fas fa-home me-2"></i> Dashboard
+                    </div>
+                    <div class="sidebar-item">
+                        <i class="fas fa-piggy-bank me-2"></i> Mis Ahorros
+                    </div>
+                    <div class="sidebar-item">
+                        <i class="fas fa-history me-2"></i> Historial
+                    </div>
+                    <div class="sidebar-item">
+                        <i class="fas fa-heart me-2"></i> Impacto Social
+                    </div>
+                    <div class="sidebar-item">
+                        <i class="fas fa-user me-2"></i> Mi Perfil
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-lg-10">
+                <!-- Balance and Savings Cards -->
+                <div class="row mb-4">
+                    <div class="col-lg-6 mb-3">
+                        <div class="balance-card p-4 animate-fade-in">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <h6 class="mb-1 opacity-75">Saldo Disponible</h6>
+                                    <h2 class="mb-0 fw-bold">$1,247,500</h2>
+                                    <small class="opacity-75">COP</small>
+                                </div>
+                                <div class="floating-icon">
+                                    <i class="fas fa-wallet fa-2x opacity-25"></i>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="opacity-75">Último movimiento: Hoy</small>
+                                <i class="fas fa-eye"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6 mb-3">
+                        <div class="savings-card p-4 animate-fade-in">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <h6 class="mb-1 opacity-75">Ahorros Acumulados</h6>
+                                    <h2 class="mb-0 fw-bold">$890,200</h2>
+                                    <small class="opacity-75">Meta: $1,000,000</small>
+                                </div>
+                                <div class="progress-circle">
+                                    <div class="progress-text">89%</div>
+                                </div>
+                            </div>
+                            <div class="progress" style="height: 6px; background: rgba(255,255,255,0.2);">
+                                <div class="progress-bar" style="width: 89%; background: var(--primary-yellow)"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="d-flex gap-3 flex-wrap justify-content-center">
+                            <button class="action-btn btn-receive">
+                                <i class="fas fa-download me-2"></i>
+                                Recibir Dinero
+                            </button>
+                            <button class="action-btn btn-save">
+                                <i class="fas fa-piggy-bank me-2"></i>
+                                Ahorrar
+                            </button>
+                            <button class="action-btn btn-transfer">
+                                <i class="fas fa-paper-plane me-2"></i>
+                                Transferir
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats Row -->
+                <div class="row mb-4">
+                    <div class="col-md-3 mb-3">
+                        <div class="stats-mini text-center">
+                            <i class="fas fa-chart-line text-success fa-2x mb-2"></i>
+                            <h6 class="mb-1">Crecimiento</h6>
+                            <h5 class="text-success mb-0">+12.5%</h5>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="stats-mini text-center">
+                            <i class="fas fa-calendar-alt text-primary fa-2x mb-2"></i>
+                            <h6 class="mb-1">Días Ahorrando</h6>
+                            <h5 class="text-primary mb-0">127</h5>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="stats-mini text-center">
+                            <i class="fas fa-handshake text-warning fa-2x mb-2"></i>
+                            <h6 class="mb-1">Emprendimientos</h6>
+                            <h5 class="text-warning mb-0">23</h5>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="stats-mini text-center">
+                            <i class="fas fa-female text-danger fa-2x mb-2"></i>
+                            <h6 class="mb-1">Mujeres Apoyadas</h6>
+                            <h5 class="text-danger mb-0">156</h5>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Transactions & Impact -->
+                <div class="row">
+                    <div class="col-lg-8 mb-4">
+                        <div class="card border-0 shadow-sm" style="border-radius: 20px;">
+                            <div class="card-header bg-white border-0 py-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0 fw-bold">Movimientos Recientes</h5>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary">Todos</button>
+                                        <button class="btn btn-primary">Ahorros</button>
+                                        <button class="btn btn-outline-primary">Transferencias</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="transaction-card p-3 mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="d-flex align-items-center">
+                                            <div class="bg-success rounded-circle p-2 me-3">
+                                                <i class="fas fa-piggy-bank text-white"></i>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-1">Ahorro Automático</h6>
+                                                <small class="text-muted">Hoy - 14:30</small>
+                                            </div>
+                                        </div>
+                                        <div class="text-end">
+                                            <h6 class="text-success mb-0">+$50,000</h6>
+                                            <small class="text-muted">Completado</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="transaction-card p-3 mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="d-flex align-items-center">
+                                            <div class="bg-primary rounded-circle p-2 me-3">
+                                                <i class="fas fa-download text-white"></i>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-1">Recibo de Transferencia</h6>
+                                                <small class="text-muted">Ayer - 09:15</small>
+                                            </div>
+                                        </div>
+                                        <div class="text-end">
+                                            <h6 class="text-primary mb-0">+$200,000</h6>
+                                            <small class="text-muted">Completado</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="transaction-card p-3 mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="d-flex align-items-center">
+                                            <div class="bg-warning rounded-circle p-2 me-3">
+                                                <i class="fas fa-paper-plane text-white"></i>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-1">Transferencia Enviada</h6>
+                                                <small class="text-muted">2 días atrás - 16:45</small>
+                                            </div>
+                                        </div>
+                                        <div class="text-end">
+                                            <h6 class="text-warning mb-0">-$75,000</h6>
+                                            <small class="text-muted">Completado</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Impact Section -->
+                    <div class="col-lg-4 mb-4">
+                        <div class="impact-section p-4 h-100">
+                            <div class="text-center mb-4">
+                                <i class="fas fa-heart text-danger fa-3x mb-3 floating-icon"></i>
+                                <h5 class="fw-bold text-dark">Tu Impacto Social</h5>
+                                <p class="text-muted small">Con tus ahorros estás transformando vidas</p>
+                            </div>
+                            
+                            <div class="row text-center">
+                                <div class="col-6 mb-3">
+                                    <div class="bg-white rounded-3 p-3">
+                                        <i class="fas fa-store text-primary fa-2x mb-2"></i>
+                                        <h6 class="mb-1">Emprendimientos</h6>
+                                        <h4 class="text-primary mb-0">8</h4>
+                                        <small class="text-muted">financiados</small>
+                                    </div>
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <div class="bg-white rounded-3 p-3">
+                                        <i class="fas fa-users text-success fa-2x mb-2"></i>
+                                        <h6 class="mb-1">Familias</h6>
+                                        <h4 class="text-success mb-0">32</h4>
+                                        <small class="text-muted">beneficiadas</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="text-center mt-3">
+                                <button class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Ver más detalles
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Smooth animations and interactions
+        document.addEventListener('DOMContentLoaded', function() {
+            // Animate cards on load
+            const cards = document.querySelectorAll('.animate-fade-in');
+            cards.forEach((card, index) => {
+                card.style.animationDelay = `${index * 0.1}s`;
+            });
+
+            // Action buttons hover effects
+            const actionBtns = document.querySelectorAll('.action-btn');
+            actionBtns.forEach(btn => {
+                btn.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-3px) scale(1.02)';
+                });
+                
+                btn.addEventListener('mouseleave', function() {
+                    this.style.transform = 'translateY(0) scale(1)';
+                });
+
+                btn.addEventListener('click', function() {
+                    this.style.transform = 'translateY(1px) scale(0.98)';
+                    setTimeout(() => {
+                        this.style.transform = 'translateY(-3px) scale(1.02)';
+                    }, 100);
+                });
+            });
+
+            // Sidebar navigation
+            const sidebarItems = document.querySelectorAll('.sidebar-item');
+            sidebarItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    sidebarItems.forEach(i => i.classList.remove('active'));
+                    this.classList.add('active');
+                });
+            });
+
+            // Dynamic balance update simulation
+            const balanceElement = document.querySelector('.balance-card h2');
+            const savingsElement = document.querySelector('.savings-card h2');
+            
+            let balance = 1247500;
+            let savings = 890200;
+            
+            // Simulate real-time updates (demo purposes)
+            setInterval(() => {
+                if (Math.random() > 0.9) {
+                    const change = Math.floor(Math.random() * 10000) + 1000;
+                    balance += change;
+                    balanceElement.textContent = `$${balance.toLocaleString()}`;
+                    
+                    // Add visual feedback
+                    balanceElement.style.color = '#4CAF50';
+                    setTimeout(() => {
+                        balanceElement.style.color = 'white';
+                    }, 1000);
+                }
+            }, 3000);
+        });
+
+        // Mobile responsiveness improvements
+        function adjustForMobile() {
+            if (window.innerWidth < 768) {
+                const actionBtns = document.querySelectorAll('.action-btn');
+                actionBtns.forEach(btn => {
+                    btn.classList.add('w-100', 'mb-2');
+                });
+            }
+        }
+
+        window.addEventListener('resize', adjustForMobile);
+        adjustForMobile();
+    </script>
+</body>
+</html>

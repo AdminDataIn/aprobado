@@ -96,32 +96,56 @@
                         <h3 class="card-title"><i class="bi bi-file-text me-2"></i>Resumen del Crédito</h3>
                     </div>
                     <div class="card-content">
-                        <div class="info-grid">
-                            <div class="info-item">
-                                <span class="info-label">Monto Original</span>
-                                <span class="info-value">${{ credito.detalle_libranza.valor_credito|intcomma }}</span>
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Monto Original</span>
+                                    <span class="info-value">${{ credito.detalle_libranza.valor_credito|intcomma }}</span>
+                                </div>
                             </div>
-                            <div class="info-item">
-                                <span class="info-label">Total Pagado</span>
-                                <span class="info-value text-success">${{ total_pagado|intcomma }}</span>
-                            </div>
-                            <div class="info-item">
-                                <span class="info-label">Saldo Pendiente</span>
-                                <span class="info-value">${{ saldo_pendiente|intcomma }}</span>
-                            </div>
-                            <div class="info-item">
-                                <span class="info-label">Estado</span>
-                                <div class="info-value">
-                                    <span class="status-badge 
-                                        {% if credito.estado == 'ACTIVO' %}status-active
-                                        {% elif credito.estado == 'EN_MORA' %}status-overdue
-                                        {% elif credito.estado == 'PAGADO' %}status-paid
-                                        {% else %}status-pending{% endif %}">
-                                        {{ credito.get_estado_display }}
-                                    </span>
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Saldo Pendiente</span>
+                                    <span class="info-value">${{ saldo_pendiente|intcomma }}</span>
                                 </div>
                             </div>
                         </div>
+                        <hr class="my-3">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Valor Cuota</span>
+                                    <span class="info-value">${{ credito.detalle_libranza.valor_cuota|intcomma }}</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Total Pagado</span>
+                                    <span class="info-value text-success">${{ total_pagado|intcomma }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <hr class="my-3">
+                        <div class="info-item text-center">
+                            <span class="info-label">Estado</span>
+                            <div class="info-value">
+                                <span class="status-badge 
+                                    {% if credito.estado == 'ACTIVO' %}status-active
+                                    {% elif credito.estado == 'EN_MORA' %}status-overdue
+                                    {% elif credito.estado == 'PAGADO' %}status-paid
+                                    {% else %}status-pending{% endif %}">
+                                    {{ credito.get_estado_display }}
+                                </span>
+                            </div>
+                        </div>
+
+                        {% if credito.estado == 'ACTIVO' %}
+                        <div class="mt-4">
+                            <a href="{% url 'gestion_creditos:iniciar_pago' credito.id %}" class="btn btn-pagar w-100">
+                                Pagar Cuota (${{ credito.detalle_libranza.valor_cuota|intcomma }})
+                            </a>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="card">
@@ -132,7 +156,7 @@
                         </h2>
                     </div>
                     <div class="card-content">
-                        <button type="button" class="btn btn-outline" data-bs-toggle="modal" data-bs-target="#infoCompletaModal" style="width: 100%; margin-bottom: 0.75rem;">
+                        <button type="button" class="btn btn-outline w-100" data-bs-toggle="modal" data-bs-target="#infoCompletaModal">
                             <i class="bi bi-search me-2"></i>
                             Ver Información Completa
                         </button>

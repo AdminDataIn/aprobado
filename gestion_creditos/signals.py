@@ -1,62 +1,90 @@
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
-from django.core.mail import send_mail
-from django.conf import settings
-from django.urls import reverse
+from django.utils import timezone
+from dateutil.relativedelta import relativedelta
+from decimal import Decimal
 
-from .models import Credito
+from .models import Credito, HistorialEstado
 
-#! LOGICA PENSADA PERO NO IMPLEMENTADA AUN
+
+@receiver(pre_save, sender=Credito)
+def registrar_cambio_estado(sender, instance, **kwargs):
+    """
+    Antes de guardar un crédito, verifica si el estado ha cambiado y, si es así,
+    guarda un registro en el HistorialEstado.
+    """
+    if instance.pk:  # Si el objeto ya existe en la BD
+        try:
+            credito_anterior = Credito.objects.get(pk=instance.pk)
+            if credito_anterior.estado != instance.estado:
+                # El estado ha cambiado, crea un registro en el historial
+                # Nota: El usuario que modifica no se captura aquí, se debería pasar desde la vista.
+                HistorialEstado.objects.create(
+                    credito=instance,
+                    estado_anterior=credito_anterior.estado,
+                    estado_nuevo=instance.estado,
+                    motivo=f"Cambio de estado a {instance.get_estado_display()}"
+                )
+        except Credito.DoesNotExist:
+            pass  # El objeto es nuevo, no hay estado anterior
+
+
 @receiver(post_save, sender=Credito)
-def gestionar_aprobacion_credito(sender, instance, **kwargs):
+def calcular_detalles_credito_activo(sender, instance, created, **kwargs):
     """
-    Señal para enviar correo de firma de pagaré cuando un crédito es aprobado
-    y actualizar el estado a PENDIENTE_TRANSFERENCIA.
+    Cuando un crédito cambia al estado 'ACTIVO', calcula y guarda los detalles
+    financieros como el saldo, la cuota y la próxima fecha de pago.
     """
-    if instance.estado == Credito.EstadoCredito.APROBADO and not instance.documento_enviado:
-        print(f"Crédito {instance.numero_credito} aprobado. Enviando correo para firma.")
+    if instance.estado == Credito.EstadoCredito.ACTIVO and instance.pk:
+        # Determinar si es un crédito recién activado
+        historial_relevante = HistorialEstado.objects.filter(
+            credito=instance, 
+            estado_nuevo=Credito.EstadoCredito.ACTIVO
+        ).order_by('-fecha').first()
 
-        # --- Lógica de envío de correo y firma ---
-        try:
-            webhook_url = settings.SITE_URL + reverse('gestion_creditos:webhook_firma_documento', kwargs={'numero_credito': instance.numero_credito})
-        except AttributeError:
-            print("ERROR: La variable SITE_URL no está definida en el archivo de settings. Usando un valor temporal.")
-            webhook_url = "https://example.com" # Valor temporal para evitar que el programa falle
+        # Solo actuar si el estado anterior no era también ACTIVO (evita recalcular en cada guardado)
+        if historial_relevante and historial_relevante.estado_anterior != Credito.EstadoCredito.ACTIVO:
+            
+            detalle_credito = getattr(instance, 'detalle_emprendimiento', None) or getattr(instance, 'detalle_libranza', None)
 
-        url_firma = f"https://servicio-firma.com/firmar?documento_id={instance.numero_credito}&callback_url={webhook_url}"
-        
-        asunto = "¡Tu crédito ha sido aprobado! Firma el pagaré para continuar"
-        mensaje = (
-            f"Hola {instance.usuario.get_full_name() or instance.usuario.username},<br><br>"
-            f"¡Buenas noticias! Tu crédito con número {instance.numero_credito} ha sido aprobado.<br>"
-            f"El siguiente paso es firmar el pagaré digitalmente. Por favor, haz clic en el siguiente enlace:<br><br>"
-            f'<a href="{url_firma}">Firmar Pagaré Ahora</a><br><br>'
-            f"Una vez firmado, procesaremos el desembolso de tu crédito.<br><br>"
-            f"Gracias,<br>El equipo de Aprobado"
-        )
-        
-        try:
-            send_mail(
-                subject=asunto,
-                message="",
-                html_message=mensaje,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[instance.usuario.email],
-                fail_silently=False,
-            )
-            print(f"Correo para firma del crédito {instance.numero_credito} enviado a {instance.usuario.email}.")
-        except Exception as e:
-            print(f"ERROR: No se pudo enviar el correo para el crédito {instance.numero_credito}. Error: {e}")
+            # --- VALIDACIÓN DE ROBUSTEZ ---
+            # Si no hay detalle, monto o plazo, no se pueden hacer cálculos.
+            if not detalle_credito or not detalle_credito.monto_aprobado or not detalle_credito.plazo or detalle_credito.plazo <= 0:
+                # Opcional: Registrar un log de advertencia aquí si es necesario
+                # logger.warning(f"No se pudieron calcular los detalles para el crédito {instance.id} por falta de datos.")
+                return # Salir de la función para evitar errores
 
-        # Desconectar la señal temporalmente para evitar recursión
-        post_save.disconnect(gestionar_aprobacion_credito, sender=Credito)
-        
-        try:
-            # Actualizar el estado y marcar como documento enviado
-            instance.documento_enviado = True
-            instance.estado = Credito.EstadoCredito.PENDIENTE_FIRMA
-            instance.save(update_fields=['documento_enviado', 'estado'])
-            print(f"Crédito {instance.numero_credito} actualizado a PENDIENTE_FIRMA.")
-        finally:
-            # Reconectar la señal
-            post_save.connect(gestionar_aprobacion_credito, sender=Credito)
+            # 1. Calcular Total a Pagar y Cuota según lógica de Comisión + IVA
+            monto_aprobado = detalle_credito.monto_aprobado
+            plazo = detalle_credito.plazo
+
+            # Porcentajes definidos por el usuario (temporalmente hardcodeados)
+            porcentaje_comision = Decimal('0.10')
+            porcentaje_iva = Decimal('0.19')
+
+            monto_comision = monto_aprobado * porcentaje_comision
+            monto_iva = monto_comision * porcentaje_iva
+            total_a_pagar = monto_aprobado + monto_comision + monto_iva
+
+            if plazo > 0:
+                valor_cuota = total_a_pagar / plazo
+            else:
+                valor_cuota = total_a_pagar
+            
+            detalle_credito.valor_cuota = valor_cuota.quantize(Decimal('0.01'))
+
+            # 2. Establecer Saldo Pendiente inicial como el Total a Pagar
+            detalle_credito.saldo_pendiente = total_a_pagar.quantize(Decimal('0.01'))
+
+            # 3. Lógica de Próximo Vencimiento
+            hoy = timezone.now().date()
+            if hoy.day <= 15:
+                # Primer pago el 1ro del mes siguiente
+                fecha_pago = (hoy.replace(day=1) + relativedelta(months=1))
+            else:
+                # Primer pago el 1ro del mes subsiguiente
+                fecha_pago = (hoy.replace(day=1) + relativedelta(months=2))
+            
+            detalle_credito.fecha_proximo_pago = fecha_pago
+
+            detalle_credito.save()

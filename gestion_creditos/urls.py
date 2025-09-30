@@ -22,4 +22,8 @@ urlpatterns = [
     path('pagador/dashboard/', views.pagador_dashboard_view, name='pagador_dashboard'),
     path('pagador/credito/<int:credito_id>/', views.pagador_detalle_credito_view, name='pagador_detalle_credito'),
     path('pagador/procesar-pagos/', views.pagador_procesar_pagos_view, name='pagador_procesar_pagos'),
+
+    #! URLs Flujo de Pago Individual
+    path('pago/iniciar/<int:credito_id>/', views.iniciar_pago_view, name='iniciar_pago'),
+    path('pago/callback/', views.procesar_pago_callback_view, name='pago_callback'),
 ]
