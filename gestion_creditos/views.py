@@ -408,13 +408,29 @@ def procesar_solicitud_view(request, credito_id):
             return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito_id)
 
         credito.save()
-        HistorialEstado.objects.create(
+        # --- Lógica para evitar duplicados en el historial ---
+        from django.utils import timezone
+        import datetime
+        system_entry = HistorialEstado.objects.filter(
             credito=credito,
             estado_anterior=estado_anterior,
             estado_nuevo=credito.estado,
-            usuario_modificacion=request.user,
-            motivo=request.POST.get('observations', 'Decisión inicial de la solicitud.')
-        )
+            usuario_modificacion__isnull=True,
+            fecha__gte=timezone.now() - datetime.timedelta(seconds=5)
+        ).order_by('-fecha').first()
+
+        if system_entry:
+            system_entry.motivo = request.POST.get('observations', 'Decisión inicial de la solicitud.')
+            system_entry.usuario_modificacion = request.user
+            system_entry.save()
+        else:
+            HistorialEstado.objects.create(
+                credito=credito,
+                estado_anterior=estado_anterior,
+                estado_nuevo=credito.estado,
+                usuario_modificacion=request.user,
+                motivo=request.POST.get('observations', 'Decisión inicial de la solicitud.')
+            )
 
     return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito_id)
 
@@ -529,23 +545,45 @@ def cambiar_estado_credito_view(request, credito_id):
                     detalle_credito.saldo_pendiente = total_a_pagar.quantize(Decimal('0.01'))
 
                     # Lógica de Próximo Vencimiento
-                    hoy = timezone.now().date()
-                    if hoy.day <= 15:
-                        detalle_credito.fecha_proximo_pago = (hoy.replace(day=1) + timedelta(days=31)).replace(day=1)
+                    from dateutil.relativedelta import relativedelta
+                    fecha_base = credito.fecha_solicitud.date()
+                    if fecha_base.day <= 15:
+                        detalle_credito.fecha_proximo_pago = fecha_base
                     else:
-                        detalle_credito.fecha_proximo_pago = (hoy.replace(day=1) + timedelta(days=62)).replace(day=1)
+                        detalle_credito.fecha_proximo_pago = (fecha_base.replace(day=1) + relativedelta(months=1))
                     
                     detalle_credito.save()
 
-            # Crear el registro de historial (único lugar)
-            HistorialEstado.objects.create(
+            # --- Lógica para evitar duplicados en el historial ---
+            # Se busca una entrada reciente del sistema para esta misma transición.
+            from django.utils import timezone
+            import datetime
+
+            system_entry = HistorialEstado.objects.filter(
                 credito=credito,
                 estado_anterior=estado_anterior,
                 estado_nuevo=nuevo_estado,
-                motivo=motivo,
-                comprobante_pago=comprobante_pago,
-                usuario_modificacion=request.user
-            )
+                usuario_modificacion__isnull=True,
+                fecha__gte=timezone.now() - datetime.timedelta(seconds=5)
+            ).order_by('-fecha').first()
+
+            if system_entry:
+                # Si existe una entrada del sistema, se actualiza con los detalles del usuario.
+                system_entry.motivo = motivo
+                system_entry.usuario_modificacion = request.user
+                if comprobante_pago:
+                    system_entry.comprobante_pago = comprobante_pago
+                system_entry.save()
+            else:
+                # Si no hay entrada del sistema, se crea una nueva.
+                HistorialEstado.objects.create(
+                    credito=credito,
+                    estado_anterior=estado_anterior,
+                    estado_nuevo=nuevo_estado,
+                    motivo=motivo,
+                    comprobante_pago=comprobante_pago,
+                    usuario_modificacion=request.user
+                )
             
             messages.success(request, f'Estado del crédito cambiado a {credito.get_estado_display()}.')
 
@@ -595,15 +633,32 @@ def agregar_pago_manual_view(request, credito_id):
                 detalle.saldo_pendiente -= monto_decimal
                 if detalle.saldo_pendiente <= 0:
                     detalle.saldo_pendiente = 0
+                    estado_anterior_pago = credito.estado
                     credito.estado = Credito.EstadoCredito.PAGADO
                     credito.save()
-                    HistorialEstado.objects.create(
+                    # --- Lógica para evitar duplicados en el historial ---
+                    from django.utils import timezone
+                    import datetime
+                    system_entry = HistorialEstado.objects.filter(
                         credito=credito,
-                        estado_anterior=credito.estado,
+                        estado_anterior=estado_anterior_pago,
                         estado_nuevo=Credito.EstadoCredito.PAGADO,
-                        motivo="Crédito saldado automáticamente por pago.",
-                        usuario_modificacion=request.user
-                    )
+                        usuario_modificacion__isnull=True,
+                        fecha__gte=timezone.now() - datetime.timedelta(seconds=5)
+                    ).order_by('-fecha').first()
+
+                    if system_entry:
+                        system_entry.motivo = "Crédito saldado automáticamente por pago."
+                        system_entry.usuario_modificacion = request.user
+                        system_entry.save()
+                    else:
+                        HistorialEstado.objects.create(
+                            credito=credito,
+                            estado_anterior=estado_anterior_pago,
+                            estado_nuevo=Credito.EstadoCredito.PAGADO,
+                            motivo="Crédito saldado automáticamente por pago.",
+                            usuario_modificacion=request.user
+                        )
                 detalle.save()
             
             messages.success(request, f"Abono de ${monto_decimal:,.2f} registrado exitosamente.")
@@ -824,15 +879,32 @@ def pagador_procesar_pagos_view(request):
                     detalle.saldo_pendiente -= monto_a_pagar
                     if detalle.saldo_pendiente <= 0:
                         detalle.saldo_pendiente = 0
+                        estado_anterior_pago_masivo = credito.estado
                         credito.estado = Credito.EstadoCredito.PAGADO
                         credito.save()
-                        HistorialEstado.objects.create(
+                        # --- Lógica para evitar duplicados en el historial ---
+                        from django.utils import timezone
+                        import datetime
+                        system_entry = HistorialEstado.objects.filter(
                             credito=credito,
-                            estado_anterior=Credito.EstadoCredito.ACTIVO,
+                            estado_anterior=estado_anterior_pago_masivo,
                             estado_nuevo=Credito.EstadoCredito.PAGADO,
-                            motivo="Crédito saldado por pago masivo.",
-                            usuario_modificacion=request.user
-                        )
+                            usuario_modificacion__isnull=True,
+                            fecha__gte=timezone.now() - datetime.timedelta(seconds=5)
+                        ).order_by('-fecha').first()
+
+                        if system_entry:
+                            system_entry.motivo = "Crédito saldado por pago masivo."
+                            system_entry.usuario_modificacion = request.user
+                            system_entry.save()
+                        else:
+                            HistorialEstado.objects.create(
+                                credito=credito,
+                                estado_anterior=estado_anterior_pago_masivo,
+                                estado_nuevo=Credito.EstadoCredito.PAGADO,
+                                motivo="Crédito saldado por pago masivo.",
+                                usuario_modificacion=request.user
+                            )
                     detalle.save()
                 
                 pagos_exitosos += 1
@@ -908,15 +980,32 @@ def procesar_pago_callback_view(request):
                     detalle.saldo_pendiente -= monto_decimal
                     if detalle.saldo_pendiente <= 0:
                         detalle.saldo_pendiente = 0
+                        estado_anterior_callback = credito.estado
                         credito.estado = Credito.EstadoCredito.PAGADO
                         credito.save()
-                        HistorialEstado.objects.create(
+                        # --- Lógica para evitar duplicados en el historial ---
+                        from django.utils import timezone
+                        import datetime
+                        system_entry = HistorialEstado.objects.filter(
                             credito=credito,
-                            estado_anterior=Credito.EstadoCredito.ACTIVO,
+                            estado_anterior=estado_anterior_callback,
                             estado_nuevo=Credito.EstadoCredito.PAGADO,
-                            motivo="Crédito saldado por pago de cuota.",
-                            usuario_modificacion=request.user
-                        )
+                            usuario_modificacion__isnull=True,
+                            fecha__gte=timezone.now() - datetime.timedelta(seconds=5)
+                        ).order_by('-fecha').first()
+
+                        if system_entry:
+                            system_entry.motivo = "Crédito saldado por pago de cuota."
+                            system_entry.usuario_modificacion = request.user
+                            system_entry.save()
+                        else:
+                            HistorialEstado.objects.create(
+                                credito=credito,
+                                estado_anterior=estado_anterior_callback,
+                                estado_nuevo=Credito.EstadoCredito.PAGADO,
+                                motivo="Crédito saldado por pago de cuota.",
+                                usuario_modificacion=request.user
+                            )
                     detalle.save()
                 
                 messages.success(request, f"Pago de ${monto_decimal:,.2f} para el crédito #{credito.id} procesado exitosamente.")
