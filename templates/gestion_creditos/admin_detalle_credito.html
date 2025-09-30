@@ -112,7 +112,7 @@
                 </div>
 
                 <!-- Credit Details -->
-                {% if credito.estado in 'APROBADO,FIRMADO,PENDIENTE_TRANSFERENCIA,ACTIVO,EN_MORA,PAGADO' %}
+                {% if credito.estado == 'ACTIVO' or credito.estado == 'EN_MORA' or credito.estado == 'PAGADO' %}
                 <div class="card" style="margin-bottom: 2rem;">
                     <div class="card-header">
                         <h2 class="card-title">
@@ -155,10 +155,16 @@
                         </div>
                     </div>
                 </div>
+                {% elif credito.estado == 'APROBADO' %}
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div class="card-body text-center">
+                        <p class="text-muted">El crédito ha sido aprobado. Los detalles financieros se mostrarán una vez que el crédito esté activo.</p>
+                    </div>
+                </div>
                 {% else %}
                 <div class="card" style="margin-bottom: 2rem;">
                     <div class="card-body text-center">
-                        <p class="text-muted">El crédito aún no ha sido aprobado. No hay detalles financieros para mostrar.</p>
+                        <p class="text-muted">El crédito aún no ha sido activado. No hay detalles financieros para mostrar.</p>
                     </div>
                 </div>
                 {% endif %}
@@ -173,25 +179,33 @@
                     </div>
                     <div class="card-content">
                         {% if historial_estados %}
+                            <ul class="list-group list-group-flush">
                             {% for historial in historial_estados %}
-                            <div class="payment-item">
-                                <div class="payment-info">
-                                    <div class="payment-amount">{{ historial.get_estado_nuevo_display }}</div>
-                                    <div class="payment-date">{{ historial.fecha|date:"d/m/Y H:i" }} por {{ historial.usuario_modificacion.username|default:'Sistema' }}</div>
-                                    <small class="text-muted">Motivo: {{ historial.motivo }}</small>
+                                <li class="list-group-item px-0">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <p class="mb-1">
+                                            <span class="badge bg-light text-dark">{{ historial.get_estado_anterior_display }}</span>
+                                            <i class="bi bi-arrow-right mx-2"></i>
+                                            <span class="badge bg-success">{{ historial.get_estado_nuevo_display }}</span>
+                                        </p>
+                                        <small class="text-muted">{{ historial.fecha|date:"d/m/Y H:i" }}</small>
+                                    </div>
+                                    <p class="mb-1 text-muted"><small>Motivo: {{ historial.motivo }}</small></p>
+                                    <small class="text-muted">Usuario: {{ historial.usuario_modificacion.username|default:'Sistema' }}</small>
                                     {% if historial.comprobante_pago %}
-                                        <a href="{{ historial.comprobante_pago.url }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">Ver Comprobante</a>
+                                        <div class="mt-2">
+                                            <a href="{{ historial.comprobante_pago.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                                <i class="bi bi-file-earmark-down"></i> Ver Comprobante
+                                            </a>
+                                        </div>
                                     {% endif %}
-                                </div>
-                                <span class="payment-status payment-success">
-                                    {{ historial.get_estado_anterior_display }} -> {{ historial.get_estado_nuevo_display }}
-                                </span>
-                            </div>
+                                </li>
                             {% endfor %}
+                            </ul>
                         {% else %}
-                            <div class="empty-state">
-                                <i class="bi bi-receipt"></i>
-                                <p>No hay historial de estados.</p>
+                            <div class="empty-state p-4 text-center">
+                                <i class="bi bi-list-ol" style="font-size: 2rem;"></i>
+                                <p class="mt-2">No hay historial de estados para mostrar.</p>
                             </div>
                         {% endif %}
                     </div>

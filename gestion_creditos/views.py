@@ -463,14 +463,22 @@ def detalle_credito_view(request, credito_id):
 @staff_member_required
 @require_POST
 def cambiar_estado_credito_view(request, credito_id):
-    """Cambiar estado de un crédito manualmente, registrando el motivo y validando la transición."""
+    """
+    Cambiar estado de un crédito manualmente, registrando el motivo, validando la transición
+    y ejecutando la lógica de negocio correspondiente (ej. activación de crédito).
+    """
     credito = get_object_or_404(Credito, id=credito_id)
     nuevo_estado = request.POST.get('status')
     motivo = request.POST.get('motivo', '')
     comprobante_pago = request.FILES.get('comprobante_pago')
     estado_anterior = credito.estado
 
-    # --- Lógica de automatización para desembolso ---
+    # 1. Evitar cambios si el estado es el mismo
+    if estado_anterior == nuevo_estado:
+        messages.info(request, "El estado seleccionado es el mismo que el actual. No se realizaron cambios.")
+        return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
+
+    # 2. Lógica de automatización y validaciones
     if estado_anterior == Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA and comprobante_pago:
         nuevo_estado = Credito.EstadoCredito.ACTIVO
         if not motivo:
@@ -480,26 +488,6 @@ def cambiar_estado_credito_view(request, credito_id):
         messages.error(request, "Estado no válido.")
         return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
 
-    # Reglas de transición de estados válidas (estado_anterior: [estados_nuevos_permitidos])
-    transiciones_validas = {
-        Credito.EstadoCredito.EN_REVISION: [Credito.EstadoCredito.APROBADO, Credito.EstadoCredito.RECHAZADO],
-        Credito.EstadoCredito.SOLICITUD: [Credito.EstadoCredito.RECHAZADO],
-        Credito.EstadoCredito.PENDIENTE_FIRMA: [Credito.EstadoCredito.FIRMADO], # Transición manual temporal
-        Credito.EstadoCredito.FIRMADO: [Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA],
-        Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA: [Credito.EstadoCredito.ACTIVO],
-        Credito.EstadoCredito.ACTIVO: [Credito.EstadoCredito.EN_MORA, Credito.EstadoCredito.PAGADO],
-        Credito.EstadoCredito.EN_MORA: [Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.PAGADO],
-    }
-
-    if estado_anterior in transiciones_validas and nuevo_estado not in transiciones_validas[estado_anterior]:
-        estados_permitidos = ", ".join([dict(Credito.EstadoCredito.choices)[s] for s in transiciones_validas[estado_anterior]])
-        messages.error(request, f'No se puede cambiar de "{credito.get_estado_display()}" a "{dict(Credito.EstadoCredito.choices)[nuevo_estado]}". Estados permitidos: {estados_permitidos}.')
-        return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
-    
-    # Si el estado anterior no está en las reglas, se asume que cualquier cambio es una acción administrativa especial (pero se puede restringir más si es necesario)
-    if estado_anterior not in transiciones_validas and estado_anterior != nuevo_estado:
-        pass # Permitir cambios no definidos explícitamente por ahora, o añadir una regla por defecto.
-
     if not motivo:
         messages.error(request, "El motivo del cambio de estado es obligatorio.")
         return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
@@ -508,11 +496,48 @@ def cambiar_estado_credito_view(request, credito_id):
         messages.error(request, "Debe adjuntar el comprobante de pago para marcar el crédito como Activo.")
         return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
 
+    # 3. Transacción Atómica para guardar cambios
     try:
         with transaction.atomic():
+            # Actualizar y guardar el estado del crédito
             credito.estado = nuevo_estado
             credito.save()
 
+            # Lógica de negocio al activar un crédito
+            if nuevo_estado == Credito.EstadoCredito.ACTIVO and estado_anterior != Credito.EstadoCredito.ACTIVO:
+                detalle_credito = getattr(credito, 'detalle_emprendimiento', None) or getattr(credito, 'detalle_libranza', None)
+                
+                if detalle_credito and detalle_credito.valor_credito and detalle_credito.plazo > 0:
+                    monto_aprobado = detalle_credito.valor_credito
+                    plazo = detalle_credito.plazo
+
+                    # Asignar monto aprobado si no existe
+                    if not detalle_credito.monto_aprobado or detalle_credito.monto_aprobado <= 0:
+                        detalle_credito.monto_aprobado = monto_aprobado
+
+                    # Lógica de cálculo de APROBADO (Comisión + IVA)
+                    porcentaje_comision = Decimal('0.10')
+                    porcentaje_iva = Decimal('0.19')
+                    
+                    monto_comision = monto_aprobado * porcentaje_comision
+                    monto_iva = monto_comision * porcentaje_iva
+                    total_a_pagar = monto_aprobado + monto_comision + monto_iva
+                    
+                    valor_cuota = total_a_pagar / plazo
+                    
+                    detalle_credito.valor_cuota = valor_cuota.quantize(Decimal('0.01'))
+                    detalle_credito.saldo_pendiente = total_a_pagar.quantize(Decimal('0.01'))
+
+                    # Lógica de Próximo Vencimiento
+                    hoy = timezone.now().date()
+                    if hoy.day <= 15:
+                        detalle_credito.fecha_proximo_pago = (hoy.replace(day=1) + timedelta(days=31)).replace(day=1)
+                    else:
+                        detalle_credito.fecha_proximo_pago = (hoy.replace(day=1) + timedelta(days=62)).replace(day=1)
+                    
+                    detalle_credito.save()
+
+            # Crear el registro de historial (único lugar)
             HistorialEstado.objects.create(
                 credito=credito,
                 estado_anterior=estado_anterior,
@@ -521,7 +546,9 @@ def cambiar_estado_credito_view(request, credito_id):
                 comprobante_pago=comprobante_pago,
                 usuario_modificacion=request.user
             )
+            
             messages.success(request, f'Estado del crédito cambiado a {credito.get_estado_display()}.')
+
     except Exception as e:
         messages.error(request, f"Ocurrió un error inesperado: {e}")
 
