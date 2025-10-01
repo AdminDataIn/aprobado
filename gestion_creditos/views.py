@@ -548,9 +548,9 @@ def cambiar_estado_credito_view(request, credito_id):
                     from dateutil.relativedelta import relativedelta
                     fecha_base = credito.fecha_solicitud.date()
                     if fecha_base.day <= 15:
-                        detalle_credito.fecha_proximo_pago = fecha_base
-                    else:
                         detalle_credito.fecha_proximo_pago = (fecha_base.replace(day=1) + relativedelta(months=1))
+                    else:
+                        detalle_credito.fecha_proximo_pago = (fecha_base.replace(day=1) + relativedelta(months=2))
                     
                     detalle_credito.save()
 
