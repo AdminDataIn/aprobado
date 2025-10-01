@@ -489,16 +489,16 @@ def cambiar_estado_credito_view(request, credito_id):
     comprobante_pago = request.FILES.get('comprobante_pago')
     estado_anterior = credito.estado
 
-    # 1. Evitar cambios si el estado es el mismo
-    if estado_anterior == nuevo_estado:
-        messages.info(request, "El estado seleccionado es el mismo que el actual. No se realizaron cambios.")
-        return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
-
     # 2. Lógica de automatización y validaciones
     if estado_anterior == Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA and comprobante_pago:
         nuevo_estado = Credito.EstadoCredito.ACTIVO
         if not motivo:
             motivo = "Desembolso de crédito realizado por el administrador."
+
+    # 1. Evitar cambios si el estado es el mismo
+    if estado_anterior == nuevo_estado:
+        messages.info(request, "El estado seleccionado es el mismo que el actual. No se realizaron cambios.")
+        return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
 
     if not nuevo_estado or nuevo_estado not in dict(Credito.EstadoCredito.choices):
         messages.error(request, "Estado no válido.")
