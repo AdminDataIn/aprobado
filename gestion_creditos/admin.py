@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago
+from .models import Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres
 from django.utils import timezone
 from datetime import timedelta
 
@@ -26,6 +26,14 @@ class CreditoAdmin(admin.ModelAdmin):
     search_fields = ('usuario__username', 'numero_credito')
     readonly_fields = ('numero_credito', 'fecha_solicitud', 'fecha_actualizacion', 'linea', 'usuario')
     inlines = [] #! Inlines se determinan dinámicamente
+
+    def get_readonly_fields(self, request, obj=None):
+        # Inicia con los campos de solo lectura definidos en la clase
+        readonly_fields = list(super().get_readonly_fields(request, obj))
+        # Si el objeto existe y su estado es ACTIVO, añade 'estado' a la lista
+        if obj and obj.estado == Credito.EstadoCredito.ACTIVO:
+            readonly_fields.append('estado')
+        return readonly_fields
 
     def get_inlines(self, request, obj=None):
         if obj:
@@ -78,3 +86,25 @@ class HistorialPagoAdmin(admin.ModelAdmin):
     list_display = ('credito', 'fecha_pago', 'monto', 'estado', 'referencia_pago')
     list_filter = ('estado', 'fecha_pago')
     search_fields = ('credito__numero_credito', 'referencia_pago')
+
+@admin.register(CuentaAhorro)
+class CuentaAhorroAdmin(admin.ModelAdmin):
+    list_display = ('usuario', 'tipo_usuario', 'saldo_disponible', 'saldo_objetivo', 'activa', 'fecha_apertura')
+    list_filter = ('tipo_usuario', 'activa', 'fecha_apertura')
+    search_fields = ('usuario__username', 'usuario__email', 'usuario__first_name', 'usuario__last_name')
+    readonly_fields = ('fecha_apertura', 'fecha_actualizacion')
+
+@admin.register(MovimientoAhorro)
+class MovimientoAhorroAdmin(admin.ModelAdmin):
+    list_display = ('referencia', 'cuenta', 'tipo', 'monto', 'estado', 'fecha_creacion', 'procesado_por')
+    list_filter = ('tipo', 'estado', 'fecha_creacion')
+    search_fields = ('referencia', 'cuenta__usuario__username', 'descripcion')
+    readonly_fields = ('referencia', 'fecha_creacion', 'fecha_procesamiento')
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('cuenta__usuario', 'procesado_por')
+
+@admin.register(ConfiguracionTasaInteres)
+class ConfiguracionTasaInteresAdmin(admin.ModelAdmin):
+    list_display = ('tasa_anual_efectiva', 'fecha_vigencia', 'activa')
+    list_filter = ('activa', 'fecha_vigencia')

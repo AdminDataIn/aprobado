@@ -82,7 +82,6 @@
             </div>
         </div>
 
-        <!-- Quick Actions -->
         <div class="quick-actions">
             <a href="{% url 'gestion_creditos:admin_solicitudes' %}" class="action-card">
                 <div class="action-icon" style="background-color: var(--accent-blue);">
@@ -112,6 +111,15 @@
                 <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">Análisis Financiero</h3>
                 <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Reportes y métricas avanzadas</p>
             </a>
+            <!-- Quick Actions -->
+            <!-- En la sección Quick Actions de admin_dashboard.html -->
+            <a href="{% url 'gestion_creditos:admin_billetera_dashboard' %}" class="action-card">
+                <div class="action-icon" style="background-color: var(--purple);">
+                    <i class="bi bi-wallet2"></i>
+                </div>
+                <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">Billetera Digital</h3>
+                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Gestionar cuentas de ahorro</p>
+            </a>
         </div>
 
         <!-- Metrics Grid -->
@@ -121,7 +129,7 @@
                     <div class="metric-icon" style="background-color: var(--accent-blue);">
                         <i class="bi bi-wallet2"></i>
                     </div>
-                    <div class="metric-value">${{ saldo_cartera_total|intcomma }}</div>
+                    <div class="metric-value">${{ saldo_cartera_total|floatformat:2|intcomma }}</div>
                     <div class="metric-label">Saldo Total de Cartera</div>
                     <div class="metric-change positive">
                         <!-- <i class="bi bi-arrow-up"></i> +12.5% vs mes anterior SE COMENTA MIENTRAS NO HAYA DATOS -->
@@ -133,7 +141,7 @@
                     <div class="metric-icon" style="background-color: var(--danger);">
                         <i class="bi bi-exclamation-triangle"></i>
                     </div>
-                    <div class="metric-value text-danger">${{ monto_total_en_mora|intcomma }}</div>
+                    <div class="metric-value text-danger">${{ monto_total_en_mora|floatformat:2|intcomma }}</div>
                     <div class="metric-label">Total en Mora</div>
                     <div class="metric-change negative">
                         <!-- <i class="bi bi-arrow-up"></i> +3.2% vs mes anterior SE COMENTA MIENTRAS NO HAYA DATOS -->

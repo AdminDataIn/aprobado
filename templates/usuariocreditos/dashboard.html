@@ -9,134 +9,868 @@
     <title>Mi Crédito - Aprobado</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'creditos/css/dashboard_usuario.css' %}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --azul-colombia: #003893;
+            --azul-cielo: #4A90E2;
+            --amarillo-colombia: #FFCD00;
+            --rojo-colombia: #CE1126;
+            --gris-claro: #F8F9FA;
+            --gris-medio: #E9ECEF;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--gris-claro);
+            min-height: 100vh;
+            font-size: 14px;
+        }
+
+        /* NAVBAR MINIMALISTA */
+        .navbar-professional {
+            background: white;
+            border-bottom: 1px solid var(--gris-medio);
+            padding: 0.5rem 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+        }
+
+        .navbar-brand {
+            font-weight: 600;
+            color: var(--azul-colombia) !important;
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .brand-logo {
+            height: 32px;
+        }
+
+        .nav-link {
+            color: #6c757d !important;
+            font-weight: 500;
+            font-size: 0.9rem;
+            padding: 0.5rem 1rem !important;
+            transition: all 0.2s;
+            border-radius: 6px;
+        }
+
+        .nav-link:hover {
+            color: var(--azul-cielo) !important;
+            background: var(--gris-claro);
+        }
+
+        .nav-link.active {
+            color: var(--azul-cielo) !important;
+            background: #E3F2FD;
+        }
+
+        .notification-badge {
+            position: relative;
+            cursor: pointer;
+        }
+
+        .notification-icon {
+            font-size: 1.2rem;
+            color: #6c757d;
+        }
+
+        .notification-badge .badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: var(--rojo-colombia);
+            font-size: 0.65rem;
+            padding: 0.25rem 0.4rem;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .user-info:hover {
+            background: var(--gris-claro);
+        }
+
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--azul-cielo), var(--azul-colombia));
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .user-name {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: #212529;
+            display: block;
+        }
+
+        .user-role {
+            font-size: 0.75rem;
+            color: #6c757d;
+            display: block;
+        }
+        .user-dropdown {
+            position: relative;
+        }
+
+        .user-menu {
+            border-radius: 15px;
+            box-shadow: var(--shadow-card);
+            min-width: 280px;
+            padding: 15px;
+            border: none;
+        }
+
+        .dropdown-menu.show {
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .user-menu-header {
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+            margin-bottom: 10px;
+        }
+
+        .user-menu-item {
+            padding: 10px;
+            border-radius: 8px;
+            transition: background 0.3s ease;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-menu-item:hover {
+            background: rgba(255, 215, 0, 0.1);
+        }
+
+        /* SELECTOR DE CRÉDITOS COMPACTO */
+        .credit-selector-card {
+            background: white;
+            border-radius: 10px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border-left: 4px solid var(--azul-cielo);
+        }
+
+        .credit-selector-card h6 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 0.75rem;
+        }
+
+        .credit-selector-card .form-select {
+            border: 1px solid var(--gris-medio);
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.875rem;
+            max-width: 400px;
+        }
+
+        /* STATUS BADGES */
+        .status-badge {
+            padding: 0.375rem 1rem;
+            border-radius: 20px;
+            font-weight: 500;
+            font-size: 0.8rem;
+            display: inline-block;
+        }
+
+        .status-revision {
+            background: #FFF3CD;
+            color: #856404;
+        }
+
+        .status-aprobado, .status-firmado {
+            background: #D1E7DD;
+            color: #0F5132;
+        }
+
+        .status-activo {
+            background: #E3F2FD;
+            color: var(--azul-colombia);
+        }
+
+        .status-rechazado {
+            background: #F8D7DA;
+            color: var(--rojo-colombia);
+        }
+
+        .status-en_mora {
+            background: #FFE5E5;
+            color: var(--rojo-colombia);
+        }
+
+        /* HEADER COMPACTO */
+        .page-header {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .page-header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--azul-colombia);
+            margin-bottom: 0.25rem;
+        }
+
+        .page-header .text-muted {
+            font-size: 0.875rem;
+        }
+
+        /* PROGRESS CARD */
+        .progress-card {
+            background: white;
+            border-radius: 10px;
+            padding: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            margin-bottom: 1.5rem;
+        }
+
+        .progress-card h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #212529;
+            margin-bottom: 1.5rem;
+        }
+
+        .progress {
+            height: 12px;
+            border-radius: 10px;
+            background: var(--gris-medio);
+        }
+
+        .progress-bar {
+            background: linear-gradient(90deg, var(--azul-cielo), var(--amarillo-colombia));
+            border-radius: 10px;
+        }
+
+        .stat-box {
+            text-align: center;
+            padding: 1rem;
+            border-radius: 10px;
+            background: var(--gris-claro);
+            transition: transform 0.2s;
+        }
+
+        .stat-box:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        .stat-box small {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-box h5 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-top: 0.5rem;
+        }
+
+        .progress-percentage {
+            font-size: 3rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--azul-cielo), var(--azul-colombia));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* PAYMENT CARD */
+        .payment-card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            margin-bottom: 1.5rem;
+        }
+
+        .payment-card h5 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #212529;
+            margin-bottom: 1.25rem;
+        }
+
+        .payment-card small {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .payment-card strong {
+            font-size: 0.95rem;
+            color: #212529;
+        }
+
+        /* BOTONES */
+        .btn-payment {
+            background: linear-gradient(135deg, var(--azul-cielo), var(--azul-colombia));
+            color: white;
+            border: none;
+            padding: 0.625rem 1.75rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+
+        .btn-payment:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(74, 144, 226, 0.3);
+            color: white;
+        }
+
+        .btn-outline-primary {
+            border: 1px solid var(--azul-cielo);
+            color: var(--azul-cielo);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--azul-cielo);
+            border-color: var(--azul-cielo);
+            color: white;
+        }
+
+        /* TABLA MODERNA */
+        .table-modern {
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .table-modern thead {
+            background: linear-gradient(135deg, var(--azul-cielo), var(--azul-colombia));
+            color: white;
+        }
+
+        .table-modern thead th {
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 1rem;
+            border: none;
+        }
+
+        .table-modern tbody td {
+            padding: 1rem;
+            vertical-align: middle;
+            font-size: 0.875rem;
+            border-bottom: 1px solid var(--gris-medio);
+        }
+
+        .table-modern tbody tr:hover {
+            background: #FFF9E6;
+        }
+
+        .table-modern tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .table-header-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.25rem 1.5rem;
+            background: white;
+            border-radius: 10px 10px 0 0;
+            border-bottom: 1px solid var(--gris-medio);
+        }
+
+        .table-header-actions h5 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #212529;
+            margin: 0;
+        }
+
+        /* EMPTY STATE */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            color: #DEE2E6;
+            margin-bottom: 1.5rem;
+        }
+
+        .empty-state h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #212529;
+        }
+
+        /* MODALES */
+        .modal-content {
+            border-radius: 12px;
+            border: none;
+        }
+
+        .modal-header {
+            border-radius: 12px 12px 0 0;
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--gris-medio);
+        }
+
+        .modal-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 768px) {
+            .page-header h1 {
+                font-size: 1.25rem;
+            }
+
+            .progress-percentage {
+                font-size: 2.5rem;
+            }
+
+            .stat-box h5 {
+                font-size: 1.1rem;
+            }
+        }
+    </style>
 </head>
 <body>
 
-    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+    <!-- Navbar Minimalista -->
+    <nav class="navbar navbar-expand-lg navbar-professional sticky-top">
         <div class="container">
-            <a href="/">
-                <img src="{% static '/images/logo-dark.png' %}" alt="Logo Aprobado" height="40" class="me-2">
+            <a class="navbar-brand" href="/">
+                <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado" class="brand-logo">
             </a>
-            <div class="d-flex align-items-center">
-                <span class="me-3">Hola, {{ nombre_asociado }}</span>
-                <a href="{% url 'usuariocreditos:billetera_digital' %}" class="btn btn-outline-secondary btn-sm me-2">Billetera Digital</a>
-                <a href="/" class="btn btn-outline-primary btn-sm">Inicio</a>
+
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav mx-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{% url 'usuariocreditos:dashboard_view' %}">
+                            <i class="bi bi-speedometer2 me-1"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'usuariocreditos:billetera_digital' %}">
+                            <i class="bi bi-wallet2 me-1"></i> Billetera
+                        </a>
+                    </li>
+                    {% if not es_empleado %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'gestion_creditos:solicitud_emprendimiento' %}">
+                            <i class="bi bi-plus-circle me-1"></i> Nuevo Crédito
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+
+                <div class="d-flex align-items-center gap-3">
+                    <div class="notification-badge">
+                        <i class="bi bi-bell notification-icon"></i>
+                        <span class="badge">3</span>
+                    </div>
+
+                    <div class="dropdown">
+                        <div class="user-info" data-bs-toggle="dropdown">
+                            <div class="user-avatar">{{ credito.usuario.first_name|first|default:"U" }}{{ credito.usuario.last_name|first|default:"" }}</div>
+                            <div class="user-details d-none d-md-block">
+                                <span class="user-name">{{ user.get_full_name|default:"Usuario" }}</span>
+                                <span class="user-role">{{ user.email }}</span>
+                            </div>
+                            <i class="bi bi-chevron-down ms-2"></i>
+                        </div> 
+
+                        <!-- Desplegable detallado estilo billetera -->
+                        <div class="dropdown-menu dropdown-menu-end user-menu p-3" aria-labelledby="userDropdown">
+                            <div class="user-menu-header mb-2">
+                                <h6 class="mb-0 fw-bold">Mi Cuenta</h6>
+                                <small class="text-muted">{{ user.email }}</small>
+                            </div>
+                            <div class="user-menu-item d-flex gap-2 align-items-start my-2">
+                                <i class="bi bi-person text-primary"></i>
+                                <div>
+                                    <div class="fw-semibold">Nombre:</div>
+                                    <small class="text-muted">{{ user.get_full_name|default:"Usuario" }}</small>
+                                </div>
+                            </div>
+                            <div class="user-menu-item d-flex gap-2 align-items-start my-2">
+                                <i class="bi bi-envelope text-success"></i>
+                                <div>
+                                    <div class="fw-semibold">Correo:</div>
+                                    <small class="text-muted">{{ user.email }}</small>
+                                </div>
+                            </div>
+                            <div class="user-menu-item d-flex gap-2 align-items-center my-2">
+                                <i class="bi bi-person-badge text-warning"></i>
+                                <span>Información Personal</span>
+                            </div>
+                            <hr class="my-2">
+                            <div class="user-menu-item d-flex gap-2 align-items-center text-danger">
+                                <i class="bi bi-box-arrow-right"></i>
+                                <a href="{% url 'account_logout' %}" class="text-decoration-none text-danger">Cerrar Sesión</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </nav>
 
     <main class="container my-4">
         {% if creditos_usuario %}
-            <!-- Selector de Créditos -->
-            <div class="card mb-4">
-                <div class="card-body p-3">
-                    <div class="row align-items-center">
-                        <div class="col-md-8">
-                            <h6 class="mb-2 text-muted"><i class="bi bi-credit-card me-2"></i>Mis Créditos y Solicitudes</h6>
-                            <div class="d-flex align-items-center">
-                                <select class="form-select form-select-sm me-3" style="max-width: 300px;" onchange="cambiarCredito(this.value)">
-                                    {% for credito in creditos_usuario %}
-                                        <option value="{{ credito.id }}" {% if credito.id == credito_actual.id %}selected{% endif %}>
-                                            {{ credito.get_linea_display }} #{{ forloop.counter }} - {{ credito.get_estado_display }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                        {% comment %} <div class="col-md-4 text-end">
-                            <a href="/" class="btn btn-primary btn-sm">Solicitar nuevo crédito</a>
-                        </div> {% endcomment %}
+            <div class="page-header">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h1 class="mb-1">{{ credito_actual.get_linea_display }}</h1>
+                        <p class="text-muted mb-0">
+                            <i class="bi bi-calendar3 me-2"></i>
+                            Solicitado el {{ credito_actual.fecha_solicitud|date:"d M, Y" }}
+                        </p>
+                    </div>
+                    <div class="col-md-4 text-end mt-3 mt-md-0">
+                        <span class="status-badge status-{{ credito_actual.estado|lower }}">
+                            {{ credito_actual.get_estado_display }}
+                        </span>
                     </div>
                 </div>
+                <hr class="my-3">
+                <h6 class="mb-2">
+                    <i class="bi bi-credit-card-2-front me-2"></i>
+                    Mis Créditos y Solicitudes
+                </h6>
+                <select class="form-select" onchange="cambiarCredito(this.value)">
+                    {% for credito in creditos_usuario %}
+                        <option value="{{ credito.id }}" {% if credito.id == credito_actual.id %}selected{% endif %}>
+                            {{ credito.get_linea_display }} - {{ credito.get_estado_display }}
+                        </option>
+                    {% endfor %}
+                </select>
             </div>
-
-            <h1 class="mb-4">Resumen de {{ credito_actual.get_linea_display }}</h1>
 
             {% if credito_actual.estado in 'APROBADO,ACTIVO,PAGADO,EN_MORA,FIRMADO' %}
                 <!-- Contenido para créditos aprobados -->
-                <div class="card progress-card mb-4">
-                    <div class="card-body">
-                        <div class="row align-items-center">
-                            <div class="col-lg-8">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <span class="progress-text">Progreso de tu crédito</span>
-                                </div>
-                                <div class="progress progress-custom mb-3">
-                                    <div class="progress-bar progress-bar-custom" role="progressbar" style="width: {{ porcentaje_pagado }}%" aria-valuenow="{{ porcentaje_pagado }}" aria-valuemin="0" aria-valuemax="100"></div>
-                                </div>
-                                <div class="row text-center">
-                                    <div class="col-4"><small class="text-muted">Pagado</small><div class="fw-bold">${{ monto_pagado|intcomma }}</div></div>
-                                    <div class="col-4"><small class="text-muted">Pendiente</small><div class="fw-bold">${{ monto_pendiente|intcomma }}</div></div>
-                                    <div class="col-4"><small class="text-muted">Total</small><div class="fw-bold">${{ monto_aprobado|intcomma }}</div></div>
+                <div class="progress-card">
+                    <div class="row align-items-center">
+                        <div class="col-lg-8">
+                            <h4>Progreso de tu crédito</h4>
+                            <div class="progress mb-4">
+                                <div class="progress-bar" 
+                                     style="width: {{ porcentaje_capital_pagado }}%;" 
+                                     role="progressbar" 
+                                     aria-valuenow="{{ porcentaje_capital_pagado }}" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">
                                 </div>
                             </div>
-                            <div class="col-lg-4 text-center">
-                                <div class="progress-percentage">{{ porcentaje_pagado }}%</div>
-                                <p class="mb-0 text-muted">completado</p>
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <div class="stat-box">
+                                        <small class="text-muted d-block mb-1">Capital Pagado</small>
+                                        <h5 class="mb-0 text-success">${{ capital_pagado_monto|intcomma }}</h5>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="stat-box">
+                                        <small class="text-muted d-block mb-1">Capital Pendiente</small>
+                                        <h5 class="mb-0 text-warning">${{ detalle_credito.capital_original_pendiente|intcomma }}</h5>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="stat-box">
+                                        <small class="text-muted d-block mb-1">Monto Solicitado</small>
+                                        <h5 class="mb-0 text-primary">${{ detalle_credito.monto_aprobado|intcomma }}</h5>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-4 text-center mt-4 mt-lg-0">
+                            <div class="progress-percentage">{{ porcentaje_capital_pagado }}%</div>
+                            <p class="mb-3 text-muted">de tu capital solicitado</p>
+                            
+                            {% if not es_empleado and credito_actual.estado == 'ACTIVO' and credito_actual.linea != 'LIBRANZA' %}
+                            <button class="btn btn-payment" data-bs-toggle="modal" data-bs-target="#pagoModal">
+                                <i class="bi bi-credit-card me-2"></i>
+                                Realizar Pago
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Información del Crédito -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <div class="payment-card">
+                            <h5><i class="bi bi-graph-up me-2"></i>Resumen de tu Crédito</h5>
+                            <div class="row">
+                                <div class="col-6 col-md-3 mb-3">
+                                    <small class="text-muted d-block">Cuotas Restantes</small>
+                                    <strong>{{ cuotas_restantes }} de {{ detalle_credito.plazo }}</strong>
+                                </div>
+                                <div class="col-6 col-md-3 mb-3">
+                                    <small class="text-muted d-block">Valor Próxima Cuota</small>
+                                    <strong>${{ detalle_credito.valor_cuota|intcomma }}</strong>
+                                </div>
+                                <div class="col-6 col-md-3 mb-3">
+                                    <small class="text-muted d-block">Próximo Vencimiento</small>
+                                    <strong>{{ detalle_credito.fecha_proximo_pago|date:"d M, Y" }}</strong>
+                                </div>
+                                <div class="col-6 col-md-3 mb-3">
+                                    <small class="text-muted d-block">Total Pagado</small>
+                                    <strong>${{ monto_total_pagado|intcomma }}</strong>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            {% else %}
-                <!-- Contenido para solicitudes en revisión o rechazadas -->
-                <div class="card mb-4">
-                    <div class="card-body text-center p-5">
-                        {% if credito_actual.estado == 'RECHAZADO' %}
-                            <i class="bi bi-x-circle display-3 text-danger"></i>
-                            <h3 class="mt-3">Tu solicitud fue {{ credito_actual.get_estado_display }}</h3>
-                            <p class="text-muted">Lo sentimos, tu solicitud para un crédito de {{ credito_actual.get_linea_display }} no pudo ser aprobada en este momento.</p>
-                            <a href="/" class="btn btn-primary mt-3">Solicitar un nuevo crédito</a>
-                        {% else %}
-                            <i class="bi bi-hourglass-split display-3 text-primary"></i>
-                            <h3 class="mt-3">Tu solicitud está {{ credito_actual.get_estado_display }}</h3>
-                            <p class="text-muted">Recibimos tu solicitud para un crédito de {{ credito_actual.get_linea_display }} el {{ credito_actual.fecha_solicitud|date:"d M, Y" }}.<br>Nuestro equipo te notificará pronto con una respuesta.</p>
-                        {% endif %}
-                    </div>
-                </div>
-            {% endif %}
 
-            <!-- Historial de Pagos -->
-            {% if credito_actual.estado in 'APROBADO,ACTIVO,PAGADO,EN_MORA,FIRMADO' %}
-            <div class="card mt-5">
-                <div class="card-header d-flex justify-content-between">
-                    <h5 class="mb-0">Historial de Pagos</h5>
-                    <a class="btn btn-outline-primary btn-sm" href="#"><i class="bi bi-file-earmark-pdf me-1"></i> Descargar Extracto</a>
-                </div>
-                <div class="card-body p-0">
+                <!-- Historial de Pagos -->
+                <div class="payment-card table-modern">
+                    <div class="table-header-actions">
+                        <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Historial de Pagos</h5>
+                        <a href="{% url 'usuariocreditos:descargar_extracto' credito_actual.id %}" 
+                           class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-file-earmark-pdf me-1"></i>
+                            Descargar Extracto
+                        </a>
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-hover mb-0">
-                            <thead><tr><th>Fecha</th><th>Referencia</th><th class="text-end">Monto</th><th class="text-center">Estado</th></tr></thead>
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Referencia</th>
+                                    <th class="text-end">Monto</th>
+                                    <th class="text-center">Estado</th>
+                                </tr>
+                            </thead>
                             <tbody>
                                 {% if historial_pagos %}
                                     {% for pago in historial_pagos %}
                                     <tr>
-                                        <td>{{ pago.fecha_pago|date:"d M, Y" }}</td>
-                                        <td>{{ pago.referencia_pago }}</td>
-                                        <td class="text-end">${{ pago.monto|intcomma }}</td>
-                                        <td class="text-center"><span class="badge rounded-pill {% if pago.estado == 'EXITOSO' %}bg-success-light text-success{% else %}bg-danger-light text-danger{% endif %}">{{ pago.get_estado_display }}</span></td>
+                                        <td>
+                                            <i class="bi bi-calendar3 me-2 text-muted"></i>
+                                            {{ pago.fecha_pago|date:"d M, Y H:i" }}
+                                        </td>
+                                        <td><code style="font-size: 0.8rem;">{{ pago.referencia_pago }}</code></td>
+                                        <td class="text-end">
+                                            <strong class="text-success">${{ pago.monto|intcomma }}</strong>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge {% if pago.estado == 'EXITOSO' %}bg-success{% else %}bg-danger{% endif %} rounded-pill">
+                                                {{ pago.get_estado_display }}
+                                            </span>
+                                        </td>
                                     </tr>
                                     {% endfor %}
                                 {% else %}
-                                    <tr><td colspan="4" class="text-center py-4"><p class="mb-0">No tienes pagos realizados aún.</p></td></tr>
+                                    <tr>
+                                        <td colspan="4" class="text-center py-4">
+                                            <i class="bi bi-inbox text-muted" style="font-size: 2rem;"></i>
+                                            <p class="mb-0 mt-2 text-muted">No tienes pagos realizados aún.</p>
+                                        </td>
+                                    </tr>
                                 {% endif %}
                             </tbody>
                         </table>
                     </div>
                 </div>
-            </div>
+
+            {% else %}
+                <!-- Contenido para solicitudes en revisión o rechazadas -->
+                <div class="empty-state">
+                    {% if credito_actual.estado == 'RECHAZADO' %}
+                        <i class="bi bi-x-circle text-danger"></i>
+                        <h3 class="mt-3">Tu solicitud fue {{ credito_actual.get_estado_display }}</h3>
+                        <p class="text-muted mb-4">
+                            Lo sentimos, tu solicitud para un crédito de {{ credito_actual.get_linea_display }} 
+                            no pudo ser aprobada en este momento.
+                        </p>
+                        <a href="/" class="btn btn-primary btn-lg">
+                            <i class="bi bi-plus-circle me-2"></i>
+                            Solicitar un nuevo crédito
+                        </a>
+                    {% else %}
+                        <i class="bi bi-hourglass-split" style="color: var(--azul-cielo);"></i>
+                        <h3 class="mt-3">Tu solicitud está {{ credito_actual.get_estado_display }}</h3>
+                        <p class="text-muted mb-4">
+                            Recibimos tu solicitud para un crédito de {{ credito_actual.get_linea_display }} 
+                            el {{ credito_actual.fecha_solicitud|date:"d M, Y" }}.
+                            <br>Nuestro equipo te notificará pronto con una respuesta.
+                        </p>
+                        <div class="alert alert-info d-inline-block">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Tiempo estimado de respuesta: 24-48 horas
+                        </div>
+                    {% endif %}
+                </div>
             {% endif %}
 
         {% else %}
-            <div class="text-center p-5">
-                 <i class="bi bi-journal-x display-3 text-muted"></i>
-                 <h3 class="mt-3">No tienes créditos ni solicitudes</h3>
-                 <p class="text-muted">Parece que aún no has solicitado ningún crédito con nosotros.</p>
-                 <a href="/" class="btn btn-primary">Solicita tu primer crédito</a>
+            <!-- Sin créditos -->
+            <div class="empty-state">
+                <i class="bi bi-journal-x"></i>
+                <h3 class="mt-3">No tienes créditos ni solicitudes</h3>
+                <p class="text-muted mb-4">
+                    Parece que aún no has solicitado ningún crédito con nosotros.
+                </p>
+                <a href="{% url 'gestion_creditos:solicitud_emprendimiento' %}" class="btn btn-primary btn-lg">
+                    <i class="bi bi-plus-circle me-2"></i>
+                    Solicita tu primer crédito
+                </a>
             </div>
         {% endif %}
     </main>
+
+    <!-- Modal de Pago (solo para emprendedores) -->
+    {% if not es_empleado %}
+    <div class="modal fade" id="pagoModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header" style="background: linear-gradient(135deg, var(--azul-cielo), var(--azul-colombia)); color: white;">
+                    <h5 class="modal-title">
+                        <i class="bi bi-credit-card me-2"></i>
+                        Realizar Pago
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formPago" method="post" action="#">
+                        {% csrf_token %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Valor de la cuota:</strong> ${{ credito_actual.valor_cuota|intcomma }}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Selecciona el método de pago</label>
+                            <div class="d-grid gap-2">
+                                <button type="button" class="btn btn-outline-primary text-start" disabled>
+                                    <i class="bi bi-credit-card me-2"></i>
+                                    Tarjeta de Crédito/Débito
+                                    <span class="badge bg-warning text-dark ms-2">Próximamente</span>
+                                </button>
+                                <button type="button" class="btn btn-outline-primary text-start" disabled>
+                                    <i class="bi bi-bank me-2"></i>
+                                    PSE - Pago en Línea
+                                    <span class="badge bg-warning text-dark ms-2">Próximamente</span>
+                                </button>
+                                <button type="button" class="btn btn-primary text-start" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#pagoOfflineModal">
+                                    <i class="bi bi-file-earmark-arrow-up me-2"></i>
+                                    Comprobante de Pago (Offline)
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-warning mt-3">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <small>Los pagos online estarán disponibles próximamente. Por ahora, puedes subir tu comprobante de pago.</small>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Pago Offline -->
+    <div class="modal fade" id="pagoOfflineModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header" style="background: linear-gradient(135deg, var(--amarillo-colombia), #FFA500);">
+                    <h5 class="modal-title">
+                        <i class="bi bi-file-earmark-arrow-up me-2"></i>
+                        Subir Comprobante de Pago
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Sube tu comprobante de pago y lo revisaremos en las próximas 24 horas.
+                    </div>
+                    
+                    <form id="formComprobanteCredito" method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="montoPago" class="form-label fw-semibold">Monto Pagado</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="montoPago" name="monto" 
+                                       value="{{ credito_actual.valor_cuota }}" min="1000" step="1000" required>
+                            </div>
+                            <small class="text-muted">Puedes pagar la cuota completa o un abono parcial</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="comprobanteCredito" class="form-label fw-semibold">Comprobante de Pago</label>
+                            <input type="file" class="form-control" id="comprobanteCredito" name="comprobante" 
+                                   accept=".pdf,.jpg,.jpeg,.png" required>
+                            <small class="text-muted">Formatos: PDF, JPG, PNG (Máx. 5MB)</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="referenciaCredito" class="form-label fw-semibold">Número de Referencia (Opcional)</label>
+                            <input type="text" class="form-control" id="referenciaCredito" name="referencia" 
+                                   placeholder="Ej: 123456789">
+                        </div>
+
+                        <div id="feedback-pago" class="d-none"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnEnviarComprobante">
+                        <i class="bi bi-upload me-2"></i>
+                        Enviar Comprobante
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
@@ -145,6 +879,80 @@
                 window.location.href = `/mi-credito/dashboard/${creditoId}/`;
             }
         }
+
+        // Envío de comprobante de pago para crédito
+        {% if not es_empleado %}
+        document.getElementById('btnEnviarComprobante')?.addEventListener('click', function() {
+            const form = document.getElementById('formComprobanteCredito');
+            const formData = new FormData(form);
+            const feedback = document.getElementById('feedback-pago');
+            const btn = this;
+
+            // Validaciones
+            const monto = document.getElementById('montoPago').value;
+            const comprobante = document.getElementById('comprobanteCredito').files[0];
+
+            if (!monto || parseFloat(monto) < 1000) {
+                feedback.className = 'alert alert-danger';
+                feedback.textContent = 'El monto mínimo es $1,000';
+                feedback.classList.remove('d-none');
+                return;
+            }
+
+            if (!comprobante) {
+                feedback.className = 'alert alert-danger';
+                feedback.textContent = 'Debes adjuntar un comprobante';
+                feedback.classList.remove('d-none');
+                return;
+            }
+
+            if (comprobante.size > 5 * 1024 * 1024) {
+                feedback.className = 'alert alert-danger';
+                feedback.textContent = 'El archivo no debe superar 5MB';
+                feedback.classList.remove('d-none');
+                return;
+            }
+
+            // Deshabilitar botón
+            btn.disabled = true;
+            btn.innerHTML = '<i class="spinner-border spinner-border-sm me-2"></i>Enviando...';
+
+            // Enviar con AJAX
+            {% comment %} fetch('{% url "usuariocreditos:subir_comprobante_pago" credito_actual.id %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }) {% endcomment %}
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    feedback.className = 'alert alert-success';
+                    feedback.textContent = '¡Comprobante enviado exitosamente! Será revisado en las próximas 24 horas.';
+                    feedback.classList.remove('d-none');
+
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    feedback.className = 'alert alert-danger';
+                    feedback.textContent = data.error || 'Error al enviar el comprobante';
+                    feedback.classList.remove('d-none');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                feedback.className = 'alert alert-danger';
+                feedback.textContent = 'Ocurrió un error inesperado';
+                feedback.classList.remove('d-none');
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-upload me-2"></i>Enviar Comprobante';
+            });
+        });
+        {% endif %}
     </script>
 </body>
 </html>

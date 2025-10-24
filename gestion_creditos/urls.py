@@ -26,4 +26,14 @@ urlpatterns = [
     #! URLs Flujo de Pago Individual
     path('pago/iniciar/<int:credito_id>/', views.iniciar_pago_view, name='iniciar_pago'),
     path('pago/callback/', views.procesar_pago_callback_view, name='pago_callback'),
+
+    #! === BILLETERA DIGITAL - USUARIO ===
+    path('billetera/', views.billetera_digital_view, name='billetera_digital'),
+    path('billetera/consignacion-offline/', views.consignacion_offline_view, name='consignacion_offline'),
+    
+    #! === BILLETERA DIGITAL - ADMIN ===
+    path('admin/billetera/', views.admin_billetera_dashboard_view, name='admin_billetera_dashboard'),
+    path('admin/billetera/aprobar/<int:movimiento_id>/', views.aprobar_consignacion_view, name='aprobar_consignacion'),
+    path('admin/billetera/rechazar/<int:movimiento_id>/', views.rechazar_consignacion_view, name='rechazar_consignacion'),
+    path('admin/billetera/abono-manual/', views.cargar_abono_manual_view, name='cargar_abono_manual'),
 ]

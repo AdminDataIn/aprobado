@@ -115,13 +115,13 @@
                             <div class="col-6">
                                 <div class="info-item">
                                     <span class="info-label">Valor Cuota</span>
-                                    <span class="info-value">${{ credito.detalle_libranza.valor_cuota|intcomma }}</span>
+                                    <span class="info-value">${{ credito.detalle_libranza.valor_cuota|floatformat:2|intcomma }}</span>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="info-item">
                                     <span class="info-label">Total Pagado</span>
-                                    <span class="info-value text-success">${{ total_pagado|intcomma }}</span>
+                                    <span class="info-value text-success">${{ total_pagado|floatformat:2|intcomma }}</span>
                                 </div>
                             </div>
                         </div>
@@ -139,7 +139,7 @@
                             </div>
                         </div>
 
-                        {% if credito.estado == 'ACTIVO' %}
+                        {% if credito.estado == 'ACTIVO' or credito.estado == 'EN_MORA' %}
                         <div class="mt-4">
                             <a href="{% url 'gestion_creditos:iniciar_pago' credito.id %}" class="btn btn-pagar w-100">
                                 Pagar Cuota (${{ credito.detalle_libranza.valor_cuota|intcomma }})

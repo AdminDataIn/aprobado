@@ -1,235 +1,384 @@
 {% load static %}
 {% load humanize %}
-<!-- filepath: templates/usuariocreditos/extracto_pdf.html -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <title>Extracto de Crédito - Aprobado</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+        @page {
+            size: A4;
+            margin: 2cm 1.5cm;
+            @top-center {
+                content: "Extracto de Cuenta de Crédito";
+            }
+            @bottom-center {
+                content: "Página " counter(page) " de " counter(pages);
+                font-size: 9pt;
+                color: #777;
+            }
+        }
 
         body {
-            font-family: 'Roboto', Arial, sans-serif;
+            font-family: 'Arial', 'Helvetica', sans-serif;
             color: #333;
-            font-size: 12px;
-            line-height: 1.6;
-        }
-
-        .container {
-            width: 90%;
-            margin: 0 auto;
-            padding-top: 120px; /* Space for fixed header */
-        }
-
-        .header, .footer {
-            width: 100%;
-            position: fixed;
-            text-align: center;
+            font-size: 11pt;
+            line-height: 1.5;
         }
 
         .header {
-            top: 0;
-            border-bottom: 2px solid #002366;
-            padding-bottom: 10px;
+            border-bottom: 3px solid #003893;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
         }
 
-        .footer {
-            bottom: 0;
-            font-size: 10px;
-            color: #777;
-            border-top: 1px solid #ddd;
-            padding-top: 10px;
+        .header-table {
+            width: 100%;
+        }
+
+        .header-table td {
+            vertical-align: top;
+            border: none;
         }
 
         .logo {
-            width: 150px;
-            margin-bottom: 15px;
+            width: 140px;
+            height: auto;
         }
 
         .company-details {
             text-align: right;
-            font-size: 10px;
+            font-size: 9pt;
             color: #555;
+            line-height: 1.4;
         }
 
-        .statement-title {
+        .company-details strong {
+            font-size: 11pt;
+            color: #003893;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .document-title {
             text-align: center;
-            color: #002366;
-            font-size: 24px;
-            font-weight: 700;
-            margin-top: 0; /* Moved up */
-            margin-bottom: 50px; /* Increased space after title */
+            color: #003893;
+            font-size: 22pt;
+            font-weight: bold;
+            margin: 30px 0 40px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
-        .details-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
+        .info-grid {
+            display: table;
+            width: 100%;
             margin-bottom: 30px;
-            padding: 15px;
-            background-color: #f9f9f9;
-            border: 1px solid #eee;
+            border: 1px solid #ddd;
             border-radius: 5px;
         }
 
-        .details-grid h4 {
-            color: #002366;
-            margin-top: 0;
-            margin-bottom: 10px;
-            font-size: 14px;
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 5px;
+        .info-row {
+            display: table-row;
         }
 
-        .details-grid p {
-            margin: 0 0 5px 0;
+        .info-cell {
+            display: table-cell;
+            padding: 12px 15px;
+            border-bottom: 1px solid #f0f0f0;
+            width: 50%;
+        }
+
+        .info-cell:first-child {
+            border-right: 1px solid #f0f0f0;
+        }
+
+        .info-label {
+            font-size: 9pt;
+            color: #777;
+            margin-bottom: 3px;
+        }
+
+        .info-value {
+            font-weight: bold;
+            color: #333;
+            font-size: 11pt;
+        }
+
+        .section-title {
+            background: linear-gradient(135deg, #003893 0%, #0056b3 100%);
+            color: white;
+            padding: 12px 15px;
+            margin: 30px 0 15px 0;
+            font-size: 13pt;
+            font-weight: bold;
+            border-radius: 5px;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
+            margin-bottom: 20px;
         }
 
-        th, td {
-            border: 1px solid #ddd;
-            padding: 10px;
-            text-align: left;
+        thead {
+            background-color: #003893;
+            color: white;
         }
 
         th {
-            background-color: #002366;
-            color: #fff;
-            font-weight: 500;
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: bold;
+            font-size: 10pt;
+        }
+
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 10pt;
         }
 
         tbody tr:nth-child(even) {
-            background-color: #f2f2f2;
+            background-color: #f9f9f9;
+        }
+
+        tbody tr:hover {
+            background-color: #f0f0f0;
         }
 
         .text-right { text-align: right; }
         .text-center { text-align: center; }
+        .text-bold { font-weight: bold; }
 
-        .summary-table {
-            width: 50%;
-            margin-left: auto;
-            margin-top: 30px;
+        .summary-box {
+            background: #f8f9fa;
+            border: 2px solid #003893;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 30px 0;
         }
 
-        .summary-table td {
-            font-weight: 500;
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 11pt;
         }
-        
-        .summary-table .pending-amount {
+
+        .summary-row.total {
+            border-top: 2px solid #003893;
+            margin-top: 10px;
+            padding-top: 15px;
             font-weight: bold;
-            background-color: #f2f2f2;
+            font-size: 13pt;
+            color: #003893;
         }
 
-        .summary-table .total {
-            font-weight: 700;
-            color: #002366;
+        .summary-row.pending {
+            background: #fff3cd;
+            margin: 0 -20px;
+            padding: 10px 20px;
+            font-weight: bold;
+            color: #856404;
         }
 
-        .confidential {
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 9pt;
+            font-weight: bold;
+        }
+
+        .status-exitoso {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-pendiente {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .footer-note {
             margin-top: 40px;
-            font-style: italic;
-            font-size: 10px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            font-size: 8pt;
             color: #888;
             text-align: center;
+            font-style: italic;
+            line-height: 1.6;
+        }
+
+        .highlight-box {
+            background: #e3f2fd;
+            border-left: 4px solid #003893;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .highlight-box strong {
+            color: #003893;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 30px;
+            color: #999;
+            font-style: italic;
         }
     </style>
 </head>
 <body>
-
+    <!-- Header -->
     <div class="header">
-        <table style="border: none; width: 100%;">
+        <table class="header-table">
             <tr>
-                <td style="border: none; width: 40%;">
+                <td style="width: 40%;">
+                    {% if logo_path %}
                     <img src="{{ logo_path }}" class="logo" alt="Aprobado Logo">
+                    {% else %}
+                    <div style="font-size: 24pt; font-weight: bold; color: #003893;">APROBADO</div>
+                    {% endif %}
                 </td>
-                <td style="border: none; width: 60%;" class="company-details">
-                    <strong>Aprobado</strong><br>
-                    Fintech Colombiana<br>
-                    Villavicencio, Colombia<br>
-                    Tel: +57 3132477352<br>
+                <td style="width: 60%;" class="company-details">
+                    <strong>Aprobado Fintech SAS</strong>
+                    Soluciones Financieras para Emprendedores<br>
+                    NIT: 900.XXX.XXX-X<br>
+                    Villavicencio, Meta - Colombia<br>
+                    Tel: +57 313 247 7352<br>
                     www.aprobado.com.co
                 </td>
             </tr>
         </table>
     </div>
 
-    <div class="footer">
-        Página <span class="page-number"></span> de <span class="page-count"></span>
-    </div>
+    <!-- Document Title -->
+    <h1 class="document-title">Extracto de Cuenta de Crédito</h1>
 
-    <div class="container">
-        <h1 class="statement-title">Extracto de Cuenta de Crédito</h1>
-
-        <div class="details-grid">
-            <div class="customer-details">
-                <h4>Información del Cliente</h4>
-                <p><strong>Cliente:</strong> {{ usuario.get_full_name }}</p>
-                <p><strong>Dirección:</strong> {{ usuario.direccion }}</p>
-                <p><strong>ID Cliente:</strong> {{ usuario.id_cliente }}</p>
+    <!-- Customer & Statement Info -->
+    <div class="info-grid">
+        <div class="info-row">
+            <div class="info-cell">
+                <div class="info-label">Nombre del Cliente</div>
+                <div class="info-value">{{ usuario.get_full_name }}</div>
             </div>
-            <div class="statement-details">
-                <h4>Detalles del Extracto</h4>
-                <p><strong>Número de Extracto:</strong> {{ numero_extracto }}</p>
-                <p><strong>Fecha de Emisión:</strong> {{ fecha_extracto|date:"d/m/Y H:i:s" }}</p>
-                <p><strong>Número de Crédito:</strong> {{ credito.numero_credito }}</p>
-                <p><strong>Monto Total Aprobado:</strong> ${{ credito.monto_aprobado|intcomma }}</p>
+            <div class="info-cell">
+                <div class="info-label">Número de Extracto</div>
+                <div class="info-value">{{ numero_extracto }}</div>
             </div>
         </div>
-
-        <h3>Historial de Transacciones</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Fecha y Hora</th>
-                    <th>Referencia</th>
-                    <th>Descripción</th>
-                    <th class="text-right">Monto</th>
-                    <th class="text-center">Estado</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for pago in pagos %}
-                <tr>
-                    <td>{{ pago.fecha|date:"d/m/Y H:i" }}</td>
-                    <td>{{ pago.referencia }}</td>
-                    <td>Pago de cuota</td>
-                    <td class="text-right">${{ pago.monto|intcomma }}</td>
-                    <td class="text-center">{{ pago.estado }}</td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="5" class="text-center">No hay transacciones en este período.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        <h3>Resumen del Crédito</h3>
-        <table class="summary-table">
-            <tr>
-                <td>Monto Total Pagado:</td>
-                <td class="text-right">${{ credito.monto_pagado|intcomma }}</td>
-            </tr>
-            <tr class="pending-amount">
-                <td>Monto Pendiente:</td>
-                <td class="text-right">${{ monto_pendiente|intcomma }}</td>
-            </tr>
-            <tr class="total">
-                <td>Saldo Total:</td>
-                <td class="text-right">${{ credito.monto_total|intcomma }}</td>
-            </tr>
-        </table>
-
-        <p class="confidential">
-            Este documento es confidencial y para uso exclusivo del destinatario. Si usted no es el destinatario, por favor notifíquelo inmediatamente al remitente.
-        </p>
+        <div class="info-row">
+            <div class="info-cell">
+                <div class="info-label">Correo Electrónico</div>
+                <div class="info-value">{{ usuario.email }}</div>
+            </div>
+            <div class="info-cell">
+                <div class="info-label">Fecha de Emisión</div>
+                <div class="info-value">{{ fecha_extracto|date:"d/m/Y H:i:s" }}</div>
+            </div>
+        </div>
+        <div class="info-row">
+            <div class="info-cell">
+                <div class="info-label">Número de Crédito</div>
+                <div class="info-value">{{ credito.numero_credito }}</div>
+            </div>
+            <div class="info-cell">
+                <div class="info-label">Tipo de Crédito</div>
+                <div class="info-value">{{ credito.get_linea_display }}</div>
+            </div>
+        </div>
     </div>
 
+    <!-- Credit Summary -->
+    <div class="highlight-box">
+        <strong>Estado del Crédito:</strong> {{ credito.get_estado_display }}<br>
+        <strong>Monto Aprobado:</strong> ${{ monto_total|floatformat:2|intcomma }} COP<br>
+        <strong>Fecha de Solicitud:</strong> {{ credito.fecha_solicitud|date:"d/m/Y" }}
+    </div>
+
+    <!-- Transaction History -->
+    <div class="section-title">
+        <i style="margin-right: 8px;">📋</i> Historial de Transacciones
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 20%;">Fecha y Hora</th>
+                <th style="width: 25%;">Referencia</th>
+                <th style="width: 30%;">Descripción</th>
+                <th style="width: 15%;" class="text-right">Monto</th>
+                <th style="width: 10%;" class="text-center">Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if pagos %}
+                {% for pago in pagos %}
+                <tr>
+                    <td>{{ pago.fecha_pago|date:"d/m/Y H:i" }}</td>
+                    <td><code>{{ pago.referencia_pago }}</code></td>
+                    <td>Pago de cuota - {{ credito.get_linea_display }}</td>
+                    <td class="text-right text-bold">${{ pago.monto|floatformat:2|intcomma }}</td>
+                    <td class="text-center">
+                        <span class="status-badge status-{{ pago.estado|lower }}">
+                            {{ pago.get_estado_display }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="5" class="no-data">
+                        No se registran transacciones en este período
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    <!-- Financial Summary -->
+    <div class="section-title">
+        <i style="margin-right: 8px;">💰</i> Resumen Financiero
+    </div>
+
+    <div class="summary-box">
+        <div class="summary-row">
+            <span>Monto Total del Crédito:</span>
+            <span class="text-bold">${{ monto_total|floatformat:2|intcomma }} COP</span>
+        </div>
+        <div class="summary-row">
+            <span>Total Pagado a la Fecha:</span>
+            <span class="text-bold" style="color: #28a745;">${{ monto_pagado|floatformat:2|intcomma }} COP</span>
+        </div>
+        <div class="summary-row pending">
+            <span>Saldo Pendiente:</span>
+            <span>${{ monto_pendiente|floatformat:2|intcomma }} COP</span>
+        </div>
+        <div class="summary-row total">
+            <span>Progreso del Crédito:</span>
+            <span>{% widthratio monto_pagado monto_total 100 %}% Completado</span>
+        </div>
+    </div>
+
+    <!-- Additional Info -->
+    <div class="highlight-box">
+        <strong>Información Importante:</strong><br>
+        • Los pagos se acreditan en un plazo máximo de 24 horas hábiles<br>
+        • Para cualquier aclaración, comunícate con nosotros a través de nuestros canales oficiales<br>
+        • Este extracto es válido como comprobante de estado de cuenta
+    </div>
+
+    <!-- Footer -->
+    <div class="footer-note">
+        Este documento es generado automáticamente por el sistema de Aprobado Fintech SAS.<br>
+        Documento confidencial. Uso exclusivo del destinatario autorizado.<br>
+        Si usted recibió este documento por error, por favor notifíquelo inmediatamente.<br>
+        <br>
+        <strong>Aprobado Fintech SAS</strong> - Impulsando el emprendimiento colombiano<br>
+        Generado el {{ fecha_extracto|date:"d/m/Y" }} a las {{ fecha_extracto|time:"H:i:s" }}
+    </div>
 </body>
 </html>

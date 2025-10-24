@@ -1,6 +1,8 @@
 from django import forms
-from .models import CreditoLibranza, Empresa, CreditoEmprendimiento
+from .models import CreditoLibranza, Empresa, CreditoEmprendimiento, MovimientoAhorro
 from decimal import Decimal
+# Agregar al archivo forms.py existente
+from django.core.validators import FileExtensionValidator
 
 #? --------- FORMULARIO DE CREDITO DE LIBRANZA ------------
 class CreditoLibranzaForm(forms.ModelForm):
@@ -126,3 +128,94 @@ class CreditoEmprendimientoForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['fecha_nac'].widget = forms.DateInput(attrs={'type': 'date'})
+
+class ConsignacionOfflineForm(forms.ModelForm):
+    """Formulario para consignaciones offline con comprobante"""
+    
+    class Meta:
+        model = MovimientoAhorro
+        fields = ['monto', 'comprobante', 'descripcion']
+        widgets = {
+            'monto': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Ingrese el monto',
+                'min': '1000',
+                'step': '1000'
+            }),
+            'comprobante': forms.FileInput(attrs={
+                'class': 'form-control',
+                'accept': '.pdf,.jpg,.jpeg,.png'
+            }),
+            'descripcion': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Descripción opcional del depósito'
+            })
+        }
+        labels = {
+            'monto': 'Monto a Consignar',
+            'comprobante': 'Comprobante de Pago',
+            'descripcion': 'Descripción (Opcional)'
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['descripcion'].required = False
+
+    def clean_comprobante(self):
+        comprobante = self.cleaned_data.get('comprobante')
+        if comprobante:
+            # Validar tamaño (5MB máximo)
+            if comprobante.size > 5 * 1024 * 1024:
+                raise forms.ValidationError('El archivo no debe superar los 5MB.')
+            
+            # Validar extensión
+            ext = comprobante.name.split('.')[-1].lower()
+            if ext not in ['pdf', 'jpg', 'jpeg', 'png']:
+                raise forms.ValidationError('Solo se permiten archivos PDF, JPG o PNG.')
+        
+        return comprobante
+
+
+class AbonoManualAdminForm(forms.Form):
+    """Formulario para que el admin cargue abonos manualmente"""
+    
+    usuario_email = forms.EmailField(
+        label='Correo del Usuario',
+        widget=forms.EmailInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'usuario@ejemplo.com'
+        })
+    )
+    
+    monto = forms.DecimalField(
+        label='Monto a Abonar',
+        min_value=1000,
+        max_digits=12,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'placeholder': '50000',
+            'step': '1000'
+        })
+    )
+    
+    comprobante = forms.FileField(
+        label='Comprobante de Transacción (Opcional)',
+        required=False,
+        validators=[FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png'])],
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.pdf,.jpg,.jpeg,.png'
+        })
+    )
+    
+    nota = forms.CharField(
+        label='Nota Administrativa',
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Nota interna sobre este abono...'
+        })
+    )

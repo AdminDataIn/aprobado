@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator, FileExtensionValidator
+from django.core.exceptions import ValidationError
 import uuid
 
 #? Modelo movido de credito_libranza (la idea es crear las empresas directamente desde el admin)
@@ -48,6 +49,74 @@ class Credito(models.Model):
 
     def __str__(self):
         return f'{self.get_linea_display()} {self.numero_credito} - {self.usuario.username}'
+
+    @property
+    def detalle(self):
+        """
+        Devuelve la instancia del modelo de detalle específico (Libranza o Emprendimiento)
+        basado en la línea de crédito.
+        """
+        if self.linea == self.LineaCredito.LIBRANZA:
+            return getattr(self, 'detalle_libranza', None)
+        elif self.linea == self.LineaCredito.EMPRENDIMIENTO:
+            return getattr(self, 'detalle_emprendimiento', None)
+        return None
+
+    # --- Propiedades delegadas para acceso unificado ---
+    @property
+    def monto_aprobado(self):
+        return self.detalle.monto_aprobado if self.detalle else 0
+
+    @property
+    def saldo_pendiente(self):
+        return self.detalle.saldo_pendiente if self.detalle else 0
+
+    @property
+    def plazo(self):
+        return self.detalle.plazo if self.detalle else 0
+
+    @property
+    def tasa_interes(self):
+        return self.detalle.tasa_interes if self.detalle else 0
+
+    @property
+    def valor_cuota(self):
+        return self.detalle.valor_cuota if self.detalle else 0
+
+    @property
+    def fecha_proximo_pago(self):
+        return self.detalle.fecha_proximo_pago if self.detalle else None
+
+    @property
+    def comision(self):
+        return self.detalle.comision if self.detalle else 0
+
+    @property
+    def iva_comision(self):
+        return self.detalle.iva_comision if self.detalle else 0
+
+    @property
+    def total_a_pagar(self):
+        return self.detalle.total_a_pagar if self.detalle else 0
+
+    @property
+    def dias_en_mora(self):
+        from django.utils import timezone
+        if self.estado == self.EstadoCredito.EN_MORA and self.fecha_proximo_pago:
+            dias = (timezone.now().date() - self.fecha_proximo_pago).days
+            return dias if dias > 0 else 0
+        return 0
+
+    def save(self, *args, **kwargs):
+        #? Validación para impedir que un crédito activo cambie de estado.
+        if self.pk:  # Si el objeto ya existe en la BD
+            try:
+                credito_anterior = Credito.objects.get(pk=self.pk)
+                if credito_anterior.estado == self.EstadoCredito.ACTIVO and self.estado != self.EstadoCredito.ACTIVO:
+                    raise ValidationError('Un crédito en estado "Activo" no puede cambiar a otro estado.')
+            except Credito.DoesNotExist:
+                pass # El objeto es nuevo, no hay estado anterior para comparar
+        super(Credito, self).save(*args, **kwargs)
 
 #? ----- Modelo de crédito de emprendimiento -----
 class CreditoEmprendimiento(models.Model):
@@ -99,7 +168,11 @@ class CreditoEmprendimiento(models.Model):
     # --- Campos de Aprobación (existentes, pero ahora opcionales) ---
     monto_aprobado = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     tasa_interes = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Tasa de interés mensual")
-    saldo_pendiente = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    comision = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    iva_comision = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    total_a_pagar = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    saldo_pendiente = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    capital_original_pendiente = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     valor_cuota = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     fecha_proximo_pago = models.DateField(null=True, blank=True)
     
@@ -140,7 +213,11 @@ class CreditoLibranza(models.Model):
     #? --- Campos de Aprobación ---
     monto_aprobado = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     tasa_interes = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Tasa de interés mensual")
-    saldo_pendiente = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    comision = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    iva_comision = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    total_a_pagar = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    saldo_pendiente = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    capital_original_pendiente = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     valor_cuota = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     fecha_proximo_pago = models.DateField(null=True, blank=True)
 
@@ -187,3 +264,151 @@ class HistorialEstado(models.Model):
 
     def __str__(self):
         return f"Crédito {self.credito.id}: {self.estado_anterior} -> {self.estado_nuevo}"
+
+
+class CuentaAhorro(models.Model):
+    """
+    Cuenta de ahorro para cualquier usuario (con o sin crédito).
+    Relación opcional con User para permitir usuarios inversionistas sin créditos.
+    """
+    class TipoUsuario(models.TextChoices):
+        INVERSIONISTA = 'INVERSIONISTA', 'Inversionista'
+        EMPRENDEDOR = 'EMPRENDEDOR', 'Cliente Emprendimiento'
+        EMPLEADO = 'EMPLEADO', 'Cliente Libranza'
+        NATURAL = 'NATURAL', 'Persona Natural'
+    
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE, 
+        related_name='cuenta_ahorro'
+    )
+    tipo_usuario = models.CharField(max_length=20, choices=TipoUsuario.choices)
+    
+    # Campos financieros
+    saldo_disponible = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0,
+        validators=[MinValueValidator(0)]
+    )
+    saldo_objetivo = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=1000000,
+        help_text="Meta de ahorro del usuario"
+    )
+    
+    # Métricas de impacto social (calculadas automáticamente de los creditos aprobados en emprendimientos)
+    emprendimientos_financiados = models.IntegerField(default=0)
+    familias_beneficiadas = models.IntegerField(default=0)
+    
+    # Fechas
+    fecha_apertura = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+    
+    # Estado
+    activa = models.BooleanField(default=True)
+    
+    class Meta:
+        verbose_name = 'Cuenta de Ahorro'
+        verbose_name_plural = 'Cuentas de Ahorro'
+        
+    def __str__(self):
+        return f"Cuenta {self.usuario.username} - ${self.saldo_disponible}"
+
+
+class MovimientoAhorro(models.Model):
+    """
+    Registro de todos los movimientos de una cuenta de ahorro.
+    """
+    class TipoMovimiento(models.TextChoices):
+        DEPOSITO_ONLINE = 'DEPOSITO_ONLINE', 'Depósito Online'
+        DEPOSITO_OFFLINE = 'DEPOSITO_OFFLINE', 'Consignación Offline'
+        RETIRO = 'RETIRO', 'Retiro'
+        INTERES = 'INTERES', 'Interés Generado'
+        AJUSTE_ADMIN = 'AJUSTE_ADMIN', 'Ajuste Administrativo'
+    
+    class EstadoMovimiento(models.TextChoices):
+        PENDIENTE = 'PENDIENTE', 'Pendiente Aprobación'
+        APROBADO = 'APROBADO', 'Aprobado'
+        RECHAZADO = 'RECHAZADO', 'Rechazado'
+        PROCESADO = 'PROCESADO', 'Procesado'
+    
+    # Relaciones
+    cuenta = models.ForeignKey(
+        CuentaAhorro, 
+        on_delete=models.CASCADE, 
+        related_name='movimientos'
+    )
+    
+    # Datos del movimiento
+    tipo = models.CharField(max_length=20, choices=TipoMovimiento.choices)
+    monto = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2,
+        validators=[MinValueValidator(0.01)]
+    )
+    estado = models.CharField(
+        max_length=20, 
+        choices=EstadoMovimiento.choices, 
+        default=EstadoMovimiento.PENDIENTE
+    )
+    
+    # Comprobante (para consignaciones offline)
+    comprobante = models.FileField(
+        upload_to='billetera/comprobantes/%Y/%m/',
+        null=True,
+        blank=True,
+        validators=[FileExtensionValidator(
+            allowed_extensions=['pdf', 'jpg', 'jpeg', 'png']
+        )]
+    )
+    
+    # Referencia de transacción
+    referencia = models.CharField(max_length=100, unique=True)
+    
+    # Observaciones
+    descripcion = models.CharField(max_length=255, blank=True)
+    nota_admin = models.TextField(blank=True, null=True)
+    
+    # Auditoría
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_procesamiento = models.DateTimeField(null=True, blank=True)
+    procesado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='movimientos_procesados'
+    )
+    
+    class Meta:
+        ordering = ['-fecha_creacion']
+        verbose_name = 'Movimiento de Ahorro'
+        verbose_name_plural = 'Movimientos de Ahorro'
+        
+    def __str__(self):
+        return f"{self.tipo} - ${self.monto} - {self.estado}"
+
+
+class ConfiguracionTasaInteres(models.Model):
+    """
+    Configuración de tasas de interés para cuentas de ahorro.
+    Permite ajustar tasas sin modificar código.
+    """
+    tasa_anual_efectiva = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=5.00,
+        help_text="Tasa anual efectiva (EA) en porcentaje"
+    )
+    fecha_vigencia = models.DateField()
+    activa = models.BooleanField(default=True)
+    
+    class Meta:
+        verbose_name = 'Configuración de Tasa'
+        verbose_name_plural = 'Configuraciones de Tasas'
+        ordering = ['-fecha_vigencia']
+        
+    def __str__(self):
+        return f"Tasa {self.tasa_anual_efectiva}% EA - {self.fecha_vigencia}"

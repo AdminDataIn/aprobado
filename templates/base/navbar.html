@@ -27,7 +27,7 @@
                     <form id="logout-form" method="post" action="{% url 'account_logout' %}" style="display: none;">
                         {% csrf_token %}
                     </form>
-                    <li><a href="{% url 'usuariocreditos:dashboard' %}">
+                    <li><a href="{% url 'usuariocreditos:dashboard_view' %}">
                         Mis créditos
                     </a></li>
                     <li><a href="#" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">

@@ -164,7 +164,7 @@
                             <td>
                                 <div class="user-info">
                                     <div class="user-avatar">
-                                        {{ credito.usuario.first_name|first|default:"U" }}{{ credito.usuario.last_name|first|default:"" }}
+                                        {{ credito.usuario.first_name|first|default:"" }}{{ credito.usuario.last_name|first|default:"" }}
                                     </div>
                                     <div class="user-details">
                                         <h6 class="mb-0">
@@ -181,8 +181,8 @@
                                 </div>
                             </td>
                             <td><span class="line-badge">{{ credito.get_linea_display }}</span></td>
-                            <td><strong class="text-primary">${{ credito.monto_aprobado|intcomma }}</strong></td>
-                            <td>${{ credito.saldo_pendiente|intcomma }}</td>
+                            <td><strong class="text-primary">${{ credito.monto_aprobado|floatformat:2|intcomma }}</strong></td>
+                            <td>${{ credito.saldo_pendiente|floatformat:2|intcomma }}</td>
                             <td>
                                 <span class="status-badge 
                                     {% if credito.estado == 'ACTIVO' %}status-active
