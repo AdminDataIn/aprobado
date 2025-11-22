@@ -156,6 +156,10 @@ def solicitud_credito_emprendimiento_view(request):
     Integra scoring de imágenes con IA y evaluación de motivación.
     """
     if request.method == 'POST':
+        # Validar autenticación para solicitudes AJAX
+        if not request.user.is_authenticated:
+            return JsonResponse({'success': False, 'error': 'Authentication required'}, status=403)
+
         # Detectar si es solicitud AJAX o viene del formulario HTML con imágenes múltiples
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
