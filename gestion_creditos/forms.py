@@ -7,11 +7,22 @@ from django.core.validators import FileExtensionValidator
 #? --------- FORMULARIO DE CREDITO DE LIBRANZA ------------
 class CreditoLibranzaForm(forms.ModelForm):
     valor_credito = forms.CharField(label='Valor crédito solicitado', required=True)
+    plazo = forms.ChoiceField(
+        choices=[
+            ('', 'Seleccione una opción'),
+            (1, '1 mes'),
+            (2, '2 meses'),
+            (3, '3 meses'),
+            (4, '4 meses'),
+            (5, '5 meses'),
+            (6, '6 meses'),
+        ],
+        required=True
+    )
+
     class Meta:
         model = CreditoLibranza
         fields = [
-            'valor_credito',
-            'plazo', 
             'nombres',
             'apellidos',
             'cedula',
@@ -25,26 +36,13 @@ class CreditoLibranzaForm(forms.ModelForm):
             'desprendible_nomina',
             'certificado_bancario'
         ]
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
+
         self.fields['empresa'].queryset = Empresa.objects.all()
         self.fields['empresa'].empty_label = "Seleccione una empresa"
-        
-        self.fields['plazo'] = forms.ChoiceField(
-            choices=[
-                ('', 'Seleccione una opción'),
-                (1, '1 mes'),
-                (2, '2 meses'),
-                (3, '3 meses'),
-                (4, '4 meses'),
-                (5, '5 meses'),
-                (6, '6 meses'),
-            ],
-            required=True
-        )
-        
+
         self.fields['valor_credito'].error_messages = {
             'required': 'El valor del crédito es requerido.',
             'invalid': 'Ingrese un valor numérico válido.',
@@ -114,20 +112,57 @@ class CreditoLibranzaForm(forms.ModelForm):
 
 #? --------- FORMULARIO DE CREDITO DE EMPRENDIMIENTO ------------
 class CreditoEmprendimientoForm(forms.ModelForm):
+    valor_credito = forms.CharField(label='Valor crédito solicitado', required=True)
+    plazo = forms.ChoiceField(
+        choices=[
+            ('', 'Seleccione una opción'),
+            (1, '1 mes'),
+            (2, '2 meses'),
+            (3, '3 meses'),
+        ],
+        required=True
+    )
+
     class Meta:
         model = CreditoEmprendimiento
         exclude = [
             'credito', 
-            'monto_aprobado', 
-            'saldo_pendiente', 
-            'valor_cuota', 
-            'fecha_proximo_pago', 
             'puntaje'
         ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['fecha_nac'].widget = forms.DateInput(attrs={'type': 'date'})
+
+    def clean_valor_credito(self):
+        valor_str = self.cleaned_data.get('valor_credito')
+        if not valor_str:
+            raise forms.ValidationError('El valor del crédito es requerido.')
+        
+        valor_str_cleaned = ''.join(filter(str.isdigit, valor_str))
+        
+        try:
+            valor = Decimal(valor_str_cleaned)
+        except (ValueError, TypeError):
+            raise forms.ValidationError('Ingrese un valor numérico válido.')
+
+        if valor <= 0:
+            raise forms.ValidationError('El valor del crédito debe ser mayor a 0.')
+        
+        if valor > 800000:
+            raise forms.ValidationError('El valor del crédito no puede ser mayor a $800.000.')
+
+        return valor
+    
+    def clean_plazo(self):
+        plazo = self.cleaned_data.get('plazo')
+        if not plazo:
+            raise forms.ValidationError('El plazo es requerido.')
+        
+        if int(plazo) > 3:
+            raise forms.ValidationError('El plazo no puede ser mayor a 3 meses.')
+
+        return plazo
 
 class ConsignacionOfflineForm(forms.ModelForm):
     """Formulario para consignaciones offline con comprobante"""

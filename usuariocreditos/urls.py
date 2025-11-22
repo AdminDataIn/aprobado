@@ -10,5 +10,6 @@ urlpatterns = [
 
     #! Descargar extracto de los pagos realizados
     path('descargar-extracto/<int:credito_id>/', views.descargar_extracto, name='descargar_extracto'),
+    path('descargar-plan-pagos/<int:credito_id>/', views.descargar_plan_pagos_pdf, name='descargar_plan_pagos_pdf'),
     # Otras URLs se reactivarán después
 ]

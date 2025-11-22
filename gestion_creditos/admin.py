@@ -1,7 +1,21 @@
 from django.contrib import admin
-from .models import Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres
+from .models import Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, ImagenNegocio
 from django.utils import timezone
 from datetime import timedelta
+
+#? --------- INLINE PARA IMÁGENES DEL NEGOCIO ------------
+class ImagenNegocioInline(admin.TabularInline):
+    model = ImagenNegocio
+    extra = 0
+    readonly_fields = ['fecha_subida', 'imagen_preview']
+    fields = ['imagen', 'imagen_preview', 'tipo_imagen', 'descripcion', 'fecha_subida']
+
+    def imagen_preview(self, obj):
+        if obj.imagen:
+            return f'<img src="{obj.imagen.url}" style="max-height: 100px; max-width: 100px;" />'
+        return "Sin imagen"
+    imagen_preview.allow_tags = True
+    imagen_preview.short_description = "Vista previa"
 
 #? --------- ADMINISTRACION DE CREDITOS ------------
 class CreditoEmprendimientoInline(admin.StackedInline):
@@ -10,7 +24,9 @@ class CreditoEmprendimientoInline(admin.StackedInline):
     verbose_name_plural = 'Detalle de Emprendimiento'
     fk_name = 'credito'
     #! Hacemos los campos de solicitud readonly una vez creados
-    readonly_fields = ('valor_credito', 'plazo', 'nombre', 'numero_cedula', 'fecha_nac', 'celular_wh', 'direccion', 'estado_civil', 'numero_personas_cargo', 'nombre_negocio', 'ubicacion_negocio', 'tiempo_operando', 'dias_trabajados_sem', 'prod_serv_ofrec', 'ingresos_prom_mes', 'cli_aten_day', 'inventario', 'nomb_ref_per1', 'cel_ref_per1', 'rel_ref_per1', 'nomb_ref_cl1', 'cel_ref_cl1', 'rel_ref_cl1', 'ref_conoc_lid_com', 'foto_negocio', 'desc_fotos_neg', 'tipo_cta_mno', 'ahorro_tand_alc', 'depend_h', 'desc_cred_nec', 'redes_soc', 'fotos_prod')
+    readonly_fields = ('nombre', 'numero_cedula', 'fecha_nac', 'celular_wh', 'direccion', 'estado_civil', 'numero_personas_cargo', 'nombre_negocio', 'ubicacion_negocio', 'tiempo_operando', 'dias_trabajados_sem', 'prod_serv_ofrec', 'ingresos_prom_mes', 'cli_aten_day', 'inventario', 'nomb_ref_per1', 'cel_ref_per1', 'rel_ref_per1', 'nomb_ref_cl1', 'cel_ref_cl1', 'rel_ref_cl1', 'ref_conoc_lid_com', 'foto_negocio', 'desc_fotos_neg', 'tipo_cta_mno', 'ahorro_tand_alc', 'depend_h', 'desc_cred_nec', 'redes_soc', 'fotos_prod', 'puntaje', 'puntaje_imagenes', 'datos_scoring_imagenes')
+    # Agregar el inline de imágenes dentro del inline de emprendimiento
+    inlines = [ImagenNegocioInline]
 
 #? --------- ADMINISTRACION DE CREDITOS ------------
 class CreditoLibranzaInline(admin.StackedInline):

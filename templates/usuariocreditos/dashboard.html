@@ -615,13 +615,13 @@
                                 <div class="col-4">
                                     <div class="stat-box">
                                         <small class="text-muted d-block mb-1">Capital Pendiente</small>
-                                        <h5 class="mb-0 text-warning">${{ detalle_credito.capital_original_pendiente|intcomma }}</h5>
+                                        <h5 class="mb-0 text-warning">${{ credito_actual.capital_pendiente|intcomma }}</h5>
                                     </div>
                                 </div>
                                 <div class="col-4">
                                     <div class="stat-box">
                                         <small class="text-muted d-block mb-1">Monto Solicitado</small>
-                                        <h5 class="mb-0 text-primary">${{ detalle_credito.monto_aprobado|intcomma }}</h5>
+                                        <h5 class="mb-0 text-primary">${{ credito_actual.monto_aprobado|intcomma }}</h5>
                                     </div>
                                 </div>
                             </div>
@@ -648,34 +648,43 @@
                             <div class="row">
                                 <div class="col-6 col-md-3 mb-3">
                                     <small class="text-muted d-block">Cuotas Restantes</small>
-                                    <strong>{{ cuotas_restantes }} de {{ detalle_credito.plazo }}</strong>
+                                    <strong>{{ cuotas_restantes }} de {{ credito_actual.plazo }}</strong>
                                 </div>
                                 <div class="col-6 col-md-3 mb-3">
                                     <small class="text-muted d-block">Valor Próxima Cuota</small>
-                                    <strong>${{ detalle_credito.valor_cuota|intcomma }}</strong>
+                                    <strong>${{ credito_actual.valor_cuota|floatformat:2|intcomma }}</strong>
                                 </div>
                                 <div class="col-6 col-md-3 mb-3">
                                     <small class="text-muted d-block">Próximo Vencimiento</small>
-                                    <strong>{{ detalle_credito.fecha_proximo_pago|date:"d M, Y" }}</strong>
+                                    <strong>{{ credito_actual.fecha_proximo_pago|date:"d M, Y" }}</strong>
                                 </div>
                                 <div class="col-6 col-md-3 mb-3">
                                     <small class="text-muted d-block">Total Pagado</small>
-                                    <strong>${{ monto_total_pagado|intcomma }}</strong>
+                                    <strong>${{ monto_total_pagado|floatformat:2|intcomma }}</strong>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
+
+
                 <!-- Historial de Pagos -->
                 <div class="payment-card table-modern">
                     <div class="table-header-actions">
                         <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Historial de Pagos</h5>
-                        <a href="{% url 'usuariocreditos:descargar_extracto' credito_actual.id %}" 
-                           class="btn btn-outline-primary btn-sm">
-                            <i class="bi bi-file-earmark-pdf me-1"></i>
-                            Descargar Extracto
-                        </a>
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'usuariocreditos:descargar_plan_pagos_pdf' credito_actual.id %}" 
+                               class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-download me-1"></i>
+                                Descargar Plan de Pagos
+                            </a>
+                            <a href="{% url 'usuariocreditos:descargar_extracto' credito_actual.id %}" 
+                               class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-file-earmark-pdf me-1"></i>
+                                Descargar Extracto
+                            </a>
+                        </div>
                     </div>
                     <div class="table-responsive">
                         <table class="table table-hover mb-0">

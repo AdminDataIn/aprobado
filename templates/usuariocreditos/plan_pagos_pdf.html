@@ -4,11 +4,11 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Extracto de Crédito - Aprobado</title>
+    <title>Plan de Pagos - Aprobado</title>
     <style>
         @page {
             size: A4;
-            margin: 1cm 1.5cm;
+            margin: 0.8cm 1.2cm;
             @bottom-center {
                 content: "Página " counter(page) " de " counter(pages);
                 font-size: 9pt;
@@ -25,8 +25,8 @@
 
         .header {
             border-bottom: 3px solid #003893;
-            padding-bottom: 15px;
-            margin-bottom: 30px;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
         }
 
         .header-table {
@@ -39,7 +39,7 @@
         }
 
         .logo {
-            width: 140px;
+            width: 180px;
             height: auto;
         }
 
@@ -60,9 +60,9 @@
         .document-title {
             text-align: center;
             color: #003893;
-            font-size: 22pt;
+            font-size: 20pt;
             font-weight: bold;
-            margin: 30px 0 40px 0;
+            margin: 20px 0 25px 0;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
@@ -70,7 +70,7 @@
         .info-grid {
             display: table;
             width: 100%;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
             border: 1px solid #ddd;
             border-radius: 5px;
         }
@@ -81,7 +81,7 @@
 
         .info-cell {
             display: table-cell;
-            padding: 12px 15px;
+            padding: 10px 15px;
             border-bottom: 1px solid #f0f0f0;
             width: 50%;
         }
@@ -105,8 +105,8 @@
         .section-title {
             background: linear-gradient(135deg, #003893 0%, #0056b3 100%);
             color: white;
-            padding: 12px 15px;
-            margin: 30px 0 15px 0;
+            padding: 10px 15px;
+            margin: 25px 0 12px 0;
             font-size: 13pt;
             font-weight: bold;
             border-radius: 5px;
@@ -125,7 +125,7 @@
 
         th {
             padding: 10px 8px;
-            text-align: left;
+            text-align: center;
             font-weight: bold;
             font-size: 9pt;
         }
@@ -134,7 +134,7 @@
             padding: 8px;
             border-bottom: 1px solid #e0e0e0;
             font-size: 9pt;
-            text-align: left;
+            text-align: center;
         }
 
         tbody tr:nth-child(even) {
@@ -142,12 +142,36 @@
         }
 
         .text-right { text-align: right; }
-        .text-center { text-align: center; }
+        .text-left { text-align: left; }
         .text-bold { font-weight: bold; }
 
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 8pt;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-pagada {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-pendiente {
+            background: #e2e3e5;
+            color: #383d41;
+        }
+
+        .status-en-mora {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
         .footer-note {
-            margin-top: 40px;
-            padding-top: 20px;
+            margin-top: 30px;
+            padding-top: 15px;
             border-top: 1px solid #ddd;
             font-size: 8pt;
             color: #888;
@@ -169,14 +193,14 @@
     <div class="header">
         <table class="header-table">
             <tr>
-                <td style="width: 40%;">
+                <td style="width: 25%;">
                     {% if logo_base64 %}
                     <img src="{{ logo_base64 }}" class="logo" alt="Aprobado Logo">
                     {% else %}
-                    <div style="font-size: 24pt; font-weight: bold; color: #003893;">APROBADO</div>
+                    <div style="font-size: 20pt; font-weight: bold; color: #003893;">APROBADO</div>
                     {% endif %}
                 </td>
-                <td style="width: 60%;" class="company-details">
+                <td style="width: 75%;" class="company-details">
                     <strong>Aprobado Fintech SAS</strong>
                     NIT: 901.949.137-2<br>
                     www.aprobado.com.co
@@ -185,14 +209,15 @@
         </table>
     </div>
 
-    <h1 class="document-title">Extracto de Crédito</h1>
+    <!-- Document Title -->
+    <h1 class="document-title">Plan de Pagos</h1>
 
     <!-- Customer & Credit Info -->
     <div class="info-grid">
         <div class="info-row">
             <div class="info-cell">
                 <div class="info-label">Nombre del Cliente</div>
-                <div class="info-value">{{ credito.nombre_cliente|upper }}</div>
+                <div class="info-value">{{ credito.nombre_cliente }}</div>
             </div>
             <div class="info-cell">
                 <div class="info-label">Número de Crédito</div>
@@ -201,67 +226,67 @@
         </div>
         <div class="info-row">
             <div class="info-cell">
-                <div class="info-label">Fecha de Emisión</div>
-                <div class="info-value">{{ fecha_generacion|date:"d F, Y" }}</div>
-            </div>
-            <div class="info-cell">
-                <div class="info-label">Estado del Crédito</div>
-                <div class="info-value">{{ credito.get_estado_display }}</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Financial Summary -->
-    <div class="section-title">Resumen Financiero</div>
-    <div class="info-grid">
-        <div class="info-row">
-            <div class="info-cell">
-                <div class="info-label">Monto Original Aprobado</div>
+                <div class="info-label">Monto Aprobado</div>
                 <div class="info-value">${{ credito.monto_aprobado|floatformat:2|intcomma }}</div>
             </div>
             <div class="info-cell">
-                <div class="info-label">Total Pagado a la Fecha</div>
-                {% if monto_total_pagado > 0 %}
-                <div class="info-value" style="color: green;">${{ monto_total_pagado|floatformat:2|intcomma }}</div>
-                {% else %}
-                <div class="info-value" style="color: #888; font-size: 10pt;">Aún no ha pagado la primera cuota</div>
-                {% endif %}
+                <div class="info-label">Plazo</div>
+                <div class="info-value">{{ credito.plazo }} meses</div>
             </div>
         </div>
         <div class="info-row">
             <div class="info-cell">
-                <div class="info-label">Saldo Pendiente de Pago</div>
-                <div class="info-value text-bold" style="color: #dc3545;">${{ credito.saldo_pendiente|floatformat:2|intcomma }}</div>
+                <div class="info-label">Tasa de Interés Mensual</div>
+                <div class="info-value">{{ credito.tasa_interes }}%</div>
             </div>
             <div class="info-cell">
-                <div class="info-label">Costo Total del Crédito <span style="font-size: 8pt; color: #888;">(Capital + Intereses)</span></div>
-                <div class="info-value">${{ credito.total_a_pagar|floatformat:2|intcomma }}</div>
+                <div class="info-label">Valor de la Cuota</div>
+                <div class="info-value">${{ credito.valor_cuota|floatformat:2|intcomma }}</div>
             </div>
         </div>
     </div>
 
-    <!-- Transaction History -->
-    <div class="section-title">Historial de Pagos</div>
+    <!-- Payment Plan Table -->
+    <div class="section-title">
+        <i style="margin-right: 8px;">🗓️</i> Detalle de Cuotas
+    </div>
+
     <table>
         <thead>
             <tr>
-                <th>Fecha de Pago</th>
-                <th>Referencia de Pago</th>
-                <th class="text-right">Monto Pagado</th>
+                <th># Cuota</th>
+                <th>Fecha Vencimiento</th>
+                <th>Valor Cuota</th>
+                <th>Capital</th>
+                <th>Intereses</th>
+                <th>Saldo Capital</th>
+                <th>Estado</th>
             </tr>
         </thead>
         <tbody>
-            {% if historial_pagos %}
-                {% for pago in historial_pagos %}
+            {% if plan_pagos %}
+                {% for cuota in plan_pagos %}
                 <tr>
-                    <td>{{ pago.fecha_pago|date:"d/m/Y" }}</td>
-                    <td>{{ pago.referencia_pago }}</td>
-                    <td class="text-right text-bold">${{ pago.monto|floatformat:2|intcomma }}</td>
+                    <td>{{ cuota.numero_cuota }}</td>
+                    <td>{{ cuota.fecha_vencimiento|date:"d/m/Y" }}</td>
+                    <td class="text-bold">${{ cuota.valor_cuota|floatformat:2|intcomma }}</td>
+                    <td>${{ cuota.capital_a_pagar|floatformat:2|intcomma }}</td>
+                    <td>${{ cuota.interes_a_pagar|floatformat:2|intcomma }}</td>
+                    <td>${{ cuota.saldo_capital_pendiente|floatformat:2|intcomma }}</td>
+                    <td>
+                        {% if cuota.pagada %}
+                        <span class="status-badge status-pagada">Pagada</span>
+                        {% else %}
+                        <span class="status-badge status-pendiente">Pendiente</span>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             {% else %}
                 <tr>
-                    <td colspan="3" class="no-data">No se han registrado pagos a la fecha.</td>
+                    <td colspan="7" class="no-data">
+                        No se pudo generar el plan de pagos.
+                    </td>
                 </tr>
             {% endif %}
         </tbody>
@@ -269,8 +294,11 @@
 
     <!-- Footer -->
     <div class="footer-note">
-        Este documento es un extracto informativo del estado de su crédito. No constituye un paz y salvo.<br>
-        Para cualquier aclaración, comuníquese a través de nuestros canales oficiales.
+        Este es un plan de pagos proyectado y puede estar sujeto a cambios si se realizan abonos a capital o por otras condiciones.<br>
+        Para cualquier aclaración, comunícate con nosotros a través de nuestros canales oficiales.<br>
+        <br>
+        <strong>Aprobado Fintech SAS</strong> - Impulsando el emprendimiento colombiano<br>
+        Generado el {{ fecha_generacion|date:"d/m/Y" }} a las {{ fecha_generacion|time:"H:i:s" }}
     </div>
 </body>
 </html>

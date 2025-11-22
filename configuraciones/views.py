@@ -121,14 +121,14 @@ def recibir_data(request):
             credito_base = Credito.objects.create(
                 usuario=request.user,
                 linea=Credito.LineaCredito.EMPRENDIMIENTO,
-                estado=Credito.EstadoCredito.EN_REVISION 
+                estado=Credito.EstadoCredito.EN_REVISION,
+                monto_solicitado=valor_credito,
+                plazo_solicitado=plazo
             )
 
             # Crear instancia del modelo de detalle CreditoEmprendimiento
             nuevo_credito_emprendimiento = CreditoEmprendimiento.objects.create(
                 credito=credito_base,
-                valor_credito=valor_credito,
-                plazo=plazo,
                 nombre=nombre,
                 numero_cedula=numero_cedula,
                 fecha_nac=fecha_nac,

@@ -1,32 +1,33 @@
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
-from gestion_creditos.models import Credito, HistorialPago, HistorialEstado, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres
+from gestion_creditos.models import Credito, HistorialPago, HistorialEstado, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, CuotaAmortizacion
 from django.utils import timezone
-from django.template.loader import render_to_string
-from django.conf import settings
-from django.db.models import Case, When, F, DecimalField
 from django.db.models import Sum
-from django.template import Context, Template
 from django.template.loader import get_template
 from django.contrib.staticfiles import finders
-from weasyprint import HTML, CSS
+from weasyprint import HTML
 from decimal import Decimal
-import os
-import pathlib
 import json
+import base64
+import io
+from pypdf import PdfReader, PdfWriter
+
+def get_logo_base64():
+    logo_path = finders.find('images/logo-dark.png')
+    if not logo_path:
+        return None
+    try:
+        with open(logo_path, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+        return f"data:image/png;base64,{encoded_string}"
+    except (IOError, FileNotFoundError):
+        return None
 
 @login_required
 def dashboard_view(request, credito_id=None):
     creditos_usuario = Credito.objects.filter(usuario=request.user).select_related(
         'detalle_emprendimiento', 'detalle_libranza'
-    ).annotate(
-        monto_aprobado_display=Case(
-            When(linea=Credito.LineaCredito.EMPRENDIMIENTO, then=F('detalle_emprendimiento__monto_aprobado')),
-            When(linea=Credito.LineaCredito.LIBRANZA, then=F('detalle_libranza__valor_credito')),
-            default=0.0,
-            output_field=DecimalField()
-        )
     )
 
     if not creditos_usuario.exists():
@@ -37,32 +38,48 @@ def dashboard_view(request, credito_id=None):
     if credito_id:
         credito_actual = get_object_or_404(creditos_usuario, id=credito_id, usuario=request.user)
     else:
-        credito_actual = creditos_usuario.filter(estado=Credito.EstadoCredito.ACTIVO).first() or \
-                         creditos_usuario.filter(estado=Credito.EstadoCredito.EN_REVISION).first() or \
-                         creditos_usuario.first()
+        # Lógica mejorada para seleccionar el crédito por defecto
+        credito_actual = (
+            creditos_usuario.filter(estado=Credito.EstadoCredito.ACTIVO).first() or
+            creditos_usuario.filter(estado=Credito.EstadoCredito.EN_MORA).first() or
+            creditos_usuario.order_by('-fecha_solicitud').first()
+        )
 
-    # Inicializar variables con valores por defecto
+    # --- Inicialización de variables ---
     historial_pagos = None
-    monto_total_pagado = 0
-    detalle = None
+    monto_total_pagado = Decimal(0)
+    detalle = credito_actual.detalle  # Usar la propiedad del modelo
     cuotas_pagadas = 0
     cuotas_restantes = 0
-    capital_pagado_monto = 0
+    plan_pagos = []
 
-    if credito_actual.estado in [Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.PAGADO, Credito.EstadoCredito.EN_MORA, Credito.EstadoCredito.FIRMADO]:
-        historial_pagos = HistorialPago.objects.filter(credito=credito_actual, estado=HistorialPago.EstadoPago.EXITOSO).order_by('-fecha_pago')
+    # --- Cálculos para créditos activos o finalizados ---
+    if credito_actual.estado in [
+        Credito.EstadoCredito.ACTIVO, 
+        Credito.EstadoCredito.PAGADO, 
+        Credito.EstadoCredito.EN_MORA, 
+        Credito.EstadoCredito.FIRMADO,
+        Credito.EstadoCredito.APROBADO,
+        Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA
+    ]:
+        historial_pagos = HistorialPago.objects.filter(
+            credito=credito_actual, 
+            estado=HistorialPago.EstadoPago.EXITOSO
+        ).order_by('-fecha_pago')
+        
         monto_total_pagado = historial_pagos.aggregate(total=Sum('monto'))['total'] or Decimal(0)
-        cuotas_pagadas = historial_pagos.count()
+        
+        plan_pagos = credito_actual.tabla_amortizacion.all().order_by('numero_cuota')
+        cuotas_pagadas = plan_pagos.filter(pagada=True).count()
 
-        if credito_actual.linea == Credito.LineaCredito.EMPRENDIMIENTO:
-            detalle = credito_actual.detalle_emprendimiento
-        elif credito_actual.linea == Credito.LineaCredito.LIBRANZA:
-            detalle = credito_actual.detalle_libranza
+        if credito_actual.plazo:
+            cuotas_restantes = credito_actual.plazo - cuotas_pagadas
 
-        if detalle and detalle.plazo:
-            cuotas_restantes = detalle.plazo - cuotas_pagadas
+    # --- Usar propiedades del modelo para cálculos financieros ---
+    capital_pagado_monto = credito_actual.capital_pagado
+    porcentaje_capital_pagado = int(credito_actual.porcentaje_pagado)
 
-    # Calcular días transcurridos desde la activación
+    # --- Calcular días transcurridos desde la activación ---
     dias_transcurridos = 0
     fecha_activacion = HistorialEstado.objects.filter(
         credito=credito_actual, 
@@ -71,15 +88,8 @@ def dashboard_view(request, credito_id=None):
     
     if fecha_activacion:
         dias_transcurridos = (timezone.now() - fecha_activacion.fecha).days
-    elif credito_actual.fecha_actualizacion and credito_actual.estado == Credito.EstadoCredito.ACTIVO:
-        dias_transcurridos = (timezone.now() - credito_actual.fecha_actualizacion).days
 
-    # Calcular porcentaje de capital pagado
-    porcentaje_capital_pagado = 0
-    if detalle and detalle.monto_aprobado and detalle.monto_aprobado > 0 and detalle.capital_original_pendiente is not None:
-        capital_pagado_monto = detalle.monto_aprobado - detalle.capital_original_pendiente
-        porcentaje_capital_pagado = round((capital_pagado_monto / detalle.monto_aprobado) * 100)
-
+    # --- Contexto para la plantilla ---
     context = {
         'nombre_asociado': request.user.get_full_name() or request.user.username,
         'creditos_usuario': creditos_usuario,
@@ -93,6 +103,8 @@ def dashboard_view(request, credito_id=None):
         'cuotas_restantes': cuotas_restantes,
         'porcentaje_capital_pagado': porcentaje_capital_pagado,
         'capital_pagado_monto': capital_pagado_monto,
+        'plan_pagos': plan_pagos,
+        'es_empleado': request.user.groups.filter(name='empleado').exists(),
     }
     return render(request, 'usuariocreditos/dashboard.html', context)
 
@@ -109,7 +121,6 @@ def billetera_digital(request):
         saldo_objetivo = cuenta.saldo_objetivo
         progreso_porcentaje = round((saldo_disponible / saldo_objetivo) * 100) if saldo_objetivo > 0 else 0
         
-        # Dummy data for now, as logic is not specified
         crecimiento_porcentaje = 5.2
         dias_ahorrando = (timezone.now() - cuenta.fecha_apertura).days
         emprendimientos_financiados = cuenta.emprendimientos_financiados
@@ -117,7 +128,6 @@ def billetera_digital(request):
         interes_estimado = 12345
         tasa_actual = ConfiguracionTasaInteres.objects.filter(activa=True).first()
 
-        # Dummy chart data
         chart_data = {
             "labels": ["Ene", "Feb", "Mar", "Abr", "May", "Jun"],
             "data": [10000, 25000, 40000, 30000, 50000, 70000],
@@ -151,6 +161,7 @@ def billetera_digital(request):
         'tasa_actual': tasa_actual,
         'movimientos_recientes': movimientos_recientes,
         'chart_data': json.dumps(chart_data),
+        'es_empleado': request.user.groups.filter(name='empleado').exists(),
     }
     return render(request, 'Billetera/billetera_digital.html', context)
 
@@ -158,54 +169,125 @@ def billetera_digital(request):
 @login_required
 def descargar_extracto(request, credito_id):
     """
-    Genera y descarga un extracto en PDF del crédito del usuario
+    Genera y descarga un PDF con el extracto de pagos de un crédito.
+    El PDF está protegido con la cédula del cliente como contraseña.
     """
     credito = get_object_or_404(Credito, id=credito_id, usuario=request.user)
-    
-    # Obtener detalle según el tipo de crédito
-    if credito.linea == Credito.LineaCredito.EMPRENDIMIENTO:
-        detalle = credito.detalle_emprendimiento
-    else:
-        detalle = credito.detalle_libranza
-    
-    # Calcular datos
-    historial_pagos = HistorialPago.objects.filter(
-        credito=credito,
-        estado=HistorialPago.EstadoPago.EXITOSO
-    ).order_by('-fecha_pago')
-    
-    monto_pagado = historial_pagos.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
-    monto_pendiente = (detalle.saldo_pendiente or Decimal('0.00'))
-    monto_total = (detalle.monto_aprobado or Decimal('0.00'))
-    
-    # Preparar datos para el template
-    logo_path = finders.find('images/logo-dark.png')
-    if not logo_path:
-        logo_path = ''
-    else:
-        logo_path = 'file://' + logo_path
-    
+
+    detalle = credito.detalle
+
+    historial_pagos = HistorialPago.objects.filter(credito=credito, estado=HistorialPago.EstadoPago.EXITOSO).order_by('fecha_pago')
+    monto_total_pagado = historial_pagos.aggregate(total=Sum('monto'))['total'] or Decimal(0)
+
+    progreso_credito = 0
+    if credito.total_a_pagar and credito.total_a_pagar > 0:
+        progreso_credito = round((monto_total_pagado / credito.total_a_pagar) * 100)
+
     context = {
         'credito': credito,
         'usuario': request.user,
-        'pagos': historial_pagos,
-        'monto_pagado': monto_pagado,
-        'monto_pendiente': monto_pendiente,
-        'monto_total': monto_total,
-        'numero_extracto': f"EXT-{credito.id:06d}",
-        'fecha_extracto': timezone.now(),
-        'logo_path': logo_path,
+        'detalle': detalle,
+        'historial_pagos': historial_pagos,
+        'monto_total_pagado': monto_total_pagado,
+        'progreso_credito': progreso_credito,
+        'fecha_generacion': timezone.now(),
+        'logo_base64': get_logo_base64(),
     }
-    
-    # Renderizar template
+
+    # Obtener la cédula del cliente para encriptar el PDF
+    cedula = None
+    if credito.linea == Credito.LineaCredito.EMPRENDIMIENTO and hasattr(detalle, 'numero_cedula'):
+        cedula = detalle.numero_cedula
+    elif credito.linea == Credito.LineaCredito.LIBRANZA and hasattr(detalle, 'cedula'):
+        cedula = detalle.cedula
+
     template = get_template('usuariocreditos/extracto_pdf.html')
     html_content = template.render(context)
-    
-    # Generar PDF
-    pdf_file = HTML(string=html_content, base_url=request.build_absolute_uri('/')).write_pdf()
-    
-    # Crear respuesta
+
+    # Generar PDF con WeasyPrint
+    pdf_bytes = HTML(string=html_content).write_pdf()
+
+    # Encriptar el PDF si hay cédula disponible
+    if cedula:
+        # Crear reader y writer para pypdf
+        pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
+        pdf_writer = PdfWriter()
+
+        # Copiar todas las páginas
+        for page in pdf_reader.pages:
+            pdf_writer.add_page(page)
+
+        # Encriptar con la cédula como contraseña
+        pdf_writer.encrypt(user_password=str(cedula), owner_password=str(cedula))
+
+        # Generar el PDF encriptado
+        encrypted_pdf = io.BytesIO()
+        pdf_writer.write(encrypted_pdf)
+        pdf_file = encrypted_pdf.getvalue()
+    else:
+        pdf_file = pdf_bytes
+
     response = HttpResponse(pdf_file, content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="extracto_credito_{credito.id}.pdf"'
-    
+    response['Content-Disposition'] = f'attachment; filename="extracto_{credito.numero_credito}.pdf"'
+
+    return response
+
+
+@login_required
+def descargar_plan_pagos_pdf(request, credito_id):
+    """
+    Genera y descarga un PDF con el plan de pagos detallado de un crédito,
+    utilizando el modelo CuotaAmortizacion como fuente de verdad.
+    El PDF está protegido con la cédula del cliente como contraseña.
+    """
+    credito = get_object_or_404(Credito, id=credito_id, usuario=request.user)
+
+    detalle = credito.detalle
+    plan_pagos = credito.tabla_amortizacion.all().order_by('numero_cuota')
+
+    context = {
+        'credito': credito,
+        'usuario': request.user,
+        'detalle': detalle,
+        'plan_pagos': plan_pagos,
+        'fecha_generacion': timezone.now(),
+        'logo_base64': get_logo_base64(),
+    }
+
+    # Obtener la cédula del cliente para encriptar el PDF
+    cedula = None
+    if credito.linea == Credito.LineaCredito.EMPRENDIMIENTO and hasattr(detalle, 'numero_cedula'):
+        cedula = detalle.numero_cedula
+    elif credito.linea == Credito.LineaCredito.LIBRANZA and hasattr(detalle, 'cedula'):
+        cedula = detalle.cedula
+
+    template = get_template('usuariocreditos/plan_pagos_pdf.html')
+    html_content = template.render(context)
+
+    # Generar PDF con WeasyPrint
+    pdf_bytes = HTML(string=html_content).write_pdf()
+
+    # Encriptar el PDF si hay cédula disponible
+    if cedula:
+        # Crear reader y writer para pypdf
+        pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
+        pdf_writer = PdfWriter()
+
+        # Copiar todas las páginas
+        for page in pdf_reader.pages:
+            pdf_writer.add_page(page)
+
+        # Encriptar con la cédula como contraseña
+        pdf_writer.encrypt(user_password=str(cedula), owner_password=str(cedula))
+
+        # Generar el PDF encriptado
+        encrypted_pdf = io.BytesIO()
+        pdf_writer.write(encrypted_pdf)
+        pdf_file = encrypted_pdf.getvalue()
+    else:
+        pdf_file = pdf_bytes
+
+    response = HttpResponse(pdf_file, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="plan_de_pagos_{credito.numero_credito}.pdf"'
+
     return response

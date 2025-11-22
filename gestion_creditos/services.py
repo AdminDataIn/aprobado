@@ -6,11 +6,12 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from openai import OpenAI
 from configuraciones.models import ConfiguracionPeso
-from .models import Credito, HistorialEstado, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, HistorialPago
-from django.db.models import Sum, Count, Case, When, F, DecimalField, Q
-from django.db.models.functions import TruncMonth
+from .models import Credito, HistorialEstado, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, HistorialPago, CuotaAmortizacion
+from django.db.models import Sum, Count, Case, When, F, DecimalField, Q, Avg
+from django.db.models.functions import TruncMonth, Coalesce
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, datetime
+from dateutil.relativedelta import relativedelta
 import json
 import csv
 import io
@@ -23,21 +24,21 @@ logger = logging.getLogger(__name__)
 def gestionar_cambio_estado_credito(credito, nuevo_estado, motivo, usuario_modificacion=None, comprobante=None):
     """
     Centraliza todos los cambios de estado de un crédito, registrando el historial.
-    Esta es la ÚNICA función que debe usarse para cambiar el estado de un crédito!!!!.
+    También envía notificaciones por email al cliente.
     """
+    from .email_service import enviar_notificacion_cambio_estado
+
     estado_anterior = credito.estado
 
     if estado_anterior == nuevo_estado:
-        return  #? No hay cambio de estado
+        return
 
     credito.estado = nuevo_estado
     credito.save()
 
-    #? Si el crédito se activa por primera vez, ejecutar la lógica de cálculo financiero.
     if nuevo_estado == Credito.EstadoCredito.ACTIVO and estado_anterior != Credito.EstadoCredito.ACTIVO:
         activar_credito(credito)
 
-    #? Registrar el cambio en el historial
     HistorialEstado.objects.create(
         credito=credito,
         estado_anterior=estado_anterior,
@@ -48,34 +49,119 @@ def gestionar_cambio_estado_credito(credito, nuevo_estado, motivo, usuario_modif
     )
     logger.info(f"Crédito {credito.id} cambió de {estado_anterior} a {nuevo_estado}. Motivo: {motivo}")
 
+    # Enviar notificación por email al cliente
+    try:
+        enviar_notificacion_cambio_estado(credito, nuevo_estado, motivo)
+        logger.info(f"Notificación de email enviada para crédito {credito.id} - Estado: {nuevo_estado}")
+    except Exception as e:
+        logger.error(f"Error al enviar notificación de email para crédito {credito.id}: {e}")
+
+@transaction.atomic
+def preparar_documento_para_firma(credito, usuario_modificacion):
+    """
+    Prepara el crédito para el proceso de firma.
+    """
+    gestionar_cambio_estado_credito(
+        credito=credito,
+        nuevo_estado=Credito.EstadoCredito.PENDIENTE_FIRMA,
+        motivo="Crédito aprobado, pendiente de firma del pagaré.",
+        usuario_modificacion=usuario_modificacion
+    )
+    
+    credito.documento_enviado = True
+    credito.save(update_fields=['documento_enviado'])
+    
+    logger.info(f"El crédito {credito.id} ha sido preparado para la firma.")
+
+@transaction.atomic
+def iniciar_proceso_desembolso(credito):
+    """
+    Inicia el proceso de desembolso.
+    """
+    logger.info(f"Iniciando proceso de desembolso para el crédito {credito.id}.")
+
+    gestionar_cambio_estado_credito(
+        credito=credito,
+        nuevo_estado=Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA,
+        motivo="El pagaré ha sido firmado. El crédito está pendiente de transferencia.",
+        usuario_modificacion=None
+    )
+
+    logger.info(f"Crédito {credito.id} pendiente de transferencia por el equipo de finanzas.")
+
+
 
 def actualizar_saldo_tras_pago(credito, monto_pagado):
     """
-    Actualiza el saldo de un crédito después de que se ha registrado un pago.
-    Delega el cambio de estado a la función centralizada 'gestionar_cambio_estado_credito'.
+    Actualiza el saldo del crédito después de recibir un pago.
+
+    Lógica de actualización:
+    1. El pago primero cubre los intereses del período
+    2. El remanente del pago abona al capital
+    3. Actualiza dos campos:
+       - saldo_pendiente: Capital financiado total pendiente (monto + comisión + IVA)
+       - capital_pendiente: Solo el monto aprobado pendiente (para mostrar al usuario)
+    4. Calcula proporcionalmente cuánto del capital_pendiente se ha pagado
+
+    Ejemplo:
+    - Monto aprobado: $500,000
+    - Capital financiado: $559,500 (incluye comisión + IVA)
+    - Al pagar 1 cuota de $284,750:
+      * saldo_pendiente: $559,500 - $284,750 = $274,750
+      * capital_pendiente: $500,000 * (274,750/559,500) = $245,448 (proporción)
+
+    Args:
+        credito: Instancia del modelo Credito
+        monto_pagado: Monto del pago realizado (Decimal o convertible)
+
+    Returns:
+        None (actualiza el crédito directamente)
     """
-    detalle = getattr(credito, 'detalle_emprendimiento', None) or getattr(credito, 'detalle_libranza', None)
-    if not detalle or detalle.capital_original_pendiente is None or not detalle.tasa_interes:
-        logger.warning(f"No se puede actualizar saldo para crédito {credito.id}: faltan datos clave (capital o tasa).")
+    # ✅ Validar que el crédito tenga los campos necesarios
+    if not all([credito.tasa_interes, credito.saldo_pendiente is not None, credito.monto_aprobado]):
+        logger.warning(f"No se puede actualizar saldo para crédito {credito.numero_credito}: faltan datos clave")
         return
 
     monto_pagado = Decimal(monto_pagado)
-    tasa_mensual = detalle.tasa_interes / Decimal(100)
+    tasa_mensual = credito.tasa_interes / Decimal(100)
 
-    interes_del_periodo = detalle.capital_original_pendiente * tasa_mensual
-    abono_a_capital = max(monto_pagado - interes_del_periodo, Decimal(0))
+    # Saldo antes del pago (capital financiado total pendiente)
+    saldo_antes_pago = credito.saldo_pendiente
 
-    if detalle.capital_original_pendiente is not None:
-        detalle.capital_original_pendiente -= abono_a_capital
-        if detalle.capital_original_pendiente < 0:
-            detalle.capital_original_pendiente = 0
+    # 1. Calcular el interés generado sobre el saldo pendiente
+    interes_del_periodo = saldo_antes_pago * tasa_mensual
 
-    if detalle.saldo_pendiente is not None:
-        detalle.saldo_pendiente -= monto_pagado
-    
-    if detalle.saldo_pendiente <= 0:
-        detalle.saldo_pendiente = 0
-        detalle.capital_original_pendiente = 0
+    # 2. Determinar abono a interés y capital
+    abono_a_interes = min(monto_pagado, interes_del_periodo)
+    abono_a_capital = monto_pagado - abono_a_interes
+
+    # 3. ✅ Actualizar saldo_pendiente (capital financiado total)
+    credito.saldo_pendiente -= abono_a_capital
+
+    # 4. ✅ Actualizar capital_pendiente PROPORCIONALMENTE
+    # Calcular qué porcentaje del capital financiado total se ha pagado
+    # y aplicarlo al monto_aprobado original
+    if credito.capital_pendiente is not None and credito.total_a_pagar:
+        # Calcular capital financiado inicial (si no está guardado, calcularlo)
+        capital_financiado_inicial = credito.monto_aprobado + (credito.comision or 0) + (credito.iva_comision or 0)
+
+        if capital_financiado_inicial > 0:
+            # Proporción del saldo pendiente respecto al capital financiado inicial
+            proporcion_pendiente = credito.saldo_pendiente / capital_financiado_inicial
+
+            # Aplicar esa proporción al monto aprobado original
+            credito.capital_pendiente = credito.monto_aprobado * proporcion_pendiente
+
+            # Redondear a 2 decimales para evitar problemas de precisión
+            credito.capital_pendiente = credito.capital_pendiente.quantize(Decimal('0.01'))
+
+    # 5. Validar si el crédito está completamente pagado
+    if credito.saldo_pendiente <= Decimal('0.01'):
+        credito.saldo_pendiente = Decimal('0.00')
+        if credito.capital_pendiente is not None:
+            credito.capital_pendiente = Decimal('0.00')
+
+        # Marcar como pagado si no lo está ya
         if credito.estado != Credito.EstadoCredito.PAGADO:
             gestionar_cambio_estado_credito(
                 credito=credito,
@@ -83,14 +169,44 @@ def actualizar_saldo_tras_pago(credito, monto_pagado):
                 motivo="Crédito saldado automáticamente por pago."
             )
     else:
-        if credito.estado == Credito.EstadoCredito.EN_MORA:
+        # 6. Avanzar fecha de próximo pago si pagó cuotas completas
+        if credito.valor_cuota and credito.valor_cuota > 0 and credito.fecha_proximo_pago:
+            cuotas_pagadas = int(monto_pagado // credito.valor_cuota)
+            if cuotas_pagadas > 0:
+                credito.fecha_proximo_pago += relativedelta(months=cuotas_pagadas)
+
+        # 7. Si estaba en mora y se puso al día, volver a ACTIVO
+        hoy = timezone.now().date()
+        if credito.estado == Credito.EstadoCredito.EN_MORA and credito.fecha_proximo_pago and credito.fecha_proximo_pago > hoy:
             gestionar_cambio_estado_credito(
                 credito=credito,
                 nuevo_estado=Credito.EstadoCredito.ACTIVO,
                 motivo="Crédito actualizado a ACTIVO por pago."
             )
-            
-    detalle.save()
+
+    # Asegurar que no queden saldos negativos
+    if credito.saldo_pendiente < 0:
+        credito.saldo_pendiente = Decimal('0.00')
+    if credito.capital_pendiente and credito.capital_pendiente < 0:
+        credito.capital_pendiente = Decimal('0.00')
+
+    # ✅ Guardar cambios en el crédito
+    credito.save()
+
+    logger.info(
+        f"Pago procesado para crédito {credito.numero_credito}: "
+        f"Monto: ${monto_pagado:,.2f}, Interés: ${abono_a_interes:,.2f}, "
+        f"Capital: ${abono_a_capital:,.2f}, Nuevo saldo: ${credito.saldo_pendiente:,.2f}, "
+        f"Capital pendiente: ${credito.capital_pendiente:,.2f if credito.capital_pendiente else 0}"
+    )
+
+    # Enviar confirmación de pago por email
+    try:
+        from .email_service import enviar_confirmacion_pago
+        enviar_confirmacion_pago(credito, monto_pagado, credito.saldo_pendiente)
+        logger.info(f"Confirmación de pago enviada por email para crédito {credito.numero_credito}")
+    except Exception as e:
+        logger.error(f"Error al enviar confirmación de pago por email para crédito {credito.numero_credito}: {e}")
 
 
 def evaluar_motivacion_credito(texto: str) -> int:
@@ -163,236 +279,277 @@ def obtener_puntaje_interno(parametros: dict) -> int:
 
 def filtrar_creditos(request, creditos_base):
     """
-    Aplica filtros de línea, estado y búsqueda a un queryset de créditos.
-
-    Args:
-        request: El objeto HttpRequest que contiene los parámetros GET.
-        creditos_base: El QuerySet base de créditos para filtrar.
-
-    Returns:
-        QuerySet: El QuerySet de créditos filtrado.
+    ✅ CORRECTO: Esta función ya está bien porque busca en campos que aún existen en los detalles
     """
+    queryset = creditos_base
+
+    # Filtro de búsqueda
+    search_text = request.GET.get('search', '').strip()
+    if search_text:
+        queryset = queryset.filter(
+            Q(usuario__username__icontains=search_text) |
+            Q(usuario__email__icontains=search_text) |
+            Q(numero_credito__icontains=search_text) |
+            Q(detalle_emprendimiento__nombre__icontains=search_text) |
+            Q(detalle_emprendimiento__numero_cedula__icontains=search_text) |
+            Q(detalle_libranza__nombres__icontains=search_text) |
+            Q(detalle_libranza__apellidos__icontains=search_text) |
+            Q(detalle_libranza__cedula__icontains=search_text)
+        )
+
+    # Filtro de línea
     linea_filter = request.GET.get('linea', '')
-    estado_filter = request.GET.get('estado', '')
-    search_query = request.GET.get('search', '')
-
     if linea_filter:
-        creditos_base = creditos_base.filter(linea=linea_filter)
-    
+        queryset = queryset.filter(linea=linea_filter)
+
+    # Filtro de estado
+    estado_filter = request.GET.get('estado', '')
     if estado_filter:
-        creditos_base = creditos_base.filter(estado=estado_filter)
-    
-    if search_query:
-        creditos_base = creditos_base.filter(
-            Q(usuario__username__icontains=search_query) |
-            Q(usuario__first_name__icontains=search_query) |
-            Q(usuario__last_name__icontains=search_query) |
-            Q(numero_credito__icontains=search_query) |
-            Q(detalle_libranza__nombres__icontains=search_query) |
-            Q(detalle_libranza__apellidos__icontains=search_query) |
-            Q(detalle_emprendimiento__nombre__icontains=search_query) |
-            Q(detalle_libranza__cedula__icontains=search_query) |
-            Q(detalle_emprendimiento__numero_cedula__icontains=search_query)
-        )
-        
-    return creditos_base
+        queryset = queryset.filter(estado=estado_filter)
+
+    return queryset.distinct()
 
 
-def get_dashboard_context():
+def get_admin_dashboard_context(user):
     """
-    Prepara el contexto de datos para el dashboard administrativo.
-
-    Esta función encapsula todas las consultas a la base de datos necesarias
-    para renderizar el dashboard, incluyendo estadísticas generales,
-    distribución de créditos y datos para las gráficas.
-
-    Returns:
-        dict: Un diccionario con todos los datos de contexto para la plantilla.
+    Obtiene todo el contexto necesario para el dashboard del administrador,
+    utilizando el modelo de Crédito centralizado y optimizando las consultas.
     """
-    total_creditos = Credito.objects.count()
-    creditos_activos = Credito.objects.filter(estado='ACTIVO').count()
-    creditos_en_mora_count = Credito.objects.filter(estado='EN_MORA').count()
+    from datetime import date
+    from django.db.models.functions import TruncMonth
 
-    #? Saldos de cartera
-    saldo_emprendimiento_cartera = Credito.objects.filter(
-        linea='EMPRENDIMIENTO',
-        estado__in=['ACTIVO', 'EN_MORA']
-    ).aggregate(total=Sum('detalle_emprendimiento__saldo_pendiente'))['total'] or 0
+    today = timezone.now().date()
+    proximos_15_dias = today + timedelta(days=15)
 
-    saldo_libranza_cartera = Credito.objects.filter(
-        linea='LIBRANZA',
-        estado__in=['ACTIVO', 'EN_MORA']
-    ).aggregate(total=Sum('detalle_libranza__saldo_pendiente'))['total'] or 0
-
-    saldo_cartera_total = saldo_emprendimiento_cartera + saldo_libranza_cartera
-
-    #? Montos en mora
-    monto_emprendimiento_en_mora = Credito.objects.filter(
-        linea='EMPRENDIMIENTO',
-        estado='EN_MORA'
-    ).aggregate(total=Sum('detalle_emprendimiento__saldo_pendiente'))['total'] or 0
-
-    monto_libranza_en_mora = Credito.objects.filter(
-        linea='LIBRANZA',
-        estado='EN_MORA'
-    ).aggregate(total=Sum('detalle_libranza__saldo_pendiente'))['total'] or 0
-
-    monto_total_en_mora = monto_emprendimiento_en_mora + monto_libranza_en_mora
+    # --- Consultas Principales ---
+    creditos_activos = Credito.objects.filter(estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA])
     
-    #? Distribución de créditos
-    creditos_por_linea = Credito.objects.values('linea').annotate(count=Count('id'))
-    
-    creditos_por_estado_list = list(Credito.objects.values('estado').annotate(count=Count('id')))
-    for item in creditos_por_estado_list:
-        item['porcentaje'] = (item['count'] / total_creditos) * 100 if total_creditos > 0 else 0
+    # --- KPIs Principales ---
+    kpis = creditos_activos.aggregate(
+        saldo_cartera_total=Coalesce(Sum('saldo_pendiente'), Decimal('0.00')),
+        monto_total_en_mora=Coalesce(Sum('saldo_pendiente', filter=Q(estado=Credito.EstadoCredito.EN_MORA)), Decimal('0.00'))
+    )
+    total_creditos = creditos_activos.count()
+    proximos_vencer = creditos_activos.filter(fecha_proximo_pago__range=[today, proximos_15_dias]).count()
 
-    #? Próximos a vencer
-    hoy = timezone.now().date()
-    fecha_limite = hoy + timedelta(days=2)
-    proximos_vencer = Credito.objects.filter(
-        Q(estado=Credito.EstadoCredito.ACTIVO) &
-        (
-            Q(detalle_emprendimiento__fecha_proximo_pago__gte=hoy, detalle_emprendimiento__fecha_proximo_pago__lte=fecha_limite) |
-            Q(detalle_libranza__fecha_proximo_pago__gte=hoy, detalle_libranza__fecha_proximo_pago__lte=fecha_limite)
-        )
-    ).distinct().count()
+    # --- Datos para Tablas ---
+    # Créditos por línea - solo creditos activos con saldo
+    creditos_por_linea_q = list(creditos_activos.values('linea').annotate(
+        count=Count('id'),
+        saldo_total=Coalesce(Sum('saldo_pendiente'), Decimal('0.00'))
+    ).order_by('-saldo_total'))
 
-    #? --- Gráfica de Saldo de Cartera por Mes ---
-    six_months_ago = timezone.now().date().replace(day=1) - timedelta(days=150)
-    monthly_balance = Credito.objects.filter(
-        estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA],
-        fecha_actualizacion__gte=six_months_ago
-    ).annotate(
-        month=TruncMonth('fecha_actualizacion')
-    ).values('month').annotate(
-        total_emprendimiento=Sum(
-            Case(
-                When(linea=Credito.LineaCredito.EMPRENDIMIENTO, then=F('detalle_emprendimiento__saldo_pendiente')),
-                default=Decimal(0), output_field=DecimalField()
-            )
-        ),
-        total_libranza=Sum(
-            Case(
-                When(linea=Credito.LineaCredito.LIBRANZA, then=F('detalle_libranza__saldo_pendiente')),
-                default=Decimal(0), output_field=DecimalField()
-            )
-        )
-    ).order_by('month')
+    # Créditos por estado - todos los créditos
+    total_general_creditos = Credito.objects.count()
+    creditos_por_estado_q = Credito.objects.values('estado').annotate(
+        count=Count('id')
+    ).order_by('-count')
 
-    data_by_month = {item['month'].strftime('%Y-%m'): item for item in monthly_balance}
+    creditos_por_estado = []
+    for item in creditos_por_estado_q:
+        porcentaje = (item['count'] / total_general_creditos) * 100 if total_general_creditos > 0 else 0
+        creditos_por_estado.append({
+            'estado': item['estado'],
+            'count': item['count'],
+            'porcentaje': porcentaje
+        })
 
+    # --- Datos para Gráfico de Distribución (Doughnut) ---
+    distribution_labels = [item['linea'] for item in creditos_por_linea_q]
+    distribution_data = [item['count'] for item in creditos_por_linea_q]
+
+    # --- Datos para Gráfico de Evolución de Cartera (Líneas) ---
+    # Generar últimos 12 meses de labels
     portfolio_labels = []
+    for i in range(11, -1, -1):
+        mes_fecha = today - relativedelta(months=i)
+        portfolio_labels.append(mes_fecha.strftime('%b %Y'))
+
+    # Calcular saldo de cartera por mes usando créditos activos
+    # Para cada mes, sumamos los saldos de créditos que estaban activos en ese momento
     emprendimiento_data = []
     libranza_data = []
-    total_data = []
 
-    for i in range(6):
-        from dateutil.relativedelta import relativedelta
-        month_date = (timezone.now() - relativedelta(months=5-i)).replace(day=1)
-        month_key = month_date.strftime('%Y-%m')
-        portfolio_labels.append(month_date.strftime('%b %Y'))
+    for label in portfolio_labels:
+        # Convertir label a fecha (último día del mes)
+        mes_date = datetime.strptime(label, '%b %Y')
+        primer_dia_mes = mes_date.replace(day=1).date()
+        ultimo_dia_mes = (primer_dia_mes + relativedelta(months=1) - timedelta(days=1))
 
-        emprendimiento_monthly = data_by_month.get(month_key, {}).get('total_emprendimiento')
-        libranza_monthly = data_by_month.get(month_key, {}).get('total_libranza')
-        
-        emprendimiento_data.append(float(emprendimiento_monthly or 0))
-        libranza_data.append(float(libranza_monthly or 0))
-        total_data.append(float((emprendimiento_monthly or 0) + (libranza_monthly or 0)))
+        # Créditos que estaban activos en ese mes (desembolsados antes del fin del mes)
+        creditos_mes_emprendimiento = Credito.objects.filter(
+            linea='EMPRENDIMIENTO',
+            estado__in=['ACTIVO', 'EN_MORA', 'PAGADO'],
+            fecha_desembolso__lte=ultimo_dia_mes
+        ).aggregate(saldo=Coalesce(Sum('saldo_pendiente'), Decimal('0.00')))['saldo']
 
-    distribution_labels = [item['linea'] for item in creditos_por_linea]
-    distribution_data = [item['count'] for item in creditos_por_linea]
-    
-    context = {
+        creditos_mes_libranza = Credito.objects.filter(
+            linea='LIBRANZA',
+            estado__in=['ACTIVO', 'EN_MORA', 'PAGADO'],
+            fecha_desembolso__lte=ultimo_dia_mes
+        ).aggregate(saldo=Coalesce(Sum('saldo_pendiente'), Decimal('0.00')))['saldo']
+
+        emprendimiento_data.append(float(creditos_mes_emprendimiento))
+        libranza_data.append(float(creditos_mes_libranza))
+
+    total_data = [e + l for e, l in zip(emprendimiento_data, libranza_data)]
+
+    return {
+        # KPIs
+        'saldo_cartera_total': kpis['saldo_cartera_total'],
+        'monto_total_en_mora': kpis['monto_total_en_mora'],
         'total_creditos': total_creditos,
-        'creditos_activos': creditos_activos,
-        'creditos_en_mora': creditos_en_mora_count,
-        'saldo_cartera_total': saldo_cartera_total,
-        'monto_total_en_mora': monto_total_en_mora,
-        'creditos_por_linea': creditos_por_linea,
-        'creditos_por_estado': creditos_por_estado_list,
         'proximos_vencer': proximos_vencer,
+        
+        # Tablas
+        'creditos_por_linea': creditos_por_linea_q,
+        'creditos_por_estado': creditos_por_estado,
+        
+        # Gráfico de Distribución
+        'distribution_labels': json.dumps(distribution_labels),
+        'distribution_data': json.dumps(distribution_data),
+        
+        # Gráfico de Evolución de Cartera
         'portfolio_labels': json.dumps(portfolio_labels),
         'emprendimiento_data': json.dumps(emprendimiento_data),
         'libranza_data': json.dumps(libranza_data),
         'total_data': json.dumps(total_data),
-        'distribution_labels': json.dumps(distribution_labels),
-        'distribution_data': json.dumps(distribution_data),
     }
-    return context
-
 
 def activar_credito(credito):
     """
-    Activa un crédito, calculando y guardando todos los valores financieros iniciales.
+    Activa un crédito generando todos los cálculos financieros y la tabla de amortización.
 
-    Esta función se llama cuando un crédito pasa al estado 'ACTIVO'. Realiza
-    las siguientes acciones:
-    1.  Obtiene el detalle del crédito (emprendimiento o libranza).
-    2.  Calcula la comisión y el IVA sobre la misma.
-    3.  Calcula el total a pagar (monto aprobado + comisión + IVA).
-    4.  Asigna la tasa de interés por defecto si no está definida.
-    5.  Calcula el valor de la cuota mensual usando una fórmula de anualidad.
-    6.  Inicializa el saldo pendiente y el capital original pendiente.
-    7.  Determina la fecha del primer pago.
+    Proceso:
+    1. Calcula comisión (10% del monto aprobado) e IVA (19% sobre comisión)
+    2. Determina el capital financiado total (monto + comisión + IVA) - esto se financia en cuotas
+    3. Calcula la cuota mensual usando amortización francesa sobre el capital financiado
+    4. Genera la tabla de amortización donde:
+       - capital_pendiente: Refleja solo el monto aprobado original (para transparencia al usuario)
+       - saldo_pendiente: Refleja el capital financiado total pendiente (incluye comisión + IVA)
+    5. Establece la fecha de primer pago y registra el desembolso
+
+    Tasas de interés por línea:
+    - Emprendimiento: 3.5% efectiva mensual (51.11% EA, 42.00% NA)
+    - Libranza: 2.0% efectiva mensual (26.82% EA, 24.00% NA)
 
     Args:
-        credito (Credito): La instancia del crédito a activar.
+        credito: Instancia del modelo Credito a activar
+
+    Raises:
+        ValueError: Si faltan campos críticos (monto_aprobado o plazo)
     """
-    detalle_credito = getattr(credito, 'detalle_emprendimiento', None) or getattr(credito, 'detalle_libranza', None)
-    
-    if not detalle_credito or not detalle_credito.valor_credito or not detalle_credito.plazo > 0:
-        logger.error(f"No se pudo activar el crédito {credito.id} por falta de datos (detalle, valor o plazo).")
-        return
+    logger.info(f"Iniciando activación del crédito {credito.numero_credito} (ID: {credito.id})")
 
-    monto_aprobado = detalle_credito.valor_credito
-    plazo = detalle_credito.plazo
+    # ✅ Validar campos críticos
+    if not credito.monto_aprobado or not credito.plazo:
+        error_msg = f"No se puede activar el crédito {credito.numero_credito}: falta monto_aprobado o plazo"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
 
-    #? Asignar monto aprobado si no existe
-    if not detalle_credito.monto_aprobado or detalle_credito.monto_aprobado <= 0:
-        detalle_credito.monto_aprobado = monto_aprobado
-
-    #? Lógica de cálculo de Comisión e IVA
-    porcentaje_comision = Decimal('0.10')
-    porcentaje_iva = Decimal('0.19')
-    
-    detalle_credito.comision = (monto_aprobado * porcentaje_comision).quantize(Decimal('0.01'))
-    detalle_credito.iva_comision = (detalle_credito.comision * porcentaje_iva).quantize(Decimal('0.01'))
-    detalle_credito.total_a_pagar = (monto_aprobado + detalle_credito.comision + detalle_credito.iva_comision).quantize(Decimal('0.01'))
-    
-    #? Asignar tasa de interés por defecto si no existe
-    if not detalle_credito.tasa_interes:
+    # ✅ Determinar tasa de interés según la línea de crédito
+    if credito.tasa_interes:
+        # Si ya tiene tasa asignada, usarla
+        tasa_interes = credito.tasa_interes
+    else:
+        # Asignar tasa según la línea
         if credito.linea == Credito.LineaCredito.EMPRENDIMIENTO:
-            detalle_credito.tasa_interes = Decimal('3.5')
+            tasa_interes = Decimal('3.5')  # 3.5% efectiva mensual
         elif credito.linea == Credito.LineaCredito.LIBRANZA:
-            detalle_credito.tasa_interes = Decimal('2.0')
+            tasa_interes = Decimal('2.0')  # 2.0% efectiva mensual
+        else:
+            tasa_interes = Decimal('2.0')  # Default
 
-    #? Calcular valor de la cuota con fórmula de anualidad
-    r = detalle_credito.tasa_interes / 100
-    n = plazo
-    P = detalle_credito.total_a_pagar
+    # ✅ Calcular componentes financieros
+    comision = credito.comision or (credito.monto_aprobado * Decimal('0.10'))
+    iva_comision = credito.iva_comision or (comision * Decimal('0.19'))
 
-    if r > 0:
-        valor_cuota = (P * r) / (1 - (1 + r)**-n)
+    # El capital financiado incluye monto + comisión + IVA (esto se paga en cuotas)
+    capital_financiado = credito.monto_aprobado + comision + iva_comision
+
+    # ✅ Calcular cuota mensual sobre el capital financiado total
+    tasa_mensual = tasa_interes / Decimal(100)
+    if tasa_mensual > 0:
+        # Fórmula de amortización francesa: C = P * [i(1+i)^n] / [(1+i)^n - 1]
+        factor = (tasa_mensual * (1 + tasa_mensual) ** credito.plazo) / (((1 + tasa_mensual) ** credito.plazo) - 1)
+        valor_cuota = capital_financiado * factor
     else:
-        valor_cuota = P / n
-    
-    detalle_credito.valor_cuota = valor_cuota.quantize(Decimal('0.01'))
-    
-    # Inicializar saldos
-    detalle_credito.saldo_pendiente = detalle_credito.total_a_pagar
-    detalle_credito.capital_original_pendiente = monto_aprobado
+        # Caso sin interés (división simple del capital financiado)
+        valor_cuota = capital_financiado / credito.plazo
 
-    #? Lógica de Próximo Vencimiento
-    from dateutil.relativedelta import relativedelta
-    fecha_base = credito.fecha_solicitud.date()
-    if fecha_base.day <= 15:
-        detalle_credito.fecha_proximo_pago = (fecha_base.replace(day=1) + relativedelta(months=1))
+    # Total a pagar es la suma de todas las cuotas
+    total_a_pagar = valor_cuota * credito.plazo
+
+    # ✅ Actualizar campos financieros en el crédito
+    credito.tasa_interes = tasa_interes
+    credito.comision = comision
+    credito.iva_comision = iva_comision
+    credito.total_a_pagar = total_a_pagar
+    credito.valor_cuota = valor_cuota
+
+    # saldo_pendiente: Capital financiado total pendiente (incluye comisión + IVA)
+    credito.saldo_pendiente = capital_financiado
+
+    # capital_pendiente: Solo el monto aprobado original (para mostrar al usuario cuánto del monto solicitado ha pagado)
+    credito.capital_pendiente = credito.monto_aprobado
+
+    # ✅ Calcular fecha de primer pago
+    hoy = timezone.now().date()
+    if hoy.day <= 15:
+        # Si es antes del 15, el pago es el mismo día del próximo mes
+        credito.fecha_proximo_pago = hoy + relativedelta(months=1)
     else:
-        detalle_credito.fecha_proximo_pago = (fecha_base.replace(day=1) + relativedelta(months=2))
-    
-    detalle_credito.save()
-    logger.info(f"Crédito {credito.id} activado exitosamente con todos los cálculos financieros.")
+        # Si es después del 15, el pago es el 1ro del mes subsiguiente
+        credito.fecha_proximo_pago = (hoy + relativedelta(months=2)).replace(day=1)
 
+    credito.fecha_desembolso = timezone.now()
+    credito.save()
+
+    # ✅ Generar tabla de amortización
+    # La tabla amortiza el capital_financiado completo (no solo monto_aprobado)
+    saldo_capital_restante = capital_financiado  # ✅ CORRECCIÓN: Amortizar el capital financiado total
+    fecha_cuota = credito.fecha_proximo_pago
+
+    for i in range(1, credito.plazo + 1):
+        # Calcular interés sobre el saldo restante
+        interes_a_pagar = saldo_capital_restante * tasa_mensual
+        capital_a_pagar = credito.valor_cuota - interes_a_pagar
+
+        # Ajuste para la última cuota para evitar diferencias por redondeo
+        if i == credito.plazo:
+            capital_a_pagar = saldo_capital_restante
+            interes_a_pagar = credito.valor_cuota - capital_a_pagar
+            if interes_a_pagar < 0:
+                interes_a_pagar = Decimal('0.00')
+                capital_a_pagar = credito.valor_cuota
+
+        # Actualizar saldo restante
+        saldo_capital_restante -= capital_a_pagar
+
+        # Asegurar que no quede negativo por redondeo
+        if saldo_capital_restante < 0:
+            saldo_capital_restante = Decimal('0.00')
+
+        # Crear cuota en la tabla de amortización
+        CuotaAmortizacion.objects.create(
+            credito=credito,
+            numero_cuota=i,
+            fecha_vencimiento=fecha_cuota,
+            capital_a_pagar=capital_a_pagar,
+            interes_a_pagar=interes_a_pagar,
+            valor_cuota=credito.valor_cuota,
+            saldo_capital_pendiente=saldo_capital_restante
+        )
+
+        # Avanzar a la siguiente fecha de cuota
+        fecha_cuota += relativedelta(months=1)
+
+    logger.info(
+        f"Crédito {credito.numero_credito} activado exitosamente. "
+        f"Línea: {credito.get_linea_display()}, Tasa: {tasa_interes}% mensual, "
+        f"Cuota: ${valor_cuota:,.2f}, Plazo: {credito.plazo} meses, "
+        f"Total a pagar: ${total_a_pagar:,.2f}"
+    )
 
 def get_billetera_context(user):
     """
@@ -510,7 +667,8 @@ def procesar_pagos_masivos_csv(csv_file, empresa):
                     continue
 
                 try:
-                    monto_a_pagar = Decimal(monto_str)
+                    monto_limpio = monto_str.replace('.', '').replace(',', '.')
+                    monto_a_pagar = Decimal(monto_limpio)
                     if monto_a_pagar <= 0:
                         raise ValueError("El monto debe ser positivo.")
                 except (ValueError, TypeError, ConversionSyntax):
@@ -554,10 +712,8 @@ def marcar_creditos_en_mora():
     hoy = timezone.now().date()
     #? Se buscan los créditos que tienen una fecha de próximo pago vencida en cualquiera de sus detalles
     creditos_vencidos = Credito.objects.filter(
-        estado=Credito.EstadoCredito.ACTIVO
-    ).filter(
-        Q(detalle_emprendimiento__fecha_proximo_pago__lt=hoy) |
-        Q(detalle_libranza__fecha_proximo_pago__lt=hoy)
+        estado=Credito.EstadoCredito.ACTIVO,
+        fecha_proximo_pago__lt=hoy
     ).distinct()
 
     creditos_actualizados = 0

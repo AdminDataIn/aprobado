@@ -12,6 +12,7 @@
     <title>Detalle de Crédito - Fintech Pro</title>
     {% load static %}
     {% load humanize %}
+    {% load l10n %}
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
@@ -79,7 +80,11 @@
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
                         <li class="breadcrumb-item"><a href="{% url 'gestion_creditos:admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+                        {% if request.GET.from == 'activos' %}
+                        <li class="breadcrumb-item"><a href="{% url 'gestion_creditos:admin_creditos_activos' %}"><i class="bi bi-credit-card"></i> Créditos Activos</a></li>
+                        {% else %}
                         <li class="breadcrumb-item"><a href="{% url 'gestion_creditos:admin_solicitudes' %}"><i class="bi bi-journal-text"></i> Solicitudes</a></li>
+                        {% endif %}
                         <li class="breadcrumb-item active" aria-current="page">Detalle del Crédito #{{ credito.id }}</li>
                     </ol>
                 </nav>
@@ -163,7 +168,7 @@
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Total Financiado</span>
-                                <span class="info-value fw-bold">${{ credito.total_a_pagar|default:"0"|intcomma }}</span>
+                                <span class="info-value fw-bold">${{ credito.capital_financiado|default:"0"|intcomma }}</span>
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Saldo Pendiente</span>
@@ -179,11 +184,23 @@
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Cuotas Pagadas</span>
-                                <span class="info-value">{{ cuotas_pagadas }}</span>
+                                <span class="info-value">
+                                    {% if cuotas_pagadas > 0 %}
+                                        {{ cuotas_pagadas }}
+                                    {% else %}
+                                        No se han realizado pagos
+                                    {% endif %}
+                                </span>
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Cuotas Restantes</span>
-                                <span class="info-value">{{ cuotas_restantes }}</span>
+                                <span class="info-value">
+                                    {% if credito.plazo %}
+                                        {{ cuotas_restantes }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </span>
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Tasa de Interés</span>
@@ -191,7 +208,7 @@
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Próximo Vencimiento</span>
-                                <span class="info-value">{{ credito.proximo_vencimiento|date:"d/m/Y"|default:"N/A" }}</span>
+                                <span class="info-value">{{ credito.fecha_proximo_pago|date:"d/m/Y"|default:"N/A" }}</span>
                             </div>
                             {% if credito.dias_en_mora > 0 %}
                             <div class="info-item">
@@ -299,42 +316,99 @@
 
             <!-- Sidebar -->
             <div class="sidebar">
-                <!-- State Management -->
+                {% if puede_procesar %}
+                <!-- Process Application -->
                 <div class="card" style="margin-bottom: 2rem;">
-                    <div class="card-header">
+                    <div class="card-header bg-warning text-dark">
                         <h2 class="card-title">
-                            <i class="bi bi-pencil me-2"></i>
-                            Cambiar Estado
+                            <i class="bi bi-diagram-3-fill me-2"></i>
+                            Procesar Solicitud
                         </h2>
                     </div>
                     <div class="card-content">
-                        <form id="status-form" method="post" action="{% url 'gestion_creditos:cambiar_estado_credito' credito.id %}" enctype="multipart/form-data">
+                        <p class="text-muted">Tome una decisión sobre esta solicitud de crédito. Puede aprobarla para continuar el flujo o rechazarla.</p>
+                        <form id="process-form" method="post" action="{% url 'gestion_creditos:procesar_solicitud' credito.id %}">
                             {% csrf_token %}
-                            <div class="form-group">
-                                <label class="form-label">Nuevo Estado</label>
-                                <select name="status" id="id_status" class="form-control form-select">
-                                    {% for value, label in estados_choices %}
-                                        <option value="{{ value }}" {% if value == credito.estado %}selected{% endif %}>
-                                            {{ label }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
+                            <div class="form-group mb-3">
+                                <label for="id_monto_aprobado" class="form-label">Monto Aprobado</label>
+                                <input type="text" name="monto_aprobado" id="id_monto_aprobado" class="form-control" value="{{ credito.monto_solicitado }}" required readonly>
+                            </div>
+                            <div class="form-group mb-3">
+                                <label for="id_plazo_aprobado" class="form-label">Plazo Aprobado (meses)</label>
+                                <input type="number" name="plazo_aprobado" id="id_plazo_aprobado" class="form-control" min="1" value="{{ credito.plazo_solicitado|default:'1' }}" required readonly>
+                            </div>
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="id_ajustar_monto_plazo">
+                                <label class="form-check-label" for="id_ajustar_monto_plazo">
+                                    Ajustar Monto y Plazo Aprobado
+                                </label>
                             </div>
                             <div class="form-group">
-                                <label for="id_motivo" class="form-label">Motivo del Cambio</label>
-                                <textarea name="motivo" id="id_motivo" class="form-control" rows="3" placeholder="Escriba por qué cambia el estado..." required></textarea>
+                                <label for="id_observations" class="form-label">Observaciones / Motivo</label>
+                                <textarea name="observations" id="id_observations" class="form-control" rows="4" placeholder="Añada un motivo para la aprobación o rechazo..." required></textarea>
                             </div>
-                            <div class="form-group" id="comprobante-group" style="display: none;">
-                                <label for="id_comprobante_pago" class="form-label">Comprobante de Pago</label>
-                                <input type="file" name="comprobante_pago" id="id_comprobante_pago" class="form-control">
+                            <div class="d-grid gap-2 mt-3">
+                                <button type="submit" name="action" value="approve" class="btn btn-success">
+                                    <i class="bi bi-check-lg me-2"></i>
+                                    Aprobar
+                                </button>
+                                <button type="submit" name="action" value="reject" class="btn btn-danger">
+                                    <i class="bi bi-x-lg me-2"></i>
+                                    Rechazar
+                                </button>
                             </div>
-                            <button type="submit" class="btn btn-primary" style="width: 100%;">
-                                <i class="bi bi-save me-2"></i>
-                                Actualizar Estado
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if credito.estado == 'PENDIENTE_FIRMA' %}
+                <!-- Simulate Signature -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div class="card-header bg-info text-dark">
+                        <h2 class="card-title">
+                            <i class="bi bi-pencil-square me-2"></i>
+                            Simular Firma
+                        </h2>
+                    </div>
+                    <div class="card-content">
+                        <p class="text-muted">Este crédito está pendiente de firma. Use este botón para simular la recepción del documento firmado y pasar al desembolso.</p>
+                        <form method="post" action="{% url 'gestion_creditos:simular_firma' credito.id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-info" style="width: 100%;">
+                                <i class="bi bi-check-square-fill me-2"></i>
+                                Forzar Firma y Continuar
                             </button>
                         </form>
                     </div>
                 </div>
+                {% endif %}
+
+                {% if credito.estado == 'PENDIENTE_TRANSFERENCIA' %}
+                <!-- Confirm Disbursement -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div class="card-header bg-primary text-white">
+                        <h2 class="card-title">
+                            <i class="bi bi-check-circle-fill me-2"></i>
+                            Confirmar Desembolso
+                        </h2>
+                    </div>
+                    <div class="card-content">
+                        <p class="text-muted">Adjunte el comprobante de la transferencia para marcar el crédito como <strong>ACTIVO</strong>.</p>
+                        <form id="disbursement-form" method="post" action="{% url 'gestion_creditos:confirmar_desembolso' credito.id %}" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            <div class="form-group">
+                                <label for="id_comprobante_pago" class="form-label">Comprobante de Desembolso</label>
+                                <input type="file" name="comprobante_pago" id="id_comprobante_pago" class="form-control" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary" style="width: 100%;">
+                                <i class="bi bi-send-check me-2"></i>
+                                Activar Crédito
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
 
                 <!-- Manual Payment -->
                 <div class="card" style="margin-bottom: 2rem;">
@@ -345,7 +419,7 @@
                         </h2>
                     </div>
                     <div class="card-content">
-                        <form method="post" action="{% url 'gestion_creditos:agregar_pago_manual' credito.id %}">
+                        <form method="post" action="{% url 'gestion_creditos:agregar_pago_manual' credito.id %}" >
                             {% csrf_token %}
                             <div class="form-group">
                                 <label for="id_monto" class="form-label">Monto a Pagar</label>
@@ -409,14 +483,16 @@
                             <p><strong>Teléfono:</strong> {{ detalle.telefono }}</p>
                             <p><strong>Correo:</strong> {{ detalle.correo_electronico }}</p>
                             <p><strong>Empresa:</strong> {{ detalle.empresa.nombre }}</p>
-                            <p><strong>Valor Solicitado:</strong> ${{ detalle.valor_credito|intcomma }}</p>
-                            <p><strong>Plazo:</strong> {{ detalle.plazo }} meses</p>
+                            <p><strong>Valor Solicitado:</strong> ${{ credito.monto_solicitado|intcomma }}</p>
+                            <p><strong>Plazo:</strong> {{ credito.plazo_solicitado }} meses</p>
                         {% endwith %}
                     {% elif credito.linea == 'EMPRENDIMIENTO' and credito.detalle_emprendimiento %}
                         {% with detalle=credito.detalle_emprendimiento %}
                             <h4>Detalles del Crédito de Emprendimiento</h4>
                             <p><strong>Nombre Completo:</strong> {{ detalle.nombre }}</p>
                             <p><strong>Cédula:</strong> {{ detalle.numero_cedula }}</p>
+                            <p><strong>Valor Solicitado:</strong> ${{ credito.monto_solicitado|intcomma }}</p>
+                            <p><strong>Plazo:</strong> {{ credito.plazo_solicitado }} meses</p>
                             <p><strong>Fecha de Nacimiento:</strong> {{ detalle.fecha_nac }}</p>
                             <p><strong>Celular:</strong> {{ detalle.celular_wh }}</p>
                             <p><strong>Dirección:</strong> {{ detalle.direccion }}</p>
@@ -462,35 +538,92 @@
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // --- Toast Notifications --- //
+            // --- Notificaiones Toast --- //
             var toastElList = [].slice.call(document.querySelectorAll('.toast'));
             var toastList = toastElList.map(function(toastEl) {
                 return new bootstrap.Toast(toastEl, { autohide: true, delay: 5000 });
             });
             toastList.forEach(toast => toast.show());
 
-            // --- State Management Logic --- //
-            const statusSelect = document.getElementById('id_status');
-            const comprobanteGroup = document.getElementById('comprobante-group');
-            const motivoTextarea = document.getElementById('id_motivo');
+            // --- Lógica de formato de número y estado de formulario --- //
+            const ajustarCheckbox = document.getElementById('id_ajustar_monto_plazo');
+            const montoInput = document.getElementById('id_monto_aprobado');
+            const plazoInput = document.getElementById('id_plazo_aprobado');
+            const processForm = document.getElementById('process-form');
 
-            function toggleComprobanteField() {
-                const selectedStatus = statusSelect.value;
-                if (selectedStatus === 'PAGADO' || selectedStatus === 'PENDIENTE_TRANSFERENCIA') {
-                    comprobanteGroup.style.display = 'block';
-                } else {
-                    comprobanteGroup.style.display = 'none';
-                }
+            // Formateador estricto para mostrar siempre 2 decimales (para el estado final)
+            const finalFormatter = new Intl.NumberFormat('es-CO', {
+                style: 'decimal',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
 
-                if (selectedStatus === 'APROBADO') {
-                    motivoTextarea.value = 'Crédito aprobado, pendiente de firma.';
-                } else if (selectedStatus === 'RECHAZADO') {
-                    motivoTextarea.value = 'El crédito no cumple con los requisitos.';
+            // Función para formatear un número mientras se escribe (más flexible)
+            function formatNumberAsYouType(value) {
+                if (!value) return '';
+                let cleanValue = value.replace(/[^\d,]/g, '');
+                const parts = cleanValue.split(',');
+                if (parts.length > 2) {
+                    cleanValue = parts[0] + ',' + parts.slice(1).join('');
                 }
+                let [integerPart, decimalPart] = cleanValue.split(',');
+                integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                if (decimalPart !== undefined) {
+                    return integerPart + ',' + decimalPart.substring(0, 2);
+                }
+                if (cleanValue.endsWith(',')) {
+                    return integerPart + ',';
+                }
+                return integerPart;
             }
 
-            statusSelect.addEventListener('change', toggleComprobanteField);
-            toggleComprobanteField();
+            // Función para parsear el número formateado a un formato estándar (ej: "1.234,56" -> "1234.56")
+            function parseLocalNumber(value) {
+                if (typeof value !== 'string') return String(value);
+                return value.replace(/\./g, '').replace(',', '.');
+            }
+
+            // 1. Formatear el valor inicial del campo con 2 decimales
+            if (montoInput.value) {
+                montoInput.value = finalFormatter.format(parseLocalNumber(montoInput.value));
+            }
+
+            // 2. Formatear en tiempo real al escribir
+            montoInput.addEventListener('input', function(e) {
+                const input = e.target;
+                const originalValue = input.value;
+                const cursorPosition = input.selectionStart;
+                const formattedValue = formatNumberAsYouType(originalValue);
+                input.value = formattedValue;
+                const lengthDifference = formattedValue.length - originalValue.length;
+                input.setSelectionRange(cursorPosition + lengthDifference, cursorPosition + lengthDifference);
+            });
+
+            // 3. Al dejar el campo (blur), aplicar el formato final con 2 decimales
+            montoInput.addEventListener('blur', function(e) {
+                const input = e.target;
+                if (input.value) {
+                    const finalValue = finalFormatter.format(parseLocalNumber(input.value));
+                    input.value = finalValue;
+                }
+            });
+
+            // 4. Activar/desactivar campos de edición
+            ajustarCheckbox.addEventListener('change', function() {
+                const isChecked = this.checked;
+                montoInput.readOnly = !isChecked;
+                plazoInput.readOnly = !isChecked;
+                if(isChecked) {
+                    montoInput.focus();
+                }
+            });
+
+            // 5. Antes de enviar, convertir el valor a formato estándar para el backend
+            if (processForm) {
+                processForm.addEventListener('submit', function(e) {
+                    montoInput.value = parseLocalNumber(montoInput.value);
+                });
+            }
         });
     </script>
 </body>

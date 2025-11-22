@@ -1,0 +1,28 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Recordatorio de pago - Crédito {{ numero_credito }}{% endblock %}
+
+{% block header %}💳 Recordatorio de Pago{% endblock %}
+
+{% block content %}
+    <h2>Hola, {{ nombre_cliente }}</h2>
+
+    <p>Te recordamos que tienes una cuota próxima a vencer de tu crédito <strong>{{ numero_credito }}</strong>.</p>
+
+    <div class="highlight">
+        <p><strong>📅 Información de pago:</strong></p>
+        <ul>
+            <li><strong>Valor a pagar:</strong> {{ valor_cuota }}</li>
+            <li><strong>Fecha de vencimiento:</strong> {{ fecha_vencimiento|date:"d/m/Y" }}</li>
+            <li><strong>Días restantes:</strong> {{ dias_restantes }} días</li>
+        </ul>
+    </div>
+
+    <p>Para evitar intereses de mora, te recomendamos realizar el pago antes de la fecha de vencimiento.</p>
+
+    <center>
+        <a href="https://aprobado.com.co/mi-credito/{{ credito.id }}/" class="button">Realizar Pago</a>
+    </center>
+
+    <p>Si ya realizaste el pago, puedes ignorar este mensaje.</p>
+{% endblock %}

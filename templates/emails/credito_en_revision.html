@@ -1,0 +1,24 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Solicitud de Crédito Recibida{% endblock %}
+
+{% block header %}📋 Solicitud Recibida{% endblock %}
+
+{% block content %}
+    <h2>Hola, {{ nombre_cliente }}</h2>
+
+    <p>Hemos recibido tu solicitud de crédito y está siendo revisada por nuestro equipo.</p>
+
+    <div class="highlight">
+        <p><strong>📋 Información de tu solicitud:</strong></p>
+        <ul>
+            <li><strong>Número de crédito:</strong> {{ numero_credito }}</li>
+            <li><strong>Línea de crédito:</strong> {{ linea_credito }}</li>
+            <li><strong>Estado:</strong> {{ nuevo_estado }}</li>
+        </ul>
+    </div>
+
+    <p>Nuestro equipo te notificará en las próximas <strong>24-48 horas</strong> sobre el resultado de tu solicitud.</p>
+
+    <p>Gracias por confiar en nosotros.</p>
+{% endblock %}

@@ -97,7 +97,7 @@
                 <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">Créditos Activos</h3>
                 <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Monitorear cartera activa</p>
             </a>
-            <a href="#" class="action-card">
+            <a href="{% url 'gestion_creditos:admin_cartera' %}" class="action-card">
                 <div class="action-icon" style="background-color: var(--warning);">
                     <i class="bi bi-exclamation-triangle"></i>
                 </div>
@@ -207,15 +207,15 @@
             <div class="col-12 col-lg-6">
                 <div class="table-container">
                     <div class="table-header">
-                        <h3 class="table-title">Créditos por Línea</h3>
+                        <h3 class="table-title">Cartera por Línea de Crédito</h3>
                     </div>
                     <div class="table-responsive">
                         <table class="table table-dashboard">
                             <thead>
                                 <tr>
                                     <th>Línea de Crédito</th>
-                                    <th>Cantidad</th>
-                                    <th>Estado</th>
+                                    <th>Créditos Activos</th>
+                                    <th class="text-end">Saldo Total</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -223,7 +223,11 @@
                                 <tr>
                                     <td>{{ item.linea }}</td>
                                     <td><strong>{{ item.count }}</strong></td>
-                                    <td><span class="status-badge status-active">Activa</span></td>
+                                    <td class="text-end"><strong>${{ item.saldo_total|floatformat:2|intcomma }}</strong></td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted">No hay créditos activos</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

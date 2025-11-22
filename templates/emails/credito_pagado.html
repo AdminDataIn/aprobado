@@ -1,0 +1,29 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}¡Felicitaciones! Crédito Completado{% endblock %}
+
+{% block header %}🎉 ¡Crédito Completado!{% endblock %}
+
+{% block content %}
+    <h2>¡Felicitaciones, {{ nombre_cliente }}!</h2>
+
+    <p>Nos complace informarte que has completado exitosamente el pago de tu crédito <strong>{{ numero_credito }}</strong>.</p>
+
+    <div class="highlight success">
+        <p><strong>✅ Tu crédito está PAGADO</strong></p>
+        <p>Has cumplido con todas tus obligaciones y ahora tu crédito está cerrado.</p>
+    </div>
+
+    <p><strong>Esto significa:</strong></p>
+    <ul>
+        <li>✅ Tu historial crediticio ha mejorado</li>
+        <li>✅ Puedes solicitar nuevos créditos con mejores condiciones</li>
+        <li>✅ Tienes mayor confiabilidad financiera</li>
+    </ul>
+
+    <p>¡Gracias por confiar en nosotros y ser un cliente responsable!</p>
+
+    <center>
+        <a href="https://aprobado.com.co" class="button">Solicitar Nuevo Crédito</a>
+    </center>
+{% endblock %}

@@ -117,3 +117,7 @@ venv.bak/
 
 # Render
 .render.yaml
+
+# Google API credentials
+config/
+token.json

@@ -61,29 +61,29 @@
                 <div class="action-icon" style="background-color: var(--success);">
                     <i class="bi bi-credit-card"></i>
                 </div>
-                <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">{{ creditos.paginator.count|default:"0" }}</h3>
-                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Total Créditos en Cartera</p>
+                <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">{{ total_creditos_activos|default:"0" }}</h3>
+                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Total Créditos Activos</p>
             </a>
             <a href="#" class="action-card">
                 <div class="action-icon" style="background-color: var(--accent-blue);">
                     <i class="bi bi-wallet2"></i>
                 </div>
-                <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">$0</h3>
-                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Valor Total Cartera</p>
-            </a>
-            <a href="#" class="action-card">
-                <div class="action-icon" style="background-color: var(--warning);">
-                    <i class="bi bi-exclamation-triangle"></i>
-                </div>
-                <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">0</h3>
-                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Créditos en Mora</p>
+                <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">${{ valor_total_cartera_activa|floatformat:2|intcomma }}</h3>
+                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Valor Cartera Activa</p>
             </a>
             <a href="#" class="action-card">
                 <div class="action-icon" style="background-color: var(--info);">
-                    <i class="bi bi-graph-up-arrow"></i>
+                    <i class="bi bi-graph-up"></i>
                 </div>
-                <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">0%</h3>
-                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Tasa de Recuperación</p>
+                <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">${{ valor_promedio_credito_activo|floatformat:2|intcomma }}</h3>
+                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Valor Promedio Crédito</p>
+            </a>
+            <a href="#" class="action-card">
+                <div class="action-icon" style="background-color: var(--orange);">
+                    <i class="bi bi-calendar-check"></i>
+                </div>
+                <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">{{ desembolsos_hoy|default:"0" }}</h3>
+                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Desembolsos Hoy</p>
             </a>
         </div>
 
@@ -97,7 +97,7 @@
                             <i class="bi bi-search me-1"></i>Buscar Cliente
                         </label>
                         <input type="text" name="search" id="search" value="{{ search }}" 
-                               class="form-control" placeholder="Nombre, usuario o documento...">
+                            class="form-control" placeholder="Nombre, usuario o documento...">
                     </div>
                     <div class="form-group">
                         <label for="linea" class="form-label">
@@ -110,17 +110,7 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label for="estado" class="form-label">
-                            <i class="bi bi-flag me-1"></i>Estado
-                        </label>
-                        <select name="estado" id="estado" class="form-select">
-                            <option value="">Todos los estados</option>
-                            {% for choice in estados_choices %}
-                            <option value="{{ choice.0 }}" {% if estado_filter == choice.0 %}selected{% endif %}>{{ choice.1 }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
+
                     <div class="form-group">
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary filter-btn">
@@ -182,7 +172,7 @@
                             </td>
                             <td><span class="line-badge">{{ credito.get_linea_display }}</span></td>
                             <td><strong class="text-primary">${{ credito.monto_aprobado|floatformat:2|intcomma }}</strong></td>
-                            <td>${{ credito.saldo_pendiente|floatformat:2|intcomma }}</td>
+                            <td><strong class="text-dark">${{ credito.saldo_pendiente|floatformat:2|intcomma }}</strong></td>
                             <td>
                                 <span class="status-badge 
                                     {% if credito.estado == 'ACTIVO' %}status-active
@@ -194,7 +184,7 @@
                             </td>
                             <td>{{ credito.fecha_solicitud|date:"d/m/Y" }}</td>
                             <td style="text-align: center;">
-                                <a href="{% url 'gestion_creditos:admin_detalle_credito' credito.id %}" class="btn btn-sm btn-outline-primary">
+                                <a href="{% url 'gestion_creditos:admin_detalle_credito' credito.id %}?from=activos" class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-eye me-1"></i>Ver
                                 </a>
                             </td>
@@ -253,10 +243,7 @@
         document.getElementById('linea').addEventListener('change', function() {
             this.form.submit();
         });
-        
-        document.getElementById('estado').addEventListener('change', function() {
-            this.form.submit();
-        });
+
         
         // Búsqueda con Enter
         document.getElementById('search').addEventListener('keypress', function(e) {

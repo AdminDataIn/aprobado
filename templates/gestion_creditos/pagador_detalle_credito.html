@@ -100,13 +100,27 @@
                             <div class="col-6">
                                 <div class="info-item">
                                     <span class="info-label">Monto Original</span>
-                                    <span class="info-value">${{ credito.detalle_libranza.valor_credito|intcomma }}</span>
+                                    <span class="info-value">${{ credito.monto_aprobado|intcomma }}</span>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="info-item">
-                                    <span class="info-label">Saldo Pendiente</span>
-                                    <span class="info-value">${{ saldo_pendiente|intcomma }}</span>
+                                    <span class="info-label">Comisión (10%)</span>
+                                    <span class="info-value">${{ credito.comision|default:"0"|intcomma }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">IVA (19%)</span>
+                                    <span class="info-value">${{ credito.iva_comision|default:"0"|intcomma }}</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Total Financiado</span>
+                                    <span class="info-value fw-bold">${{ credito.capital_financiado|default:"0"|intcomma }}</span>
                                 </div>
                             </div>
                         </div>
@@ -114,8 +128,51 @@
                         <div class="row text-center">
                             <div class="col-6">
                                 <div class="info-item">
+                                    <span class="info-label">Saldo Pendiente</span>
+                                    <span class="info-value">${{ credito.saldo_pendiente|intcomma }}</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="info-item">
                                     <span class="info-label">Valor Cuota</span>
-                                    <span class="info-value">${{ credito.detalle_libranza.valor_cuota|floatformat:2|intcomma }}</span>
+                                    <span class="info-value">${{ credito.valor_cuota|floatformat:2|intcomma }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <hr class="my-3">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Plazo Original</span>
+                                    <span class="info-value">{{ credito.plazo }} meses</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Tasa de Interés</span>
+                                    <span class="info-value">{{ credito.tasa_interes }}% mensual</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Próximo Vencimiento</span>
+                                    <span class="info-value">{{ credito.fecha_proximo_pago|date:"d/m/Y"|default:"N/A" }}</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Cuotas Pagadas</span>
+                                    <span class="info-value">{{ credito.cuotas_pagadas }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Cuotas Restantes</span>
+                                    <span class="info-value">{{ credito.cuotas_restantes }}</span>
                                 </div>
                             </div>
                             <div class="col-6">
@@ -142,7 +199,7 @@
                         {% if credito.estado == 'ACTIVO' or credito.estado == 'EN_MORA' %}
                         <div class="mt-4">
                             <a href="{% url 'gestion_creditos:iniciar_pago' credito.id %}" class="btn btn-pagar w-100">
-                                Pagar Cuota (${{ credito.detalle_libranza.valor_cuota|intcomma }})
+                                Pagar Cuota (${{ credito.valor_cuota|intcomma }})
                             </a>
                         </div>
                         {% endif %}
@@ -185,8 +242,8 @@
                             <p><strong>Teléfono:</strong> {{ detalle.telefono }}</p>
                             <p><strong>Correo:</strong> {{ detalle.correo_electronico }}</p>
                             <p><strong>Empresa:</strong> {{ detalle.empresa.nombre }}</p>
-                            <p><strong>Valor Solicitado:</strong> ${{ detalle.valor_credito|intcomma }}</p>
-                            <p><strong>Plazo:</strong> {{ detalle.plazo }} meses</p>
+                            <p><strong>Valor Solicitado:</strong> ${{ credito.monto_solicitado|intcomma }}</p>
+                            <p><strong>Plazo:</strong> {{ credito.plazo_solicitado }} meses</p>
                         {% endwith %}
                     {% elif credito.linea == 'EMPRENDIMIENTO' and credito.detalle_emprendimiento %}
                         {% with detalle=credito.detalle_emprendimiento %}

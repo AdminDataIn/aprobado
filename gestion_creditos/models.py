@@ -34,21 +34,182 @@ class Credito(models.Model):
 
     # Campos comunes a todos los créditos
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='creditos')
-    numero_credito = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    numero_credito = models.CharField(max_length=20, unique=True, editable=False, help_text="ID único y legible para el crédito (ej. CR-2024-00001)")
     linea = models.CharField(max_length=30, choices=LineaCredito.choices)
     estado = models.CharField(max_length=30, choices=EstadoCredito.choices, default=EstadoCredito.SOLICITUD)
     documento_enviado = models.BooleanField(default=False, help_text="Indica si el pagaré ha sido enviado para firma.")
     
+    # --- Campos financieros (ÚNICA FUENTE DE VERDAD) ---
+    monto_solicitado = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        help_text="Monto solicitado por el cliente"
+    )
+    plazo_solicitado = models.IntegerField(
+        help_text="Plazo solicitado en meses"
+    )
+    monto_aprobado = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text="Monto aprobado por el analista (puede diferir del solicitado)"
+    )
+    plazo = models.IntegerField(
+        null=True, 
+        blank=True, 
+        help_text="Plazo aprobado en meses"
+    )
+    tasa_interes = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        null=True, 
+        blank=True, 
+        help_text="Tasa de interés mensual (%)"
+    )
+    comision = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text="Comisión de estudio del crédito"
+    )
+    iva_comision = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text="IVA sobre la comisión (19%)"
+    )
+    total_a_pagar = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text="Total a pagar (capital + intereses + comisión + IVA)"
+    )
+    saldo_pendiente = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text="Saldo pendiente por pagar"
+    )
+    capital_pendiente = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text="Capital pendiente por amortizar (sin intereses)"
+    )
+    valor_cuota = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text="Valor de la cuota fija mensual"
+    )
+    fecha_proximo_pago = models.DateField(
+        null=True, 
+        blank=True,
+        help_text="Fecha de vencimiento de la próxima cuota"
+    )
+    fecha_desembolso = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha en la que se realizó el desembolso"
+    )
+    
     fecha_solicitud = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        """
+        Método save unificado que:
+        1. Genera el numero_credito si no existe
+        2. Valida las transiciones de estado permitidas
+        """
+        # 1. Generar numero_credito si es un crédito nuevo
+        if not self.numero_credito:
+            from django.utils import timezone
+            today = timezone.now()
+            year = today.year
+            
+            # Generar el prefijo y buscar el último número para ese año
+            prefix = f'CR-{year}-'
+            last_credit = Credito.objects.filter(numero_credito__startswith=prefix).order_by('numero_credito').last()
+            
+            if last_credit and last_credit.numero_credito[len(prefix):].isdigit():
+                last_sequence = int(last_credit.numero_credito[len(prefix):])
+                new_sequence = last_sequence + 1
+            else:
+                new_sequence = 1
+            
+            self.numero_credito = f'{prefix}{new_sequence:05d}'
+
+        # 2. Validación de transiciones de estado
+        if self.pk:  # Si el objeto ya existe en la BD
+            try:
+                credito_anterior = Credito.objects.get(pk=self.pk)
+                
+                # Validar que un crédito ACTIVO solo pueda cambiar a EN_MORA o PAGADO
+                if (credito_anterior.estado == self.EstadoCredito.ACTIVO and 
+                    self.estado not in [self.EstadoCredito.ACTIVO, self.EstadoCredito.EN_MORA, self.EstadoCredito.PAGADO]):
+                    raise ValidationError(
+                        f'Un crédito en estado "Activo" no puede cambiar a "{self.get_estado_display()}". '
+                        f'Solo se permiten las transiciones: Activo → En Mora o Activo → Pagado.'
+                    )
+                
+                # Validar que un crédito PAGADO no pueda cambiar de estado
+                if credito_anterior.estado == self.EstadoCredito.PAGADO:
+                    raise ValidationError(
+                        'Un crédito en estado "Pagado" no puede cambiar de estado.'
+                    )
+                    
+            except Credito.DoesNotExist:
+                pass  # El objeto es nuevo, no hay estado anterior para comparar
+
+        super(Credito, self).save(*args, **kwargs)
 
     class Meta:
         ordering = ['-fecha_solicitud']
         verbose_name = 'Crédito'
         verbose_name_plural = 'Créditos'
+        indexes = [
+            # Índices para filtros frecuentes en dashboards y listados
+            models.Index(fields=['estado'], name='idx_credito_estado'),
+            models.Index(fields=['linea'], name='idx_credito_linea'),
+            models.Index(fields=['estado', 'linea'], name='idx_credito_estado_linea'),
+
+            # Índice para detectar créditos en mora (tarea automática)
+            models.Index(fields=['fecha_proximo_pago'], name='idx_credito_fecha_pago'),
+            models.Index(fields=['estado', 'fecha_proximo_pago'], name='idx_credito_estado_fecha'),
+
+            # Índice para ordenamiento por defecto y búsquedas por fecha
+            models.Index(fields=['-fecha_solicitud'], name='idx_credito_fecha_sol'),
+
+            # Índice para búsquedas por usuario
+            models.Index(fields=['usuario', 'estado'], name='idx_credito_usuario_estado'),
+
+            # Índice para búsquedas por número de crédito (aunque ya es unique, ayuda en JOINs)
+            models.Index(fields=['numero_credito'], name='idx_credito_numero'),
+        ]
 
     def __str__(self):
         return f'{self.get_linea_display()} {self.numero_credito} - {self.usuario.username}'
+
+    @property
+    def nombre_cliente(self):
+        """
+        Devuelve el nombre completo del cliente desde el detalle del crédito.
+        """
+        if self.detalle:
+            if self.linea == self.LineaCredito.EMPRENDIMIENTO and hasattr(self.detalle, 'nombre'):
+                return self.detalle.nombre
+            elif self.linea == self.LineaCredito.LIBRANZA and hasattr(self.detalle, 'nombre_completo'):
+                return self.detalle.nombre_completo
+        # Fallback por si el detalle no está o por alguna razón no tiene nombre
+        return self.usuario.get_full_name() or self.usuario.username
 
     @property
     def detalle(self):
@@ -62,175 +223,260 @@ class Credito(models.Model):
             return getattr(self, 'detalle_emprendimiento', None)
         return None
 
-    # --- Propiedades delegadas para acceso unificado ---
-    @property
-    def monto_aprobado(self):
-        return self.detalle.monto_aprobado if self.detalle else 0
-
-    @property
-    def saldo_pendiente(self):
-        return self.detalle.saldo_pendiente if self.detalle else 0
-
-    @property
-    def plazo(self):
-        return self.detalle.plazo if self.detalle else 0
-
-    @property
-    def tasa_interes(self):
-        return self.detalle.tasa_interes if self.detalle else 0
-
-    @property
-    def valor_cuota(self):
-        return self.detalle.valor_cuota if self.detalle else 0
-
-    @property
-    def fecha_proximo_pago(self):
-        return self.detalle.fecha_proximo_pago if self.detalle else None
-
-    @property
-    def comision(self):
-        return self.detalle.comision if self.detalle else 0
-
-    @property
-    def iva_comision(self):
-        return self.detalle.iva_comision if self.detalle else 0
-
-    @property
-    def total_a_pagar(self):
-        return self.detalle.total_a_pagar if self.detalle else 0
-
     @property
     def dias_en_mora(self):
+        """
+        Calcula los días en mora basado en la fecha del próximo pago.
+        """
         from django.utils import timezone
         if self.estado == self.EstadoCredito.EN_MORA and self.fecha_proximo_pago:
             dias = (timezone.now().date() - self.fecha_proximo_pago).days
             return dias if dias > 0 else 0
         return 0
 
-    def save(self, *args, **kwargs):
-        #? Validación para impedir que un crédito activo cambie de estado.
-        if self.pk:  # Si el objeto ya existe en la BD
-            try:
-                credito_anterior = Credito.objects.get(pk=self.pk)
-                if credito_anterior.estado == self.EstadoCredito.ACTIVO and self.estado != self.EstadoCredito.ACTIVO:
-                    raise ValidationError('Un crédito en estado "Activo" no puede cambiar a otro estado.')
-            except Credito.DoesNotExist:
-                pass # El objeto es nuevo, no hay estado anterior para comparar
-        super(Credito, self).save(*args, **kwargs)
+    @property
+    def capital_pagado(self):
+        """
+        Calcula el monto de capital que ya ha sido pagado.
+        """
+        if self.monto_aprobado is None or self.capital_pendiente is None:
+            return 0
+        
+        # Se asume que capital_pendiente es el capital que aún se debe del monto original aprobado
+        pagado = self.monto_aprobado - self.capital_pendiente
+        return max(0, pagado)
+
+    @property
+    def capital_financiado(self):
+        """
+        Calcula el capital total financiado (sin intereses).
+
+        Returns:
+            Decimal: Monto aprobado + comisión + IVA
+
+        Ejemplo:
+            Monto: $1,000,000
+            Comisión (10%): $100,000
+            IVA (19% sobre comisión): $19,000
+            Capital Financiado: $1,119,000
+        """
+        if not self.monto_aprobado:
+            return 0
+
+        comision = self.comision or 0
+        iva = self.iva_comision or 0
+
+        return self.monto_aprobado + comision + iva
+
+    @property
+    def porcentaje_pagado(self):
+        """
+        Calcula el porcentaje del capital aprobado que ha sido pagado.
+        """
+        if not self.monto_aprobado or self.monto_aprobado == 0:
+            return 0
+
+        # Usa la nueva propiedad capital_pagado para el cálculo
+        porcentaje = (self.capital_pagado / self.monto_aprobado) * 100
+
+        return round(max(0, min(100, float(porcentaje))), 2)
+
 
 #? ----- Modelo de crédito de emprendimiento -----
 class CreditoEmprendimiento(models.Model):
     """
     Modelo para créditos de emprendimiento.
-    Contiene tanto los campos de la solicitud inicial como los datos del crédito una vez aprobado.
+    SOLO contiene información de la SOLICITUD INICIAL.
+    Los datos financieros están en el modelo Credito principal.
     """
-    #!--- Relación con el Crédito Principal ---
+    #! --- Relación con el Crédito Principal ---
     credito = models.OneToOneField(Credito, on_delete=models.CASCADE, related_name='detalle_emprendimiento')
 
-    #! --- Campos de la Solicitud (movidos desde configuraciones.SolicitudCredito) ---
-    valor_credito = models.DecimalField(max_digits=10, decimal_places=2)
-    plazo = models.IntegerField()
-    nombre = models.CharField(max_length=100)
-    numero_cedula = models.CharField(max_length=20)
-    fecha_nac = models.DateField()
-    celular_wh = models.CharField(max_length=20)
-    direccion = models.TextField()
-    estado_civil = models.CharField(max_length=20)
-    numero_personas_cargo = models.IntegerField()
-    nombre_negocio = models.CharField(max_length=100)
-    ubicacion_negocio = models.TextField()
-    tiempo_operando = models.CharField(max_length=50)
-    dias_trabajados_sem = models.IntegerField()
-    prod_serv_ofrec = models.TextField()
-    ingresos_prom_mes = models.CharField(max_length=50)
-    cli_aten_day = models.IntegerField()
-    inventario = models.CharField(max_length=2)
-    nomb_ref_per1 = models.CharField(max_length=100)
-    cel_ref_per1 = models.CharField(max_length=20)
-    rel_ref_per1 = models.CharField(max_length=50)
-    nomb_ref_cl1 = models.CharField(max_length=100)
-    cel_ref_cl1 = models.CharField(max_length=20)
-    rel_ref_cl1 = models.CharField(max_length=50)
-    ref_conoc_lid_com = models.CharField(max_length=2)
+    #! --- Campos de la Solicitud ÚNICAMENTE ---
+    nombre = models.CharField(max_length=100, verbose_name="Nombre completo del solicitante")
+    numero_cedula = models.CharField(max_length=20, verbose_name="Número de cédula")
+    fecha_nac = models.DateField(verbose_name="Fecha de nacimiento")
+    celular_wh = models.CharField(max_length=20, verbose_name="Celular/WhatsApp")
+    direccion = models.TextField(verbose_name="Dirección de residencia")
+    estado_civil = models.CharField(max_length=20, verbose_name="Estado civil")
+    numero_personas_cargo = models.IntegerField(verbose_name="Número de personas a cargo")
+    
+    # Información del negocio
+    nombre_negocio = models.CharField(max_length=100, verbose_name="Nombre del negocio")
+    ubicacion_negocio = models.TextField(verbose_name="Ubicación del negocio")
+    tiempo_operando = models.CharField(max_length=50, verbose_name="Tiempo operando")
+    dias_trabajados_sem = models.IntegerField(verbose_name="Días trabajados por semana")
+    prod_serv_ofrec = models.TextField(verbose_name="Productos/servicios que ofrece")
+    ingresos_prom_mes = models.CharField(max_length=50, verbose_name="Ingresos promedio mensuales")
+    cli_aten_day = models.IntegerField(verbose_name="Clientes atendidos por día")
+    inventario = models.CharField(max_length=2, verbose_name="¿Tiene inventario?")
+    
+    # Referencias
+    nomb_ref_per1 = models.CharField(max_length=100, verbose_name="Nombre referencia personal 1")
+    cel_ref_per1 = models.CharField(max_length=20, verbose_name="Celular referencia personal 1")
+    rel_ref_per1 = models.CharField(max_length=50, verbose_name="Relación referencia personal 1")
+    nomb_ref_cl1 = models.CharField(max_length=100, verbose_name="Nombre referencia cliente 1")
+    cel_ref_cl1 = models.CharField(max_length=20, verbose_name="Celular referencia cliente 1")
+    rel_ref_cl1 = models.CharField(max_length=50, verbose_name="Relación referencia cliente 1")
+    ref_conoc_lid_com = models.CharField(max_length=2, verbose_name="¿Conoce al líder comunitario?")
+    
+    # Archivos adjuntos
     foto_negocio = models.FileField(
         upload_to='fotos_negocios/',
         validators=[FileExtensionValidator(allowed_extensions=['pdf'])],
         help_text="Solo se permiten archivos PDF"
     )
-    desc_fotos_neg = models.TextField()
-    tipo_cta_mno = models.CharField(max_length=20)
-    ahorro_tand_alc = models.CharField(max_length=2)
-    depend_h = models.CharField(max_length=2)
-    desc_cred_nec = models.TextField()
-    redes_soc = models.CharField(max_length=2)
-    fotos_prod = models.CharField(max_length=2)
-
-    # --- Campos de Aprobación (existentes, pero ahora opcionales) ---
-    monto_aprobado = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    tasa_interes = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Tasa de interés mensual")
-    comision = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    iva_comision = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    total_a_pagar = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    saldo_pendiente = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    capital_original_pendiente = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    valor_cuota = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    fecha_proximo_pago = models.DateField(null=True, blank=True)
+    desc_fotos_neg = models.TextField(verbose_name="Descripción de las fotos del negocio")
     
-    # --- Evaluación del Administrador (Estaba en configuraciones.SolicitudCredito) ---
-    puntaje = models.IntegerField(null=True, blank=True)
+    # Información adicional
+    tipo_cta_mno = models.CharField(max_length=20, verbose_name="Tipo de cuenta de mano")
+    ahorro_tand_alc = models.CharField(max_length=2, verbose_name="¿Tiene ahorro en tanda/alcancía?")
+    depend_h = models.CharField(max_length=2, verbose_name="¿Tiene dependientes?")
+    desc_cred_nec = models.TextField(verbose_name="Descripción de por qué necesita el crédito")
+    redes_soc = models.CharField(max_length=2, verbose_name="¿Tiene redes sociales?")
+    fotos_prod = models.CharField(max_length=2, verbose_name="¿Tiene fotos de productos?")
+
+    # --- Evaluación del Administrador ---
+    puntaje = models.IntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Puntaje de evaluación del crédito (0-100)"
+    )
+    observaciones_analista = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Observaciones del analista durante la evaluación"
+    )
+
+    # --- Scoring de Imágenes con IA ---
+    puntaje_imagenes = models.FloatField(
+        default=0.0,
+        help_text="Puntaje obtenido del análisis de imágenes con IA (0-18)"
+    )
+    datos_scoring_imagenes = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Datos completos del scoring de imágenes"
+    )
+
+    class Meta:
+        verbose_name = 'Detalle de Emprendimiento'
+        verbose_name_plural = 'Detalles de Emprendimiento'
 
     def __str__(self):
-        return f"Detalle Emprendimiento para Crédito {self.credito.id}"
+        return f"Detalle Emprendimiento - {self.nombre} ({self.credito.numero_credito})"
+
+
+#? ----- Modelo para múltiples imágenes del negocio -----
+class ImagenNegocio(models.Model):
+    """
+    Modelo para almacenar las múltiples imágenes del negocio.
+    Permite al sistema de scoring IA analizar diferentes aspectos del negocio.
+    """
+    TIPO_IMAGEN_CHOICES = [
+        ('building_exterior', 'Exterior del Local/Edificio'),
+        ('room_interior', 'Interior del Espacio'),
+        ('products_display', 'Productos en Exhibición'),
+        ('shelves_storage', 'Estantes/Almacenamiento'),
+        ('general_business', 'Vista General del Negocio'),
+    ]
+
+    credito_emprendimiento = models.ForeignKey(
+        CreditoEmprendimiento,
+        on_delete=models.CASCADE,
+        related_name='imagenes_negocio'
+    )
+    imagen = models.ImageField(
+        upload_to='imagenes_negocios/%Y/%m/%d/',
+        help_text="Imágenes del negocio (JPG, PNG, WEBP)"
+    )
+    tipo_imagen = models.CharField(
+        max_length=20,
+        choices=TIPO_IMAGEN_CHOICES,
+        default='general_business',
+        verbose_name="Tipo de imagen"
+    )
+    descripcion = models.TextField(
+        blank=True,
+        help_text="Descripción opcional de la imagen"
+    )
+    fecha_subida = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['fecha_subida']
+        verbose_name = 'Imagen del Negocio'
+        verbose_name_plural = 'Imágenes del Negocio'
+
+    def __str__(self):
+        return f"Imagen {self.get_tipo_imagen_display()} - {self.credito_emprendimiento.nombre_negocio}"
+
 
 #? ----- Modelo de crédito de libranza -----
 class CreditoLibranza(models.Model):
-    """Modelo para créditos de libranza, basado en el antiguo credito_libranza.CreditoLibranza."""
-    #!--- Relación con el Crédito Principal ---
+    """
+    Modelo para créditos de libranza.
+    SOLO contiene información de la SOLICITUD INICIAL.
+    Los datos financieros están en el modelo Credito principal.
+    """
+    #! --- Relación con el Crédito Principal ---
     credito = models.OneToOneField(Credito, on_delete=models.CASCADE, related_name='detalle_libranza')
 
-    #? Información de la solicitud
-    valor_credito = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(100000)])
-    plazo = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(12)])
-
-    #? Información personal (se mantiene aquí porque es específica de la solicitud de libranza)
-    nombres = models.CharField(max_length=100)
-    apellidos = models.CharField(max_length=100)
-    cedula = models.CharField(max_length=20, unique=True)
-    direccion = models.CharField(max_length=255)
-    telefono = models.CharField(max_length=20)
-    correo_electronico = models.EmailField()
+    #? Información personal del solicitante
+    nombres = models.CharField(max_length=100, verbose_name="Nombres")
+    apellidos = models.CharField(max_length=100, verbose_name="Apellidos")
+    cedula = models.CharField(max_length=20, unique=True, verbose_name="Número de cédula")
+    direccion = models.CharField(max_length=255, verbose_name="Dirección de residencia")
+    telefono = models.CharField(max_length=20, verbose_name="Teléfono de contacto")
+    correo_electronico = models.EmailField(verbose_name="Correo electrónico")
 
     #? Información laboral
-    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    empresa = models.ForeignKey(
+        Empresa, 
+        on_delete=models.CASCADE,
+        verbose_name="Empresa donde labora"
+    )
 
-    #? Archivos adjuntos
-    cedula_frontal = models.FileField(upload_to='credito_libranza/cedulas/')
-    cedula_trasera = models.FileField(upload_to='credito_libranza/cedulas/')
-    certificado_laboral = models.FileField(upload_to='credito_libranza/certificados_laborales/')
-    desprendible_nomina = models.FileField(upload_to='credito_libranza/desprendibles_nomina/')
-    certificado_bancario = models.FileField(upload_to='credito_libranza/certificados_bancarios/')
+    #? Archivos adjuntos requeridos
+    cedula_frontal = models.FileField(
+        upload_to='credito_libranza/cedulas/',
+        verbose_name="Cédula (frontal)"
+    )
+    cedula_trasera = models.FileField(
+        upload_to='credito_libranza/cedulas/',
+        verbose_name="Cédula (trasera)"
+    )
+    certificado_laboral = models.FileField(
+        upload_to='credito_libranza/certificados_laborales/',
+        verbose_name="Certificado laboral"
+    )
+    desprendible_nomina = models.FileField(
+        upload_to='credito_libranza/desprendibles_nomina/',
+        verbose_name="Desprendible de nómina"
+    )
+    certificado_bancario = models.FileField(
+        upload_to='credito_libranza/certificados_bancarios/',
+        verbose_name="Certificado bancario"
+    )
 
-    #? --- Campos de Aprobación ---
-    monto_aprobado = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    tasa_interes = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Tasa de interés mensual")
-    comision = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    iva_comision = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    total_a_pagar = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    saldo_pendiente = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    capital_original_pendiente = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    valor_cuota = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    fecha_proximo_pago = models.DateField(null=True, blank=True)
+    class Meta:
+        verbose_name = 'Detalle de Libranza'
+        verbose_name_plural = 'Detalles de Libranza'
 
     def __str__(self):
-        return f"Detalle Libranza para Crédito {self.credito.id}"
+        return f"Detalle Libranza - {self.nombre_completo} ({self.credito.numero_credito})"
 
     @property
     def nombre_completo(self):
         return f'{self.nombres} {self.apellidos}'
 
+
 #? ----- Modelo de historial de pagos -----
 class HistorialPago(models.Model):
-    """Historial de pagos, ahora vinculado al modelo principal de Crédito."""
+    """
+    Historial de pagos realizados sobre un crédito.
+    Cada registro representa un pago (parcial o total) realizado por el cliente.
+    """
     class EstadoPago(models.TextChoices):
         EXITOSO = 'EXITOSO', 'Exitoso'
         FALLIDO = 'FALLIDO', 'Fallido'
@@ -238,24 +484,92 @@ class HistorialPago(models.Model):
 
     #! Relación con el crédito principal
     credito = models.ForeignKey(Credito, on_delete=models.CASCADE, related_name='historial_pagos')
-    fecha_pago = models.DateTimeField(auto_now_add=True)
-    monto = models.DecimalField(max_digits=10, decimal_places=2)
-    referencia_pago = models.CharField(max_length=100, unique=True)
-    estado = models.CharField(max_length=20, choices=EstadoPago.choices, default=EstadoPago.PENDIENTE)
+    
+    # Información del pago
+    fecha_pago = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de pago")
+    monto = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2,
+        verbose_name="Monto pagado"
+    )
+    referencia_pago = models.CharField(
+        max_length=100, 
+        unique=True,
+        verbose_name="Referencia de transacción"
+    )
+    estado = models.CharField(
+        max_length=20, 
+        choices=EstadoPago.choices, 
+        default=EstadoPago.PENDIENTE
+    )
+    
+    # Desglose del pago (calculado al momento de registrar)
+    capital_abonado = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Porción del pago que abonó a capital"
+    )
+    intereses_pagados = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Porción del pago que cubrió intereses"
+    )
+    
+    # Observaciones
+    notas = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Notas adicionales"
+    )
+
+    class Meta:
+        ordering = ['-fecha_pago']
+        verbose_name = 'Historial de Pago'
+        verbose_name_plural = 'Historial de Pagos'
 
     def __str__(self):
-        return f"Pago {self.id} para Crédito {self.credito.id} - ${self.monto}"
+        return f"Pago {self.referencia_pago} - ${self.monto} ({self.get_estado_display()})"
+
 
 #? ----- Modelo de historial de estados -----
 class HistorialEstado(models.Model):
-    """Guarda un registro de cada cambio de estado de un crédito."""
+    """
+    Guarda un registro de cada cambio de estado de un crédito.
+    Útil para auditoría y trazabilidad.
+    """
     credito = models.ForeignKey(Credito, on_delete=models.CASCADE, related_name='historial_estados')
-    estado_anterior = models.CharField(max_length=30, choices=Credito.EstadoCredito.choices, null=True, blank=True)
-    estado_nuevo = models.CharField(max_length=30, choices=Credito.EstadoCredito.choices)
+    estado_anterior = models.CharField(
+        max_length=30, 
+        choices=Credito.EstadoCredito.choices, 
+        null=True, 
+        blank=True
+    )
+    estado_nuevo = models.CharField(
+        max_length=30, 
+        choices=Credito.EstadoCredito.choices
+    )
     fecha = models.DateTimeField(auto_now_add=True)
-    usuario_modificacion = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
-    motivo = models.TextField(blank=True, null=True, help_text="Razón o motivo del cambio de estado.")
-    comprobante_pago = models.FileField(upload_to='comprobantes_pago/', blank=True, null=True)
+    usuario_modificacion = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        verbose_name="Usuario que realizó el cambio"
+    )
+    motivo = models.TextField(
+        blank=True, 
+        null=True, 
+        help_text="Razón o motivo del cambio de estado"
+    )
+    comprobante_pago = models.FileField(
+        upload_to='comprobantes_pago/', 
+        blank=True, 
+        null=True
+    )
 
     class Meta:
         ordering = ['-fecha']
@@ -263,8 +577,73 @@ class HistorialEstado(models.Model):
         verbose_name_plural = 'Historial de Estados'
 
     def __str__(self):
-        return f"Crédito {self.credito.id}: {self.estado_anterior} -> {self.estado_nuevo}"
+        estado_ant = self.estado_anterior or 'Inicial'
+        return f"{self.credito.numero_credito}: {estado_ant} → {self.estado_nuevo}"
 
+
+#? ----- Modelo de cuota de amortización -----
+class CuotaAmortizacion(models.Model):
+    """
+    Representa una única cuota en la tabla de amortización de un crédito.
+    Se genera automáticamente cuando un crédito es aprobado.
+    """
+    credito = models.ForeignKey(
+        Credito, 
+        on_delete=models.CASCADE, 
+        related_name='tabla_amortizacion'
+    )
+    numero_cuota = models.IntegerField(verbose_name="Número de cuota")
+    fecha_vencimiento = models.DateField(verbose_name="Fecha de vencimiento")
+    
+    # Desglose de la cuota
+    capital_a_pagar = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2,
+        help_text="Porción de la cuota que amortiza el capital"
+    )
+    interes_a_pagar = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2,
+        help_text="Porción de la cuota que cubre intereses"
+    )
+    valor_cuota = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2,
+        help_text="Valor total de la cuota (capital + intereses)"
+    )
+    saldo_capital_pendiente = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2,
+        help_text="Saldo de capital pendiente después de pagar esta cuota"
+    )
+    
+    # Estado de la cuota
+    pagada = models.BooleanField(default=False, verbose_name="¿Cuota pagada?")
+    fecha_pago = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Fecha en que se pagó la cuota"
+    )
+    monto_pagado = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Monto efectivamente pagado (puede diferir del valor_cuota)"
+    )
+
+    class Meta:
+        ordering = ['credito', 'numero_cuota']
+        unique_together = ('credito', 'numero_cuota')
+        verbose_name = 'Cuota de Amortización'
+        verbose_name_plural = 'Cuotas de Amortización'
+
+    def __str__(self):
+        estado = "Pagada" if self.pagada else "Pendiente"
+        return f"Cuota {self.numero_cuota}/{self.credito.plazo} - {self.credito.numero_credito} ({estado})"
+
+
+#? ----- MODELOS DE BILLETERA DIGITAL -----
 
 class CuentaAhorro(models.Model):
     """
@@ -289,7 +668,8 @@ class CuentaAhorro(models.Model):
         max_digits=12, 
         decimal_places=2, 
         default=0,
-        validators=[MinValueValidator(0)]
+        validators=[MinValueValidator(0)],
+        help_text="Saldo actual disponible en la cuenta"
     )
     saldo_objetivo = models.DecimalField(
         max_digits=12, 
@@ -298,9 +678,15 @@ class CuentaAhorro(models.Model):
         help_text="Meta de ahorro del usuario"
     )
     
-    # Métricas de impacto social (calculadas automáticamente de los creditos aprobados en emprendimientos)
-    emprendimientos_financiados = models.IntegerField(default=0)
-    familias_beneficiadas = models.IntegerField(default=0)
+    # Métricas de impacto social (calculadas automáticamente)
+    emprendimientos_financiados = models.IntegerField(
+        default=0,
+        help_text="Número de emprendimientos financiados con fondos de esta cuenta"
+    )
+    familias_beneficiadas = models.IntegerField(
+        default=0,
+        help_text="Número de familias beneficiadas indirectamente"
+    )
     
     # Fechas
     fecha_apertura = models.DateTimeField(auto_now_add=True)

@@ -1,0 +1,33 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}¡Tu crédito ha sido desembolsado!{% endblock %}
+
+{% block header %}💰 ¡Tu crédito ha sido desembolsado!{% endblock %}
+
+{% block content %}
+    <h2>¡Felicitaciones, {{ nombre_cliente }}!</h2>
+
+    <p>Nos complace informarte que tu crédito <strong>{{ numero_credito }}</strong> ha sido <strong>desembolsado exitosamente</strong>.</p>
+
+    <div class="highlight success">
+        <p><strong>💰 El dinero ya está disponible en tu cuenta.</strong></p>
+        <p>Adjunto a este correo encontrarás el <strong>plan de pagos detallado</strong> de tu crédito con toda la información financiera.</p>
+    </div>
+
+    <p><strong>📄 Plan de Pagos Adjunto</strong><br>
+    Revisa el documento PDF adjunto para conocer:</p>
+    <ul>
+        <li>Monto total financiado</li>
+        <li>Valor de cada cuota mensual</li>
+        <li>Fechas de vencimiento</li>
+        <li>Distribución de capital e intereses</li>
+    </ul>
+
+    <p>Recuerda cumplir con tus pagos mensuales para mantener un buen historial crediticio.</p>
+
+    <center>
+        <a href="https://aprobado.com.co/mi-credito" class="button">Ver mi crédito en línea</a>
+    </center>
+
+    <p>¡Gracias por confiar en nosotros!</p>
+{% endblock %}

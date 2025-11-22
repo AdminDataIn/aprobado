@@ -1,0 +1,36 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}URGENTE: Crédito en Mora - {{ numero_credito }}{% endblock %}
+
+{% block header %}⚠️ Alerta de Mora{% endblock %}
+
+{% block content %}
+    <h2>URGENTE: {{ nombre_cliente }}</h2>
+
+    <p>Te informamos que tu crédito <strong>{{ numero_credito }}</strong> se encuentra en mora.</p>
+
+    <div class="highlight danger">
+        <p><strong>⚠️ Estado de tu crédito:</strong></p>
+        <ul>
+            <li><strong>Días en mora:</strong> {{ dias_mora }} días</li>
+            <li><strong>Saldo pendiente:</strong> {{ saldo_pendiente }}</li>
+            <li><strong>Valor de cuota:</strong> {{ valor_cuota }}</li>
+        </ul>
+    </div>
+
+    <p><strong>Es importante que regularices tu situación lo antes posible para evitar:</strong></p>
+    <ul>
+        <li>Incremento de intereses moratorios</li>
+        <li>Afectación de tu historial crediticio</li>
+        <li>Posibles acciones de cobranza</li>
+    </ul>
+
+    <center>
+        <a href="https://aprobado.com.co/mi-credito/{{ credito.id }}/" class="button">Pagar Ahora</a>
+    </center>
+
+    <p>Si tienes alguna dificultad para realizar el pago, contáctanos para buscar una solución.</p>
+
+    <p><strong>Teléfono de contacto:</strong> +57 300 123 4567<br>
+    <strong>Email:</strong> cobranza@aprobado.com.co</p>
+{% endblock %}

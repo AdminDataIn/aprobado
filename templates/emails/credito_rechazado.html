@@ -1,0 +1,24 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Actualización sobre tu Solicitud de Crédito{% endblock %}
+
+{% block header %}Actualización de Solicitud{% endblock %}
+
+{% block content %}
+    <h2>Hola, {{ nombre_cliente }}</h2>
+
+    <p>Lamentamos informarte que después de revisar tu solicitud de crédito, no pudimos aprobarla en esta ocasión.</p>
+
+    <div class="highlight">
+        <p><strong>Motivo:</strong> {{ motivo|default:"Documentación incompleta o criterios no cumplidos" }}</p>
+    </div>
+
+    <p><strong>¿Qué puedes hacer?</strong></p>
+    <ul>
+        <li>Puedes volver a solicitar un crédito en 30 días</li>
+        <li>Asegúrate de tener toda la documentación completa</li>
+        <li>Contáctanos si necesitas asesoría</li>
+    </ul>
+
+    <p>Gracias por considerar nuestros servicios.</p>
+{% endblock %}

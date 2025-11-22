@@ -1,0 +1,24 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Alerta: Crédito en Mora - {{ numero_credito }}{% endblock %}
+
+{% block header %}⚠️ Crédito en Mora{% endblock %}
+
+{% block content %}
+    <h2>{{ nombre_cliente }},</h2>
+
+    <p>Te informamos que tu crédito <strong>{{ numero_credito }}</strong> ha entrado en estado de mora.</p>
+
+    <div class="highlight danger">
+        <p><strong>⚠️ Información importante:</strong></p>
+        <p>{{ motivo|default:"Tu crédito ha superado la fecha de pago sin haber recibido el abono correspondiente." }}</p>
+    </div>
+
+    <p>Es fundamental que regularices tu situación lo antes posible para evitar consecuencias adicionales.</p>
+
+    <center>
+        <a href="https://aprobado.com.co/mi-credito/{{ credito.id }}/" class="button">Pagar Ahora</a>
+    </center>
+
+    <p>Si necesitas ayuda o tienes alguna dificultad, no dudes en contactarnos.</p>
+{% endblock %}

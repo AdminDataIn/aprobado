@@ -319,7 +319,7 @@ Su trabajo es hacer que la variable es_empleado esté disponible en todos los te
             const inputs = form.querySelectorAll('input, select, textarea');
 
             inputs.forEach(input => {
-                if (input.type !== 'submit' && input.type !== 'button') {
+                if (input.type !== 'submit' && input.type !== 'button' && input.name !== 'csrfmiddlewaretoken') {
                     formData[input.name] = input.value;
                 }
             });
@@ -484,16 +484,16 @@ Su trabajo es hacer que la variable es_empleado esté disponible en todos los te
 
             const formData = new FormData(formulario);
 
-            const csrfToken = getCookie('csrftoken');
-
             formData.append('user_id', '{{ user.id }}');
+
+            const csrfToken = formulario.querySelector('[name="csrfmiddlewaretoken"]').value;
 
             fetch(formulario.action, {
                 method: 'POST',
                 body: formData,
                 headers: {
-                    'X-CSRFToken': csrfToken,
-                    'X-Requested-With': 'XMLHttpRequest'
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': csrfToken
                 },
             })
             .then(response => {

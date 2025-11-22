@@ -1,0 +1,28 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Confirmación de Pago Recibido{% endblock %}
+
+{% block header %}✅ Pago Recibido{% endblock %}
+
+{% block content %}
+    <h2>Hola, {{ nombre_cliente }}</h2>
+
+    <p>Hemos recibido y procesado exitosamente tu pago para el crédito <strong>{{ numero_credito }}</strong>.</p>
+
+    <div class="highlight success">
+        <p><strong>💰 Detalles del pago:</strong></p>
+        <ul>
+            <li><strong>Monto pagado:</strong> {{ monto_pagado }}</li>
+            <li><strong>Nuevo saldo pendiente:</strong> {{ nuevo_saldo }}</li>
+            {% if fecha_proximo_pago %}
+            <li><strong>Próxima cuota:</strong> {{ fecha_proximo_pago|date:"d/m/Y" }}</li>
+            {% endif %}
+        </ul>
+    </div>
+
+    <p>¡Gracias por tu pago puntual! Esto ayuda a mantener un buen historial crediticio.</p>
+
+    <center>
+        <a href="https://aprobado.com.co/mi-credito/{{ credito.id }}/" class="button">Ver Detalle de Crédito</a>
+    </center>
+{% endblock %}

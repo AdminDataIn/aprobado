@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python manage.py shell:*)",
+      "Bash(python manage.py migrate:*)",
+      "Bash(del fix_orphan_data.py)",
+      "Bash(python manage.py:*)",
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -6,15 +6,17 @@ app_name = 'gestion_creditos'
 urlpatterns = [
     path('solicitar/libranza/', views.solicitud_credito_libranza_view, name='solicitud_libranza'),
     path('solicitar/emprendimiento/', views.solicitud_credito_emprendimiento_view, name='solicitud_emprendimiento'),
-    path('webhook/firma/<uuid:numero_credito>/', views.webhook_firma_documento, name='webhook_firma_documento'), # DESCOMENTAR AL IMPLEMENTAR LA INTEGRACION
+    # path('webhook/firma/<str:numero_credito>/', views.webhook_firma_documento, name='webhook_firma_documento'), # DESCOMENTAR AL IMPLEMENTAR LA INTEGRACION
+    path('admin/credito/<int:credito_id>/simular-firma/', views.simular_firma_view, name='simular_firma'), # Ruta para el webhook falso
     
     #! URLs Dashboard Administrativo (APROBADOR DE CREDITOS)
     path('admin/dashboard/', views.admin_dashboard_view, name='admin_dashboard'),
     path('admin/solicitudes/', views.admin_solicitudes_view, name='admin_solicitudes'),
     path('admin/creditos/', views.admin_creditos_activos_view, name='admin_creditos_activos'),
-    path('admin/credito/<int:credito_id>/', views.detalle_credito_view, name='admin_detalle_credito'),
+    path('admin/cartera/', views.admin_cartera_view, name='admin_cartera'),
+    path('admin/detalle_credito/<int:credito_id>/', views.detalle_credito_view, name='admin_detalle_credito'),
     path('admin/procesar-solicitud/<int:credito_id>/', views.procesar_solicitud_view, name='procesar_solicitud'),
-    path('admin/cambiar-estado/<int:credito_id>/', views.cambiar_estado_credito_view, name='cambiar_estado_credito'),
+    path('admin/credito/<int:credito_id>/confirmar-desembolso/', views.confirmar_desembolso_view, name='confirmar_desembolso'),
     path('admin/agregar-pago/<int:credito_id>/', views.agregar_pago_manual_view, name='agregar_pago_manual'),
     path('admin/descargar-documentos/<int:credito_id>/', views.descargar_documentos_view, name='descargar_documentos'),
 

@@ -1,6 +1,10 @@
 from pathlib import Path
 import os
 import dj_database_url
+from dotenv import load_dotenv
+
+# Cargar variables de entorno desde .env
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -43,6 +47,7 @@ INSTALLED_APPS = [
     'allauth.account',
     'allauth.socialaccount',
     'allauth.socialaccount.providers.google',
+    'django_celery_beat',  # Para tareas programadas con Celery
     'usuarios',
     'configuraciones',
     'gestion_creditos',
@@ -168,3 +173,48 @@ SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ========================
+# Configuración de Email (Gmail SMTP)
+# ========================
+
+# Backend de email - usando SMTP de Gmail
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'medios.datain@gmail.com')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')  # Contraseña de aplicación de Gmail
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', f'Aprobado <{EMAIL_HOST_USER}>')
+SERVER_EMAIL = EMAIL_HOST_USER
+
+# ========================
+# Configuración de Email con Gmail API (COMENTADO - Para uso futuro)
+# ========================
+# Para implementar Gmail API en el futuro, consulta: GMAIL_API_SETUP.md
+#
+# GOOGLE_SERVICE_ACCOUNT_FILE = os.environ.get(
+#     'GOOGLE_SERVICE_ACCOUNT_FILE',
+#     os.path.join(BASE_DIR, 'config', 'google-service-account.json')
+# )
+# DEFAULT_FROM_EMAIL = 'Aprobado <aprobado-email-service@aprobado-web.iam.gserviceaccount.com>'
+# SERVER_EMAIL = DEFAULT_FROM_EMAIL
+# GMAIL_DELEGATED_USER = os.environ.get('GMAIL_DELEGATED_USER', 'tu-email@tudominio.com')
+
+# ========================
+# Configuración de Celery
+# ========================
+
+# URL de Redis (usar Redis como broker y backend)
+CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+
+# Configuración adicional de Celery
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'America/Bogota'
+CELERY_ENABLE_UTC = False
+
+# Configuración de Celery Beat (tareas programadas)
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'

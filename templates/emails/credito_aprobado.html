@@ -1,0 +1,33 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}¡Tu crédito ha sido aprobado!{% endblock %}
+
+{% block header %}✅ ¡Crédito Aprobado!{% endblock %}
+
+{% block content %}
+    <h2>¡Excelentes noticias, {{ nombre_cliente }}!</h2>
+
+    <p>Nos complace informarte que tu solicitud de crédito ha sido <strong>APROBADA</strong>.</p>
+
+    <div class="highlight success">
+        <p><strong>📋 Detalles de aprobación:</strong></p>
+        <ul>
+            <li><strong>Número de crédito:</strong> {{ numero_credito }}</li>
+            <li><strong>Línea de crédito:</strong> {{ linea_credito }}</li>
+            <li><strong>Monto aprobado:</strong> {{ monto_aprobado }}</li>
+        </ul>
+    </div>
+
+    <p>Los próximos pasos son:</p>
+    <ol>
+        <li>Firmar los documentos del crédito</li>
+        <li>Esperar la validación final</li>
+        <li>Recibir el desembolso en tu cuenta</li>
+    </ol>
+
+    <p>Te estaremos contactando pronto para completar el proceso.</p>
+
+    <center>
+        <a href="https://aprobado.com.co/mi-credito" class="button">Ver Mi Crédito</a>
+    </center>
+{% endblock %}
