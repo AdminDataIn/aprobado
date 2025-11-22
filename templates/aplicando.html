@@ -289,11 +289,23 @@
                         <h2 class="step-title">Validaciones y Perfil</h2>
 
                         <div class="form-grid">
-                            <div class="form-field">
+                            <!--<div class="form-field">
                                 <label for="fotos_neg" class="form-label required">Sube foto del negocio:</label>
                                 <div class="file-input-container">
                                     <input type="file" id="fotos_neg" name="fotos_neg" class="form-input" accept=".pdf, application/pdf" required>
                                     <span class="file-input-info">Solo se permiten archivos PDF</span>
+                                </div>
+                            </div>-->
+                            <div class="form-field">
+                                <label for="fotos_neg" class="form-label required">Sube fotos del negocio (Mínimo 3):</label>
+                                <div class="file-input-container">
+                                    <input type="file" id="fotos_neg" name="fotos_neg" class="form-input" 
+                                        accept="image/*" multiple required
+                                        onchange="mostrarCamposTipo(this)">
+                                    <span class="file-input-info">Mínimo 3 imágenes - Formatos: JPG, PNG, WEBP</span>
+                                </div>
+                                <div id="campos-tipo" class="campos-tipo-container">
+                                    <!-- Los campos de tipo se generarán aquí dinámicamente -->
                                 </div>
                             </div>
 
@@ -392,6 +404,80 @@
         <p id="mensajeModal"></p>
     </div>
 </div>
+
+<script>
+// JavaScript para generar campos de tipo dinámicamente
+function mostrarCamposTipo(input) {
+    const archivos = input.files;
+    const container = document.getElementById('campos-tipo');
+    container.innerHTML = '';
+    
+    if (archivos.length > 0) {
+        container.innerHTML = '<h4>Especifica qué muestra cada imagen:</h4>';
+        
+        Array.from(archivos).forEach((archivo, index) => {
+            const div = document.createElement('div');
+            div.className = 'campo-tipo-item';
+            div.innerHTML = `
+                <div class="archivo-info">
+                    <strong>Imagen ${index + 1}:</strong> ${archivo.name}
+                </div>
+                <select name="tipo_imagen_${index}" class="form-select" required>
+                    <option value="">Selecciona el tipo</option>
+                    <option value="building_exterior">Exterior del Local/Edificio</option>
+                    <option value="room_interior">Interior del Espacio</option>
+                    <option value="products_display">Productos en Exhibición</option>
+                    <option value="shelves_storage">Estantes/Almacenamiento</option>
+                    <option value="general_business">Vista General del Negocio</option>
+                </select>
+            `;
+            container.appendChild(div);
+        });
+    }
+}
+
+// CSS para los campos de tipo
+const estiloCamposTipo = `
+    .campos-tipo-container {
+        margin-top: 15px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+    .campo-tipo-item {
+        margin-bottom: 12px;
+        padding: 10px;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        background: white;
+    }
+    .archivo-info {
+        margin-bottom: 8px;
+        font-weight: 500;
+    }
+`;
+
+// Agregar CSS al documento
+const styleSheet = document.createElement("style");
+styleSheet.textContent = estiloCamposTipo;
+document.head.appendChild(styleSheet);
+</script>
+
+<script>
+// Validación simple de mínimo 3 imágenes
+document.getElementById('fotos_neg').addEventListener('change', function(e) {
+    const archivos = e.target.files;
+    const infoSpan = this.nextElementSibling;
+    
+    if (archivos.length < 3) {
+        infoSpan.innerHTML = '<span style="color: red;">❌ Mínimo 3 imágenes requeridas (' + archivos.length + '/3)</span>';
+        this.setCustomValidity('Se requieren al menos 3 imágenes');
+    } else {
+        infoSpan.innerHTML = '<span style="color: green;">✅ ' + archivos.length + ' imágenes seleccionadas</span>';
+        this.setCustomValidity('');
+    }
+});
+</script>
 
 <script>
 // Función para manejar la navegación entre pasos
