@@ -78,3 +78,51 @@ class EmpresaLoginView(LoginView):
     def get_success_url(self):
         # Redirige al dashboard principal. Se puede cambiar a un dashboard de empresa si se crea.
         return '/gestion-creditos/pagador/dashboard/'
+
+
+# Vista para la Landing Page de Crédito de Libranza
+def libranza_landing(request):
+    """
+    Vista para mostrar la landing page del producto de Crédito de Libranza.
+
+    Esta página es pública y no requiere autenticación.
+    Muestra información completa sobre el producto incluyendo:
+    - Características y beneficios
+    - Simulador (enlace al simulador completo)
+    - Proceso paso a paso
+    - Requisitos y documentación
+    - Preguntas frecuentes
+    - Llamados a la acción para solicitar el crédito
+
+    Returns:
+        Renderiza 'libranza_landing.html'
+    """
+    context = {
+        # Se puede agregar contexto adicional si es necesario en el futuro
+        # Por ejemplo: tasas, montos, convenios, etc.
+    }
+    return render(request, 'libranza_landing.html', context)
+
+
+# Vista para el Simulador de Crédito de Libranza
+def simulador_libranza(request):
+    """
+    Vista para mostrar el simulador exclusivo de Crédito de Libranza.
+
+    Esta página es pública y no requiere autenticación.
+    Permite calcular:
+    - Monto solicitado: $500.000 - $2.000.000
+    - Plazo: 1 - 6 meses
+    - Comisión: 10% + IVA (19%)
+    - Afianzadora: 4% + IVA (próximamente)
+    - Cuota mensual
+    - Total a pagar
+
+    Returns:
+        Renderiza 'simulacion_libranza.html'
+    """
+    context = {
+        # Se puede agregar contexto adicional si es necesario
+        # Por ejemplo: tasas dinámicas, rangos personalizados, etc.
+    }
+    return render(request, 'simulacion_libranza.html', context)
