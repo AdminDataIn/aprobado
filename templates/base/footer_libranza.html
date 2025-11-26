@@ -1,0 +1,94 @@
+{% comment %}
+=============================================================================
+FOOTER EXCLUSIVO PARA PRODUCTO DE LIBRANZA
+=============================================================================
+Este footer se usa únicamente en las páginas relacionadas con Crédito de Libranza.
+NO incluye enlaces a emprendimiento.
+
+SECCIONES:
+- Logo y descripción de Libranza
+- Información de contacto
+- Enlaces de Libranza (Compañía)
+- Enlaces adicionales (Explora)
+
+MODIFICAR:
+- Descripción del producto: Línea ~15
+- Email de contacto: Línea ~22
+- Teléfono de contacto: Línea ~28
+- Enlaces de navegación: Líneas 40-58
+{% endcomment %}
+
+{% load static %}
+<footer class="footer">
+  <div class="footer-container">
+    <div class="footer-grid">
+      <!-- Columna 1: Logo e información de Libranza -->
+      <div class="footer-column col-logo">
+        <a href="{% url 'usuarios:libranza_landing' %}" class="footer-logo">
+          <!-- MODIFICAR: Logo (puede ser diferente si Libranza tiene logo propio) -->
+          <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Libranza" class="footer-logo-img" />
+        </a>
+        <!-- MODIFICAR: Descripción del producto de Libranza -->
+        <p class="footer-description">
+          Aprobado Libranza ofrece créditos con descuento automático de nómina
+          para empleados públicos y privados. Proceso 100% digital, cuotas fijas
+          y aprobación rápida.
+        </p>
+        <div class="footer-contact">
+          <!-- MODIFICAR: Email de contacto para Libranza -->
+          <a href="mailto:libranza@aprobado.com.co" class="footer-link">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-mail h-4 w-4">
+              <rect width="20" height="16" x="2" y="4" rx="2"></rect>
+              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+            </svg>
+            <span>libranza@aprobado.com.co</span>
+          </a>
+          <!-- MODIFICAR: Teléfono/WhatsApp de contacto -->
+          <a href="https://wa.me/573132477352" class="footer-link" target="_blank">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-phone h-4 w-4">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+            </svg>
+            <span>+57 313 247 7352</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Espacio en medio (solo visible en desktop) -->
+      <div class="footer-column col-empty"></div>
+
+      <!-- Columna 2: Enlaces de Libranza -->
+      <div class="footer-column">
+        <h3 class="footer-title">Crédito de Libranza</h3>
+        <ul class="footer-list">
+          <!-- MODIFICAR: Enlaces principales de Libranza -->
+          <li><a href="{% url 'usuarios:libranza_landing' %}" class="footer-item">Inicio</a></li>
+          <li><a href="{% url 'usuarios:simulador_libranza' %}" class="footer-item">Simulador</a></li>
+          <li><a href="{% url 'usuarios:libranza_landing' %}#requisitos" class="footer-item">Requisitos</a></li>
+          <li><a href="{% url 'usuarios:libranza_landing' %}#como-funciona" class="footer-item">Cómo funciona</a></li>
+          <li><a href="{% url 'gestion_creditos:solicitud_libranza' %}" class="footer-item">Solicitar crédito</a></li>
+        </ul>
+      </div>
+
+      <!-- Columna 3: Enlaces adicionales -->
+      <div class="footer-column">
+        <h3 class="footer-title">Soporte</h3>
+        <ul class="footer-list">
+          <!-- MODIFICAR: Enlaces de soporte y legales -->
+          <li><a href="{% url 'usuarios:libranza_landing' %}#preguntas-frecuentes" class="footer-item">Preguntas Frecuentes</a></li>
+          <li><a href="#" class="footer-item">Términos y Condiciones</a></li>
+          <li><a href="#" class="footer-item">Política de Privacidad</a></li>
+          <li><a href="#" class="footer-item">Contacto</a></li>
+          {% if request.user.is_authenticated %}
+          <li><a href="{% url 'usuariocreditos:dashboard_view' %}" class="footer-item">Mis Créditos</a></li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+
+    <!-- Línea divisoria y copyright -->
+    <div class="footer-bottom">
+      <!-- MODIFICAR: Texto de copyright -->
+      <p class="footer-copy">Aprobado Libranza 2024-2025. Todos los derechos reservados.</p>
+    </div>
+  </div>
+</footer>

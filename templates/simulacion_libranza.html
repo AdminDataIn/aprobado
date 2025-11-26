@@ -1,0 +1,252 @@
+{% comment %}
+=============================================================================
+SIMULADOR EXCLUSIVO DE CRÉDITO DE LIBRANZA
+=============================================================================
+Este simulador es exclusivo para el producto de Libranza.
+Utiliza el navbar y footer de Libranza (sin enlaces a emprendimiento).
+
+CARACTERÍSTICAS:
+- Monto: $500.000 - $2.000.000
+- Plazo: 1 - 6 meses
+- Comisión: 10% + IVA (19%)
+- Afianzadora: 4% + IVA (próximamente)
+- Tasa de interés: 0%
+
+MODIFICAR:
+- Rangos de monto: Líneas 38-40
+- Rangos de plazo: Líneas 52-54
+- Cálculos (comisión, IVA, etc.): Líneas 204-221
+{% endcomment %}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Crédito de Libranza - Aprobado</title>
+    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>
+<body class="body-index">
+<div class="div-body-main">
+    <!-- Navbar exclusivo de Libranza -->
+    {% include 'base/navbar_libranza.html' %}
+
+    <main class="simulador-main">
+        <section class="simulador-hero-section">
+            <div class="simulador-container">
+                <div class="simulador-hero">
+                    <!-- SIMULADOR DE LIBRANZA -->
+                    <div class="simulador-text-content">
+                        <!-- MODIFICAR: Título y descripción del simulador -->
+                        <h1>Simulador de Crédito de Libranza</h1>
+                        <p>Calcula tu cuota mensual y conoce las condiciones de tu crédito de libranza.
+                           Financiamiento con descuento directo de nómina para empleados públicos y privados.</p>
+                        <a href="{% url 'gestion_creditos:solicitud_libranza' %}" class="simulador-cta-button">Aplicar ahora</a>
+                    </div>
+
+                    <div class="simulador-card">
+                        <form action="#" class="simulador-form">
+                            <div class="simulador-form-step active">
+                                <!-- Primer slider - Monto del crédito -->
+                                <div class="simulador-slider-container">
+                                    <div class="simulador-slider-title">¿Cuánto necesitas?</div>
+                                    <div class="simulador-range-container">
+                                        <div class="simulador-range-progress" id="simulador-progress-1"></div>
+                                        <!-- MODIFICAR: Monto mínimo, máximo y paso -->
+                                        <input type="range" min="500000" max="2000000" step="50000" value="1000000"
+                                               class="simulador-range-input" id="simulador-range-1">
+                                        <div class="simulador-range-tooltip" id="simulador-tooltip-1">$ 1.000.000</div>
+                                    </div>
+                                    <div class="simulador-range-labels">
+                                        <!-- MODIFICAR: Etiquetas de rango -->
+                                        <span>$ 500.000</span>
+                                        <span>$ 2.000.000</span>
+                                    </div>
+                                </div>
+
+                                <!-- Segundo slider - Plazo (1-6 meses) -->
+                                <div class="simulador-slider-container">
+                                    <div class="simulador-slider-title">¿En cuántos meses deseas pagarlo?</div>
+                                    <div class="simulador-range-container">
+                                        <div class="simulador-range-progress" id="simulador-progress-2"></div>
+                                        <!-- MODIFICAR: Plazo mínimo, máximo -->
+                                        <input type="range" min="1" max="6" step="1" value="3"
+                                               class="simulador-range-input" id="simulador-range-2">
+                                        <div class="simulador-range-tooltip" id="simulador-tooltip-2">3 meses</div>
+                                    </div>
+                                    <div class="simulador-range-labels">
+                                        <!-- MODIFICAR: Etiquetas de plazo -->
+                                        <span>1 mes</span>
+                                        <span>6 meses</span>
+                                    </div>
+                                </div>
+
+                                <!-- Resultados del cálculo - LIBRANZA -->
+                                <div class="simulador-results-container">
+                                    <div class="simulador-result-row">
+                                        <label for="total-pr" class="simulador-result-label">Monto solicitado:</label>
+                                        <input type="text" id="total-pr" name="total-pr" value="1.000.000,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label for="comision" class="simulador-result-label">Comisión (10%):</label>
+                                        <input type="text" id="comision" name="comision" value="100.000,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label for="ivaComision" class="simulador-result-label">IVA sobre comisión (19%):</label>
+                                        <input type="text" id="ivaComision" name="ivaComision" value="19.000,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                    <!-- Afianzadora (próximamente - estructura lista) -->
+                                    <!-- MODIFICAR: Descomentar cuando se active la afianzadora -->
+                                    <div class="simulador-result-row" style="opacity: 0.5;">
+                                        <label for="afianzadora" class="simulador-result-label">Afianzadora (4% + IVA) - Próximamente:</label>
+                                        <input type="text" id="afianzadora" name="afianzadora" value="47.600,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label for="totalPagar" class="simulador-result-label">Total a pagar:</label>
+                                        <input type="text" id="totalPagar" name="totalPagar" value="1.119.000,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label for="cuotaMensual" class="simulador-result-label">Cuota mensual:</label>
+                                        <input type="text" id="cuotaMensual" name="cuotaMensual" value="373.000,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer exclusivo de Libranza -->
+    {% include 'base/footer_libranza.html' %}
+
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        // SCRIPT PARA SIMULADOR DE LIBRANZA
+        const totalPrestamoInput = document.getElementById("total-pr");
+        const comisionInput = document.getElementById("comision");
+        const ivaComisionInput = document.getElementById("ivaComision");
+        const afianzadoraInput = document.getElementById("afianzadora");
+        const totalPagarInput = document.getElementById("totalPagar");
+        const cuotaMensualInput = document.getElementById("cuotaMensual");
+
+        /**
+         * Calcula la cuota usando la fórmula de anualidad
+         * MODIFICAR: Si cambias la tasa de interés, ajusta tasaMensual
+         */
+        function calcularCuotaAnualidad(monto, tasaMensual, meses) {
+            if (tasaMensual === 0) {
+                return monto / meses;
+            }
+            const factor = Math.pow(1 + tasaMensual, meses);
+            const cuota = monto * (tasaMensual * factor) / (factor - 1);
+            return cuota;
+        }
+
+        /**
+         * Actualiza todos los cálculos del simulador
+         * MODIFICAR: Porcentajes de comisión, IVA, afianzadora
+         */
+        function actualizarCalculosLibranza() {
+            const montoSolicitado = parseFloat(slider1.value);
+            const meses = parseFloat(slider2.value);
+
+            // MODIFICAR: Porcentajes aquí
+            const comision = montoSolicitado * 0.10;           // 10% de comisión
+            const ivaComision = comision * 0.19;                // 19% de IVA sobre comisión
+            const afianzadora = montoSolicitado * 0.04;         // 4% de afianzadora (próximamente)
+            const ivaAfianzadora = afianzadora * 0.19;          // 19% de IVA sobre afianzadora
+            const totalAfianzadora = afianzadora + ivaAfianzadora;
+            const totalSinAfianzadora = montoSolicitado + comision + ivaComision;
+
+            // MODIFICAR: Tasa de interés mensual (actualmente 0%)
+            const tasaMensual = 0;
+            const cuotaMensual = calcularCuotaAnualidad(totalSinAfianzadora, tasaMensual, meses);
+
+            // Actualizar valores en el formulario
+            totalPrestamoInput.value = formatColombianNumber(montoSolicitado);
+            comisionInput.value = formatColombianNumber(comision);
+            ivaComisionInput.value = formatColombianNumber(ivaComision);
+            afianzadoraInput.value = formatColombianNumber(totalAfianzadora);
+            totalPagarInput.value = formatColombianNumber(totalSinAfianzadora);
+            cuotaMensualInput.value = formatColombianNumber(cuotaMensual);
+        }
+
+        // Configuración de sliders
+        const slider1 = document.getElementById("simulador-range-1");
+        const tooltip1 = document.getElementById("simulador-tooltip-1");
+        const progress1 = document.getElementById("simulador-progress-1");
+
+        const slider2 = document.getElementById("simulador-range-2");
+        const tooltip2 = document.getElementById("simulador-tooltip-2");
+        const progress2 = document.getElementById("simulador-progress-2");
+
+        /**
+         * Formatea números en formato colombiano ($ 1.000.000,00)
+         */
+        function formatColombianNumber(num) {
+            return new Intl.NumberFormat('es-CO', {
+                style: 'currency',
+                currency: 'COP',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(num);
+        }
+
+        /**
+         * Actualiza el slider de monto
+         */
+        function updateSlider1() {
+            const minVal = parseFloat(slider1.min);
+            const maxVal = parseFloat(slider1.max);
+            const val = parseFloat(slider1.value);
+            const percent = ((val - minVal) / (maxVal - minVal)) * 100;
+
+            tooltip1.innerText = formatColombianNumber(val);
+            tooltip1.style.left = `${percent}%`;
+            tooltip1.style.transform = 'translateX(-50%)';
+            progress1.style.width = `${percent}%`;
+
+            actualizarCalculosLibranza();
+        }
+
+        /**
+         * Actualiza el slider de plazo
+         */
+        function updateSlider2() {
+            const val = slider2.value;
+            const percent = ((val - slider2.min) / (slider2.max - slider2.min)) * 100;
+
+            tooltip2.innerText = `${val} ${val === "1" ? "mes" : "meses"}`;
+            tooltip2.style.left = `${percent}%`;
+            tooltip2.style.transform = 'translateX(-50%)';
+            progress2.style.width = `${percent}%`;
+
+            actualizarCalculosLibranza();
+        }
+
+        // Event listeners para los sliders
+        slider1.addEventListener("input", updateSlider1);
+        slider2.addEventListener("input", updateSlider2);
+        slider1.addEventListener("change", updateSlider1);
+        slider2.addEventListener("change", updateSlider2);
+
+        // Inicializar sliders y cálculos
+        updateSlider1();
+        updateSlider2();
+    });
+</script>
+
+</body>
+</html>

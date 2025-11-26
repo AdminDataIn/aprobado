@@ -1,7 +1,35 @@
-{% comment %} 
-adapter.py: Se ejecuta solo durante el registro de un nuevo usuario social (con Google, por ejemplo) y lo asigna al grupo 'Empleados'.
-context_processors.py: Se ejecuta con cada página que visitas. 
-Su trabajo es hacer que la variable es_empleado esté disponible en todos los templates, para que los botones y enlaces puedan cambiar dinámicamente. 
+{% comment %}
+=============================================================================
+FORMULARIO DE SOLICITUD DE CRÉDITO DE LIBRANZA
+=============================================================================
+Este formulario es EXCLUSIVO para el producto de Crédito de Libranza.
+NO está relacionado con emprendimiento ni otras líneas de crédito.
+
+COMPONENTES UTILIZADOS:
+- navbar_libranza.html (navbar exclusivo de Libranza)
+- footer_libranza.html (footer exclusivo de Libranza)
+
+FLUJO DEL FORMULARIO:
+1. Paso 1: Información del Crédito (monto y plazo)
+2. Paso 2: Información Personal (datos del solicitante)
+3. Paso 3: Información Laboral (empresa y documentos adjuntos)
+
+DOCUMENTOS REQUERIDOS:
+- Cédula (frontal y trasera)
+- Certificado laboral
+- Último desprendible de pago
+- Certificado bancario
+
+PROCESAMIENTO:
+- View: solicitud_credito_libranza_view (gestion_creditos/views.py)
+- URL: /gestion-creditos/solicitar/libranza/
+- Requiere autenticación con Google
+- Envía email de confirmación automático
+
+MODIFICAR:
+- Campos del formulario: Líneas 65-185
+- Validaciones JavaScript: Líneas 392-423
+- Mensajes de error: Líneas 425-446
 {% endcomment %}
 
 <!DOCTYPE html>
@@ -16,7 +44,7 @@ Su trabajo es hacer que la variable es_empleado esté disponible en todos los te
 
 <body class="body-index">
 <div class="div-body-main">
-    {% include 'base/navbar.html' %}
+    {% include 'base/navbar_libranza.html' %}
 
     <main class="form-container">
         <div class="form-content">
@@ -188,7 +216,7 @@ Su trabajo es hacer que la variable es_empleado esté disponible en todos los te
         </div>
     </main>
 
-    {% include 'base/footer.html' %}
+    {% include 'base/footer_libranza.html' %}
 </div>
 
 <!-- Modal -->
