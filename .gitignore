@@ -62,6 +62,7 @@ db.sqlite3-journal
 media/
 staticfiles/
 .env
+.env.example
 
 # Flask stuff:
 instance/
@@ -114,6 +115,7 @@ venv.bak/
 
 # VSCode files
 .vscode/
+.claude/
 
 # Render
 .render.yaml
@@ -121,3 +123,19 @@ venv.bak/
 # Google API credentials
 config/
 token.json
+
+# ARCHIVOS DE DOCUMENTACION GUIA
+CONFIGURACION_EMAILS_CELERY.md
+DOCUMENTACION_LANDING_LIBRANZA.md
+GMAIL_API_SETUP.md
+MIGRACION_FORMULARIO_EMPRENDIMIENTO.md
+QUICK_START_EMAIL.md
+RESUMEN_IMPLEMENTACION.md
+runtime.txt
+MIGRACION_URLS.md
+REFERENCIA_URLS.md
+PENDIENTES.md
+DOCUMENTACION_APROBADO.md
+Loading.json
+nul
+Check_Animation.json

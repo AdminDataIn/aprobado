@@ -75,29 +75,34 @@
                         <i class="bi bi-plus-lg me-2"></i>Nuevo Crédito
                     </button>
                     <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
-                        <li><a class="dropdown-item" href="{% url 'gestion_creditos:solicitud_emprendimiento' %}">Emprendimiento</a></li>
-                        <li><a class="dropdown-item" href="{% url 'gestion_creditos:solicitud_libranza' %}">Libranza</a></li>
+                        {# NUEVA URL - Emprendimiento #}
+                        <li><a class="dropdown-item" href="{% url 'emprendimiento:solicitar' %}">Emprendimiento</a></li>
+                        {# NUEVA URL - Libranza #}
+                        <li><a class="dropdown-item" href="{% url 'libranza:solicitar' %}">Libranza</a></li>
                     </ul>
                 </div>
             </div>
         </div>
 
         <div class="quick-actions">
-            <a href="{% url 'gestion_creditos:admin_solicitudes' %}" class="action-card">
+            {# NUEVA URL - Gestión #}
+            <a href="{% url 'gestion:solicitudes' %}" class="action-card">
                 <div class="action-icon" style="background-color: var(--accent-blue);">
                     <i class="bi bi-clipboard-check"></i>
                 </div>
                 <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">Gestionar Solicitudes</h3>
                 <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Revisar y aprobar solicitudes pendientes</p>
             </a>
-            <a href="{% url 'gestion_creditos:admin_creditos_activos' %}" class="action-card">
+            {# NUEVA URL - Gestión #}
+            <a href="{% url 'gestion:creditos_activos' %}" class="action-card">
                 <div class="action-icon" style="background-color: var(--success);">
                     <i class="bi bi-credit-card"></i>
                 </div>
                 <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">Créditos Activos</h3>
                 <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Monitorear cartera activa</p>
             </a>
-            <a href="{% url 'gestion_creditos:admin_cartera' %}" class="action-card">
+            {# ✅ NUEVA URL - Gestión #}
+            <a href="{% url 'gestion:cartera_mora' %}" class="action-card">
                 <div class="action-icon" style="background-color: var(--warning);">
                     <i class="bi bi-exclamation-triangle"></i>
                 </div>
@@ -113,7 +118,8 @@
             </a>
             <!-- Quick Actions -->
             <!-- En la sección Quick Actions de admin_dashboard.html -->
-            <a href="{% url 'gestion_creditos:admin_billetera_dashboard' %}" class="action-card">
+            {# ✅ NUEVA URL - Billetera #}
+            <a href="{% url 'billetera:gestion_dashboard' %}" class="action-card">
                 <div class="action-icon" style="background-color: var(--purple);">
                     <i class="bi bi-wallet2"></i>
                 </div>

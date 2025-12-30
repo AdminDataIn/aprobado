@@ -9,8 +9,9 @@
 
         <!-- Desktop Navigation -->
         <nav class="nav-links">
-            <a href="/" class="nav-link">Inicio</a>
-            <a href="{% url 'usuarios:simulador' %}" class="nav-link">Simulador</a>
+            {# NUEVAS URLs - Emprendimiento #}
+            <a href="{% url 'emprendimiento:landing' %}" class="nav-link">Inicio</a>
+            <a href="{% url 'emprendimiento:simulador' %}" class="nav-link">Simulador</a>
             <a href="#" class="nav-link">Productos</a>
             <a href="#" class="nav-link">Nosotros</a>
             <a href="#" class="nav-link">Alianzas</a>
@@ -24,10 +25,10 @@
                     <span class="name-us">{{ request.user.first_name|default:request.user.email }}</span>
                 </a>
                 <ul class="dropdown-menu">
-                    <form id="logout-form" method="post" action="{% url 'account_logout' %}" style="display: none;">
+                    <form id="logout-form" method="post" action="{% url 'emprendimiento:logout' %}" style="display: none;">
                         {% csrf_token %}
                     </form>
-                    <li><a href="{% url 'usuariocreditos:dashboard_view' %}">
+                    <li><a href="{% url 'emprendimiento:mi_credito' %}">
                         Mis créditos
                     </a></li>
                     <li><a href="#" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
@@ -40,11 +41,8 @@
 
         <!-- Buttons & Mobile Menu Toggle -->
         <div class="navbar-right">
-            {% if es_empleado %}
-                <a href="{% url 'gestion_creditos:solicitud_libranza' %}" class="btn btn-apply">Aplicar ahora</a>
-            {% else %}
-                <a href="{% url 'usuarios:aplicar' %}" class="btn btn-apply">Aplicar ahora</a>
-            {% endif %}
+            {# ✅ NUEVA URL - Solicitar Emprendimiento #}
+            <a href="{% url 'emprendimiento:solicitar' %}" class="btn btn-apply">Aplicar ahora</a>
             <button id="menu-toggle" class="menu-toggle" aria-label="Abrir menú">
                 &#9776;
             </button>
@@ -58,26 +56,27 @@
             <button id="menu-close" class="menu-close">&times;</button>
         </div>
         <nav class="mobile-nav-links">
-            <a href="/" class="mobile-nav-link">Inicio</a>
-            <a href="{% url 'usuarios:simulador' %}" class="nav-link">Simulador</a>
+            {# ✅ NUEVAS URLs - Emprendimiento #}
+            <a href="{% url 'emprendimiento:landing' %}" class="mobile-nav-link">Inicio</a>
+            <a href="{% url 'emprendimiento:simulador' %}" class="mobile-nav-link">Simulador</a>
             <a href="#" class="mobile-nav-link">Productos</a>
             <a href="#" class="mobile-nav-link">Nosotros</a>
             <a href="#" class="mobile-nav-link">Alianzas</a>
             <a href="#" class="mobile-nav-link">Blog</a>
             {% if request.user.is_authenticated %}
-            <a href="#" class="mobile-nav-link">Mis aplicados</a>
+            <form id="logout-form-mobile" method="post" action="{% url 'emprendimiento:logout' %}" style="display: none;">
+                {% csrf_token %}
+            </form>
+            <a href="{% url 'emprendimiento:mi_credito' %}" class="mobile-nav-link">Mis créditos</a>
             <a href="#" class="mobile-nav-link"
-               onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+               onclick="event.preventDefault(); document.getElementById('logout-form-mobile').submit();">
                 Cerrar sesión
             </a>
             {% endif %}
         </nav>
         <div class="mobile-apply">
-            {% if es_empleado %}
-                <a href="{% url 'gestion_creditos:solicitud_libranza' %}" class="btn btn-apply-full">Aplicar ahora</a>
-            {% else %}
-                <a href="{% url 'usuarios:aplicar' %}" class="btn btn-apply-full">Aplicar ahora</a>
-            {% endif %}
+            {# ✅ NUEVA URL - Solicitar Emprendimiento #}
+            <a href="{% url 'emprendimiento:solicitar' %}" class="btn btn-apply-full">Aplicar ahora</a>
         </div>
     </div>
 </header>

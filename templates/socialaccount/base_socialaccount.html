@@ -1,0 +1,35 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Aprobado{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="{% block body_class %}auth-body{% endblock %}">
+<div class="div-body-main">
+    {# Detectar si viene de Libranza basándose en el parámetro next #}
+    {% if 'libranza' in request.GET.next|default:'' or 'libranza' in request.path %}
+        {% include 'base/navbar_libranza.html' %}
+    {% else %}
+        {% include 'base/navbar.html' %}
+    {% endif %}
+
+    <main>
+        {% block content %}
+        {% endblock %}
+    </main>
+
+    {# Footer condicional #}
+    {% if 'libranza' in request.GET.next|default:'' or 'libranza' in request.path %}
+        {% include 'base/footer_libranza.html' %}
+    {% else %}
+        {% include 'base/footer.html' %}
+    {% endif %}
+</div>
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

@@ -61,11 +61,14 @@ AUTHENTICATION_BACKENDS = [
 
 SITE_ID = 1
 
+# ========================================
+# Django Allauth - Autenticación
+# ========================================
 LOGIN_URL = '/accounts/google/login/'
-LOGIN_REDIRECT_URL = '/usuarios/aplicar/'
+LOGIN_REDIRECT_URL = '/emprendimiento/solicitar/'  # NUEVA URL - Redirige a solicitud de emprendimiento
 ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_USERNAME_REQUIRED = False
-ACCOUNT_LOGOUT_REDIRECT_URL = '/usuarios/inicio/'
+ACCOUNT_LOGOUT_REDIRECT_URL = '/'  # NUEVA URL - Redirige a home (landing emprendimiento)
 SOCIALACCOUNT_AUTO_SIGNUP = True
 
 SOCIALACCOUNT_PROVIDERS = {
@@ -86,6 +89,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'usuarios.middleware.ProductoContextMiddleware',  # Detecta producto (libranza/emprendimiento) por URL - DEBE ir después de AuthenticationMiddleware
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
@@ -106,6 +110,8 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'usuarios.context_processors.user_groups_processor',
+                'usuarios.context_processors.notificaciones_processor',
+                'usuarios.context_processors.producto_context_processor',
             ],
         },
     },

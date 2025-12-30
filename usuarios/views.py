@@ -1,9 +1,11 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from allauth.socialaccount.models import SocialAccount
-from django.contrib.auth.views import LoginView
+from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib import messages
 from django.contrib.auth import logout
+from django.views.generic import TemplateView
+from django.urls import reverse
 
 
 # Create your views here.
@@ -57,9 +59,19 @@ def simulador(request):
 
 class EmpresaLoginView(LoginView):
     template_name = 'account/login_empresa.html'
-    redirect_authenticated_user = True
+    redirect_authenticated_user = False  # ⭐ Cambiado a False para permitir acceso a usuarios autenticados
 
     def get(self, request, *args, **kwargs):
+        # Si el usuario ya está autenticado, verificamos si tiene perfil de pagador
+        if request.user.is_authenticated:
+            if hasattr(request.user, 'perfil_pagador'):
+                # Si ya tiene perfil de pagador, lo redirigimos al dashboard
+                return redirect(reverse('pagador:dashboard'))
+            else:
+                # Si está autenticado pero NO es pagador, mostramos mensaje y redirigimos
+                messages.warning(request, 'Su cuenta actual no tiene permisos de pagador. Si necesita acceso como pagador, contacte al administrador.')
+                return redirect(reverse('libranza:landing'))
+
         # Marcamos la sesión para identificar que el flujo de login empezó aquí
         request.session['login_flow'] = 'empresa'
         return super().get(request, *args, **kwargs)
@@ -76,8 +88,8 @@ class EmpresaLoginView(LoginView):
             return self.form_invalid(form)
 
     def get_success_url(self):
-        # Redirige al dashboard principal. Se puede cambiar a un dashboard de empresa si se crea.
-        return '/gestion-creditos/pagador/dashboard/'
+        # Redirige al dashboard de pagador (nueva estructura)
+        return reverse('pagador:dashboard')
 
 
 # Vista para la Landing Page de Crédito de Libranza
@@ -126,3 +138,54 @@ def simulador_libranza(request):
         # Por ejemplo: tasas dinámicas, rangos personalizados, etc.
     }
     return render(request, 'simulacion_libranza.html', context)
+
+
+# Vista para el login de Libranza
+class LoginLibranzaView(TemplateView):
+    """
+    Vista que muestra la página de login específica para Libranza.
+    Usa el template base_libranza.html con navbar y footer de Libranza.
+    """
+    template_name = 'account/login_libranza.html'
+
+
+# Vista para el login de Emprendimiento
+class LoginEmprendimientoView(TemplateView):
+    """
+    Vista que muestra la página de login específica para Emprendimiento.
+    Usa el template base_emprendimiento.html con navbar y footer de Emprendimiento.
+    """
+    template_name = 'account/login_emprendimiento.html'
+
+
+class CustomLogoutView(LogoutView):
+    """
+    Vista personalizada de logout que redirige según el producto del usuario.
+
+    Utiliza el middleware ProductoContextMiddleware que detecta automáticamente
+    el producto (LIBRANZA o EMPRENDIMIENTO) y lo guarda en la sesión.
+
+    Esto evita consultas a la base de datos en cada logout.
+
+    - Si producto_actual = 'LIBRANZA' → redirige a landing de Libranza
+    - En otros casos → redirige a inicio de Emprendimiento
+    """
+    http_method_names = ['post', 'options']  # Solo permite POST
+
+    def post(self, request, *args, **kwargs):
+        # Obtener el producto actual desde la sesión (detectado por middleware)
+        producto_actual = request.session.get('producto_actual', 'EMPRENDIMIENTO')
+
+        # Determinar la URL de redirección ANTES de hacer logout
+        if producto_actual == 'LIBRANZA':
+            # Redirigir a landing de libranza
+            next_page = reverse('libranza:landing')
+        else:
+            # Redirigir a landing de emprendimiento (home)
+            next_page = reverse('home')
+
+        # Realizar el logout
+        logout(request)
+
+        # Redirigir a la página correspondiente
+        return redirect(next_page)

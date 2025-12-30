@@ -18,7 +18,8 @@
     <header class="page-header">
         <div class="container-fluid" style="max-width: 1400px;">
             <div class="d-flex align-items-center justify-content-between">
-                <a href="{% url 'gestion_creditos:admin_dashboard' %}" class="logo">
+                {# NUEVA URL - Gestión #}
+                <a href="{% url 'gestion:dashboard' %}" class="logo">
                     <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;" />
                 </a>
                 <div class="d-flex align-items-center gap-3">
@@ -45,12 +46,14 @@
                 <h1 class="page-title">Gestión de Créditos</h1>
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
-                        <li class="breadcrumb-item"><a href="{% url 'gestion_creditos:admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+                        {# NUEVA URL - Gestión #}
+                        <li class="breadcrumb-item"><a href="{% url 'gestion:dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
                         <li class="breadcrumb-item active" aria-current="page">Créditos Activos</li>
                     </ol>
                 </nav>
             </div>
-            <a href="{% url 'gestion_creditos:admin_solicitudes' %}" class="btn btn-outline-primary">
+            {# NUEVA URL - Gestión #}
+            <a href="{% url 'gestion:solicitudes' %}" class="btn btn-outline-primary">
                 <i class="bi bi-journal-text me-2"></i>Ver Solicitudes
             </a>
         </div>
@@ -116,7 +119,8 @@
                             <button type="submit" class="btn btn-primary filter-btn">
                                 <i class="bi bi-funnel me-1"></i>Filtrar
                             </button>
-                            <a href="{% url 'gestion_creditos:admin_creditos_activos' %}" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
+                            {# NUEVA URL - Gestión #}
+                            <a href="{% url 'gestion:creditos_activos' %}" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
                         </div>
                     </div>
                 </div>
@@ -184,7 +188,7 @@
                             </td>
                             <td>{{ credito.fecha_solicitud|date:"d/m/Y" }}</td>
                             <td style="text-align: center;">
-                                <a href="{% url 'gestion_creditos:admin_detalle_credito' credito.id %}?from=activos" class="btn btn-sm btn-outline-primary">
+                                <a href="{% url 'gestion:credito_detalle' credito.id %}?from=activos" class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-eye me-1"></i>Ver
                                 </a>
                             </td>

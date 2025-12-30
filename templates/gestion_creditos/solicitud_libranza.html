@@ -86,7 +86,8 @@ MODIFICAR:
             </div>
             <!-- Contenido del formulario -->
             <div class="form-main">
-                <form id="formularioLibranza" method="POST" enctype="multipart/form-data" action="{% url 'gestion_creditos:solicitud_libranza' %}">
+                {# NUEVA URL - Libranza #}
+                <form id="formularioLibranza" method="POST" enctype="multipart/form-data" action="{% url 'libranza:solicitar' %}">
                     {% csrf_token %}
 
                     <!-- Paso 1: Información del Crédito -->

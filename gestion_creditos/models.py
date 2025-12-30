@@ -795,6 +795,65 @@ class ConfiguracionTasaInteres(models.Model):
         verbose_name = 'Configuración de Tasa'
         verbose_name_plural = 'Configuraciones de Tasas'
         ordering = ['-fecha_vigencia']
-        
+
     def __str__(self):
         return f"Tasa {self.tasa_anual_efectiva}% EA - {self.fecha_vigencia}"
+
+
+#? ----- Sistema de Notificaciones -----
+class Notificacion(models.Model):
+    """
+    Modelo para gestionar notificaciones de usuarios.
+    Muestra alertas en tiempo real sobre eventos importantes.
+    """
+    class TipoNotificacion(models.TextChoices):
+        CREDITO_APROBADO = 'CREDITO_APROBADO', 'Crédito Aprobado'
+        CREDITO_RECHAZADO = 'CREDITO_RECHAZADO', 'Crédito Rechazado'
+        PAGO_RECIBIDO = 'PAGO_RECIBIDO', 'Pago Recibido'
+        PAGO_PENDIENTE = 'PAGO_PENDIENTE', 'Pago Pendiente'
+        CONSIGNACION_APROBADA = 'CONSIGNACION_APROBADA', 'Consignación Aprobada'
+        CONSIGNACION_RECHAZADA = 'CONSIGNACION_RECHAZADA', 'Consignación Rechazada'
+        DOCUMENTO_PENDIENTE = 'DOCUMENTO_PENDIENTE', 'Documento Pendiente'
+        MORA = 'MORA', 'Crédito en Mora'
+        SISTEMA = 'SISTEMA', 'Notificación del Sistema'
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='notificaciones'
+    )
+    tipo = models.CharField(
+        max_length=30,
+        choices=TipoNotificacion.choices
+    )
+    titulo = models.CharField(max_length=100)
+    mensaje = models.TextField()
+    leida = models.BooleanField(default=False)
+    url = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+        help_text="URL a la que redirige la notificación"
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_leida = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Notificación'
+        verbose_name_plural = 'Notificaciones'
+        ordering = ['-fecha_creacion']
+        indexes = [
+            models.Index(fields=['usuario', '-fecha_creacion']),
+            models.Index(fields=['usuario', 'leida']),
+        ]
+
+    def __str__(self):
+        return f"{self.titulo} - {self.usuario.email}"
+
+    def marcar_como_leida(self):
+        """Marca la notificación como leída"""
+        if not self.leida:
+            from django.utils import timezone
+            self.leida = True
+            self.fecha_leida = timezone.now()
+            self.save(update_fields=['leida', 'fecha_leida'])

@@ -24,8 +24,8 @@ MODIFICAR:
     <div class="footer-grid">
       <!-- Columna 1: Logo e información de Libranza -->
       <div class="footer-column col-logo">
-        <a href="{% url 'usuarios:libranza_landing' %}" class="footer-logo">
-          <!-- MODIFICAR: Logo (puede ser diferente si Libranza tiene logo propio) -->
+        {# ✅ NUEVA URL - Libranza #}
+        <a href="{% url 'libranza:landing' %}" class="footer-logo">
           <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Libranza" class="footer-logo-img" />
         </a>
         <!-- MODIFICAR: Descripción del producto de Libranza -->
@@ -60,12 +60,12 @@ MODIFICAR:
       <div class="footer-column">
         <h3 class="footer-title">Crédito de Libranza</h3>
         <ul class="footer-list">
-          <!-- MODIFICAR: Enlaces principales de Libranza -->
-          <li><a href="{% url 'usuarios:libranza_landing' %}" class="footer-item">Inicio</a></li>
-          <li><a href="{% url 'usuarios:simulador_libranza' %}" class="footer-item">Simulador</a></li>
-          <li><a href="{% url 'usuarios:libranza_landing' %}#requisitos" class="footer-item">Requisitos</a></li>
-          <li><a href="{% url 'usuarios:libranza_landing' %}#como-funciona" class="footer-item">Cómo funciona</a></li>
-          <li><a href="{% url 'gestion_creditos:solicitud_libranza' %}" class="footer-item">Solicitar crédito</a></li>
+          {# ✅ NUEVAS URLs - Libranza #}
+          <li><a href="{% url 'libranza:landing' %}" class="footer-item">Inicio</a></li>
+          <li><a href="{% url 'libranza:simulador' %}" class="footer-item">Simulador</a></li>
+          <li><a href="{% url 'libranza:landing' %}#requisitos" class="footer-item">Requisitos</a></li>
+          <li><a href="{% url 'libranza:landing' %}#como-funciona" class="footer-item">Cómo funciona</a></li>
+          <li><a href="{% url 'libranza:solicitar' %}" class="footer-item">Solicitar crédito</a></li>
         </ul>
       </div>
 
@@ -73,13 +73,14 @@ MODIFICAR:
       <div class="footer-column">
         <h3 class="footer-title">Soporte</h3>
         <ul class="footer-list">
-          <!-- MODIFICAR: Enlaces de soporte y legales -->
-          <li><a href="{% url 'usuarios:libranza_landing' %}#preguntas-frecuentes" class="footer-item">Preguntas Frecuentes</a></li>
+          {# ✅ NUEVAS URLs - Libranza #}
+          <li><a href="{% url 'libranza:landing' %}#preguntas-frecuentes" class="footer-item">Preguntas Frecuentes</a></li>
           <li><a href="#" class="footer-item">Términos y Condiciones</a></li>
           <li><a href="#" class="footer-item">Política de Privacidad</a></li>
           <li><a href="#" class="footer-item">Contacto</a></li>
+          <li><a href="{% url 'pagador:login' %}" class="footer-item">🏢 Acceso Pagadores</a></li>
           {% if request.user.is_authenticated %}
-          <li><a href="{% url 'usuariocreditos:dashboard_view' %}" class="footer-item">Mis Créditos</a></li>
+          <li><a href="{% url 'libranza:mi_credito' %}" class="footer-item">Mi Crédito</a></li>
           {% endif %}
         </ul>
       </div>

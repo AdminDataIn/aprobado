@@ -24,7 +24,8 @@
     <header class="page-header">
         <div class="container-fluid" style="max-width: 1400px;">
             <div class="d-flex align-items-center justify-content-between">
-                <a href="{% url 'gestion_creditos:admin_dashboard' %}" class="logo">
+                {# NUEVA URL - Gestión #}
+                <a href="{% url 'gestion:dashboard' %}" class="logo">
                     <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;" />
                 </a>
                 <div class="d-flex align-items-center gap-3">
@@ -47,7 +48,8 @@
                 <h1 class="page-title">Dashboard de Billetera Digital</h1>
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
-                        <li class="breadcrumb-item"><a href="{% url 'gestion_creditos:admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+                        {# NUEVA URL - Gestión #}
+                        <li class="breadcrumb-item"><a href="{% url 'gestion:dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
                         <li class="breadcrumb-item active" aria-current="page">Billetera Digital</li>
                     </ol>
                 </nav>
@@ -108,7 +110,8 @@
                         <h3 class="section-title"><i class="bi bi-plus-circle me-2"></i>Cargar Abono Manualmente</h3>
                     </div>
                     <div class="card-body">
-                        <form method="post" action="{% url 'gestion_creditos:cargar_abono_manual' %}" enctype="multipart/form-data">
+                        {# NUEVA URL - Billetera #}
+                        <form method="post" action="{% url 'billetera:gestion_abono_manual' %}" enctype="multipart/form-data">
                             {% csrf_token %}
                             <div class="mb-3">
                                 <label for="id_usuario_email" class="form-label">Correo del Usuario</label>
@@ -391,7 +394,7 @@
             document.getElementById('aprobar-monto').textContent = montoNumerico.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             
             const form = document.getElementById('formAprobar');
-            form.action = "{% url 'gestion_creditos:aprobar_consignacion' 0 %}".replace('0', movimientoId);
+            form.action = "{% url 'billetera:gestion_aprobar' 0 %}".replace('0', movimientoId);
             
             const modal = new bootstrap.Modal(document.getElementById('aprobarModal'));
             modal.show();
@@ -402,7 +405,7 @@
             document.getElementById('rechazar-usuario').textContent = nombreUsuario;
             
             const form = document.getElementById('formRechazar');
-            form.action = "{% url 'gestion_creditos:rechazar_consignacion' 0 %}".replace('0', movimientoId);
+            form.action = "{% url 'billetera:gestion_rechazar' 0 %}".replace('0', movimientoId);
             
             const modal = new bootstrap.Modal(document.getElementById('rechazarModal'));
             modal.show();

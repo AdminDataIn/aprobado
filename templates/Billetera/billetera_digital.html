@@ -89,15 +89,51 @@
             font-size: 0.65rem;
             padding: 0.25rem 0.4rem;
         }
+
+        /* TOAST STYLES */
+        .toast {
+            min-width: 320px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            backdrop-filter: blur(10px);
+            font-weight: 500;
+        }
+
+        .toast-body {
+            font-size: 0.9rem;
+            padding: 1rem;
+        }
+
+        .toast.bg-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
+        }
+
+        .toast.bg-danger {
+            background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%) !important;
+        }
+
+        .toast.bg-warning {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%) !important;
+            color: #000 !important;
+        }
+
+        .toast.bg-info {
+            background: linear-gradient(135deg, #17a2b8 0%, #6610f2 100%) !important;
+        }
     </style>
 </head>
 <body>
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-professional sticky-top">
         <div class="container">
-            <a class="navbar-brand" href="/">
+            {% if es_libranza %}
+            <a class="navbar-brand" href="{% url 'libranza:landing' %}">
+                <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Libranza" class="brand-logo">
+            </a>
+            {% else %}
+            <a class="navbar-brand" href="{% url 'emprendimiento:landing' %}">
                 <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado" class="brand-logo">
             </a>
+            {% endif %}
 
             <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -106,33 +142,57 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav mx-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'usuariocreditos:dashboard_view' %}">
+                        {% if es_libranza %}
+                        <a class="nav-link" href="{% url 'libranza:mi_credito' %}">
+                            <i class="bi bi-speedometer2 me-1"></i> Mi Crédito
+                        </a>
+                        {% else %}
+                        <a class="nav-link" href="{% url 'emprendimiento:mi_credito' %}">
                             <i class="bi bi-speedometer2 me-1"></i> Dashboard
                         </a>
+                        {% endif %}
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link active" href="{% url 'usuariocreditos:billetera_digital' %}">
+                        <a class="nav-link active" href="{% url 'billetera:dashboard' %}">
                             <i class="bi bi-wallet2 me-1"></i> Billetera
                         </a>
                     </li>
-                    {% if not es_empleado %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'gestion_creditos:solicitud_emprendimiento' %}">
-                            <i class="bi bi-plus-circle me-1"></i> Nuevo Crédito
-                        </a>
-                    </li>
-                    {% endif %}
                 </ul>
 
                 <div class="d-flex align-items-center gap-3">
-                    <div class="notification-badge">
-                        <i class="bi bi-bell notification-icon"></i>
-                        <span class="badge">3</span>
+                    {% if count_notificaciones > 0 %}
+                    <div class="dropdown">
+                        <div class="notification-badge" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-bell notification-icon"></i>
+                            <span class="badge">{{ count_notificaciones }}</span>
+                        </div>
+
+                        <div class="dropdown-menu dropdown-menu-end p-0" style="min-width: 320px; max-width: 400px;">
+                            <div class="p-3 border-bottom">
+                                <h6 class="mb-0 fw-bold">Notificaciones</h6>
+                                <small class="text-muted">Tienes {{ count_notificaciones }} notificación{{ count_notificaciones|pluralize:"es" }} nueva{{ count_notificaciones|pluralize }}</small>
+                            </div>
+                            <div style="max-height: 400px; overflow-y: auto;">
+                                {% for notif in notificaciones_no_leidas %}
+                                <a href="{{ notif.url|default:'#' }}" class="dropdown-item p-3 border-bottom" style="white-space: normal;">
+                                    <div class="d-flex gap-2">
+                                        <i class="bi bi-circle-fill text-primary" style="font-size: 0.5rem; margin-top: 0.5rem;"></i>
+                                        <div class="flex-grow-1">
+                                            <div class="fw-semibold">{{ notif.titulo }}</div>
+                                            <small class="text-muted d-block">{{ notif.mensaje|truncatewords:15 }}</small>
+                                            <small class="text-muted">{{ notif.fecha_creacion|timesince }} atrás</small>
+                                        </div>
+                                    </div>
+                                </a>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
+                    {% endif %}
 
                     <div class="dropdown">
                         <div class="user-info" data-bs-toggle="dropdown">
-                            <div class="user-avatar">{{ credito.usuario.first_name|first|default:"U" }}{{ credito.usuario.last_name|first|default:"" }}</div>
+                            <div class="user-avatar">{{ user.first_name|first|default:"U" }}{{ user.last_name|first|default:"" }}</div>
                             <div class="user-details d-none d-md-block">
                                 <span class="user-name">{{ user.get_full_name|default:"Usuario" }}</span>
                                 <span class="user-role">{{ user.email }}</span>
@@ -167,7 +227,10 @@
                             <hr class="my-2">
                             <div class="user-menu-item d-flex gap-2 align-items-center text-danger">
                                 <i class="bi bi-box-arrow-right"></i>
-                                <a href="{% url 'account_logout' %}" class="text-decoration-none text-danger">Cerrar Sesión</a>
+                                <form id="logout-form-billetera" method="post" action="{% if es_libranza %}{% url 'libranza:logout' %}{% else %}{% url 'emprendimiento:logout' %}{% endif %}" style="display: inline;">
+                                    {% csrf_token %}
+                                    <a href="#" onclick="event.preventDefault(); document.getElementById('logout-form-billetera').submit();" class="text-decoration-none text-danger">Cerrar Sesión</a>
+                                </form>
                             </div>
                         </div>
                     </div>
@@ -176,17 +239,22 @@
         </div>
     </nav>
 
-    <!-- Messages -->
-    {% if messages %}
-    <div class="container-fluid py-2" style="max-width: 1400px;">
+    <!-- Toast Container (Fixed Position) - Unified -->
+    <div id="toastContainer" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+        {% if messages %}
         {% for message in messages %}
-        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        <div class="toast align-items-center text-white bg-{{ message.tags }} border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="5000">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    {{ message }}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
         </div>
         {% endfor %}
+        {% endif %}
     </div>
-    {% endif %}
 
     <div class="container-fluid py-4" style="max-width: 1400px;">
         <div class="row">
@@ -406,7 +474,8 @@
                     </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form id="offlineConsignmentForm" method="post" action="{% url 'gestion_creditos:consignacion_offline' %}" enctype="multipart/form-data">
+                {# NUEVA URL - Billetera #}
+                <form id="offlineConsignmentForm" method="post" action="{% url 'billetera:consignar' %}" enctype="multipart/form-data">
                     {% csrf_token %}
                     <div class="modal-body">
                         <div class="alert alert-info">
@@ -460,7 +529,53 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
+        // Función para mostrar toasts dinámicos
+        function showToast(message, type = 'success') {
+            const toastContainer = document.getElementById('toastContainer');
+            const toastId = 'toast-' + Date.now();
+
+            // Mapeo de tipos a clases de Bootstrap y iconos
+            const typeConfig = {
+                'success': { class: 'bg-success', icon: 'bi-check-circle-fill' },
+                'error': { class: 'bg-danger', icon: 'bi-x-circle-fill' },
+                'warning': { class: 'bg-warning', icon: 'bi-exclamation-triangle-fill' },
+                'info': { class: 'bg-info', icon: 'bi-info-circle-fill' }
+            };
+
+            const config = typeConfig[type] || typeConfig['success'];
+
+            const toastHTML = `
+                <div id="${toastId}" class="toast align-items-center text-white ${config.class} border-0 mb-2" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <i class="bi ${config.icon} me-2"></i>
+                            ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+
+            toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+
+            const toastElement = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastElement, { delay: 5000 });
+            toast.show();
+
+            // Remover el elemento del DOM después de que se oculte
+            toastElement.addEventListener('hidden.bs.toast', () => {
+                toastElement.remove();
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
+            // Mostrar toasts de Django messages al cargar
+            const djangoToasts = document.querySelectorAll('#toastContainer .toast');
+            djangoToasts.forEach(toastEl => {
+                const toast = new bootstrap.Toast(toastEl);
+                toast.show();
+            });
+
             // Datos del gráfico desde Django
             const chartData = {{ chart_data|safe }};
 
@@ -590,12 +705,23 @@
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            feedbackDiv.className = 'alert alert-success';
-                            feedbackDiv.textContent = data.mensaje || '¡Consignación enviada con éxito!';
+                            // Cerrar el modal
+                            const modal = bootstrap.Modal.getInstance(document.getElementById('consignarModal'));
+                            modal.hide();
+
+                            // Mostrar toast de éxito
+                            showToast(
+                                `¡Consignación enviada exitosamente! Referencia: ${data.referencia}. Tu consignación será revisada pronto.`,
+                                'success'
+                            );
+
+                            // Limpiar el formulario
+                            offlineForm.reset();
+                            feedbackDiv.classList.add('d-none');
+
+                            // Recargar después de 2 segundos
                             setTimeout(() => {
-                                const modal = bootstrap.Modal.getInstance(document.getElementById('consignarModal'));
-                                modal.hide();
-                                location.reload(); // Recargar para ver el mensaje de Django
+                                location.reload();
                             }, 2000);
                         } else {
                             let errorMsg = 'Ocurrió un error. Por favor, revise los datos.';
@@ -606,17 +732,18 @@
                             }
                             feedbackDiv.className = 'alert alert-danger';
                             feedbackDiv.textContent = errorMsg;
+                            feedbackDiv.classList.remove('d-none');
                         }
                     })
                     .catch(error => {
                         feedbackDiv.className = 'alert alert-danger';
                         feedbackDiv.textContent = 'Error de conexión. Por favor, inténtalo de nuevo.';
+                        feedbackDiv.classList.remove('d-none');
                         console.error('Error:', error);
                     })
                     .finally(() => {
                         submitBtn.disabled = false;
                         submitBtn.innerHTML = '<i class="bi bi-upload me-2"></i>Enviar Comprobante';
-                        feedbackDiv.classList.remove('d-none');
                     });
                 });
             }

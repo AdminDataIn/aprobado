@@ -629,6 +629,15 @@ def get_billetera_context(user):
         'data': chart_values
     }
 
+    # Determinar tipo de usuario (empleado/libranza vs emprendedor)
+    from gestion_creditos.models import Credito
+    es_empleado = user.groups.filter(name='Empleados').exists()
+    tiene_credito_libranza = Credito.objects.filter(
+        usuario=user,
+        linea='LIBRANZA'
+    ).exists()
+    es_libranza = es_empleado or tiene_credito_libranza
+
     return {
         'cuenta': cuenta,
         'saldo_disponible': cuenta.saldo_disponible,
@@ -643,6 +652,8 @@ def get_billetera_context(user):
         'movimientos_recientes': movimientos_recientes,
         'chart_data': json.dumps(chart_data),
         'total_depositado': total_depositado,
+        'es_empleado': es_empleado,
+        'es_libranza': es_libranza,
     }
 
 

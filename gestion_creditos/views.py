@@ -86,7 +86,7 @@ def simular_firma_view(request, credito_id):
 
     if credito.estado != Credito.EstadoCredito.PENDIENTE_FIRMA:
         messages.error(request, f"El crédito no está en estado 'Pendiente Firma'. Estado actual: {credito.get_estado_display()}.")
-        return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
+        return redirect('gestion:credito_detalle', credito_id=credito.id)
 
     try:
         with transaction.atomic():
@@ -107,11 +107,11 @@ def simular_firma_view(request, credito_id):
         messages.error(request, f"Error al simular la firma para el crédito {credito.id}: {e}")
         logger.error(f"Error en simular_firma_view para crédito {credito.id}: {e}", exc_info=True)
 
-    return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
+    return redirect('gestion:credito_detalle', credito_id=credito.id)
 
 
 #? --------- VISTA DE CREDITO DE LIBRANZA ------------
-@login_required
+@login_required(login_url='/accounts/google/login/')
 def solicitud_credito_libranza_view(request):
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     if request.method == 'POST':
@@ -141,7 +141,7 @@ def solicitud_credito_libranza_view(request):
 
             if is_ajax:
                 return JsonResponse({'success': True})
-            return redirect('usuariocreditos:dashboard_view')
+            return redirect('usuariocreditos:dashboard_libranza')  # ⭐ Redirige al dashboard de LIBRANZA
         else:
             if is_ajax:
                 return JsonResponse({'success': False, 'errors': form.errors}, status=400)
@@ -378,7 +378,7 @@ def solicitud_credito_emprendimiento_view(request):
     else:
         form = CreditoEmprendimientoForm()
 
-    return render(request, 'gestion_creditos/solicitud_emprendimiento.html', {'form': form})
+    return render(request, 'aplicando.html', {'form': form})
 
 @staff_member_required
 def admin_dashboard_view(request):
@@ -537,7 +537,7 @@ def procesar_solicitud_view(request, credito_id):
     """Aprobar o rechazar una solicitud usando el servicio centralizado."""
     if request.method != 'POST':
         messages.error(request, "Método no permitido.")
-        return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito_id)
+        return redirect('gestion:credito_detalle', credito_id=credito_id)
 
     credito = get_object_or_404(Credito, id=credito_id, estado__in=['SOLICITUD', 'EN_REVISION'])
     action = request.POST.get('action')
@@ -553,7 +553,7 @@ def procesar_solicitud_view(request, credito_id):
 
             if not monto_aprobado_str or not plazo_str:
                 messages.error(request, "Para aprobar, el monto y el plazo son obligatorios.")
-                return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito_id)
+                return redirect('gestion:credito_detalle', credito_id=credito_id)
 
             credito.monto_aprobado = Decimal(monto_aprobado_str)
             credito.plazo = int(plazo_str)
@@ -561,14 +561,14 @@ def procesar_solicitud_view(request, credito_id):
         
         except (ValueError, TypeError, decimal.InvalidOperation) as e:
             messages.error(request, f"Monto o plazo inválido: {e}")
-            return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito_id)
+            return redirect('gestion:credito_detalle', credito_id=credito_id)
 
     elif action == 'reject':
         nuevo_estado = Credito.EstadoCredito.RECHAZADO
         messages.warning(request, f'Crédito {credito.numero_credito} rechazado.')
     else:
         messages.error(request, "Acción no válida.")
-        return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito_id)
+        return redirect('gestion:credito_detalle', credito_id=credito_id)
 
     motivo = request.POST.get('observations', 'Decisión inicial de la solicitud.')
     
@@ -594,7 +594,7 @@ def procesar_solicitud_view(request, credito_id):
         logger.error(f"Error al procesar solicitud del crédito {credito.id}: {e}", exc_info=True)
 
 
-    return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito_id)
+    return redirect('gestion:credito_detalle', credito_id=credito_id)
 
 
 @staff_member_required
@@ -618,12 +618,15 @@ def detalle_credito_view(request, credito_id):
     cuotas_pagadas = historial_pagos.count()
     cuotas_restantes = (credito.plazo - cuotas_pagadas) if credito.plazo else 0
 
+    # Tabla de amortización (si existe)
+    tabla_amortizacion = credito.tabla_amortizacion.all().order_by('numero_cuota')
+
     # Determinar si el crédito puede ser procesado (aprobado/rechazado)
     puede_procesar = credito.estado in [Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION]
     print("Monto solicitado: ",credito.monto_solicitado)
     context = {
         'credito': credito,
-        
+
         # ✅ Campos ahora vienen del modelo Credito
         'monto_solicitado': credito.monto_solicitado,
         'plazo_solicitado': credito.plazo_solicitado,
@@ -636,7 +639,7 @@ def detalle_credito_view(request, credito_id):
         'total_a_pagar': credito.total_a_pagar,
         'comision': credito.comision,
         'iva_comision': credito.iva_comision,
-        
+
         # Campos que SÍ vienen del detalle
         'detalle': credito.detalle,  # Usa la property
         'historial_pagos': historial_pagos,
@@ -644,6 +647,7 @@ def detalle_credito_view(request, credito_id):
         'puede_procesar': puede_procesar,
         'cuotas_pagadas': cuotas_pagadas,
         'cuotas_restantes': cuotas_restantes,
+        'tabla_amortizacion': tabla_amortizacion,  # ⭐ NUEVA: Tabla de amortización
     }
     
     return render(request, 'gestion_creditos/admin_detalle_credito.html', context)
@@ -662,12 +666,12 @@ def confirmar_desembolso_view(request, credito_id):
     # 1. Validar estado actual
     if credito.estado != Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA:
         messages.error(request, f"El crédito no está en estado 'Pendiente de Transferencia'. Estado actual: {credito.get_estado_display()}.")
-        return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
+        return redirect('gestion:credito_detalle', credito_id=credito.id)
 
     # 2. Validar que se haya subido el comprobante
     if not comprobante:
         messages.error(request, "Es obligatorio adjuntar el comprobante de desembolso.")
-        return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
+        return redirect('gestion:credito_detalle', credito_id=credito.id)
 
     # 3. Ejecutar el cambio de estado a ACTIVO
     try:
@@ -683,7 +687,7 @@ def confirmar_desembolso_view(request, credito_id):
         messages.error(request, f"Ocurrió un error inesperado al activar el crédito: {e}")
         logger.error(f"Error al activar crédito {credito.id} vía confirmación de desembolso: {e}", exc_info=True)
 
-    return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
+    return redirect('gestion:credito_detalle', credito_id=credito.id)
 
 
 
@@ -696,11 +700,11 @@ def agregar_pago_manual_view(request, credito_id):
 
     if not monto or not auth_key:
         messages.error(request, "Monto y clave de autorización son requeridos.")
-        return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
+        return redirect('gestion:credito_detalle', credito_id=credito.id)
 
     if auth_key != getattr(settings, 'MANUAL_PAYMENT_AUTH_KEY', None):
         messages.error(request, "Clave de autorización no válida.")
-        return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
+        return redirect('gestion:credito_detalle', credito_id=credito.id)
 
     try:
         monto_decimal = Decimal(monto)
@@ -728,7 +732,7 @@ def agregar_pago_manual_view(request, credito_id):
     except Exception as e:
         messages.error(request, f"Ocurrió un error inesperado: {e}")
 
-    return redirect('gestion_creditos:admin_detalle_credito', credito_id=credito.id)
+    return redirect('gestion:credito_detalle', credito_id=credito.id)
 
 @staff_member_required
 def descargar_documentos_view(request, credito_id):

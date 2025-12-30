@@ -1,0 +1,25 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Aprobado{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="{% block body_class %}body-index{% endblock %}">
+<div class="div-body-main">
+    {% include 'base/navbar.html' %}
+
+    <main>
+        {% block content %}
+        {% endblock %}
+    </main>
+
+    {% include 'base/footer.html' %}
+</div>
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

@@ -1,6 +1,7 @@
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
+from django.urls import reverse
 from gestion_creditos.models import Credito, HistorialPago, HistorialEstado, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, CuotaAmortizacion
 from django.utils import timezone
 from django.db.models import Sum
@@ -25,14 +26,115 @@ def get_logo_base64():
         return None
 
 @login_required
-def dashboard_view(request, credito_id=None):
-    creditos_usuario = Credito.objects.filter(usuario=request.user).select_related(
-        'detalle_emprendimiento', 'detalle_libranza'
-    )
+def dashboard_libranza_view(request, credito_id=None):
+    """
+    Dashboard EXCLUSIVO para créditos de LIBRANZA.
+    Muestra SOLO los créditos de libranza del usuario, sin redirecciones.
+    """
+    # Filtrar SOLO créditos de libranza
+    creditos_usuario = Credito.objects.filter(
+        usuario=request.user,
+        linea=Credito.LineaCredito.LIBRANZA
+    ).select_related('detalle_libranza')
 
     if not creditos_usuario.exists():
+        # Usuario sin créditos de libranza - mostrar página genérica
         return render(request, 'usuariocreditos/sin_creditos.html', {
-            'nombre_asociado': request.user.get_full_name() or request.user.username
+            'nombre_asociado': request.user.get_full_name() or request.user.username,
+            'es_empleado': True  # En libranza, asumimos que es empleado
+        })
+
+    if credito_id:
+        credito_actual = get_object_or_404(creditos_usuario, id=credito_id, usuario=request.user)
+    else:
+        # Lógica mejorada para seleccionar el crédito por defecto
+        credito_actual = (
+            creditos_usuario.filter(estado=Credito.EstadoCredito.ACTIVO).first() or
+            creditos_usuario.filter(estado=Credito.EstadoCredito.EN_MORA).first() or
+            creditos_usuario.order_by('-fecha_solicitud').first()
+        )
+
+    # --- Inicialización de variables ---
+    historial_pagos = None
+    monto_total_pagado = Decimal(0)
+    detalle = credito_actual.detalle  # Usar la propiedad del modelo
+    cuotas_pagadas = 0
+    cuotas_restantes = 0
+    plan_pagos = []
+
+    # --- Cálculos para créditos activos o finalizados ---
+    if credito_actual.estado in [
+        Credito.EstadoCredito.ACTIVO,
+        Credito.EstadoCredito.PAGADO,
+        Credito.EstadoCredito.EN_MORA,
+        Credito.EstadoCredito.FIRMADO,
+        Credito.EstadoCredito.APROBADO,
+        Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA
+    ]:
+        historial_pagos = HistorialPago.objects.filter(
+            credito=credito_actual,
+            estado=HistorialPago.EstadoPago.EXITOSO
+        ).order_by('-fecha_pago')
+
+        monto_total_pagado = historial_pagos.aggregate(total=Sum('monto'))['total'] or Decimal(0)
+
+        plan_pagos = credito_actual.tabla_amortizacion.all().order_by('numero_cuota')
+        cuotas_pagadas = plan_pagos.filter(pagada=True).count()
+
+        if credito_actual.plazo:
+            cuotas_restantes = credito_actual.plazo - cuotas_pagadas
+
+    # --- Usar propiedades del modelo para cálculos financieros ---
+    capital_pagado_monto = credito_actual.capital_pagado
+    porcentaje_capital_pagado = int(credito_actual.porcentaje_pagado)
+
+    # --- Calcular días transcurridos desde la activación ---
+    dias_transcurridos = 0
+    fecha_activacion = HistorialEstado.objects.filter(
+        credito=credito_actual,
+        estado_nuevo=Credito.EstadoCredito.ACTIVO
+    ).order_by('-fecha').first()
+
+    if fecha_activacion:
+        dias_transcurridos = (timezone.now() - fecha_activacion.fecha).days
+
+    # --- Contexto para la plantilla ---
+    context = {
+        'nombre_asociado': request.user.get_full_name() or request.user.username,
+        'creditos_usuario': creditos_usuario,
+        'credito_actual': credito_actual,
+        'detalle_credito': detalle,
+        'tiene_multiples_creditos': creditos_usuario.count() > 1,
+        'monto_total_pagado': monto_total_pagado,
+        'historial_pagos': historial_pagos,
+        'dias_transcurridos': dias_transcurridos,
+        'cuotas_pagadas': cuotas_pagadas,
+        'cuotas_restantes': cuotas_restantes,
+        'porcentaje_capital_pagado': porcentaje_capital_pagado,
+        'capital_pagado_monto': capital_pagado_monto,
+        'plan_pagos': plan_pagos,
+        'es_libranza': True,  # ⭐ Flag para identificar dashboard de Libranza
+    }
+    return render(request, 'usuariocreditos/dashboard_libranza.html', context)
+
+
+@login_required
+def dashboard_view(request, credito_id=None):
+    """
+    Dashboard EXCLUSIVO para créditos de EMPRENDIMIENTO.
+    Muestra SOLO los créditos de emprendimiento del usuario, sin redirecciones.
+    """
+    # Filtrar SOLO créditos de emprendimiento
+    creditos_usuario = Credito.objects.filter(
+        usuario=request.user,
+        linea=Credito.LineaCredito.EMPRENDIMIENTO
+    ).select_related('detalle_emprendimiento')
+
+    if not creditos_usuario.exists():
+        # Usuario sin créditos de emprendimiento - mostrar página genérica
+        return render(request, 'usuariocreditos/sin_creditos.html', {
+            'nombre_asociado': request.user.get_full_name() or request.user.username,
+            'es_empleado': False  # En emprendimiento nunca es empleado
         })
 
     if credito_id:
@@ -104,9 +206,10 @@ def dashboard_view(request, credito_id=None):
         'porcentaje_capital_pagado': porcentaje_capital_pagado,
         'capital_pagado_monto': capital_pagado_monto,
         'plan_pagos': plan_pagos,
-        'es_empleado': request.user.groups.filter(name='empleado').exists(),
+        'es_empleado': False,  # Dashboard de emprendimiento nunca es empleado
+        'es_libranza': False,  # Dashboard de emprendimiento nunca es libranza
     }
-    return render(request, 'usuariocreditos/dashboard.html', context)
+    return render(request, 'usuariocreditos/dashboard_emprendimiento.html', context)
 
 
 def billetera_digital(request):
@@ -147,6 +250,13 @@ def billetera_digital(request):
         tasa_actual = None
         chart_data = {"labels": [], "data": []}
 
+    # Detectar si el usuario tiene créditos de Libranza
+    from gestion_creditos.models import Credito
+    tiene_libranza = Credito.objects.filter(
+        usuario=request.user,
+        linea=Credito.LineaCredito.LIBRANZA
+    ).exists()
+
     context = {
         'nombre_asociado': request.user.get_full_name() or request.user.username,
         'cuenta': cuenta,
@@ -162,6 +272,7 @@ def billetera_digital(request):
         'movimientos_recientes': movimientos_recientes,
         'chart_data': json.dumps(chart_data),
         'es_empleado': request.user.groups.filter(name='empleado').exists(),
+        'es_libranza': tiene_libranza,  # ⭐ Nuevo contexto
     }
     return render(request, 'Billetera/billetera_digital.html', context)
 

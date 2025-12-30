@@ -102,9 +102,11 @@ que requiere autenticación con Google (según especificaciones).
                     <p>Financia tus proyectos personales con descuento automático de nómina. Proceso 100% digital, aprobación rápida y sin complicaciones.</p>
                     <div class="libranza-hero-buttons">
                         <!-- MODIFICAR: URL o texto del botón principal -->
-                        <a href="{% url 'usuarios:simulador_libranza' %}" class="libranza-btn-primary">Simula tu crédito</a>
+                        {# NUEVA URL - Libranza #}
+                        <a href="{% url 'libranza:simulador' %}" class="libranza-btn-primary">Simula tu crédito</a>
                         <!-- MODIFICAR: URL del botón secundario -->
-                        <a href="{% url 'gestion_creditos:solicitud_libranza' %}" class="libranza-btn-secondary">Aplicar ahora</a>
+                        {# NUEVA URL - Libranza #}
+                        <a href="{% url 'libranza:solicitar' %}" class="libranza-btn-secondary">Aplicar ahora</a>
                     </div>
                 </div>
                 <!-- MODIFICAR: Imagen o gráfico hero -->
@@ -178,7 +180,8 @@ que requiere autenticación con Google (según especificaciones).
 
             <!-- Botón para ir al simulador -->
             <div class="libranza-simulator-cta">
-                <a href="{% url 'usuarios:simulador_libranza' %}" class="libranza-btn-primary-large">Ir al simulador completo</a>
+                {# ✅ NUEVA URL - Libranza #}
+                <a href="{% url 'libranza:simulador' %}" class="libranza-btn-primary-large">Ir al simulador completo</a>
             </div>
         </div>
     </section>
@@ -244,10 +247,13 @@ que requiere autenticación con Google (según especificaciones).
                         <!-- MODIFICAR: Tipo de cuota -->
                         <li><strong>Cuota:</strong> Fija mensual descontada de nómina</li>
                         <!-- MODIFICAR: Comisión -->
-                        <li><strong>Comisión:</strong> 10% + IVA sobre el monto</li>
+                        <li><strong>Comisión:</strong> 10% + IVA (19%) sobre el monto</li>
                         <!-- MODIFICAR: Tasa de interés si aplica -->
-                        <li><strong>Tasa de interés:</strong> 2% Efectiva mensual (EM)</li>
+                        <li><strong>Tasa de interés:</strong> 2% Efectiva mensual (EM) - 26.82% EA</li>
                     </ul>
+                    <p class="libranza-note" style="margin-top: 1rem; background-color: #dbeafe; border-left: 4px solid #06b6d4;">
+                        <strong>💡 Transparencia total:</strong> En nuestro simulador verás el desglose completo: monto, comisión, IVA, intereses totales, y cuota mensual. Sin sorpresas, sin letra pequeña.
+                    </p>
                 </div>
 
                 <!-- Columna 2: Documentos requeridos -->
@@ -336,6 +342,23 @@ que requiere autenticación con Google (según especificaciones).
                 <!-- FAQ 6 -->
                 <div class="libranza-faq-item">
                     <button class="libranza-faq-question" onclick="toggleFAQ(this)">
+                        <span>¿Cuáles son todos los costos del crédito?</span>
+                        <span class="libranza-faq-icon">+</span>
+                    </button>
+                    <div class="libranza-faq-answer">
+                        <p><strong>Costos totales del crédito de libranza:</strong></p>
+                        <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                            <li><strong>Comisión:</strong> 10% del monto solicitado (única vez)</li>
+                            <li><strong>IVA sobre comisión:</strong> 19% de la comisión</li>
+                            <li><strong>Intereses:</strong> 2% efectivo mensual sobre el capital financiado</li>
+                        </ul>
+                        <p style="margin-top: 0.75rem;"><strong>Ejemplo:</strong> Si solicitas $1.000.000 a 3 meses, pagarás aproximadamente $45.000 de intereses en total. Usa nuestro simulador para ver el desglose exacto de tu crédito.</p>
+                    </div>
+                </div>
+
+                <!-- FAQ 7 -->
+                <div class="libranza-faq-item">
+                    <button class="libranza-faq-question" onclick="toggleFAQ(this)">
                         <span>¿Mi empresa tiene convenio de libranza?</span>
                         <span class="libranza-faq-icon">+</span>
                     </button>
@@ -361,8 +384,9 @@ que requiere autenticación con Google (según especificaciones).
                     <p>Completa tu solicitud en minutos y obtén una respuesta rápida. Es fácil, seguro y 100% digital.</p>
                     <div class="libranza-cta-buttons">
                         <!-- MODIFICAR: Botones de acción -->
-                        <a href="{% url 'gestion_creditos:solicitud_libranza' %}" class="libranza-btn-primary-large">Solicitar ahora</a>
-                        <a href="{% url 'usuarios:simulador_libranza' %}" class="libranza-btn-secondary-large">Simular crédito</a>
+                        {# ✅ NUEVAS URLs - Libranza #}
+                        <a href="{% url 'libranza:solicitar' %}" class="libranza-btn-primary-large">Solicitar ahora</a>
+                        <a href="{% url 'libranza:simulador' %}" class="libranza-btn-secondary-large">Simular crédito</a>
                     </div>
                     <!-- MODIFICAR: Información de contacto -->
                     <p class="libranza-contact-info">
@@ -412,7 +436,7 @@ que requiere autenticación con Google (según especificaciones).
 
     /* HERO SECTION */
     .libranza-hero-section {
-        background: linear-gradient(135deg, #0a192f 0%, #1e293b 100%);
+        background: #0a192f;
         padding: 4rem 1rem;
         min-height: 600px;
         display: flex;

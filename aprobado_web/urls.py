@@ -1,33 +1,71 @@
 """
 URL configuration for aprobado_web project.
 
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/5.0/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
+🎯 NUEVA ESTRUCTURA ORGANIZADA (2025-12-21)
+
+Prefijos principales:
+- /emprendimiento/  → Producto de microcréditos para emprendedores
+- /libranza/        → Producto de crédito de nómina
+- /gestion/         → Panel de analistas de crédito
+- /pagador/         → Panel de pagadores de empresas (RR.HH.)
+- /billetera/       → Sistema de ahorro digital
+
+Legacy (backwards compatibility):
+- /usuarios/        → Redirige a nuevas rutas
+- /mi-credito/      → Redirige a nuevas rutas
+- /gestion-creditos/ → Redirige a nuevas rutas
 """
-from django.contrib import admin #type: ignore
-from django.urls import path, include #type: ignore
-from django.shortcuts import redirect #type: ignore
-from django.conf import settings #type: ignore
-from django.conf.urls.static import static #type: ignore
+from django.contrib import admin
+from django.urls import path, include
+from django.views.generic import TemplateView
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
+    # ========================================
+    # ADMINISTRACIÓN DJANGO
+    # ========================================
     path('admin/', admin.site.urls),
-    path('accounts/', include('allauth.urls')),  # Nueva línea
-    path('usuarios/', include('usuarios.urls')),
-    path('mi-credito/', include('usuariocreditos.urls')),
-    path('configuraciones/', include('configuraciones.urls')),
-    path('', lambda request: redirect('usuarios:inicio')),
-    path('gestion-creditos/', include('gestion_creditos.urls')),
+
+    # ========================================
+    # AUTENTICACIÓN (Django Allauth)
+    # ========================================
+    path('accounts/', include('allauth.urls')),
+
+    # ========================================
+    # PRODUCTOS (NUEVA ESTRUCTURA)
+    # ========================================
+    path('emprendimiento/', include('usuarios.urls_emprendimiento')),
+    path('libranza/', include('usuarios.urls_libranza')),
+
+    # ========================================
+    # ROLES ADMINISTRATIVOS
+    # ========================================
+    path('gestion/', include('gestion_creditos.urls_gestion')),
+    path('pagador/', include('gestion_creditos.urls_pagador')),
+
+    # ========================================
+    # BILLETERA DIGITAL
+    # ========================================
+    path('billetera/', include('gestion_creditos.urls_billetera')),
+
+    # ========================================
+    # LEGACY URLS (DEPRECADAS - ELIMINADAS)
+    # ========================================
+    # Las siguientes rutas legacy fueron eliminadas el 2025-12-23
+    # Si se detectan errores, se deben actualizar las referencias a las nuevas URLs
+    # path('usuarios/', include('usuarios.urls')),  # ELIMINADO - Usar /emprendimiento/ o /libranza/
+    # path('mi-credito/', include('usuariocreditos.urls')),  # ELIMINADO - Usar /emprendimiento/mi-credito/ o /libranza/mi-credito/
+    # path('gestion-creditos/', include('gestion_creditos.urls')),  # ELIMINADO - Usar /gestion/, /pagador/, o /billetera/
+    # path('configuraciones/', include('configuraciones.urls')),  # ELIMINADO - No se usa
+
+    # ========================================
+    # PÁGINA DE INICIO
+    # ========================================
+    # Landing principal de emprendimiento
+    path('', TemplateView.as_view(
+        template_name='index.html'
+    ), name='home'),
 ]
 
 # Servir archivos media en desarrollo

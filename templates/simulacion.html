@@ -20,9 +20,10 @@
                     <!-- SIMULADOR DE LIBRANZA -->
                     <div class="simulador-text-content">
                         <h1>Simulador de Crédito de Libranza</h1>
-                        <p>Calcula tu cuota mensual y conoce las condiciones de tu crédito de libranza. 
+                        <p>Calcula tu cuota mensual y conoce las condiciones de tu crédito de libranza.
                            Financiamiento con descuento directo de nómina para empleados públicos y privados.</p>
-                        <a href="{% url 'gestion_creditos:solicitud_libranza' %}" target="_blank" class="simulador-cta-button">Aplicar ahora</a>
+                        {# NUEVA URL - Libranza #}
+                        <a href="{% url 'libranza:solicitar' %}" target="_blank" class="simulador-cta-button">Aplicar ahora</a>
                     </div>
 
                     <div class="simulador-card">
@@ -107,7 +108,8 @@
                         <h1>Una solución financiera segura para tu negocio</h1>
                         <p>Accede a financiamiento ágil y confiable, diseñado específicamente para las necesidades de tu
                             negocio, sin trámites complicados.</p>
-                        <a href="{% url 'usuarios:aplicar' %}" target="_blank" class="simulador-cta-button">Aplicar ahora</a>
+                        {# NUEVA URL - Emprendimiento #}
+                        <a href="{% url 'emprendimiento:solicitar' %}" target="_blank" class="simulador-cta-button">Aplicar ahora</a>
                     </div>
 
                     <div class="simulador-card">
@@ -151,24 +153,34 @@
                                                class="simulador-result-input" readonly>
                                     </div>
                                     <div class="simulador-result-row">
-                                        <label for="cuotaAdIva" class="simulador-result-label">Cuota de administración +
-                                            IVA:</label>
-                                        <input type="text" id="cuotaAdIva" name="cuotaAdIva" value="71.400,00"
+                                        <label for="comisionEmp" class="simulador-result-label">Comisión (10%):</label>
+                                        <input type="text" id="comisionEmp" name="comisionEmp" value="50.000,00"
                                                class="simulador-result-input" readonly>
                                     </div>
                                     <div class="simulador-result-row">
-                                        <label for="afianzad" class="simulador-result-label">Afianzadora:</label>
-                                        <input type="text" id="afianzad" name="afianzad" value="25.000,00"
+                                        <label for="ivaComisionEmp" class="simulador-result-label">IVA sobre comisión (19%):</label>
+                                        <input type="text" id="ivaComisionEmp" name="ivaComisionEmp" value="9.500,00"
                                                class="simulador-result-input" readonly>
                                     </div>
                                     <div class="simulador-result-row">
-                                        <label for="valCuota" class="simulador-result-label">Cuota mensual:</label>
-                                        <input type="text" id="valCuota" name="valCuota" value="298.200,00"
+                                        <label for="interesesEmp" class="simulador-result-label">Intereses (3.5% EM):</label>
+                                        <input type="text" id="interesesEmp" name="interesesEmp" value="36.044,35"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                    <!-- Afianzadora (próximamente - estructura lista) -->
+                                    <div class="simulador-result-row" style="opacity: 0.5;">
+                                        <label for="afianzadoraEmp" class="simulador-result-label">Afianzadora (4% + IVA) - Próximamente:</label>
+                                        <input type="text" id="afianzadoraEmp" name="afianzadoraEmp" value="23.800,00"
                                                class="simulador-result-input" readonly>
                                     </div>
                                     <div class="simulador-result-row">
-                                        <label for="totalPag" class="simulador-result-label">Total a pagar:</label>
-                                        <input type="text" id="totalPag" name="totalPag" value="596.400,00"
+                                        <label for="totalPagarEmp" class="simulador-result-label">Total a pagar:</label>
+                                        <input type="text" id="totalPagarEmp" name="totalPagarEmp" value="595.500,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label for="cuotaMensualEmp" class="simulador-result-label">Cuota mensual:</label>
+                                        <input type="text" id="cuotaMensualEmp" name="cuotaMensualEmp" value="297.750,00"
                                                class="simulador-result-input" readonly>
                                     </div>
                                 </div>
@@ -229,25 +241,57 @@
         {% else %}
         // SCRIPT PARA SIMULADOR DE EMPRENDIMIENTO
         const totalPrestamoInput = document.getElementById("total-pr-emp");
-        const cuotaAdIvaInput = document.getElementById("cuotaAdIva");
-        const afianzadInput = document.getElementById("afianzad");
-        const totalPagInput = document.getElementById("totalPag");
-        const valCuotaInput = document.getElementById("valCuota");
+        const comisionEmpInput = document.getElementById("comisionEmp");
+        const ivaComisionEmpInput = document.getElementById("ivaComisionEmp");
+        const interesesEmpInput = document.getElementById("interesesEmp");
+        const afianzadoraEmpInput = document.getElementById("afianzadoraEmp");
+        const totalPagarEmpInput = document.getElementById("totalPagarEmp");
+        const cuotaMensualEmpInput = document.getElementById("cuotaMensualEmp");
+
+        function calcularCuotaAnualidad(monto, tasaMensual, meses) {
+            if (tasaMensual === 0) {
+                return monto / meses;
+            }
+            const factor = Math.pow(1 + tasaMensual, meses);
+            const cuota = monto * (tasaMensual * factor) / (factor - 1);
+            return cuota;
+        }
 
         function actualizarCalculosEmprendimiento() {
-            const totalPrestamo = parseFloat(slider1.value);
+            const montoSolicitado = parseFloat(slider1.value);
             const meses = parseFloat(slider2.value);
 
-            const cuotaAdIva = totalPrestamo * 0.1428;
-            const afianzad = totalPrestamo * 0.05;
-            const totalPag = totalPrestamo + cuotaAdIva + afianzad;
-            const cuotaMensual = totalPag / meses;
+            // Calcular comisión (10% del monto solicitado)
+            const comision = montoSolicitado * 0.10;
+            const ivaComision = comision * 0.19;
 
-            totalPrestamoInput.value = formatColombianNumber(totalPrestamo);
-            cuotaAdIvaInput.value = formatColombianNumber(cuotaAdIva);
-            afianzadInput.value = formatColombianNumber(afianzad);
-            totalPagInput.value = formatColombianNumber(totalPag);
-            valCuotaInput.value = formatColombianNumber(cuotaMensual);
+            // Calcular afianzadora (4% + IVA)
+            const afianzadora = montoSolicitado * 0.04;
+            const ivaAfianzadora = afianzadora * 0.19;
+            const totalAfianzadora = afianzadora + ivaAfianzadora;
+
+            // Capital financiado total (monto + comisión + IVA comisión)
+            const totalSinAfianzadora = montoSolicitado + comision + ivaComision;
+
+            // Tasa de interés mensual: 3.5% efectiva mensual para emprendimiento
+            const tasaMensual = 0.035;
+
+            // Calcular cuota mensual usando fórmula de amortización francesa
+            const cuotaMensual = calcularCuotaAnualidad(totalSinAfianzadora, tasaMensual, meses);
+
+            // Total a pagar = cuota mensual * número de meses
+            const totalPagar = cuotaMensual * meses;
+
+            // Intereses = total a pagar - capital financiado
+            const intereses = totalPagar - totalSinAfianzadora;
+
+            totalPrestamoInput.value = formatColombianNumber(montoSolicitado);
+            comisionEmpInput.value = formatColombianNumber(comision);
+            ivaComisionEmpInput.value = formatColombianNumber(ivaComision);
+            interesesEmpInput.value = formatColombianNumber(intereses);
+            afianzadoraEmpInput.value = formatColombianNumber(totalAfianzadora);
+            totalPagarEmpInput.value = formatColombianNumber(totalPagar);
+            cuotaMensualEmpInput.value = formatColombianNumber(cuotaMensual);
         }
         {% endif %}
 

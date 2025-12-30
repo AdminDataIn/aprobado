@@ -16,6 +16,6 @@ def pagador_required(view_func):
             request.empresa = perfil_pagador.empresa
         except PerfilPagador.DoesNotExist:
             messages.error(request, "No tiene los permisos necesarios para acceder a esta sección.")
-            return redirect('index')
+            return redirect('usuarios:libranza_landing')  # Redirige al landing de Libranza
         return view_func(request, *args, **kwargs)
     return _wrapped_view

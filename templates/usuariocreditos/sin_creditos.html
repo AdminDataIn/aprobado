@@ -14,45 +14,174 @@
 
     <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
         <div class="container">
-            <a href="/">
-                <img src="{% static '/images/logo-dark.png' %}" alt="Logo Aprobado" height="40" class="me-2">
-            </a>
+            {% if es_empleado %}
+                <a href="{% url 'libranza:landing' %}">
+                    <img src="{% static '/images/logo-dark.png' %}" alt="Logo Aprobado" height="40" class="me-2">
+                </a>
+            {% else %}
+                <a href="{% url 'home' %}">
+                    <img src="{% static '/images/logo-dark.png' %}" alt="Logo Aprobado" height="40" class="me-2">
+                </a>
+            {% endif %}
             <div class="d-flex align-items-center">
                 <span class="me-3">Hola, {{ nombre_asociado }}</span>
-                <a href="/" class="btn btn-outline-primary btn-sm">Inicio</a>
+                {% if es_empleado %}
+                    <a href="{% url 'libranza:landing' %}" class="btn btn-outline-primary btn-sm">Inicio</a>
+                {% else %}
+                    <a href="{% url 'home' %}" class="btn btn-outline-primary btn-sm">Inicio</a>
+                {% endif %}
             </div>
         </div>
     </nav>
 
-    <main class="container my-5">
-        <div class="card empty-state-card">
-            <div class="card-body text-center">
-                <div class="icon-circle">
-                    <i class="bi bi-wallet2"></i>
-                </div>
-                {% if es_empleado %}
-                    <h2 class="card-title">Inicia tu Crédito de Libranza</h2>
-                    <p class="card-text">
-                        Como empleado de una de nuestras empresas asociadas, tienes acceso a créditos de libranza con beneficios exclusivos.
-                        <br>El proceso es rápido, fácil y 100% digital.
-                    </p>
-                    <a href="{% url 'gestion_creditos:solicitud_libranza' %}" class="btn btn-primary btn-lg mt-3">
-                        <i class="bi bi-plus-circle me-2"></i>Solicitar Crédito de Libranza
-                    </a>
-                {% else %}
-                    <h2 class="card-title">Aún no tienes créditos</h2>
-                    <p class="card-text">
-                        Impulsa tu negocio con nuestras soluciones financieras. Ofrecemos créditos diseñados para emprendedores como tú.
-                        <br>Completa tu solicitud en pocos minutos.
-                    </p>
-                    <a href="{% url 'usuarios:aplicar' %}" class="btn btn-primary btn-lg mt-3">
-                        <i class="bi bi-plus-circle me-2"></i>Solicitar Mi Crédito
-                    </a>
-                {% endif %}
+    <main class="container my-4">
+        <!-- Hero Section -->
+        <div class="empty-state-hero text-center mb-3">
+            <div class="icon-circle-lg mx-auto mb-3">
+                <i class="bi bi-wallet2"></i>
             </div>
+            {% if es_empleado %}
+                <h1 class="hero-title">Comienza tu Crédito de Libranza</h1>
+                <p class="hero-subtitle">
+                    Como empleado de una de nuestras empresas asociadas, tienes acceso a créditos
+                    de libranza con beneficios exclusivos y descuento por nómina.
+                </p>
+            {% else %}
+                <h1 class="hero-title">Da el siguiente paso para tu negocio</h1>
+                <p class="hero-subtitle">
+                    Impulsa tu emprendimiento con soluciones financieras diseñadas especialmente
+                    para emprendedores y microempresarios como tú.
+                </p>
+            {% endif %}
+        </div>
+
+        <!-- Benefits Cards -->
+        <div class="row mb-3 g-3">
+            {% if es_empleado %}
+                <div class="col-md-4">
+                    <div class="benefit-card">
+                        <div class="benefit-icon">
+                            <i class="bi bi-percent"></i>
+                        </div>
+                        <h3 class="benefit-title">Tasas Preferenciales</h3>
+                        <p class="benefit-text">Disfruta de las mejores tasas del mercado con descuento automático por nómina.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="benefit-card">
+                        <div class="benefit-icon">
+                            <i class="bi bi-lightning-charge"></i>
+                        </div>
+                        <h3 class="benefit-title">Aprobación Rápida</h3>
+                        <p class="benefit-text">Proceso 100% digital con respuesta en 24-48 horas hábiles.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="benefit-card">
+                        <div class="benefit-icon">
+                            <i class="bi bi-shield-check"></i>
+                        </div>
+                        <h3 class="benefit-title">Seguro y Confiable</h3>
+                        <p class="benefit-text">Respaldado por tu empleador y procesado con los más altos estándares de seguridad.</p>
+                    </div>
+                </div>
+            {% else %}
+                <div class="col-md-4">
+                    <div class="benefit-card">
+                        <div class="benefit-icon">
+                            <i class="bi bi-graph-up-arrow"></i>
+                        </div>
+                        <h3 class="benefit-title">Impulsa tu Negocio</h3>
+                        <p class="benefit-text">Créditos desde $500.000 hasta $2.000.000 para hacer crecer tu emprendimiento.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="benefit-card">
+                        <div class="benefit-icon">
+                            <i class="bi bi-clock-history"></i>
+                        </div>
+                        <h3 class="benefit-title">Plazos Flexibles</h3>
+                        <p class="benefit-text">Escoge el plazo que mejor se adapte a tu flujo de caja, de 1 a 6 meses.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="benefit-card">
+                        <div class="benefit-icon">
+                            <i class="bi bi-phone"></i>
+                        </div>
+                        <h3 class="benefit-title">100% Digital</h3>
+                        <p class="benefit-text">Completa tu solicitud desde tu celular en menos de 10 minutos.</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Process Steps -->
+        <div class="process-section mb-3">
+            <h2 class="section-title text-center mb-3">Proceso simple en 3 pasos</h2>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="step-card">
+                        <div class="step-number">1</div>
+                        <h4 class="step-title">Completa el formulario</h4>
+                        <p class="step-text">Llena tus datos personales y {% if es_empleado %}laborales{% else %}del negocio{% endif %} en nuestro formulario digital.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="step-card">
+                        <div class="step-number">2</div>
+                        <h4 class="step-title">Evaluación y aprobación</h4>
+                        <p class="step-text">Nuestro equipo revisa tu solicitud y te notifica la decisión en máximo 48 horas.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="step-card">
+                        <div class="step-number">3</div>
+                        <h4 class="step-title">Recibe tu dinero</h4>
+                        <p class="step-text">Una vez aprobado, firma digitalmente y recibe el desembolso en tu cuenta.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CTA Section -->
+        <div class="cta-section text-center">
+            {% if es_empleado %}
+                <a href="{% url 'libranza:solicitar' %}" class="btn btn-primary btn-lg px-4 py-2">
+                    <i class="bi bi-plus-circle me-2"></i>Solicitar Crédito de Libranza
+                </a>
+                <p class="cta-help-text">
+                    ¿Tienes dudas? <a href="{% url 'libranza:simulador' %}">Usa nuestro simulador</a> o
+                    <a href="{% url 'libranza:landing' %}">conoce más sobre Libranza</a>
+                </p>
+            {% else %}
+                <a href="{% url 'emprendimiento:solicitar' %}" class="btn btn-primary btn-lg px-4 py-2">
+                    <i class="bi bi-plus-circle me-2"></i>Solicitar Mi Crédito
+                </a>
+                <p class="cta-help-text">
+                    ¿Tienes dudas? <a href="{% url 'emprendimiento:simulador' %}">Usa nuestro simulador</a> o
+                    <a href="/">vuelve al inicio</a>
+                </p>
+            {% endif %}
         </div>
     </main>
 
+    <!-- Footer -->
+    <footer class="footer-aprobado">
+        <div class="container text-center">
+            <p class="mb-0">© {{ current_year|default:"2024" }} Aprobado. Todos los derechos reservados.</p>
+        </div>
+    </footer>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Añadir el año actual dinámicamente
+        document.addEventListener('DOMContentLoaded', function() {
+            const yearElement = document.querySelector('.footer-aprobado p');
+            if (yearElement) {
+                yearElement.textContent = `© ${new Date().getFullYear()} Aprobado. Todos los derechos reservados.`;
+            }
+        });
+    </script>
 </body>
 </html>

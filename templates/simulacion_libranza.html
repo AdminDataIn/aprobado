@@ -10,12 +10,13 @@ CARACTERÍSTICAS:
 - Plazo: 1 - 6 meses
 - Comisión: 10% + IVA (19%)
 - Afianzadora: 4% + IVA (próximamente)
-- Tasa de interés: 0%
+- Tasa de interés: 2% EM (Efectiva Mensual)
 
 MODIFICAR:
-- Rangos de monto: Líneas 38-40
-- Rangos de plazo: Líneas 52-54
-- Cálculos (comisión, IVA, etc.): Líneas 204-221
+- Rangos de monto: Líneas 58-60
+- Rangos de plazo: Líneas 75-77
+- Tasa de interés: Línea 182 (tasaMensual = 0.02)
+- Cálculos (comisión, IVA, etc.): Líneas 167-201
 {% endcomment %}
 
 <!DOCTYPE html>
@@ -43,7 +44,8 @@ MODIFICAR:
                         <h1>Simulador de Crédito de Libranza</h1>
                         <p>Calcula tu cuota mensual y conoce las condiciones de tu crédito de libranza.
                            Financiamiento con descuento directo de nómina para empleados públicos y privados.</p>
-                        <a href="{% url 'gestion_creditos:solicitud_libranza' %}" class="simulador-cta-button">Aplicar ahora</a>
+                        {# NUEVA URL - Libranza #}
+                        <a href="{% url 'libranza:solicitar' %}" class="simulador-cta-button">Aplicar ahora</a>
                     </div>
 
                     <div class="simulador-card">
@@ -100,6 +102,11 @@ MODIFICAR:
                                         <input type="text" id="ivaComision" name="ivaComision" value="19.000,00"
                                                class="simulador-result-input" readonly>
                                     </div>
+                                    <div class="simulador-result-row">
+                                        <label for="totalIntereses" class="simulador-result-label">Intereses (2% EM):</label>
+                                        <input type="text" id="totalIntereses" name="totalIntereses" value="33.582,00"
+                                               class="simulador-result-input" readonly>
+                                    </div>
                                     <!-- Afianzadora (próximamente - estructura lista) -->
                                     <!-- MODIFICAR: Descomentar cuando se active la afianzadora -->
                                     <div class="simulador-result-row" style="opacity: 0.5;">
@@ -107,15 +114,15 @@ MODIFICAR:
                                         <input type="text" id="afianzadora" name="afianzadora" value="47.600,00"
                                                class="simulador-result-input" readonly>
                                     </div>
-                                    <div class="simulador-result-row">
-                                        <label for="totalPagar" class="simulador-result-label">Total a pagar:</label>
-                                        <input type="text" id="totalPagar" name="totalPagar" value="1.119.000,00"
-                                               class="simulador-result-input" readonly>
+                                    <div class="simulador-result-row" style="border-top: 2px solid #06b6d4; padding-top: 10px; margin-top: 10px;">
+                                        <label for="totalPagar" class="simulador-result-label" style="font-weight: 700;">Total a pagar:</label>
+                                        <input type="text" id="totalPagar" name="totalPagar" value="1.152.582,00"
+                                               class="simulador-result-input" style="font-weight: 700;" readonly>
                                     </div>
                                     <div class="simulador-result-row">
-                                        <label for="cuotaMensual" class="simulador-result-label">Cuota mensual:</label>
-                                        <input type="text" id="cuotaMensual" name="cuotaMensual" value="373.000,00"
-                                               class="simulador-result-input" readonly>
+                                        <label for="cuotaMensual" class="simulador-result-label" style="font-weight: 700; color: #06b6d4;">Cuota mensual:</label>
+                                        <input type="text" id="cuotaMensual" name="cuotaMensual" value="384.194,00"
+                                               class="simulador-result-input" style="font-weight: 700; color: #06b6d4;" readonly>
                                     </div>
                                 </div>
                             </div>
@@ -137,12 +144,13 @@ MODIFICAR:
         const totalPrestamoInput = document.getElementById("total-pr");
         const comisionInput = document.getElementById("comision");
         const ivaComisionInput = document.getElementById("ivaComision");
+        const totalInteresesInput = document.getElementById("totalIntereses");
         const afianzadoraInput = document.getElementById("afianzadora");
         const totalPagarInput = document.getElementById("totalPagar");
         const cuotaMensualInput = document.getElementById("cuotaMensual");
 
         /**
-         * Calcula la cuota usando la fórmula de anualidad
+         * Calcula la cuota usando la fórmula de anualidad (amortización francesa)
          * MODIFICAR: Si cambias la tasa de interés, ajusta tasaMensual
          */
         function calcularCuotaAnualidad(monto, tasaMensual, meses) {
@@ -168,18 +176,29 @@ MODIFICAR:
             const afianzadora = montoSolicitado * 0.04;         // 4% de afianzadora (próximamente)
             const ivaAfianzadora = afianzadora * 0.19;          // 19% de IVA sobre afianzadora
             const totalAfianzadora = afianzadora + ivaAfianzadora;
-            const totalSinAfianzadora = montoSolicitado + comision + ivaComision;
 
-            // MODIFICAR: Tasa de interés mensual (actualmente 0%)
-            const tasaMensual = 0;
-            const cuotaMensual = calcularCuotaAnualidad(totalSinAfianzadora, tasaMensual, meses);
+            // Capital financiado = monto + comisión + IVA (esto es lo que se financia en cuotas)
+            const capitalFinanciado = montoSolicitado + comision + ivaComision;
+
+            // MODIFICAR: Tasa de interés mensual (2% efectivo mensual para Libranza)
+            const tasaMensual = 0.02;  // 2% EM
+
+            // Calcular cuota mensual sobre el capital financiado
+            const cuotaMensual = calcularCuotaAnualidad(capitalFinanciado, tasaMensual, meses);
+
+            // Total a pagar = suma de todas las cuotas
+            const totalAPagar = cuotaMensual * meses;
+
+            // Total de intereses = Total a pagar - Capital financiado
+            const totalIntereses = totalAPagar - capitalFinanciado;
 
             // Actualizar valores en el formulario
             totalPrestamoInput.value = formatColombianNumber(montoSolicitado);
             comisionInput.value = formatColombianNumber(comision);
             ivaComisionInput.value = formatColombianNumber(ivaComision);
+            totalInteresesInput.value = formatColombianNumber(totalIntereses);
             afianzadoraInput.value = formatColombianNumber(totalAfianzadora);
-            totalPagarInput.value = formatColombianNumber(totalSinAfianzadora);
+            totalPagarInput.value = formatColombianNumber(totalAPagar);
             cuotaMensualInput.value = formatColombianNumber(cuotaMensual);
         }
 

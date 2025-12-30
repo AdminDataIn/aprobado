@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="max-width: 500px; margin: 4rem auto; padding: 2rem; box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 8px; text-align: center; background: white;">
+    <h2 style="color: #202124; margin-bottom: 1rem;">¿Seguro que desea cerrar sesión?</h2>
+    <p style="color: #5f6368; margin-bottom: 2rem;">Dejarás de tener acceso a tu cuenta y tus créditos.</p>
+
+    <form method="post" action="{% url 'emprendimiento:logout' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger" style="padding: 12px 48px; font-size: 1rem; border-radius: 8px; border: none; background: #dc3545; color: white; cursor: pointer; width: 100%; margin-bottom: 1rem;">
+            Sí, cerrar sesión
+        </button>
+    </form>
+
+    <a href="javascript:history.back()" style="color: #4285F4; text-decoration: none; display: inline-block; padding: 12px 48px;">
+        Cancelar
+    </a>
+</div>
+{% endblock %}

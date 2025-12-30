@@ -22,22 +22,25 @@ MODIFICAR:
 <header id="main-navbar" class="navbar">
     <div class="container">
         <div class="logo">
-            <!-- MODIFICAR: Logo (puedes usar uno específico de Libranza si existe) -->
-            <a href="{% url 'usuarios:libranza_landing' %}">
+            {# ✅ NUEVA URL - Logo Libranza #}
+            <a href="{% url 'libranza:landing' %}">
                 <img src="{% static 'images/logo.png' %}" alt="Aprobado Libranza" id="navbar-logo"/>
             </a>
         </div>
 
         <!-- Desktop Navigation -->
         <nav class="nav-links">
-            <!-- MODIFICAR: Enlaces de navegación exclusivos de Libranza -->
-            <a href="{% url 'usuarios:libranza_landing' %}" class="nav-link">Inicio</a>
-            <a href="{% url 'usuarios:simulador_libranza' %}" class="nav-link">Simulador</a>
-            <a href="{% url 'usuarios:libranza_landing' %}#requisitos" class="nav-link">Requisitos</a>
-            <a href="{% url 'usuarios:libranza_landing' %}#como-funciona" class="nav-link">Cómo funciona</a>
-            <a href="{% url 'usuarios:libranza_landing' %}#preguntas-frecuentes" class="nav-link">FAQ</a>
+            {# NUEVAS URLs - Libranza #}
+            <a href="{% url 'libranza:landing' %}" class="nav-link">Inicio</a>
+            <a href="{% url 'libranza:simulador' %}" class="nav-link">Simulador</a>
+            <a href="{% url 'libranza:landing' %}#requisitos" class="nav-link">Requisitos</a>
+            <a href="{% url 'libranza:landing' %}#como-funciona" class="nav-link">Cómo funciona</a>
+            <a href="{% url 'libranza:landing' %}#preguntas-frecuentes" class="nav-link">FAQ</a>
 
             {% if request.user.is_authenticated %}
+            <a href="{% url 'billetera:dashboard' %}" class="nav-link">
+                <i class="bi bi-wallet2"></i> Billetera
+            </a>
             <!-- Menú de usuario autenticado -->
             <li class="dropdown menu-us">
                 <a href="#">
@@ -46,11 +49,11 @@ MODIFICAR:
                     <span class="name-us">{{ request.user.first_name|default:request.user.email }}</span>
                 </a>
                 <ul class="dropdown-menu">
-                    <form id="logout-form" method="post" action="{% url 'account_logout' %}" style="display: none;">
+                    <form id="logout-form" method="post" action="{% url 'libranza:logout' %}" style="display: none;">
                         {% csrf_token %}
                     </form>
-                    <li><a href="{% url 'usuariocreditos:dashboard_view' %}">
-                        Mis créditos
+                    <li><a href="{% url 'libranza:mi_credito' %}">
+                        Mi crédito
                     </a></li>
                     <li><a href="#" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
                         Cerrar sesión
@@ -62,8 +65,8 @@ MODIFICAR:
 
         <!-- Buttons & Mobile Menu Toggle -->
         <div class="navbar-right">
-            <!-- MODIFICAR: Botón CTA principal -->
-            <a href="{% url 'gestion_creditos:solicitud_libranza' %}" class="btn btn-apply">Solicitar ahora</a>
+            {# ✅ NUEVA URL - Solicitar Libranza #}
+            <a href="{% url 'libranza:solicitar' %}" class="btn btn-apply">Solicitar ahora</a>
             <button id="menu-toggle" class="menu-toggle" aria-label="Abrir menú">
                 &#9776;
             </button>
@@ -77,22 +80,30 @@ MODIFICAR:
             <button id="menu-close" class="menu-close">&times;</button>
         </div>
         <nav class="mobile-nav-links">
-            <!-- MODIFICAR: Enlaces móviles (mismos que desktop) -->
-            <a href="{% url 'usuarios:libranza_landing' %}" class="mobile-nav-link">Inicio</a>
-            <a href="{% url 'usuarios:simulador_libranza' %}" class="mobile-nav-link">Simulador</a>
-            <a href="{% url 'usuarios:libranza_landing' %}#requisitos" class="mobile-nav-link">Requisitos</a>
-            <a href="{% url 'usuarios:libranza_landing' %}#como-funciona" class="mobile-nav-link">Cómo funciona</a>
-            <a href="{% url 'usuarios:libranza_landing' %}#preguntas-frecuentes" class="mobile-nav-link">FAQ</a>
+            {# ✅ NUEVAS URLs - Libranza #}
+            <a href="{% url 'libranza:landing' %}" class="mobile-nav-link">Inicio</a>
+            <a href="{% url 'libranza:simulador' %}" class="mobile-nav-link">Simulador</a>
+            <a href="{% url 'libranza:landing' %}#requisitos" class="mobile-nav-link">Requisitos</a>
+            <a href="{% url 'libranza:landing' %}#como-funciona" class="mobile-nav-link">Cómo funciona</a>
+            <a href="{% url 'libranza:landing' %}#preguntas-frecuentes" class="mobile-nav-link">FAQ</a>
+            <a href="{% url 'pagador:login' %}" class="mobile-nav-link">🏢 Acceso Pagadores</a>
             {% if request.user.is_authenticated %}
-            <a href="{% url 'usuariocreditos:dashboard_view' %}" class="mobile-nav-link">Mis créditos</a>
+            <form id="logout-form-mobile" method="post" action="{% url 'libranza:logout' %}" style="display: none;">
+                {% csrf_token %}
+            </form>
+            <a href="{% url 'billetera:dashboard' %}" class="mobile-nav-link">
+                <i class="bi bi-wallet2"></i> Billetera
+            </a>
+            <a href="{% url 'libranza:mi_credito' %}" class="mobile-nav-link">Mi crédito</a>
             <a href="#" class="mobile-nav-link"
-               onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+               onclick="event.preventDefault(); document.getElementById('logout-form-mobile').submit();">
                 Cerrar sesión
             </a>
             {% endif %}
         </nav>
         <div class="mobile-apply">
-            <a href="{% url 'gestion_creditos:solicitud_libranza' %}" class="btn btn-apply-full">Solicitar ahora</a>
+            {# ✅ NUEVA URL - Solicitar Libranza #}
+            <a href="{% url 'libranza:solicitar' %}" class="btn btn-apply-full">Solicitar ahora</a>
         </div>
     </div>
 </header>

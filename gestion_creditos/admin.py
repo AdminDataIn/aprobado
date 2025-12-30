@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, ImagenNegocio
+from .models import (
+    Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago,
+    CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, ImagenNegocio, Notificacion
+)
 from django.utils import timezone
 from datetime import timedelta
 
@@ -23,8 +26,8 @@ class CreditoEmprendimientoInline(admin.StackedInline):
     can_delete = False
     verbose_name_plural = 'Detalle de Emprendimiento'
     fk_name = 'credito'
-    #! Hacemos los campos de solicitud readonly una vez creados
-    readonly_fields = ('nombre', 'numero_cedula', 'fecha_nac', 'celular_wh', 'direccion', 'estado_civil', 'numero_personas_cargo', 'nombre_negocio', 'ubicacion_negocio', 'tiempo_operando', 'dias_trabajados_sem', 'prod_serv_ofrec', 'ingresos_prom_mes', 'cli_aten_day', 'inventario', 'nomb_ref_per1', 'cel_ref_per1', 'rel_ref_per1', 'nomb_ref_cl1', 'cel_ref_cl1', 'rel_ref_cl1', 'ref_conoc_lid_com', 'foto_negocio', 'desc_fotos_neg', 'tipo_cta_mno', 'ahorro_tand_alc', 'depend_h', 'desc_cred_nec', 'redes_soc', 'fotos_prod', 'puntaje', 'puntaje_imagenes', 'datos_scoring_imagenes')
+    #! Hacemos los campos de solicitud readonly una vez creados (excepto numero_cedula y celular_wh para correcciones)
+    readonly_fields = ('nombre', 'fecha_nac', 'direccion', 'estado_civil', 'numero_personas_cargo', 'nombre_negocio', 'ubicacion_negocio', 'tiempo_operando', 'dias_trabajados_sem', 'prod_serv_ofrec', 'ingresos_prom_mes', 'cli_aten_day', 'inventario', 'nomb_ref_per1', 'cel_ref_per1', 'rel_ref_per1', 'nomb_ref_cl1', 'cel_ref_cl1', 'rel_ref_cl1', 'ref_conoc_lid_com', 'foto_negocio', 'desc_fotos_neg', 'tipo_cta_mno', 'ahorro_tand_alc', 'depend_h', 'desc_cred_nec', 'redes_soc', 'fotos_prod', 'puntaje', 'puntaje_imagenes', 'datos_scoring_imagenes')
     # Agregar el inline de imágenes dentro del inline de emprendimiento
     inlines = [ImagenNegocioInline]
 
@@ -92,6 +95,82 @@ class CreditoAdmin(admin.ModelAdmin):
                 detalle.fecha_proximo_pago = fecha_primer_pago
                 detalle.save()
 
+@admin.register(CreditoEmprendimiento)
+class CreditoEmprendimientoAdmin(admin.ModelAdmin):
+    """
+    Admin dedicado para corregir datos erróneos en CreditoEmprendimiento.
+    Permite modificar campos como numero_cedula y celular_wh directamente.
+    """
+    list_display = ('credito_numero', 'nombre', 'numero_cedula', 'celular_wh', 'nombre_negocio', 'fecha_solicitud')
+    list_filter = ('credito__estado', 'credito__fecha_solicitud')
+    search_fields = ('nombre', 'numero_cedula', 'celular_wh', 'nombre_negocio', 'credito__numero_credito')
+    readonly_fields = ('credito', 'fecha_nac', 'puntaje', 'puntaje_imagenes', 'datos_scoring_imagenes')
+
+    fieldsets = (
+        ('Información del Crédito', {
+            'fields': ('credito',)
+        }),
+        ('Datos Personales (Editable para Correcciones)', {
+            'fields': ('nombre', 'numero_cedula', 'celular_wh', 'fecha_nac', 'direccion', 'estado_civil', 'numero_personas_cargo'),
+            'description': 'Estos campos pueden ser editados para corregir datos erróneos ingresados por error.'
+        }),
+        ('Información del Negocio', {
+            'fields': ('nombre_negocio', 'ubicacion_negocio', 'tiempo_operando', 'dias_trabajados_sem',
+                      'prod_serv_ofrec', 'ingresos_prom_mes', 'cli_aten_day', 'inventario'),
+            'classes': ('collapse',)
+        }),
+        ('Referencias', {
+            'fields': ('nomb_ref_per1', 'cel_ref_per1', 'rel_ref_per1',
+                      'nomb_ref_cl1', 'cel_ref_cl1', 'rel_ref_cl1', 'ref_conoc_lid_com'),
+            'classes': ('collapse',)
+        }),
+        ('Información Adicional', {
+            'fields': ('tipo_cta_mno', 'ahorro_tand_alc', 'depend_h', 'desc_cred_nec',
+                      'redes_soc', 'fotos_prod', 'desc_fotos_neg'),
+            'classes': ('collapse',)
+        }),
+        ('Evaluación y Scoring', {
+            'fields': ('puntaje', 'observaciones_analista', 'puntaje_imagenes', 'datos_scoring_imagenes'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def credito_numero(self, obj):
+        return obj.credito.numero_credito
+    credito_numero.short_description = 'Número de Crédito'
+    credito_numero.admin_order_field = 'credito__numero_credito'
+
+    def fecha_solicitud(self, obj):
+        return obj.credito.fecha_solicitud
+    fecha_solicitud.short_description = 'Fecha Solicitud'
+    fecha_solicitud.admin_order_field = 'credito__fecha_solicitud'
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('credito')
+
+    actions = ['detectar_cedulas_invalidas']
+
+    @admin.action(description='Detectar cédulas con datos no numéricos')
+    def detectar_cedulas_invalidas(self, request, queryset):
+        """
+        Detecta y muestra los registros con cédulas que contienen datos no numéricos.
+        """
+        invalidos = []
+        for obj in queryset:
+            # Verificar si numero_cedula contiene caracteres no numéricos
+            if not obj.numero_cedula.isdigit():
+                invalidos.append(f"{obj.credito.numero_credito}: '{obj.nombre}' tiene cédula inválida '{obj.numero_cedula}'")
+
+        if invalidos:
+            self.message_user(
+                request,
+                f"Se encontraron {len(invalidos)} registros con cédulas inválidas:\n" + "\n".join(invalidos),
+                level='warning'
+            )
+        else:
+            self.message_user(request, "No se encontraron cédulas inválidas en la selección.", level='success')
+
+
 @admin.register(Empresa)
 class EmpresaAdmin(admin.ModelAdmin):
     list_display = ('nombre',)
@@ -124,3 +203,28 @@ class MovimientoAhorroAdmin(admin.ModelAdmin):
 class ConfiguracionTasaInteresAdmin(admin.ModelAdmin):
     list_display = ('tasa_anual_efectiva', 'fecha_vigencia', 'activa')
     list_filter = ('activa', 'fecha_vigencia')
+
+
+@admin.register(Notificacion)
+class NotificacionAdmin(admin.ModelAdmin):
+    list_display = ('titulo', 'usuario', 'tipo', 'leida', 'fecha_creacion')
+    list_filter = ('tipo', 'leida', 'fecha_creacion')
+    search_fields = ('usuario__username', 'usuario__email', 'titulo', 'mensaje')
+    readonly_fields = ('fecha_creacion', 'fecha_leida')
+    list_per_page = 25
+
+    fieldsets = (
+        ('Información General', {
+            'fields': ('usuario', 'tipo', 'titulo', 'mensaje')
+        }),
+        ('Estado', {
+            'fields': ('leida', 'fecha_creacion', 'fecha_leida')
+        }),
+        ('Acción', {
+            'fields': ('url',),
+            'description': 'URL a la que redirige cuando el usuario hace clic en la notificación'
+        }),
+    )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('usuario')

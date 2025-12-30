@@ -18,7 +18,8 @@
     <header class="page-header">
         <div class="container-fluid" style="max-width: 1400px;">
             <div class="d-flex align-items-center justify-content-between">
-                <a href="{% url 'gestion_creditos:admin_dashboard' %}" class="logo">
+                {# NUEVA URL - Gestión #}
+                <a href="{% url 'gestion:dashboard' %}" class="logo">
                     <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;" />
                 </a>
                 <div class="d-flex align-items-center gap-3">
@@ -45,7 +46,8 @@
                 <h1 class="page-title">Gestión de Cartera en Mora</h1>
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
-                        <li class="breadcrumb-item"><a href="{% url 'gestion_creditos:admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+                        {# NUEVA URL - Gestión #}
+                        <li class="breadcrumb-item"><a href="{% url 'gestion:dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
                         <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-exclamation-triangle"></i> Cartera en Mora</li>
                     </ol>
                 </nav>
@@ -132,14 +134,16 @@
                     <tbody>
                         {% for credito in creditos %}
                         <tr>
-                            <td><a href="{% url 'gestion_creditos:admin_detalle_credito' credito.id %}">{{ credito.numero_credito }}</a></td>
+                            {# NUEVA URL - Gestión #}
+                            <td><a href="{% url 'gestion:detalle_credito' credito.id %}">{{ credito.numero_credito }}</a></td>
                             <td>{{ credito.nombre_cliente }}</td>
                             <td><span class="line-badge">{{ credito.get_linea_display }}</span></td>
                             <td class="text-end">${{ credito.saldo_pendiente|intcomma }}</td>
                             <td class="text-center text-danger fw-bold">{{ credito.dias_en_mora }}</td>
                             <td class="text-center">{{ credito.fecha_proximo_pago|date:"d/m/Y" }}</td>
                             <td class="text-center">
-                                <a href="{% url 'gestion_creditos:admin_detalle_credito' credito.id %}" class="btn btn-sm btn-outline-primary">
+                                {# NUEVA URL - Gestión #}
+                                <a href="{% url 'gestion:detalle_credito' credito.id %}" class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-eye"></i> Ver Detalle
                                 </a>
                             </td>
