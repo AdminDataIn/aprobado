@@ -974,7 +974,7 @@ def billetera_digital_view(request):
     Muestra saldo, estadísticas, movimientos e impacto social.
     """
     context = services.get_billetera_context(request.user)
-    return render(request, 'billetera/billetera_digital.html', context)
+    return render(request, 'Billetera/billetera_digital.html', context)
 
 
 @login_required
