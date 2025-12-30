@@ -15,7 +15,7 @@
     <header class="page-header">
         <div class="container-fluid" style="max-width: 1400px;">
             <div class="d-flex align-items-center justify-content-between">
-                <a href="{% url 'gestion_creditos:pagador_dashboard' %}" class="logo">
+                <a href="{% url 'pagador:dashboard' %}" class="logo">
                     <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;" />
                 </a>
                 <div class="d-flex align-items-center gap-3">
@@ -44,12 +44,12 @@
                 <h1 class="page-title">Detalle del Crédito</h1>
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
-                        <li class="breadcrumb-item"><a href="{% url 'gestion_creditos:pagador_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+                        <li class="breadcrumb-item"><a href="{% url 'pagador:dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
                         <li class="breadcrumb-item active" aria-current="page">Detalle del Crédito</li>
                     </ol>
                 </nav>
             </div>
-            <a href="{% url 'gestion_creditos:pagador_dashboard' %}" class="btn btn-outline-primary">
+            <a href="{% url 'pagador:dashboard' %}" class="btn btn-outline-primary">
                 <i class="bi bi-arrow-left me-2"></i>Volver al Dashboard
             </a>
         </div>
@@ -198,7 +198,7 @@
 
                         {% if credito.estado == 'ACTIVO' or credito.estado == 'EN_MORA' %}
                         <div class="mt-4">
-                            <a href="{% url 'gestion_creditos:iniciar_pago' credito.id %}" class="btn btn-pagar w-100">
+                            <a href="{% url 'pagador:pagar_individual' credito.id %}" class="btn btn-pagar w-100">
                                 Pagar Cuota (${{ credito.valor_cuota|intcomma }})
                             </a>
                         </div>

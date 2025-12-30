@@ -126,7 +126,7 @@
                             <button type="submit" class="btn btn-primary filter-btn">
                                 <i class="bi bi-funnel me-1"></i>Filtrar
                             </button>
-                            <a href="{% url 'gestion_creditos:pagador_dashboard' %}" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
+                            <a href="{% url 'pagador:dashboard' %}" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
                         </div>
                     </div>
                 </div>
@@ -179,7 +179,7 @@
                                 </span>
                             </td>
                             <td>
-                                <a href="{% url 'gestion_creditos:pagador_detalle_credito' credito.id %}" class="action-btn">
+                                <a href="{% url 'pagador:credito_detalle' credito.id %}" class="action-btn">
                                     <i class="bi bi-eye"></i> Ver Detalle
                                 </a>
                             </td>
@@ -252,7 +252,7 @@
             </div>
             <div class="card-content">
                 <p class="text-secondary">Sube un archivo CSV para procesar los pagos de forma masiva.</p>
-                <form action="{% url 'gestion_creditos:pagador_procesar_pagos' %}" method="post" enctype="multipart/form-data" class="mt-3">
+                <form action="{% url 'pagador:pagos_masivos' %}" method="post" enctype="multipart/form-data" class="mt-3">
                     {% csrf_token %}
                     <div class="row align-items-end g-3">
                         <div class="col-lg-5">
