@@ -378,7 +378,10 @@ def solicitud_credito_emprendimiento_view(request):
     else:
         form = CreditoEmprendimientoForm()
 
-    return render(request, 'aplicando.html', {'form': form})
+    return render(request, 'aplicando.html', {
+        'form': form,
+        'es_empleado': False  # Formulario de emprendimiento siempre es False
+    })
 
 @staff_member_required
 def admin_dashboard_view(request):

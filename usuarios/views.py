@@ -22,22 +22,14 @@ def aplicar_formulario(request):
     return render(request, 'aplicando.html')
 
 
-#? Adaptamos el simulador al grupo de empresas
+#? Simulador de EMPRENDIMIENTO
 def simulador(request):
-    es_empleado = False
-    
-    # --- INICIO: Código de depuración ---
-    print(f"Usuario actual: {request.user}")
-    if request.user.is_authenticated:
-        grupos = list(request.user.groups.all().values_list('name', flat=True))
-        print(f"El usuario pertenece a los siguientes grupos: {grupos}")
-        if 'Empleados' in grupos:
-            es_empleado = True
-    print(f"¿Se considera empleado para la plantilla?: {es_empleado}")
-    # --- FIN: Código de depuración ---
-
+    """
+    Vista del simulador de crédito de EMPRENDIMIENTO.
+    Siempre muestra el simulador de emprendimiento, independiente del grupo del usuario.
+    """
     context = {
-        'es_empleado': es_empleado
+        'es_empleado': False  # SIEMPRE False porque este es el simulador de EMPRENDIMIENTO
     }
     return render(request, 'simulacion.html', context)
 
