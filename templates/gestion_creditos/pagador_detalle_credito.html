@@ -96,17 +96,50 @@
                         <h3 class="card-title"><i class="bi bi-file-text me-2"></i>Resumen del Crédito</h3>
                     </div>
                     <div class="card-content">
+                        {% if credito.estado == 'EN_REVISION' %}
+                        <div class="alert alert-info text-center">
+                            <i class="bi bi-hourglass-split me-2"></i>
+                            <strong>Crédito en Revisión</strong>
+                            <p class="mb-0 mt-2">Este crédito está siendo evaluado. Los detalles financieros estarán disponibles una vez sea aprobado.</p>
+                        </div>
+                        <div class="row text-center mt-3">
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Monto Solicitado</span>
+                                    <span class="info-value">${{ credito.monto_solicitado|intcomma }}</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Plazo Solicitado</span>
+                                    <span class="info-value">{{ credito.plazo_solicitado }} meses</span>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
                         <div class="row text-center">
                             <div class="col-6">
                                 <div class="info-item">
                                     <span class="info-label">Monto Original</span>
-                                    <span class="info-value">${{ credito.monto_aprobado|intcomma }}</span>
+                                    <span class="info-value">
+                                        {% if credito.monto_aprobado %}
+                                            ${{ credito.monto_aprobado|intcomma }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </span>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="info-item">
                                     <span class="info-label">Comisión (10%)</span>
-                                    <span class="info-value">${{ credito.comision|default:"0"|intcomma }}</span>
+                                    <span class="info-value">
+                                        {% if credito.comision %}
+                                            ${{ credito.comision|intcomma }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -114,13 +147,25 @@
                             <div class="col-6">
                                 <div class="info-item">
                                     <span class="info-label">IVA (19%)</span>
-                                    <span class="info-value">${{ credito.iva_comision|default:"0"|intcomma }}</span>
+                                    <span class="info-value">
+                                        {% if credito.iva_comision %}
+                                            ${{ credito.iva_comision|intcomma }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </span>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="info-item">
                                     <span class="info-label">Total Financiado</span>
-                                    <span class="info-value fw-bold">${{ credito.capital_financiado|default:"0"|intcomma }}</span>
+                                    <span class="info-value fw-bold">
+                                        {% if credito.capital_financiado %}
+                                            ${{ credito.capital_financiado|intcomma }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -129,13 +174,25 @@
                             <div class="col-6">
                                 <div class="info-item">
                                     <span class="info-label">Saldo Pendiente</span>
-                                    <span class="info-value">${{ credito.saldo_pendiente|intcomma }}</span>
+                                    <span class="info-value">
+                                        {% if credito.saldo_pendiente %}
+                                            ${{ credito.saldo_pendiente|intcomma }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </span>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="info-item">
                                     <span class="info-label">Valor Cuota</span>
-                                    <span class="info-value">${{ credito.valor_cuota|floatformat:2|intcomma }}</span>
+                                    <span class="info-value">
+                                        {% if credito.valor_cuota %}
+                                            ${{ credito.valor_cuota|floatformat:2|intcomma }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -144,13 +201,25 @@
                             <div class="col-6">
                                 <div class="info-item">
                                     <span class="info-label">Plazo Original</span>
-                                    <span class="info-value">{{ credito.plazo }} meses</span>
+                                    <span class="info-value">
+                                        {% if credito.plazo %}
+                                            {{ credito.plazo }} meses
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </span>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="info-item">
                                     <span class="info-label">Tasa de Interés</span>
-                                    <span class="info-value">{{ credito.tasa_interes }}% mensual</span>
+                                    <span class="info-value">
+                                        {% if credito.tasa_interes %}
+                                            {{ credito.tasa_interes }}% mensual
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -158,13 +227,25 @@
                             <div class="col-6">
                                 <div class="info-item">
                                     <span class="info-label">Próximo Vencimiento</span>
-                                    <span class="info-value">{{ credito.fecha_proximo_pago|date:"d/m/Y"|default:"N/A" }}</span>
+                                    <span class="info-value">
+                                        {% if credito.fecha_proximo_pago %}
+                                            {{ credito.fecha_proximo_pago|date:"d/m/Y" }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </span>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="info-item">
                                     <span class="info-label">Cuotas Pagadas</span>
-                                    <span class="info-value">{{ credito.cuotas_pagadas }}</span>
+                                    <span class="info-value">
+                                        {% if credito.cuotas_pagadas is not None %}
+                                            {{ credito.cuotas_pagadas }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -172,16 +253,29 @@
                             <div class="col-6">
                                 <div class="info-item">
                                     <span class="info-label">Cuotas Restantes</span>
-                                    <span class="info-value">{{ credito.cuotas_restantes }}</span>
+                                    <span class="info-value">
+                                        {% if credito.cuotas_restantes is not None %}
+                                            {{ credito.cuotas_restantes }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </span>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="info-item">
                                     <span class="info-label">Total Pagado</span>
-                                    <span class="info-value text-success">${{ total_pagado|floatformat:2|intcomma }}</span>
+                                    <span class="info-value text-success">
+                                        {% if total_pagado %}
+                                            ${{ total_pagado|floatformat:2|intcomma }}
+                                        {% else %}
+                                            <span class="text-muted">$0</span>
+                                        {% endif %}
+                                    </span>
                                 </div>
                             </div>
                         </div>
+                        {% endif %}
                         <hr class="my-3">
                         <div class="info-item text-center">
                             <span class="info-label">Estado</span>

@@ -165,12 +165,44 @@
                                 <div class="user-name">{{ credito.detalle_libranza.nombre_completo }}</div>
                             </td>
                             <td>{{ credito.detalle_libranza.cedula }}</td>
-                            <td class="text-end amount-display">${{ credito.monto_aprobado|intcomma }}</td>
-                            <td class="text-end amount-display">${{ credito.saldo_pendiente|intcomma }}</td>
-                            <td class="text-end amount-display">${{ credito.valor_cuota|intcomma }}</td>
-                            <td class="text-center date-display">{{ credito.fecha_proximo_pago|date:"d/m/Y" }}</td>
+                            <td class="text-end amount-display">
+                                {% if credito.estado == 'EN_REVISION' %}
+                                    <span class="text-muted fst-italic">En revisión</span>
+                                {% elif credito.monto_aprobado %}
+                                    ${{ credito.monto_aprobado|intcomma }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end amount-display">
+                                {% if credito.estado == 'EN_REVISION' %}
+                                    <span class="text-muted fst-italic">En revisión</span>
+                                {% elif credito.saldo_pendiente %}
+                                    ${{ credito.saldo_pendiente|intcomma }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end amount-display">
+                                {% if credito.estado == 'EN_REVISION' %}
+                                    <span class="text-muted fst-italic">En revisión</span>
+                                {% elif credito.valor_cuota %}
+                                    ${{ credito.valor_cuota|intcomma }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center date-display">
+                                {% if credito.estado == 'EN_REVISION' %}
+                                    <span class="text-muted fst-italic">Pendiente</span>
+                                {% elif credito.fecha_proximo_pago %}
+                                    {{ credito.fecha_proximo_pago|date:"d/m/Y" }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                             <td class="text-center">
-                                <span class="status-badge 
+                                <span class="status-badge
                                     {% if credito.estado == 'ACTIVO' %}status-active
                                     {% elif credito.estado == 'EN_MORA' %}status-overdue
                                     {% elif credito.estado == 'PAGADO' %}status-paid
