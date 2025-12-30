@@ -98,7 +98,7 @@
                     <h2 class="text-primary mb-0">${{ valor_cuota|intcomma }}</h2>
                 </div>
 
-                <form method="post" action="{% url 'pagador:procesar_pago_callback' %}" class="mt-4">
+                <form method="post" action="{% url 'pagador:pago_callback' %}" class="mt-4">
                     {% csrf_token %}
                     <input type="hidden" name="credito_id" value="{{ credito.id }}">
                     <input type="hidden" name="monto" value="{{ valor_cuota }}">
