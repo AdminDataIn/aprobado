@@ -7,6 +7,7 @@
     <title>Dashboard de Pagador - {{ empresa.nombre }}</title>
     {% load static %}
     {% load humanize %}
+    {% load l10n %}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
@@ -211,9 +212,18 @@
                                 </span>
                             </td>
                             <td>
-                                <a href="{% url 'pagador:credito_detalle' credito.id %}" class="action-btn">
-                                    <i class="bi bi-eye"></i> Ver Detalle
-                                </a>
+                                <div class="d-flex flex-column gap-2">
+                                    <a href="{% url 'pagador:credito_detalle' credito.id %}" class="action-btn">
+                                        <i class="bi bi-eye"></i> Ver Detalle
+                                    </a>
+                                    {% if credito.estado == 'EN_REVISION' %}
+                                    <button class="btn btn-sm btn-success"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#decisionModal-{{ credito.id }}">
+                                        <i class="bi bi-check2-circle me-1"></i> Aprobar / Rechazar
+                                    </button>
+                                    {% endif %}
+                                </div>
                             </td>
                         </tr>
                         {% empty %}
@@ -230,6 +240,47 @@
                 </table>
             </div>
         </div>
+
+        {% for credito in creditos %}
+            {% if credito.estado == 'EN_REVISION' %}
+            <div class="modal fade" id="decisionModal-{{ credito.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <form method="post" action="{% url 'pagador:decidir_solicitud' credito.id %}">
+                            {% csrf_token %}
+                            <div class="modal-header">
+                                <h5 class="modal-title">Decision de Solicitud</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p class="mb-2">
+                                    <strong>{{ credito.detalle_libranza.nombre_completo }}</strong> -
+                                    {{ credito.detalle_libranza.cedula }}
+                                </p>
+                                <div class="small text-muted mb-3">
+                                    Monto solicitado: ${{ credito.monto_solicitado|intcomma }} ·
+                                    Plazo: {{ credito.plazo_solicitado }} meses
+                                </div>
+                                <label for="motivo-{{ credito.id }}" class="form-label">
+                                    Campo de estudio (opcional)
+                                </label>
+                                <textarea id="motivo-{{ credito.id }}" name="motivo" class="form-control" rows="3"
+                                          placeholder="Ej: Aprobado por antiguedad / Rechazado por endeudamiento"></textarea>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="submit" name="action" value="reject" class="btn btn-outline-danger">
+                                    <i class="bi bi-x-circle me-1"></i> Rechazar
+                                </button>
+                                <button type="submit" name="action" value="approve" class="btn btn-success">
+                                    <i class="bi bi-check-circle me-1"></i> Aprobar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
 
         <!-- Pagination -->
         {% if creditos.has_other_pages %}
@@ -265,11 +316,11 @@
             document.getElementById('estado').addEventListener('change', function() {
                 this.form.submit();
             });
-            
+
             document.getElementById('sort_by').addEventListener('change', function() {
                 this.form.submit();
             });
-            
+
             // Búsqueda con Enter
             document.getElementById('search').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
@@ -297,12 +348,26 @@
                             </button>
                         </div>
                         <div class="col-lg-auto">
+                            <a href="{% url 'pagador:descargar_csv_cuotas' %}" class="btn btn-success">
+                                <i class="bi bi-file-earmark-spreadsheet me-1"></i> Descargar Cuotas Pendientes
+                            </a>
+                        </div>
+                        <div class="col-lg-auto">
                              <a href="{% static 'files/plantilla_pagos_masivos.csv' %}" download class="btn btn-outline-success">
-                                <i class="bi bi-download me-1"></i> Descargar Plantilla
+                                <i class="bi bi-download me-1"></i> Plantilla Vacía
                             </a>
                         </div>
                     </div>
-                    <div class="form-text mt-2">El archivo debe tener las columnas: 'cedula' y 'monto_a_pagar'.</div>
+                    <div class="alert alert-info mt-3 mb-0">
+                        <h6 class="mb-2"><i class="bi bi-info-circle me-1"></i> Instrucciones del archivo CSV:</h6>
+                        <ul class="mb-0 small">
+                            <li><strong>Opción 1 (Recomendada):</strong> Descarga "Cuotas Pendientes" para obtener un CSV listo con todos los empleados y sus cuotas (montos redondeados sin centavos)</li>
+                            <li><strong>Opción 2:</strong> Descarga "Plantilla Vacía" y completa manualmente</li>
+                            <li><strong>Columnas requeridas:</strong> 'cedula' y 'monto_a_pagar'</li>
+                            <li><strong>Formato de cédula:</strong> Solo números, sin puntos ni espacios (Ejemplo: 1234567890)</li>
+                            <li><strong>Formato de monto:</strong> Solo números enteros, sin puntos, comas ni símbolos $ (Ejemplo: 50000 para $50.000)</li>
+                        </ul>
+                    </div>
                 </form>
             </div>
         </div>

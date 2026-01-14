@@ -31,12 +31,13 @@
             font-size: 14px;
         }
 
-        /* NAVBAR MINIMALISTA */
+        /* NAVBAR PROFESIONAL MEJORADO */
         .navbar-professional {
             background: white;
-            border-bottom: 1px solid var(--gris-medio);
-            padding: 0.5rem 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+            border-bottom: none;
+            padding: 1rem 0;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            backdrop-filter: blur(10px);
         }
 
         .navbar-brand {
@@ -49,26 +50,40 @@
         }
 
         .brand-logo {
-            height: 32px;
+            height: 40px;
         }
 
         .nav-link {
-            color: #6c757d !important;
+            color: #6B7280 !important;
             font-weight: 500;
-            font-size: 0.9rem;
-            padding: 0.5rem 1rem !important;
+            font-size: 0.95rem;
+            padding: 0.625rem 1.25rem !important;
             transition: all 0.2s;
-            border-radius: 6px;
+            border-radius: 10px;
+            position: relative;
         }
 
         .nav-link:hover {
             color: var(--azul-cielo) !important;
-            background: var(--gris-claro);
+            background: #F0F9FF;
         }
 
         .nav-link.active {
             color: var(--azul-cielo) !important;
-            background: #E3F2FD;
+            background: linear-gradient(135deg, #E0F2FE 0%, #BAE6FD 100%);
+            font-weight: 600;
+        }
+
+        .nav-link.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 30px;
+            height: 3px;
+            background: var(--azul-cielo);
+            border-radius: 3px 3px 0 0;
         }
 
         .notification-badge {
@@ -90,6 +105,126 @@
             padding: 0.25rem 0.4rem;
         }
 
+        /* USER DROPDOWN MODERNO */
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: #F9FAFB;
+        }
+
+        .user-info:hover {
+            background: #F0F9FF;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--azul-cielo), var(--azul-colombia));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        .user-details {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .user-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #111827;
+            line-height: 1.2;
+        }
+
+        .user-role {
+            font-size: 0.75rem;
+            color: #6c757d;
+            display: block;
+        }
+
+        .user-dropdown {
+            position: relative;
+        }
+
+        .user-menu {
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            min-width: 320px;
+            padding: 20px;
+            border: 1px solid var(--gris-medio);
+            margin-top: 0.5rem;
+        }
+
+        .dropdown-menu.show {
+            animation: fadeInDropdown 0.3s ease-out;
+        }
+
+        @keyframes fadeInDropdown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .user-menu-header {
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--gris-medio);
+            margin-bottom: 12px;
+        }
+
+        .user-menu-header h6 {
+            color: var(--azul-colombia);
+            font-size: 1rem;
+        }
+
+        .user-menu-item {
+            padding: 12px;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .user-menu-item:hover {
+            background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 50%);
+            transform: translateX(4px);
+        }
+
+        .user-menu-item i {
+            font-size: 1.1rem;
+        }
+
+        .user-menu-item a {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .user-menu-item.logout-item {
+            border-top: 2px solid var(--gris-medio);
+            margin-top: 8px;
+            padding-top: 12px;
+        }
+
+        .user-menu-item.logout-item:hover {
+            background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 50%);
+        }
+
         /* TOAST STYLES */
         .toast {
             min-width: 320px;
@@ -104,7 +239,7 @@
         }
 
         .toast.bg-success {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
+            background: #28a745 !important;
         }
 
         .toast.bg-danger {
@@ -148,7 +283,7 @@
                         </a>
                         {% else %}
                         <a class="nav-link" href="{% url 'emprendimiento:mi_credito' %}">
-                            <i class="bi bi-speedometer2 me-1"></i> Dashboard
+                            <i class="bi bi-speedometer2 me-1"></i> Mi Crédito
                         </a>
                         {% endif %}
                     </li>
@@ -200,36 +335,42 @@
                             <i class="bi bi-chevron-down ms-2"></i>
                         </div> 
 
-                        <!-- Desplegable detallado estilo billetera -->
-                        <div class="dropdown-menu dropdown-menu-end user-menu p-3" aria-labelledby="userDropdown">
-                            <div class="user-menu-header mb-2">
-                                <h6 class="mb-0 fw-bold">Mi Cuenta</h6>
-                                <small class="text-muted">{{ user.email }}</small>
+                        <!-- Desplegable mejorado -->
+                        <div class="dropdown-menu dropdown-menu-end user-menu" aria-labelledby="userDropdown">
+                            <div class="user-menu-header">
+                                <h6 class="mb-1 fw-bold">Mi Cuenta</h6>
+                                <small class="text-muted d-block">{{ user.email }}</small>
                             </div>
-                            <div class="user-menu-item d-flex gap-2 align-items-start my-2">
-                                <i class="bi bi-person text-primary"></i>
-                                <div>
-                                    <div class="fw-semibold">Nombre:</div>
+
+                            <div class="user-menu-item">
+                                <i class="bi bi-person-circle text-primary"></i>
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold" style="font-size: 0.85rem;">Nombre completo</div>
                                     <small class="text-muted">{{ user.get_full_name|default:"Usuario" }}</small>
                                 </div>
                             </div>
-                            <div class="user-menu-item d-flex gap-2 align-items-start my-2">
-                                <i class="bi bi-envelope text-success"></i>
-                                <div>
-                                    <div class="fw-semibold">Correo:</div>
+
+                            <div class="user-menu-item">
+                                <i class="bi bi-envelope-fill text-info"></i>
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold" style="font-size: 0.85rem;">Correo electrónico</div>
                                     <small class="text-muted">{{ user.email }}</small>
                                 </div>
                             </div>
-                            <div class="user-menu-item d-flex gap-2 align-items-center my-2">
-                                <i class="bi bi-person-badge text-warning"></i>
-                                <span>Información Personal</span>
+
+                            <div class="user-menu-item">
+                                <i class="bi bi-wallet2 text-warning"></i>
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold" style="font-size: 0.85rem;">Sección actual</div>
+                                    <small class="text-muted">Billetera Digital</small>
+                                </div>
                             </div>
-                            <hr class="my-2">
-                            <div class="user-menu-item d-flex gap-2 align-items-center text-danger">
-                                <i class="bi bi-box-arrow-right"></i>
+
+                            <div class="user-menu-item logout-item">
+                                <i class="bi bi-box-arrow-right text-danger"></i>
                                 <form id="logout-form-billetera" method="post" action="{% if es_libranza %}{% url 'libranza:logout' %}{% else %}{% url 'emprendimiento:logout' %}{% endif %}" style="display: inline;">
                                     {% csrf_token %}
-                                    <a href="#" onclick="event.preventDefault(); document.getElementById('logout-form-billetera').submit();" class="text-decoration-none text-danger">Cerrar Sesión</a>
+                                    <a href="#" onclick="event.preventDefault(); document.getElementById('logout-form-billetera').submit();" class="text-decoration-none text-danger fw-semibold">Cerrar Sesión</a>
                                 </form>
                             </div>
                         </div>

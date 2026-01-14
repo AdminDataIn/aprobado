@@ -1,0 +1,1163 @@
+:root {
+    --azul-colombia: #003893;
+    --azul-cielo: #4A90E2;
+    --amarillo-colombia: #FFCD00;
+    --rojo-colombia: #CE1126;
+    --gris-claro: #F8F9FA;
+    --gris-medio: #E9ECEF;
+    --verde-exito: #10B981;
+    --naranja-alerta: #F59E0B;
+    --morado-acento: #8B5CF6;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background: linear-gradient(135deg, #F0F4F8 0%, #E6EDF3 100%);
+    min-height: 100vh;
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* NAVBAR PROFESIONAL MEJORADO */
+.navbar-professional {
+    background: white;
+    border-bottom: none;
+    padding: 1rem 0;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(10px);
+}
+
+.navbar-brand {
+    font-weight: 600;
+    color: var(--azul-colombia) !important;
+    font-size: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.brand-logo {
+    height: 32px;
+}
+
+.nav-link {
+    color: #6c757d !important;
+    font-weight: 500;
+    font-size: 0.9rem;
+    padding: 0.5rem 1rem !important;
+    transition: all 0.2s;
+    border-radius: 6px;
+}
+
+.nav-link:hover {
+    color: var(--azul-cielo) !important;
+    background: var(--gris-claro);
+}
+
+.nav-link.active {
+    color: var(--azul-cielo) !important;
+    background: #E3F2FD;
+}
+
+.notification-badge {
+    position: relative;
+    cursor: pointer;
+}
+
+.notification-icon {
+    font-size: 1.2rem;
+    color: #6c757d;
+}
+
+.notification-badge .badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: var(--rojo-colombia);
+    font-size: 0.65rem;
+    padding: 0.25rem 0.4rem;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+
+.user-info:hover {
+    background: var(--gris-claro);
+}
+
+.user-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--azul-cielo), var(--azul-colombia));
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.user-name {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: #212529;
+    display: block;
+}
+
+.user-role {
+    font-size: 0.75rem;
+    color: #6c757d;
+    display: block;
+}
+.user-dropdown {
+    position: relative;
+}
+
+.user-menu {
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    min-width: 320px;
+    padding: 20px;
+    border: 1px solid var(--gris-medio);
+    margin-top: 0.5rem;
+}
+
+.dropdown-menu.show {
+    animation: fadeInDropdown 0.3s ease-out;
+}
+
+@keyframes fadeInDropdown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.user-menu-header {
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--gris-medio);
+    margin-bottom: 12px;
+}
+
+.user-menu-header h6 {
+    color: var(--azul-colombia);
+    font-size: 1rem;
+}
+
+.user-menu-item {
+    padding: 12px;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.user-menu-item:hover {
+    background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 50%);
+    transform: translateX(4px);
+}
+
+.user-menu-item i {
+    font-size: 1.1rem;
+}
+
+.user-menu-item a {
+    text-decoration: none;
+    color: inherit;
+}
+
+.user-menu-item.logout-item {
+    border-top: 2px solid var(--gris-medio);
+    margin-top: 8px;
+    padding-top: 12px;
+}
+
+.user-menu-item.logout-item:hover {
+    background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 50%);
+}
+
+/* HEADER MODERNO */
+.page-header-modern {
+    background: white;
+    border-radius: 20px;
+    padding: 0;
+    margin-bottom: 2rem;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    border: 1px solid rgba(74, 144, 226, 0.1);
+    position: relative;
+}
+
+.page-header-modern::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 5px;
+    background: linear-gradient(90deg, var(--azul-cielo) 0%, var(--amarillo-colombia) 50%, var(--verde-exito) 100%);
+}
+
+.header-content {
+    padding: 2.5rem 2rem 2rem 2rem;
+    background: linear-gradient(135deg, #FFFFFF 0%, #F9FAFB 100%);
+}
+
+.credit-type-badge {
+    display: inline-block;
+    padding: 0.5rem 1.25rem;
+    background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
+    border-radius: 25px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--azul-colombia);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.header-title {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--azul-colombia);
+    letter-spacing: -0.5px;
+    margin: 0;
+}
+
+.header-meta {
+    display: flex;
+    align-items: center;
+    font-size: 0.9rem;
+    color: #6B7280;
+}
+
+.header-meta i {
+    color: var(--azul-cielo);
+    font-size: 1rem;
+}
+
+.header-meta strong {
+    color: #111827;
+    font-weight: 600;
+}
+
+.status-badge-modern {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.875rem 2rem;
+    border-radius: 50px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.status-badge-modern.status-activo {
+    background: linear-gradient(135deg, #dfffe4 0%, #90f9b1 100%);
+    color: #009324;
+}
+
+.status-badge-modern.status-aprobado,
+.status-badge-modern.status-firmado {
+    background: linear-gradient(135deg, #C8E6C9 0%, #81C784 100%);
+    color: #1B5E20;
+}
+
+.status-badge-modern.status-en_mora {
+    background: linear-gradient(135deg, #FFCDD2 0%, #EF5350 100%);
+    color: #B71C1C;
+}
+
+.status-badge-modern.status-pagado {
+    background: linear-gradient(135deg, #B2DFDB 0%, #4DB6AC 100%);
+    color: #004D40;
+}
+
+/* SELECTOR DE CRÉDITOS MODERNO */
+.credit-selector-modern {
+    padding: 1.5rem 2rem 2rem 2rem;
+    background: white;
+    border-top: 2px solid var(--gris-medio);
+}
+
+.selector-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    color: var(--azul-colombia);
+}
+
+.selector-header i {
+    font-size: 1.2rem;
+    color: var(--azul-cielo);
+}
+
+.selector-header h6 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.selector-header .badge {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.75rem;
+}
+
+.form-select-modern {
+    border: 2px solid var(--gris-medio);
+    border-radius: 12px;
+    padding: 0.875rem 1.25rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #111827;
+    background: linear-gradient(135deg, #FFFFFF 0%, #F9FAFB 100%);
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.form-select-modern:hover {
+    border-color: var(--azul-cielo);
+    box-shadow: 0 4px 12px rgba(74, 144, 226, 0.1);
+}
+
+.form-select-modern:focus {
+    border-color: var(--azul-cielo);
+    box-shadow: 0 0 0 4px rgba(74, 144, 226, 0.1);
+    outline: none;
+}
+
+/* STATUS BADGES */
+.status-badge {
+    padding: 0.375rem 1rem;
+    border-radius: 20px;
+    font-weight: 500;
+    font-size: 0.8rem;
+    display: inline-block;
+}
+
+.status-revision {
+    background: #FFF3CD;
+    color: #856404;
+}
+
+.status-aprobado, .status-firmado {
+    background: #D1E7DD;
+    color: #0F5132;
+}
+
+.status-activo {
+    background: #E3F2FD;
+    color: var(--azul-colombia);
+}
+
+.status-rechazado {
+    background: #F8D7DA;
+    color: var(--rojo-colombia);
+}
+
+.status-en_mora {
+    background: #FFE5E5;
+    color: var(--rojo-colombia);
+}
+
+/* HEADER COMPACTO (Legacy - para otras vistas) */
+.page-header {
+    background: white;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.page-header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--azul-colombia);
+    margin-bottom: 0.25rem;
+}
+
+.page-header .text-muted {
+    font-size: 0.875rem;
+}
+
+/* PROGRESS CARD MEJORADO */
+.progress-card {
+    background: white;
+    border-radius: 20px;
+    padding: 2.5rem;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+    margin-bottom: 2rem;
+    border: 1px solid rgba(74, 144, 226, 0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: linear-gradient(90deg, var(--azul-cielo), var(--amarillo-colombia), var(--azul-colombia));
+}
+
+.progress-card h4 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--azul-colombia);
+    margin-bottom: 2rem;
+}
+
+.progress {
+    height: 16px;
+    border-radius: 12px;
+    background: var(--gris-medio);
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, var(--azul-cielo) 0%, var(--amarillo-colombia) 50%, var(--verde-exito) 100%);
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.stat-box {
+    text-align: center;
+    padding: 1.5rem 1rem;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #FFFFFF 0%, #F9FAFB 100%);
+    border: 2px solid var(--gris-medio);
+}
+
+.stat-box small {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+    color: #6B7280;
+}
+
+.stat-box h5 {
+    font-size: 1.5rem;
+    font-weight: 800;
+    margin-top: 0.75rem;
+    letter-spacing: -0.5px;
+}
+
+/* PROGRESO CIRCULAR */
+.circular-progress-container {
+    position: relative;
+    width: 180px;
+    height: 180px;
+    margin: 0 auto;
+}
+
+.circular-progress {
+    transform: rotate(-90deg);
+}
+
+.progress-circle-bg {
+    fill: none;
+    stroke: var(--gris-medio);
+    stroke-width: 12;
+}
+
+.progress-circle {
+    fill: none;
+    stroke: url(#gradient);
+    stroke-width: 12;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s ease;
+}
+
+.progress-percentage {
+    font-size: 3rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--azul-cielo) 0%, var(--azul-colombia) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.progress-label {
+    font-size: 0.75rem;
+    color: #6B7280;
+    margin-top: 0.25rem;
+    font-weight: 600;
+}
+
+/* PAYMENT CARD MEJORADO */
+.payment-card {
+    background: white;
+    border-radius: 18px;
+    padding: 2rem;
+    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.08);
+    margin-bottom: 2rem;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+}
+
+.payment-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.12);
+}
+
+.payment-card h5 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--azul-colombia);
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.payment-card h5 i {
+    color: var(--azul-cielo);
+}
+
+.payment-card small {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+    color: #9CA3AF;
+}
+
+.payment-card strong {
+    font-size: 1.1rem;
+    color: #111827;
+    font-weight: 700;
+}
+
+/* INFO CARD DETALLADA */
+.info-card-item {
+    padding: 1.25rem;
+    border-radius: 14px;
+    background: white;
+    border: 1px solid #E5E7EB;
+    transition: all 0.2s ease;
+}
+
+.info-card-item:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.info-card-item .icon-wrapper {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.875rem;
+}
+
+/* Colores específicos para cada tipo de icono */
+.info-card-item:nth-child(1) .icon-wrapper {
+    background: #E0F2FE;
+}
+
+.info-card-item:nth-child(1) .icon-wrapper i {
+    color: #0284C7;
+    font-size: 1.2rem;
+}
+
+.info-card-item:nth-child(2) .icon-wrapper {
+    background: #FEF3C7;
+}
+
+.info-card-item:nth-child(2) .icon-wrapper i {
+    color: #D97706;
+    font-size: 1.2rem;
+}
+
+.info-card-item:nth-child(3) .icon-wrapper {
+    background: #FCE7F3;
+}
+
+.info-card-item:nth-child(3) .icon-wrapper i {
+    color: #DB2777;
+    font-size: 1.2rem;
+}
+
+.info-card-item:nth-child(4) .icon-wrapper {
+    background: #D1FAE5;
+}
+
+.info-card-item:nth-child(4) .icon-wrapper i {
+    color: #059669;
+    font-size: 1.2rem;
+}
+
+.info-card-item .label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #6B7280;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.info-card-item .value {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: #111827;
+    letter-spacing: -0.5px;
+}
+
+/* BOTONES MEJORADOS */
+.btn-payment {
+    background: linear-gradient(135deg, var(--azul-cielo) 0%, var(--azul-colombia) 100%);
+    color: white;
+    border: none;
+    padding: 0.875rem 2rem;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(74, 144, 226, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-payment::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    transition: left 0.5s ease;
+}
+
+.btn-payment:hover::before {
+    left: 100%;
+}
+
+.btn-payment:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(74, 144, 226, 0.4);
+    color: white;
+}
+
+.btn-payment:active {
+    transform: translateY(-1px);
+}
+
+.btn-outline-primary {
+    border: 1px solid var(--azul-cielo);
+    color: var(--azul-cielo);
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    background: white;
+}
+
+.btn-outline-primary:hover {
+    background: var(--azul-cielo);
+    border-color: var(--azul-cielo);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(74, 144, 226, 0.25);
+}
+
+.btn-sm {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    border-radius: 10px;
+}
+
+/* TABLA MODERNA MEJORADA */
+.table-modern {
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.table-modern thead {
+    background: linear-gradient(135deg, var(--azul-cielo) 0%, var(--azul-colombia) 100%);
+    color: white;
+}
+
+.table-modern thead th {
+    font-weight: 700;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    padding: 1.25rem 1.5rem;
+    border: none;
+}
+
+.table-modern tbody {
+    background: white;
+}
+
+.table-modern tbody td {
+    padding: 1.25rem 1.5rem;
+    vertical-align: middle;
+    font-size: 0.9rem;
+    border-bottom: 1px solid var(--gris-medio);
+    font-weight: 500;
+}
+
+.table-modern tbody tr {
+    transition: all 0.2s ease;
+}
+
+.table-modern tbody tr:hover {
+    background: linear-gradient(90deg, #FFF9E6 0%, #FFFBF0 100%);
+    transform: scale(1.01);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.table-modern tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.table-header-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 1.5rem 1.75rem;
+    background: white;
+    border-radius: 18px 18px 0 0;
+    border-bottom: 2px solid var(--gris-medio);
+}
+
+.table-header-actions h5 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--azul-colombia);
+    margin: 0;
+}
+
+.badge.rounded-pill {
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+}
+
+.badge.bg-success {
+    background: linear-gradient(135deg, var(--verde-exito), #059669) !important;
+}
+
+.badge.bg-danger {
+    background: linear-gradient(135deg, var(--rojo-colombia), #DC2626) !important;
+}
+
+/* EMPTY STATE */
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.empty-state i {
+    font-size: 4rem;
+    color: #DEE2E6;
+    margin-bottom: 1.5rem;
+}
+
+.empty-state h3 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #212529;
+}
+
+/* MODALES */
+.modal-content {
+    border-radius: 12px;
+    border: none;
+}
+
+.modal-header {
+    border-radius: 12px 12px 0 0;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--gris-medio);
+}
+
+.modal-title {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.modal-body {
+    padding: 1.25rem;
+}
+
+/* MODAL DE ABONOS - ULTRA COMPACTO */
+#abonoModal .modal-dialog {
+    max-width: 520px;
+}
+
+#abonoModal .modal-body {
+    padding: 0.5rem;
+}
+
+.tipo-abono-card {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1.5px solid #dee2e6;
+}
+
+.tipo-abono-card:hover {
+    border-color: var(--azul-cielo);
+    box-shadow: 0 2px 8px rgba(74, 144, 226, 0.2);
+    transform: translateY(-1px);
+}
+
+.tipo-abono-card.border-primary {
+    border-width: 2px;
+}
+
+/* Slider más delgado */
+#abonoModal .form-range {
+    height: 4px;
+}
+
+#abonoModal .form-range::-webkit-slider-thumb {
+    width: 14px;
+    height: 14px;
+}
+
+#abonoModal .form-range::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+}
+
+/* Responsive - móvil */
+@media (max-width: 576px) {
+    #abonoModal .modal-dialog {
+        max-width: 95%;
+        margin: 0.5rem auto;
+    }
+}
+
+/* MAIN - Para sticky footer y centrado */
+main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+
+/* FOOTER */
+.footer-aprobado {
+    background-color: #1e293b;
+    color: #fff;
+    padding: 1.25rem 0;
+    margin-top: auto;
+    font-size: 0.875rem;
+}
+
+.footer-aprobado p {
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 0;
+}
+
+/* LOADER GLOBAL */
+#globalLoader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+#globalLoader.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+#lottieLoader {
+    width: 200px;
+    height: 200px;
+}
+
+.loader-text {
+    margin-top: 1rem;
+    color: var(--azul-colombia);
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+/* ANIMACIONES */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.progress-card, .payment-card, .stat-box, .info-card-item {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* ESTADOS ESPECIALES */
+.badge-status {
+    padding: 0.5rem 1.25rem;
+    border-radius: 25px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+/* RESPONSIVE MEJORADO */
+@media (max-width: 992px) {
+    .table-header-actions {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .table-header-actions .d-flex {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .circular-progress-container {
+        width: 150px;
+        height: 150px;
+    }
+
+    .progress-percentage {
+        font-size: 2.5rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .page-header h1 {
+        font-size: 1.25rem;
+    }
+
+    .header-title {
+        font-size: 1.5rem;
+    }
+
+    .header-content {
+        padding: 2rem 1.5rem 1.5rem 1.5rem;
+    }
+
+    .credit-selector-modern {
+        padding: 1.25rem 1.5rem 1.5rem 1.5rem;
+    }
+
+    .status-badge-modern {
+        padding: 0.625rem 1.25rem;
+        font-size: 0.85rem;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .credit-type-badge {
+        font-size: 0.7rem;
+        padding: 0.4rem 1rem;
+    }
+
+    .header-meta {
+        font-size: 0.85rem;
+    }
+
+    .navbar-professional {
+        padding: 0.75rem 0;
+    }
+
+    .progress-card, .payment-card {
+        padding: 1.5rem;
+    }
+
+    .stat-box h5 {
+        font-size: 1.2rem;
+    }
+
+    .info-card-item .value {
+        font-size: 1.1rem;
+    }
+
+    .info-card-item .icon-wrapper {
+        width: 36px;
+        height: 36px;
+    }
+
+    .info-card-item .icon-wrapper i {
+        font-size: 1.1rem;
+    }
+
+    #abonoModal .modal-dialog {
+        max-width: 95%;
+    }
+
+    .btn-payment, .btn-outline-primary {
+        width: 100%;
+        padding: 1rem;
+    }
+
+    .user-menu {
+        min-width: 280px;
+        max-width: 90vw;
+    }
+}
+
+@media (max-width: 576px) {
+    .circular-progress-container {
+        width: 130px;
+        height: 130px;
+    }
+
+    .circular-progress-container svg {
+        width: 130px;
+        height: 130px;
+    }
+
+    .progress-percentage {
+        font-size: 2rem;
+    }
+
+    .stat-box {
+        padding: 1rem 0.75rem;
+    }
+
+    .info-card-item {
+        padding: 1rem;
+    }
+
+    .table-modern thead th,
+    .table-modern tbody td {
+        padding: 0.75rem 1rem;
+        font-size: 0.8rem;
+    }
+
+    .page-header {
+        padding: 1rem;
+    }
+
+    .progress-card h4 {
+        font-size: 1.1rem;
+    }
+}
+
+/* MODAL OPCIONES DE PAGO MODERNAS */
+.tipo-abono-card-modern {
+    background: white;
+    border: 2px solid #E5E7EB;
+    border-radius: 16px;
+    padding: 1.25rem;
+    transition: all 0.2s ease;
+}
+
+.tipo-abono-card-modern:hover {
+    border-color: #0284C7;
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.15);
+    transform: translateX(4px);
+}
+
+.tipo-abono-card-modern.active {
+    border-color: #0284C7;
+    background: #F0F9FF;
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2);
+}
+
+.tipo-abono-card-modern.active .bi-chevron-right {
+    color: #0284C7 !important;
+}
+
+/* MEJORAS VISUALES */
+.card-hover-effect {
+    transition: all 0.3s ease;
+}
+
+.card-hover-effect:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
+}
+
+/* LOADER MEJORADO */
+#lottieLoader {
+    width: 220px;
+    height: 220px;
+    filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.1));
+}
+
+/* SCROLL SUAVE */
+html {
+    scroll-behavior: smooth;
+}
+
+/* SELECCIÓN DE TEXTO */
+::selection {
+    background: var(--azul-cielo);
+    color: white;
+}
+
+::-moz-selection {
+    background: var(--azul-cielo);
+    color: white;
+}

@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from openai import OpenAI
 from configuraciones.models import ConfiguracionPeso
 from .models import Credito, HistorialEstado, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, HistorialPago, CuotaAmortizacion
-from django.db.models import Sum, Count, Case, When, F, DecimalField, Q, Avg
+from django.db.models import Sum, Count, Case, When, F, DecimalField, Q, Avg, Value, ExpressionWrapper, Value, ExpressionWrapper
 from django.db.models.functions import TruncMonth, Coalesce
 from django.utils import timezone
 from datetime import timedelta, datetime
@@ -59,21 +59,43 @@ def gestionar_cambio_estado_credito(credito, nuevo_estado, motivo, usuario_modif
 @transaction.atomic
 def preparar_documento_para_firma(credito, usuario_modificacion):
     """
-    Prepara el crédito para el proceso de firma.
+    Prepara el credito para el proceso de firma.
     """
     gestionar_cambio_estado_credito(
         credito=credito,
         nuevo_estado=Credito.EstadoCredito.PENDIENTE_FIRMA,
-        motivo="Crédito aprobado, pendiente de firma del pagaré.",
+        motivo="Credito aprobado, pendiente de firma del pagare.",
         usuario_modificacion=usuario_modificacion
     )
-    
-    credito.documento_enviado = True
-    credito.save(update_fields=['documento_enviado'])
-    
-    logger.info(f"El crédito {credito.id} ha sido preparado para la firma.")
 
-@transaction.atomic
+    from gestion_creditos.models import Pagare
+    from gestion_creditos.services.pagare_service import generar_pagare_pdf
+    from gestion_creditos.services.pagare_url import generar_url_publica_temporal
+    from gestion_creditos.services.zapsign_client import enviar_pagare_a_zapsign, ZapSignAPIError
+
+    try:
+        pagare = getattr(credito, 'pagare', None)
+        if pagare and pagare.estado in [Pagare.EstadoPagare.SENT, Pagare.EstadoPagare.SIGNED]:
+            credito.documento_enviado = True
+            credito.save(update_fields=['documento_enviado'])
+            logger.info(f"El pagare del credito {credito.id} ya fue enviado o firmado.")
+            return
+
+        pagare = generar_pagare_pdf(credito, usuario_modificacion)
+        if pagare.estado == Pagare.EstadoPagare.CREATED:
+            url_pdf_publica = generar_url_publica_temporal(pagare)
+            enviar_pagare_a_zapsign(pagare, url_pdf_publica)
+
+        credito.documento_enviado = pagare.estado in [Pagare.EstadoPagare.SENT, Pagare.EstadoPagare.SIGNED]
+        credito.save(update_fields=['documento_enviado'])
+
+        logger.info(f"El credito {credito.id} ha sido preparado para la firma.")
+
+    except ZapSignAPIError as e:
+        logger.error(f"Error al enviar el pagare a ZapSign para credito {credito.id}: {e}")
+    except Exception as e:
+        logger.error(f"Error inesperado al preparar el pagare para firma en credito {credito.id}: {e}")
+
 def iniciar_proceso_desembolso(credito):
     """
     Inicia el proceso de desembolso.
@@ -155,7 +177,10 @@ def actualizar_saldo_tras_pago(credito, monto_pagado):
             # Redondear a 2 decimales para evitar problemas de precisión
             credito.capital_pendiente = credito.capital_pendiente.quantize(Decimal('0.01'))
 
-    # 5. Validar si el crédito está completamente pagado
+    # 5. Aplicar el pago a las cuotas pendientes (permite abonos parciales)
+    _aplicar_pago_a_cuotas(credito, monto_pagado)
+
+    # 6. Validar si el crédito está completamente pagado
     if credito.saldo_pendiente <= Decimal('0.01'):
         credito.saldo_pendiente = Decimal('0.00')
         if credito.capital_pendiente is not None:
@@ -169,13 +194,13 @@ def actualizar_saldo_tras_pago(credito, monto_pagado):
                 motivo="Crédito saldado automáticamente por pago."
             )
     else:
-        # 6. Avanzar fecha de próximo pago si pagó cuotas completas
+        # 7. Avanzar fecha de próximo pago si pagó cuotas completas
         if credito.valor_cuota and credito.valor_cuota > 0 and credito.fecha_proximo_pago:
             cuotas_pagadas = int(monto_pagado // credito.valor_cuota)
             if cuotas_pagadas > 0:
                 credito.fecha_proximo_pago += relativedelta(months=cuotas_pagadas)
 
-        # 7. Si estaba en mora y se puso al día, volver a ACTIVO
+        # 8. Si estaba en mora y se puso al día, volver a ACTIVO
         hoy = timezone.now().date()
         if credito.estado == Credito.EstadoCredito.EN_MORA and credito.fecha_proximo_pago and credito.fecha_proximo_pago > hoy:
             gestionar_cambio_estado_credito(
@@ -207,6 +232,40 @@ def actualizar_saldo_tras_pago(credito, monto_pagado):
         logger.info(f"Confirmación de pago enviada por email para crédito {credito.numero_credito}")
     except Exception as e:
         logger.error(f"Error al enviar confirmación de pago por email para crédito {credito.numero_credito}: {e}")
+
+
+def _aplicar_pago_a_cuotas(credito, monto_pagado):
+    """
+    Aplica un pago a las cuotas pendientes, permitiendo abonos parciales.
+
+    Regla:
+    - El abono se aplica desde la cuota más próxima.
+    - Si el abono cubre la cuota completa, se marca como pagada.
+    - Si el abono es parcial, se actualiza monto_pagado y se deja pendiente.
+    """
+    monto_restante = Decimal(monto_pagado)
+    cuotas_pendientes = credito.tabla_amortizacion.filter(pagada=False).order_by('numero_cuota')
+
+    for cuota in cuotas_pendientes:
+        ya_pagado = cuota.monto_pagado or Decimal('0.00')
+        restante_cuota = cuota.valor_cuota - ya_pagado
+
+        if restante_cuota <= Decimal('0.00'):
+            continue
+
+        if monto_restante >= restante_cuota:
+            cuota.monto_pagado = cuota.valor_cuota
+            cuota.pagada = True
+            cuota.fecha_pago = timezone.now()
+            cuota.save(update_fields=['monto_pagado', 'pagada', 'fecha_pago'])
+            monto_restante -= restante_cuota
+        else:
+            cuota.monto_pagado = ya_pagado + monto_restante
+            cuota.save(update_fields=['monto_pagado'])
+            monto_restante = Decimal('0.00')
+
+        if monto_restante <= Decimal('0.00'):
+            break
 
 
 def evaluar_motivacion_credito(texto: str) -> int:
@@ -310,6 +369,38 @@ def filtrar_creditos(request, creditos_base):
     return queryset.distinct()
 
 
+
+def calcular_total_en_mora(creditos=None):
+    """
+    Calcula el monto total vencido en mora basado en cuotas vencidas no pagadas.
+    """
+    today = timezone.now().date()
+
+    cuotas = CuotaAmortizacion.objects.filter(
+        pagada=False,
+        fecha_vencimiento__lt=today
+    )
+
+    if creditos is not None:
+        cuotas = cuotas.filter(credito__in=creditos)
+    else:
+        cuotas = cuotas.filter(
+            credito__estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]
+        )
+
+    monto_expr = ExpressionWrapper(
+        F('valor_cuota') - Coalesce(F('monto_pagado'), Value(Decimal('0.00'))),
+        output_field=DecimalField(max_digits=12, decimal_places=2)
+    )
+
+    total = cuotas.aggregate(
+        total=Coalesce(Sum(monto_expr), Value(Decimal('0.00')))
+    )['total']
+
+    return total or Decimal('0.00')
+
+
+
 def get_admin_dashboard_context(user):
     """
     Obtiene todo el contexto necesario para el dashboard del administrador,
@@ -326,9 +417,9 @@ def get_admin_dashboard_context(user):
     
     # --- KPIs Principales ---
     kpis = creditos_activos.aggregate(
-        saldo_cartera_total=Coalesce(Sum('saldo_pendiente'), Decimal('0.00')),
-        monto_total_en_mora=Coalesce(Sum('saldo_pendiente', filter=Q(estado=Credito.EstadoCredito.EN_MORA)), Decimal('0.00'))
+        saldo_cartera_total=Coalesce(Sum('saldo_pendiente'), Decimal('0.00'))
     )
+    monto_total_en_mora = calcular_total_en_mora()
     total_creditos = creditos_activos.count()
     proximos_vencer = creditos_activos.filter(fecha_proximo_pago__range=[today, proximos_15_dias]).count()
 
@@ -397,7 +488,7 @@ def get_admin_dashboard_context(user):
     return {
         # KPIs
         'saldo_cartera_total': kpis['saldo_cartera_total'],
-        'monto_total_en_mora': kpis['monto_total_en_mora'],
+        'monto_total_en_mora': monto_total_en_mora,
         'total_creditos': total_creditos,
         'proximos_vencer': proximos_vencer,
         
@@ -656,6 +747,110 @@ def get_billetera_context(user):
         'es_libranza': es_libranza,
     }
 
+def _leer_csv_pagos(csv_file):
+    """
+    Lee un CSV de pagos masivos soportando BOM, linea sep= y delimitadores comunes.
+    """
+    raw = csv_file.read()
+    if isinstance(raw, str):
+        text = raw
+    else:
+        text = raw.decode('utf-8-sig')
+
+    lines = text.splitlines()
+    if lines and lines[0].strip().lower().startswith('sep='):
+        lines = lines[1:]
+
+    cleaned = "\n".join(lines)
+    sample = cleaned[:4096]
+
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=[',', ';', '\t'])
+    except csv.Error:
+        header = lines[0] if lines else ''
+        delim = ',' if header.count(',') >= header.count(';') else ';'
+
+        class SimpleDialect(csv.Dialect):
+            delimiter = delim
+            quotechar = '"'
+            doublequote = True
+            skipinitialspace = True
+            lineterminator = '\n'
+            quoting = csv.QUOTE_MINIMAL
+
+        dialect = SimpleDialect
+
+    return csv.DictReader(io.StringIO(cleaned), dialect=dialect)
+
+def validar_csv_pagos_masivos(csv_file, empresa):
+    """
+    Valida un archivo CSV de pagos masivos SIN aplicar los pagos.
+    Retorna los pagos válidos y errores encontrados.
+    """
+    pagos_validos = []
+    errores = []
+
+    try:
+        reader = _leer_csv_pagos(csv_file)
+
+        for i, row in enumerate(reader, start=2):
+            normalized = {k.strip().lower(): (v.strip() if isinstance(v, str) else v) for k, v in row.items() if k}
+            cedula_raw = (normalized.get('cedula') or '').strip()
+            monto_str = (normalized.get('monto_a_pagar') or '').strip()
+
+            if not cedula_raw or not monto_str:
+                errores.append(f"Fila {i}: Faltan datos de cédula o monto.")
+                continue
+
+            # Limpiar cédula (remover puntos, espacios, guiones)
+            cedula = cedula_raw.replace('.', '').replace(' ', '').replace('-', '')
+
+            if not cedula.isdigit():
+                errores.append(f"Fila {i}: La cédula '{cedula_raw}' contiene caracteres no numéricos. Use solo números sin puntos ni espacios.")
+                continue
+
+            # Limpiar y validar monto
+            try:
+                # Remover símbolos comunes: $, puntos de miles, espacios
+                monto_limpio = monto_str.replace('$', '').replace('.', '').replace(' ', '').replace(',', '')
+
+                if not monto_limpio.isdigit():
+                    raise ValueError("Contiene caracteres no numéricos")
+
+                monto_a_pagar = Decimal(monto_limpio)
+
+                if monto_a_pagar <= 0:
+                    raise ValueError("El monto debe ser mayor a cero")
+
+            except (ValueError, TypeError) as e:
+                errores.append(f"Fila {i} (Cédula {cedula}): Monto '{monto_str}' no es válido. Use solo números sin símbolos (Ejemplo: 50000).")
+                continue
+
+            credito = Credito.objects.filter(
+                linea=Credito.LineaCredito.LIBRANZA,
+                detalle_libranza__empresa=empresa,
+                detalle_libranza__cedula=cedula,
+                estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]
+            ).select_related('detalle_libranza').first()
+
+            if not credito:
+                errores.append(f"Fila {i}: No se encontró un crédito activo para la cédula {cedula}.")
+                continue
+
+            pagos_validos.append({
+                'credito_id': credito.id,
+                'cedula': cedula,
+                'nombre': credito.detalle_libranza.nombre_completo,
+                'monto': monto_a_pagar,
+                'fila': i
+            })
+
+    except Exception as e:
+        logger.error(f"Error al leer CSV: {str(e)}")
+        errores.append(f"Error al procesar el archivo: {str(e)}")
+
+    return pagos_validos, errores
+
 
 def procesar_pagos_masivos_csv(csv_file, empresa):
     """
@@ -663,22 +858,22 @@ def procesar_pagos_masivos_csv(csv_file, empresa):
     """
     pagos_exitosos = 0
     errores = []
-    
+
     try:
-        decoded_file = io.TextIOWrapper(csv_file, encoding='utf-8')
-        reader = csv.DictReader(decoded_file)
+        reader = _leer_csv_pagos(csv_file)
 
         with transaction.atomic():
             for i, row in enumerate(reader, start=2):
-                cedula = row.get('cedula')
-                monto_str = row.get('monto_a_pagar')
+                normalized = {k.strip().lower(): (v.strip() if isinstance(v, str) else v) for k, v in row.items() if k}
+                cedula = (normalized.get('cedula') or '').strip()
+                monto_str = (normalized.get('monto_a_pagar') or '').strip()
 
                 if not cedula or not monto_str:
                     errores.append(f"Fila {i}: Faltan datos de cédula o monto.")
                     continue
 
                 try:
-                    monto_limpio = monto_str.replace('.', '').replace(',', '.')
+                    monto_limpio = monto_str.replace('$', '').replace('.', '').replace(' ', '').replace(',', '')
                     monto_a_pagar = Decimal(monto_limpio)
                     if monto_a_pagar <= 0:
                         raise ValueError("El monto debe ser positivo.")
@@ -690,7 +885,7 @@ def procesar_pagos_masivos_csv(csv_file, empresa):
                     linea=Credito.LineaCredito.LIBRANZA,
                     detalle_libranza__empresa=empresa,
                     detalle_libranza__cedula=cedula,
-                    estado=Credito.EstadoCredito.ACTIVO
+                    estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]
                 ).select_related('detalle_libranza').first()
 
                 if not credito:
@@ -705,7 +900,7 @@ def procesar_pagos_masivos_csv(csv_file, empresa):
                 )
 
                 actualizar_saldo_tras_pago(credito, monto_a_pagar)
-                
+
                 pagos_exitosos += 1
     
     except Exception as e:
@@ -806,3 +1001,434 @@ def crear_ajuste_manual_billetera(admin_user, user_email, monto, nota, comproban
     cuenta.save()
 
     return movimiento
+
+
+#? ===================================================================
+#? SERVICIOS DE ABONOS AL CRÉDITO Y REESTRUCTURACIÓN
+#? ===================================================================
+
+def calcular_cuotas_restantes(credito):
+    """
+    Calcula el número de cuotas restantes del crédito basándose en la tabla de amortización.
+
+    Returns:
+        int: Número de cuotas pendientes de pago
+    """
+    cuotas_pendientes = credito.tabla_amortizacion.filter(pagada=False).count()
+    return cuotas_pendientes
+
+
+def generar_plan_pagos_actual(credito):
+    """
+    Genera un JSON con el plan de pagos actual del crédito.
+
+    Args:
+        credito: Instancia del modelo Credito
+
+    Returns:
+        dict: Plan de pagos con cuotas restantes
+    """
+    cuotas_pendientes = credito.tabla_amortizacion.filter(pagada=False).order_by('numero_cuota')
+
+    plan = {
+        'cuotas': [],
+        'total_capital': Decimal('0.00'),
+        'total_intereses': Decimal('0.00'),
+        'total_pagar': Decimal('0.00'),
+        'num_cuotas': cuotas_pendientes.count()
+    }
+
+    for cuota in cuotas_pendientes:
+        plan['cuotas'].append({
+            'numero': cuota.numero_cuota,
+            'fecha_vencimiento': cuota.fecha_vencimiento.isoformat(),
+            'capital': float(cuota.capital_a_pagar),
+            'interes': float(cuota.interes_a_pagar),
+            'cuota': float(cuota.valor_cuota),
+            'saldo_pendiente': float(cuota.saldo_capital_pendiente)
+        })
+        plan['total_capital'] += cuota.capital_a_pagar
+        plan['total_intereses'] += cuota.interes_a_pagar
+        plan['total_pagar'] += cuota.valor_cuota
+
+    # Convertir Decimals a float para JSON
+    plan['total_capital'] = float(plan['total_capital'])
+    plan['total_intereses'] = float(plan['total_intereses'])
+    plan['total_pagar'] = float(plan['total_pagar'])
+
+    return plan
+
+
+def calcular_plan_con_abono(credito, monto_abono, tipo_abono='NORMAL'):
+    """
+    Calcula el nuevo plan de pagos después de aplicar un abono.
+
+    Args:
+        credito: Instancia del modelo Credito
+        monto_abono (Decimal): Monto del abono
+        tipo_abono (str): 'NORMAL', 'CAPITAL', o 'MAYOR'
+
+    Returns:
+        dict: Nuevo plan de pagos después del abono
+    """
+    from .models import ReestructuracionCredito
+
+    # Obtener cuotas pendientes
+    cuotas_pendientes = list(credito.tabla_amortizacion.filter(pagada=False).order_by('numero_cuota'))
+
+    if not cuotas_pendientes:
+        return {
+            'cuotas': [],
+            'total_capital': 0,
+            'total_intereses': 0,
+            'total_pagar': 0,
+            'num_cuotas': 0
+        }
+
+    tasa_mensual = credito.tasa_interes / Decimal('100')  # Convertir porcentaje a decimal
+    monto_restante = monto_abono
+
+    if tipo_abono == 'CAPITAL':
+        # Abono directo a capital - reduce el saldo pero mantiene el mismo plazo
+        nuevo_capital_pendiente = max(Decimal('0.00'), credito.capital_pendiente - monto_abono)
+
+        # Recalcular cuotas con el nuevo capital
+        if nuevo_capital_pendiente > 0:
+            cuotas_restantes = len(cuotas_pendientes)
+            nueva_cuota = calcular_cuota_fija(nuevo_capital_pendiente, tasa_mensual, cuotas_restantes)
+        else:
+            nueva_cuota = Decimal('0.00')
+            cuotas_restantes = 0
+
+        # Generar nuevo plan
+        plan = {
+            'cuotas': [],
+            'total_capital': Decimal('0.00'),
+            'total_intereses': Decimal('0.00'),
+            'total_pagar': Decimal('0.00'),
+            'num_cuotas': cuotas_restantes
+        }
+
+        saldo = nuevo_capital_pendiente
+        fecha_base = cuotas_pendientes[0].fecha_vencimiento
+
+        for i in range(cuotas_restantes):
+            interes = saldo * tasa_mensual
+            capital = nueva_cuota - interes
+            saldo -= capital
+
+            plan['cuotas'].append({
+                'numero': cuotas_pendientes[0].numero_cuota + i,
+                'fecha_vencimiento': (fecha_base + relativedelta(months=i)).isoformat(),
+                'capital': float(capital),
+                'interes': float(interes),
+                'cuota': float(nueva_cuota),
+                'saldo_pendiente': float(max(Decimal('0.00'), saldo))
+            })
+            plan['total_capital'] += capital
+            plan['total_intereses'] += interes
+            plan['total_pagar'] += nueva_cuota
+
+    else:  # NORMAL o MAYOR
+        # Abono que paga cuotas completas desde la más próxima
+        plan = {
+            'cuotas': [],
+            'total_capital': Decimal('0.00'),
+            'total_intereses': Decimal('0.00'),
+            'total_pagar': Decimal('0.00'),
+            'num_cuotas': 0
+        }
+
+        for i, cuota in enumerate(cuotas_pendientes):
+            if monto_restante >= cuota.valor_cuota:
+                # El abono cubre esta cuota completa - la omitimos del nuevo plan
+                monto_restante -= cuota.valor_cuota
+            else:
+                # El abono no cubre esta cuota - agregamos todas las cuotas restantes
+                for cuota_restante in cuotas_pendientes[i:]:
+                    plan['cuotas'].append({
+                        'numero': cuota_restante.numero_cuota,
+                        'fecha_vencimiento': cuota_restante.fecha_vencimiento.isoformat(),
+                        'capital': float(cuota_restante.capital_a_pagar),
+                        'interes': float(cuota_restante.interes_a_pagar),
+                        'cuota': float(cuota_restante.valor_cuota),
+                        'saldo_pendiente': float(cuota_restante.saldo_capital_pendiente)
+                    })
+                    plan['total_capital'] += cuota_restante.capital_a_pagar
+                    plan['total_intereses'] += cuota_restante.interes_a_pagar
+                    plan['total_pagar'] += cuota_restante.valor_cuota
+                break
+
+        plan['num_cuotas'] = len(plan['cuotas'])
+
+    # Convertir Decimals a float para JSON
+    plan['total_capital'] = float(plan['total_capital'])
+    plan['total_intereses'] = float(plan['total_intereses'])
+    plan['total_pagar'] = float(plan['total_pagar'])
+
+    return plan
+
+
+def calcular_cuota_fija(capital, tasa_mensual, num_cuotas):
+    """
+    Calcula el valor de la cuota fija usando la fórmula de amortización francesa.
+
+    Args:
+        capital (Decimal): Capital a financiar
+        tasa_mensual (Decimal): Tasa de interés mensual (en decimal, ej: 0.02 para 2%)
+        num_cuotas (int): Número de cuotas
+
+    Returns:
+        Decimal: Valor de la cuota mensual
+    """
+    if num_cuotas == 0 or capital == 0:
+        return Decimal('0.00')
+
+    if tasa_mensual == 0:
+        return capital / num_cuotas
+
+    # Fórmula: C = P * (i * (1 + i)^n) / ((1 + i)^n - 1)
+    factor = (1 + tasa_mensual) ** num_cuotas
+    cuota = capital * (tasa_mensual * factor) / (factor - 1)
+
+    return cuota.quantize(Decimal('0.01'))
+
+
+def calcular_ahorro_intereses(credito, monto_abono, tipo_abono='NORMAL'):
+    """
+    Calcula el ahorro en intereses al hacer un abono.
+
+    Args:
+        credito: Instancia del modelo Credito
+        monto_abono (Decimal): Monto del abono
+        tipo_abono (str): 'NORMAL', 'CAPITAL', o 'MAYOR'
+
+    Returns:
+        Decimal: Ahorro en intereses
+    """
+    plan_actual = generar_plan_pagos_actual(credito)
+    plan_nuevo = calcular_plan_con_abono(credito, monto_abono, tipo_abono)
+
+    ahorro = Decimal(str(plan_actual['total_intereses'])) - Decimal(str(plan_nuevo['total_intereses']))
+
+    return max(Decimal('0.00'), ahorro)
+
+
+def analizar_abono_credito(credito, monto_abono, tipo_abono='NORMAL'):
+    """
+    Analiza un abono al crédito y determina si requiere reestructuración.
+
+    Args:
+        credito: Instancia del modelo Credito
+        monto_abono (Decimal): Monto que el cliente quiere abonar
+        tipo_abono (str): 'NORMAL', 'CAPITAL', o 'MAYOR'
+
+    Returns:
+        dict: Información sobre el abono y si requiere reestructuración
+    """
+    from .models import ReestructuracionCredito
+
+    cuota_normal = credito.valor_cuota or Decimal('0.00')
+
+    # Determinar si requiere reestructuración
+    requiere_reestructuracion = (
+        tipo_abono == 'CAPITAL' or
+        monto_abono > (cuota_normal * 2)
+    )
+
+    # Obtener planes
+    plan_actual = generar_plan_pagos_actual(credito)
+    plan_nuevo = calcular_plan_con_abono(credito, monto_abono, tipo_abono)
+
+    # Calcular ahorro
+    ahorro = calcular_ahorro_intereses(credito, monto_abono, tipo_abono)
+
+    # Calcular nuevo plazo
+    nuevo_plazo = plan_nuevo['num_cuotas']
+    plazo_actual = plan_actual['num_cuotas']
+
+    # Calcular nueva cuota mensual (si cambió)
+    nueva_cuota = None
+    if tipo_abono == 'CAPITAL' and plan_nuevo['num_cuotas'] > 0:
+        nueva_cuota = Decimal(str(plan_nuevo['cuotas'][0]['cuota']))
+
+    resultado = {
+        'requiere_reestructuracion': requiere_reestructuracion,
+        'plan_actual': plan_actual,
+        'plan_nuevo': plan_nuevo,
+        'ahorro_intereses': float(ahorro),
+        'tipo_abono_calculado': tipo_abono,
+        'plazo_actual': plazo_actual,
+        'nuevo_plazo': nuevo_plazo,
+        'cuota_actual': float(cuota_normal),
+        'nueva_cuota': float(nueva_cuota) if nueva_cuota else float(cuota_normal),
+        'advertencia': None
+    }
+
+    if requiere_reestructuracion:
+        if tipo_abono == 'CAPITAL':
+            resultado['advertencia'] = (
+                'Este abono a capital reducirá significativamente sus intereses, '
+                'pero su cuota mensual cambiará. El plan de pagos será reestructurado.'
+            )
+        else:
+            resultado['advertencia'] = (
+                f'Este abono de ${monto_abono:,.0f} cubre más de 2 cuotas. '
+                f'Su plan de pagos será reestructurado, ahorrará ${ahorro:,.0f} en intereses '
+                f'y su nuevo plazo será de {nuevo_plazo} cuotas.'
+            )
+
+    return resultado
+
+
+@transaction.atomic
+def aplicar_abono_credito(credito, monto_abono, tipo_abono, usuario, referencia_pago):
+    """
+    Aplica un abono al crédito, crea el registro de reestructuración si es necesario,
+    y actualiza la tabla de amortización.
+
+    Args:
+        credito: Instancia del modelo Credito
+        monto_abono (Decimal): Monto del abono
+        tipo_abono (str): 'NORMAL', 'CAPITAL', o 'MAYOR'
+        usuario: Usuario que aprueba el abono
+        referencia_pago (str): Referencia del pago que generó el abono
+
+    Returns:
+        tuple: (HistorialPago, ReestructuracionCredito o None)
+    """
+    from .models import ReestructuracionCredito
+
+    # Analizar el abono
+    analisis = analizar_abono_credito(credito, monto_abono, tipo_abono)
+
+    # Crear el registro del pago
+    pago = HistorialPago.objects.create(
+        credito=credito,
+        monto=monto_abono,
+        referencia_pago=referencia_pago,
+        estado=HistorialPago.EstadoPago.EXITOSO,
+        notas=f"Abono tipo: {tipo_abono}. Ahorro en intereses: ${analisis['ahorro_intereses']:,.0f}"
+    )
+
+    # Guardar estado anterior del crédito
+    saldo_anterior = credito.saldo_pendiente or Decimal('0.00')
+    capital_anterior = credito.capital_pendiente or Decimal('0.00')
+    plazo_anterior = calcular_cuotas_restantes(credito)
+
+    # Si requiere reestructuración, crear el registro
+    reestructuracion = None
+    if analisis['requiere_reestructuracion']:
+        reestructuracion = ReestructuracionCredito.objects.create(
+            credito=credito,
+            monto_abonado=monto_abono,
+            tipo_abono=tipo_abono,
+            plan_anterior=analisis['plan_actual'],
+            plan_nuevo=analisis['plan_nuevo'],
+            saldo_pendiente_anterior=saldo_anterior,
+            capital_pendiente_anterior=capital_anterior,
+            plazo_restante_anterior=plazo_anterior,
+            saldo_pendiente_nuevo=Decimal(str(analisis['plan_nuevo']['total_pagar'])),
+            capital_pendiente_nuevo=Decimal(str(analisis['plan_nuevo']['total_capital'])),
+            plazo_restante_nuevo=analisis['nuevo_plazo'],
+            ahorro_intereses=Decimal(str(analisis['ahorro_intereses'])),
+            cuota_mensual_nueva=Decimal(str(analisis['nueva_cuota'])) if tipo_abono == 'CAPITAL' else None,
+            aprobado_por=usuario,
+            pago_relacionado=pago,
+            observaciones=analisis['advertencia'] or ''
+        )
+
+    # Actualizar tabla de amortización
+    if tipo_abono == 'CAPITAL':
+        # Abono a capital: recalcular todas las cuotas pendientes
+        _recalcular_amortizacion_por_capital(credito, analisis['plan_nuevo'])
+    else:
+        # Abono normal/mayor: marcar cuotas pagadas
+        _marcar_cuotas_pagadas(credito, monto_abono, pago)
+
+    # Actualizar campos del crédito
+    credito.saldo_pendiente = Decimal(str(analisis['plan_nuevo']['total_pagar']))
+    credito.capital_pendiente = Decimal(str(analisis['plan_nuevo']['total_capital']))
+
+    if tipo_abono == 'CAPITAL' and analisis['nueva_cuota']:
+        credito.valor_cuota = Decimal(str(analisis['nueva_cuota']))
+
+    # Si se pagó todo el crédito, cambiar estado
+    if credito.saldo_pendiente <= Decimal('0.01'):
+        credito.estado = Credito.EstadoCredito.PAGADO
+        credito.saldo_pendiente = Decimal('0.00')
+        credito.capital_pendiente = Decimal('0.00')
+
+    credito.save()
+
+    logger.info(
+        f"Abono aplicado al crédito {credito.numero_credito}. "
+        f"Monto: ${monto_abono}, Tipo: {tipo_abono}, "
+        f"Ahorro: ${analisis['ahorro_intereses']:,.0f}"
+    )
+
+    return pago, reestructuracion
+
+
+def _recalcular_amortizacion_por_capital(credito, plan_nuevo):
+    """
+    Recalcula la tabla de amortización cuando se hace un abono a capital.
+    Elimina las cuotas pendientes y crea nuevas con los valores recalculados.
+
+    Args:
+        credito: Instancia del modelo Credito
+        plan_nuevo (dict): Nuevo plan de pagos
+    """
+    # Eliminar cuotas pendientes
+    credito.tabla_amortizacion.filter(pagada=False).delete()
+
+    # Crear nuevas cuotas
+    for cuota_data in plan_nuevo['cuotas']:
+        CuotaAmortizacion.objects.create(
+            credito=credito,
+            numero_cuota=cuota_data['numero'],
+            fecha_vencimiento=datetime.fromisoformat(cuota_data['fecha_vencimiento']).date(),
+            capital_a_pagar=Decimal(str(cuota_data['capital'])),
+            interes_a_pagar=Decimal(str(cuota_data['interes'])),
+            valor_cuota=Decimal(str(cuota_data['cuota'])),
+            saldo_capital_pendiente=Decimal(str(cuota_data['saldo_pendiente'])),
+            pagada=False
+        )
+
+    logger.info(f"Tabla de amortización recalculada para crédito {credito.numero_credito}")
+
+
+def _marcar_cuotas_pagadas(credito, monto_abono, pago):
+    """
+    Marca cuotas como pagadas cuando se hace un abono normal o mayor.
+
+    Args:
+        credito: Instancia del modelo Credito
+        monto_abono (Decimal): Monto del abono
+        pago: Instancia de HistorialPago
+    """
+    monto_restante = monto_abono
+    cuotas_pendientes = credito.tabla_amortizacion.filter(pagada=False).order_by('numero_cuota')
+
+    for cuota in cuotas_pendientes:
+        if monto_restante >= cuota.valor_cuota:
+            # Marcar cuota como pagada
+            cuota.pagada = True
+            cuota.fecha_pago = timezone.now()
+            cuota.monto_pagado = cuota.valor_cuota
+            cuota.save()
+
+            monto_restante -= cuota.valor_cuota
+
+            # Actualizar el desglose del pago
+            if pago.capital_abonado is None:
+                pago.capital_abonado = Decimal('0.00')
+                pago.intereses_pagados = Decimal('0.00')
+
+            pago.capital_abonado += cuota.capital_a_pagar
+            pago.intereses_pagados += cuota.interes_a_pagar
+        else:
+            break
+
+    pago.save()
+    logger.info(f"Cuotas marcadas como pagadas para crédito {credito.numero_credito}")

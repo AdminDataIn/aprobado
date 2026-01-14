@@ -6,8 +6,6 @@ app_name = 'gestion_creditos'
 urlpatterns = [
     path('solicitar/libranza/', views.solicitud_credito_libranza_view, name='solicitud_libranza'),
     path('solicitar/emprendimiento/', views.solicitud_credito_emprendimiento_view, name='solicitud_emprendimiento'),
-    # path('webhook/firma/<str:numero_credito>/', views.webhook_firma_documento, name='webhook_firma_documento'), # DESCOMENTAR AL IMPLEMENTAR LA INTEGRACION
-    path('admin/credito/<int:credito_id>/simular-firma/', views.simular_firma_view, name='simular_firma'), # Ruta para el webhook falso
     
     #! URLs Dashboard Administrativo (APROBADOR DE CREDITOS)
     path('admin/dashboard/', views.admin_dashboard_view, name='admin_dashboard'),

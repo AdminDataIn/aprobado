@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pago Masivo con WOMPI - Aprobado</title>
+    {% load static %}
+    {% load humanize %}
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+    <style>
+        .payment-method-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 15px;
+        }
+        .payment-method-card:hover {
+            border-color: var(--azul-cielo);
+            box-shadow: 0 4px 12px rgba(0,123,255,0.1);
+        }
+        .payment-method-card.active {
+            border-color: var(--azul-cielo);
+            background-color: #f0f8ff;
+        }
+        .payment-method-icon {
+            font-size: 2rem;
+            color: var(--azul-cielo);
+        }
+        .payment-method-img {
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+        }
+        .payment-form-section {
+            display: none;
+            animation: fadeIn 0.3s ease-in;
+        }
+        .payment-form-section.active {
+            display: block;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .card-input {
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+        }
+        .credito-item {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+        .credito-item:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body class="theme-details">
+    <header class="page-header">
+        <div class="container-fluid" style="max-width: 1400px;">
+            <div class="d-flex align-items-center justify-content-between">
+                <a href="{% url 'pagador:dashboard' %}" class="logo">
+                    <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;">
+                </a>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="user-info">
+                        <div class="user-details">
+                            <h6 class="mb-0">{{ request.user.get_full_name|default:request.user.username }}</h6>
+                            <small>Pagador - {{ customer_name }}</small>
+                        </div>
+                        <div class="user-avatar">{{ request.user.username|slice:":1"|upper }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container-fluid py-4" style="max-width: 900px;">
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb" class="mb-4">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'pagador:dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+                <li class="breadcrumb-item active">Pago Masivo con WOMPI</li>
+            </ol>
+        </nav>
+
+        <!-- Resumen de Pago -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title"><i class="bi bi-receipt me-2"></i>Resumen del Pago Masivo</h3>
+            </div>
+            <div class="card-content">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <p><strong>Empresa:</strong> {{ customer_name }}</p>
+                        <p><strong>Referencia:</strong> {{ referencia_pago }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Cantidad de Créditos:</strong> {{ cantidad_creditos }}</p>
+                        <p><strong>Fecha:</strong> {% now "d/m/Y H:i" %}</p>
+                    </div>
+                </div>
+
+                <!-- Lista de créditos -->
+                <div class="mb-3">
+                    <h6 class="mb-2"><i class="bi bi-list-check me-2"></i>Créditos Seleccionados:</h6>
+                    <div class="border rounded" style="max-height: 250px; overflow-y: auto;">
+                        {% for credito in creditos %}
+                        <div class="credito-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="fw-semibold">{{ credito.detalle_libranza.nombre_completo }}</span>
+                                <br>
+                                <small class="text-muted">Cédula: {{ credito.detalle_libranza.cedula }}</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-primary">${{ credito.valor_cuota|intcomma }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <hr>
+                <div class="text-center">
+                    <h4 class="mb-2">Monto Total a Pagar</h4>
+                    <h2 class="text-primary mb-0">${{ monto_total|intcomma }}</h2>
+                    <small class="text-muted">{{ cantidad_creditos }} cuota{{ cantidad_creditos|pluralize }}</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Selección de Método de Pago -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title"><i class="bi bi-credit-card me-2"></i>Selecciona tu Método de Pago</h3>
+            </div>
+            <div class="card-content">
+                <div class="row">
+                    <!-- Tarjeta de Crédito/Débito -->
+                    <div class="col-md-6 mb-3">
+                        <div class="payment-method-card" data-method="card">
+                            <div class="text-center">
+                                <img src="{% static 'images/wompi/tarjeta.png' %}" alt="Tarjeta" class="payment-method-img mx-auto d-block">
+                                <h5 class="mt-3">Tarjeta de Crédito/Débito</h5>
+                                <p class="text-muted small mb-0">Pago seguro con tu tarjeta</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PSE -->
+                    <div class="col-md-6 mb-3">
+                        <div class="payment-method-card" data-method="pse">
+                            <div class="text-center">
+                                <img src="{% static 'images/wompi/pse_logo.svg' %}" alt="PSE" class="payment-method-img mx-auto d-block">
+                                <h5 class="mt-3">PSE</h5>
+                                <p class="text-muted small mb-0">Paga desde tu banco</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Nequi -->
+                    <div class="col-md-6 mb-3">
+                        <div class="payment-method-card" data-method="nequi">
+                            <div class="text-center">
+                                <img src="{% static 'images/wompi/nequi_logo.svg' %}" alt="Nequi" class="payment-method-img mx-auto d-block">
+                                <h5 class="mt-3">Nequi</h5>
+                                <p class="text-muted small mb-0">Pago rápido con Nequi</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bancolombia Transfer -->
+                    <div class="col-md-6 mb-3">
+                        <div class="payment-method-card" data-method="bancolombia">
+                            <div class="text-center">
+                                <img src="{% static 'images/wompi/bancolombia_logo.svg' %}" alt="Bancolombia" class="payment-method-img mx-auto d-block">
+                                <h5 class="mt-3">Bancolombia</h5>
+                                <p class="text-muted small mb-0">Transferencia Bancolombia</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Formularios de Pago -->
+
+        <!-- Formulario Tarjeta -->
+        <div id="form-card" class="payment-form-section card mb-4">
+            <div class="card-header">
+                <h4 class="card-title"><i class="bi bi-credit-card me-2"></i>Pago con Tarjeta</h4>
+            </div>
+            <div class="card-content">
+                <form id="card-form">
+                    <div class="mb-3">
+                        <label class="form-label">Número de Tarjeta</label>
+                        <input type="text" class="form-control card-input" id="card-number"
+                               placeholder="4242 4242 4242 4242" maxlength="19" required>
+                        <small class="text-muted">Tarjeta de prueba: 4242424242424242</small>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Fecha de Vencimiento</label>
+                            <input type="text" class="form-control card-input" id="card-expiry"
+                                   placeholder="MM/AA" maxlength="5" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">CVV</label>
+                            <input type="text" class="form-control card-input" id="card-cvc"
+                                   placeholder="123" maxlength="4" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nombre del Titular</label>
+                        <input type="text" class="form-control" id="card-holder"
+                               value="{{ customer_name }}" required>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="accept-terms" required>
+                        <label class="form-check-label" for="accept-terms">
+                            Acepto los <a href="#" target="_blank">términos y condiciones</a> de WOMPI
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg w-100">
+                        <i class="bi bi-lock-fill me-2"></i>
+                        Pagar ${{ monto_total|intcomma }} de forma segura
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Formulario PSE -->
+        <div id="form-pse" class="payment-form-section card mb-4">
+            <div class="card-header">
+                <h4 class="card-title"><i class="bi bi-bank me-2"></i>Pago con PSE</h4>
+            </div>
+            <div class="card-content">
+                <form id="pse-form">
+                    <div class="mb-3">
+                        <label class="form-label">Banco</label>
+                        <select class="form-select" id="pse-bank" required>
+                            <option value="">Selecciona tu banco</option>
+                            {% for banco in bancos_pse %}
+                            <option value="{{ banco.financial_institution_code }}">
+                                {{ banco.financial_institution_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Persona</label>
+                        <select class="form-select" id="pse-user-type" required>
+                            <option value="0">Persona Natural</option>
+                            <option value="1">Persona Jurídica</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Documento</label>
+                        <select class="form-select" id="pse-doc-type" required>
+                            <option value="CC">Cédula de Ciudadanía</option>
+                            <option value="CE">Cédula de Extranjería</option>
+                            <option value="NIT">NIT</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Número de Documento</label>
+                        <input type="text" class="form-control" id="pse-doc-number"
+                               placeholder="1234567890" required>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="accept-terms-pse" required>
+                        <label class="form-check-label" for="accept-terms-pse">
+                            Acepto los <a href="#" target="_blank">términos y condiciones</a>
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg w-100">
+                        <i class="bi bi-lock-fill me-2"></i>
+                        Ir al banco a pagar
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Formulario Nequi -->
+        <div id="form-nequi" class="payment-form-section card mb-4">
+            <div class="card-header">
+                <h4 class="card-title"><i class="bi bi-phone me-2"></i>Pago con Nequi</h4>
+            </div>
+            <div class="card-content">
+                <form id="nequi-form">
+                    <div class="mb-3">
+                        <label class="form-label">Número de Celular Nequi</label>
+                        <input type="tel" class="form-control" id="nequi-phone"
+                               placeholder="3001234567" maxlength="10" required>
+                        <small class="text-muted">Número de prueba: 3991111111</small>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="accept-terms-nequi" required>
+                        <label class="form-check-label" for="accept-terms-nequi">
+                            Acepto los <a href="#" target="_blank">términos y condiciones</a>
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg w-100">
+                        <i class="bi bi-lock-fill me-2"></i>
+                        Pagar con Nequi
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Formulario Bancolombia -->
+        <div id="form-bancolombia" class="payment-form-section card mb-4">
+            <div class="card-header">
+                <h4 class="card-title"><i class="bi bi-building me-2"></i>Transferencia Bancolombia</h4>
+            </div>
+            <div class="card-content">
+                <form id="bancolombia-form">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Serás redirigido a la aplicación de Bancolombia para completar el pago.
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="accept-terms-bancolombia" required>
+                        <label class="form-check-label" for="accept-terms-bancolombia">
+                            Acepto los <a href="#" target="_blank">términos y condiciones</a>
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg w-100">
+                        <i class="bi bi-lock-fill me-2"></i>
+                        Ir a Bancolombia
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Botón Cancelar -->
+        <div class="text-center mb-4">
+            <a href="{% url 'pagador:dashboard' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-x-circle me-2"></i>Cancelar
+            </a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://checkout.wompi.co/widget.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const WOMPI_PUBLIC_KEY = '{{ wompi_public_key }}';
+            const ACCEPTANCE_TOKEN = '{{ acceptance_token }}';
+            const AMOUNT_IN_CENTS = {{ monto_total_centavos }};
+            const REFERENCE = '{{ referencia_pago }}';
+            const CUSTOMER_EMAIL = '{{ customer_email }}';
+            const CALLBACK_URL = '{{ request.build_absolute_uri }}{% url 'pagador:pago_wompi_callback' %}';
+
+            // Manejar selección de método de pago
+            document.querySelectorAll('.payment-method-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    console.log('Payment method clicked:', this.dataset.method);
+
+                    // Remover active de todos
+                    document.querySelectorAll('.payment-method-card').forEach(c => c.classList.remove('active'));
+                    document.querySelectorAll('.payment-form-section').forEach(f => f.classList.remove('active'));
+
+                    // Activar seleccionado
+                    this.classList.add('active');
+                    const method = this.dataset.method;
+                    const formElement = document.getElementById(`form-${method}`);
+
+                    if (formElement) {
+                        formElement.classList.add('active');
+                        console.log('Form activated:', `form-${method}`);
+
+                        // Scroll suave al formulario
+                        setTimeout(() => {
+                            formElement.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'start'
+                            });
+                        }, 100);
+                    } else {
+                        console.error('Form not found:', `form-${method}`);
+                    }
+                });
+            });
+
+            // Formatear número de tarjeta
+            document.getElementById('card-number')?.addEventListener('input', function(e) {
+                let value = e.target.value.replace(/\s/g, '');
+                let formattedValue = value.match(/.{1,4}/g)?.join(' ') || value;
+                e.target.value = formattedValue;
+            });
+
+            // Formatear fecha de expiración
+            document.getElementById('card-expiry')?.addEventListener('input', function(e) {
+                let value = e.target.value.replace(/\D/g, '');
+                if (value.length >= 2) {
+                    value = value.substring(0, 2) + '/' + value.substring(2, 4);
+                }
+                e.target.value = value;
+            });
+
+            // Procesar pago con tarjeta
+            document.getElementById('card-form')?.addEventListener('submit', async function(e) {
+                e.preventDefault();
+
+                const cardNumber = document.getElementById('card-number').value.replace(/\s/g, '');
+                const expiry = document.getElementById('card-expiry').value.split('/');
+                const cvc = document.getElementById('card-cvc').value;
+                const holder = document.getElementById('card-holder').value;
+
+                try {
+                    const response = await fetch('{% url "pagador:procesar_pago_wompi" %}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: JSON.stringify({
+                            payment_method: 'CARD',
+                            card_number: cardNumber,
+                            exp_month: expiry[0],
+                            exp_year: '20' + expiry[1],
+                            cvc: cvc,
+                            card_holder: holder,
+                            acceptance_token: ACCEPTANCE_TOKEN,
+                            amount_in_cents: AMOUNT_IN_CENTS,
+                            reference: REFERENCE,
+                            customer_email: CUSTOMER_EMAIL,
+                            tipo_pago: 'MASIVO',
+                            cantidad_creditos: {{ cantidad_creditos }}
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.status === 'APPROVED') {
+                        alert('¡Pago aprobado exitosamente!');
+                        window.location.href = '{% url "pagador:dashboard" %}';
+                    } else if (data.status === 'DECLINED') {
+                        alert('El pago fue rechazado. Por favor intenta con otra tarjeta.');
+                    } else {
+                        alert(`Estado del pago: ${data.status}`);
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Error al procesar el pago. Por favor intenta de nuevo.');
+                }
+            });
+
+            // Procesar pago con PSE (similar estructura)
+            // ... código similar para los otros métodos de pago
+        });
+    </script>
+</body>
+</html>

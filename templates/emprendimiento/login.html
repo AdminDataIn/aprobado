@@ -1,0 +1,27 @@
+{% extends "emprendimiento/base_emprendimiento.html" %}
+{% load socialaccount %}
+
+{% block title %}Iniciar Sesión - Emprendimiento{% endblock %}
+
+{% block body_class %}auth-body{% endblock %}
+
+{% block content %}
+<main class="section-main">
+    <section class="hero-section-account">
+        <div class="container-account">
+            <div class="div-card-agent-account">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                     alt="Google" style="height: 40px; margin-bottom: 1rem;">
+                <h2 class="mb-3">Inicio de sesión con Google</h2>
+                <p>Debes iniciar sesión con tu cuenta de Google para acceder al formulario de crédito</p>
+
+                <a href="{% provider_login_url 'google' %}?next=/usuarios/aplicar/" class="btn-account">
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                         alt="Google" style="height: 20px;">
+                    <span>Continuar con Google</span>
+                </a>
+            </div>
+        </div>
+    </section>
+</main>
+{% endblock %}

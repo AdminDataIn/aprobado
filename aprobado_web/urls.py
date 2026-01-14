@@ -20,12 +20,21 @@ from django.urls import path, include
 from django.views.generic import TemplateView
 from django.conf import settings
 from django.conf.urls.static import static
+from gestion_creditos import views as gestion_views
+from gestion_creditos.services.pagare_url import descargar_pagare_publico
 
 urlpatterns = [
     # ========================================
     # ADMINISTRACIÓN DJANGO
     # ========================================
     path('admin/', admin.site.urls),
+
+    # ========================================
+    # WEBHOOKS Y APIs PÚBLICAS (Sin autenticación)
+    # ========================================
+    path('webhook/wompi/events/', gestion_views.wompi_webhook_view, name='wompi_webhook'),
+    path('api/webhooks/zapsign/', gestion_views.zapsign_webhook_view, name='zapsign_webhook'),
+    path('api/pagares/download/<str:token>/', descargar_pagare_publico, name='descargar_pagare_publico'),
 
     # ========================================
     # AUTENTICACIÓN (Django Allauth)

@@ -7,7 +7,10 @@
       "Bash(python manage.py:*)",
       "Bash(pip install:*)",
       "Bash(python:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(venv/Scripts/pip.exe install:*)",
+      "Bash(venv/Scripts/python.exe:*)",
+      "Bash(start \"\" \"C:\\\\.vscode\\\\Project_aprobado\\\\media\\\\pagares\\\\2026\\\\01\\\\pagare_PAG-2026-00001.pdf\")"
     ],
     "deny": [],
     "ask": []

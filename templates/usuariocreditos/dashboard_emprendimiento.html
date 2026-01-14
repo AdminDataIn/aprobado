@@ -1,5 +1,6 @@
 {% load static %}
 {% load humanize %}
+{% load l10n %}
 
 <!DOCTYPE html>
 <html lang="es">
@@ -10,530 +11,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --azul-colombia: #003893;
-            --azul-cielo: #4A90E2;
-            --amarillo-colombia: #FFCD00;
-            --rojo-colombia: #CE1126;
-            --gris-claro: #F8F9FA;
-            --gris-medio: #E9ECEF;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--gris-claro);
-            min-height: 100vh;
-            font-size: 14px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* NAVBAR MINIMALISTA */
-        .navbar-professional {
-            background: white;
-            border-bottom: 1px solid var(--gris-medio);
-            padding: 0.5rem 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
-        }
-
-        .navbar-brand {
-            font-weight: 600;
-            color: var(--azul-colombia) !important;
-            font-size: 1.25rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .brand-logo {
-            height: 32px;
-        }
-
-        .nav-link {
-            color: #6c757d !important;
-            font-weight: 500;
-            font-size: 0.9rem;
-            padding: 0.5rem 1rem !important;
-            transition: all 0.2s;
-            border-radius: 6px;
-        }
-
-        .nav-link:hover {
-            color: var(--azul-cielo) !important;
-            background: var(--gris-claro);
-        }
-
-        .nav-link.active {
-            color: var(--azul-cielo) !important;
-            background: #E3F2FD;
-        }
-
-        .notification-badge {
-            position: relative;
-            cursor: pointer;
-        }
-
-        .notification-icon {
-            font-size: 1.2rem;
-            color: #6c757d;
-        }
-
-        .notification-badge .badge {
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            background: var(--rojo-colombia);
-            font-size: 0.65rem;
-            padding: 0.25rem 0.4rem;
-        }
-
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            cursor: pointer;
-            padding: 0.25rem 0.5rem;
-            border-radius: 8px;
-            transition: background 0.2s;
-        }
-
-        .user-info:hover {
-            background: var(--gris-claro);
-        }
-
-        .user-avatar {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--azul-cielo), var(--azul-colombia));
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            font-size: 0.85rem;
-        }
-
-        .user-name {
-            font-weight: 600;
-            font-size: 0.875rem;
-            color: #212529;
-            display: block;
-        }
-
-        .user-role {
-            font-size: 0.75rem;
-            color: #6c757d;
-            display: block;
-        }
-        .user-dropdown {
-            position: relative;
-        }
-
-        .user-menu {
-            border-radius: 15px;
-            box-shadow: var(--shadow-card);
-            min-width: 280px;
-            padding: 15px;
-            border: none;
-        }
-
-        .dropdown-menu.show {
-            animation: fadeIn 0.3s ease-out;
-        }
-
-        .user-menu-header {
-            padding-bottom: 10px;
-            border-bottom: 1px solid rgba(0,0,0,0.1);
-            margin-bottom: 10px;
-        }
-
-        .user-menu-item {
-            padding: 10px;
-            border-radius: 8px;
-            transition: background 0.3s ease;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .user-menu-item:hover {
-            background: rgba(255, 215, 0, 0.1);
-        }
-
-        /* SELECTOR DE CRÉDITOS COMPACTO */
-        .credit-selector-card {
-            background: white;
-            border-radius: 10px;
-            padding: 1rem 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            border-left: 4px solid var(--azul-cielo);
-        }
-
-        .credit-selector-card h6 {
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: #495057;
-            margin-bottom: 0.75rem;
-        }
-
-        .credit-selector-card .form-select {
-            border: 1px solid var(--gris-medio);
-            border-radius: 8px;
-            padding: 0.5rem 0.75rem;
-            font-size: 0.875rem;
-            max-width: 400px;
-        }
-
-        /* STATUS BADGES */
-        .status-badge {
-            padding: 0.375rem 1rem;
-            border-radius: 20px;
-            font-weight: 500;
-            font-size: 0.8rem;
-            display: inline-block;
-        }
-
-        .status-revision {
-            background: #FFF3CD;
-            color: #856404;
-        }
-
-        .status-aprobado, .status-firmado {
-            background: #D1E7DD;
-            color: #0F5132;
-        }
-
-        .status-activo {
-            background: #E3F2FD;
-            color: var(--azul-colombia);
-        }
-
-        .status-rechazado {
-            background: #F8D7DA;
-            color: var(--rojo-colombia);
-        }
-
-        .status-en_mora {
-            background: #FFE5E5;
-            color: var(--rojo-colombia);
-        }
-
-        /* HEADER COMPACTO */
-        .page-header {
-            background: white;
-            border-radius: 10px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        }
-
-        .page-header h1 {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--azul-colombia);
-            margin-bottom: 0.25rem;
-        }
-
-        .page-header .text-muted {
-            font-size: 0.875rem;
-        }
-
-        /* PROGRESS CARD */
-        .progress-card {
-            background: white;
-            border-radius: 10px;
-            padding: 2rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            margin-bottom: 1.5rem;
-        }
-
-        .progress-card h4 {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: #212529;
-            margin-bottom: 1.5rem;
-        }
-
-        .progress {
-            height: 12px;
-            border-radius: 10px;
-            background: var(--gris-medio);
-        }
-
-        .progress-bar {
-            background: linear-gradient(90deg, var(--azul-cielo), var(--amarillo-colombia));
-            border-radius: 10px;
-        }
-
-        .stat-box {
-            text-align: center;
-            padding: 1rem;
-            border-radius: 10px;
-            background: var(--gris-claro);
-            transition: transform 0.2s;
-        }
-
-        .stat-box:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }
-
-        .stat-box small {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .stat-box h5 {
-            font-size: 1.25rem;
-            font-weight: 700;
-            margin-top: 0.5rem;
-        }
-
-        .progress-percentage {
-            font-size: 3rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, var(--azul-cielo), var(--azul-colombia));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        /* PAYMENT CARD */
-        .payment-card {
-            background: white;
-            border-radius: 10px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            margin-bottom: 1.5rem;
-        }
-
-        .payment-card h5 {
-            font-size: 1rem;
-            font-weight: 600;
-            color: #212529;
-            margin-bottom: 1.25rem;
-        }
-
-        .payment-card small {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .payment-card strong {
-            font-size: 0.95rem;
-            color: #212529;
-        }
-
-        /* BOTONES */
-        .btn-payment {
-            background: linear-gradient(135deg, var(--azul-cielo), var(--azul-colombia));
-            color: white;
-            border: none;
-            padding: 0.625rem 1.75rem;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 0.875rem;
-            transition: all 0.2s;
-        }
-
-        .btn-payment:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(74, 144, 226, 0.3);
-            color: white;
-        }
-
-        .btn-outline-primary {
-            border: 1px solid var(--azul-cielo);
-            color: var(--azul-cielo);
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            font-weight: 500;
-            font-size: 0.875rem;
-            transition: all 0.2s;
-        }
-
-        .btn-outline-primary:hover {
-            background: var(--azul-cielo);
-            border-color: var(--azul-cielo);
-            color: white;
-        }
-
-        /* TABLA MODERNA */
-        .table-modern {
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        }
-
-        .table-modern thead {
-            background: linear-gradient(135deg, var(--azul-cielo), var(--azul-colombia));
-            color: white;
-        }
-
-        .table-modern thead th {
-            font-weight: 600;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 1rem;
-            border: none;
-        }
-
-        .table-modern tbody td {
-            padding: 1rem;
-            vertical-align: middle;
-            font-size: 0.875rem;
-            border-bottom: 1px solid var(--gris-medio);
-        }
-
-        .table-modern tbody tr:hover {
-            background: #FFF9E6;
-        }
-
-        .table-modern tbody tr:last-child td {
-            border-bottom: none;
-        }
-
-        .table-header-actions {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1.25rem 1.5rem;
-            background: white;
-            border-radius: 10px 10px 0 0;
-            border-bottom: 1px solid var(--gris-medio);
-        }
-
-        .table-header-actions h5 {
-            font-size: 1rem;
-            font-weight: 600;
-            color: #212529;
-            margin: 0;
-        }
-
-        /* EMPTY STATE */
-        .empty-state {
-            text-align: center;
-            padding: 4rem 2rem;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        }
-
-        .empty-state i {
-            font-size: 4rem;
-            color: #DEE2E6;
-            margin-bottom: 1.5rem;
-        }
-
-        .empty-state h3 {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: #212529;
-        }
-
-        /* MODALES */
-        .modal-content {
-            border-radius: 12px;
-            border: none;
-        }
-
-        .modal-header {
-            border-radius: 12px 12px 0 0;
-            padding: 1.25rem 1.5rem;
-            border-bottom: 1px solid var(--gris-medio);
-        }
-
-        .modal-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-        }
-
-        .modal-body {
-            padding: 1.5rem;
-        }
-
-        /* MAIN - Para sticky footer y centrado */
-        main {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            padding-top: 2rem;
-            padding-bottom: 2rem;
-        }
-
-        /* FOOTER */
-        .footer-aprobado {
-            background-color: #1e293b;
-            color: #fff;
-            padding: 1.25rem 0;
-            margin-top: auto;
-            font-size: 0.875rem;
-        }
-
-        .footer-aprobado p {
-            color: rgba(255, 255, 255, 0.8);
-            margin-bottom: 0;
-        }
-
-        /* LOADER GLOBAL */
-        #globalLoader {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(8px);
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.3s ease, visibility 0.3s ease;
-        }
-
-        #globalLoader.active {
-            opacity: 1;
-            visibility: visible;
-        }
-
-        #lottieLoader {
-            width: 200px;
-            height: 200px;
-        }
-
-        .loader-text {
-            margin-top: 1rem;
-            color: var(--azul-colombia);
-            font-weight: 600;
-            font-size: 1.1rem;
-        }
-
-        /* RESPONSIVE */
-        @media (max-width: 768px) {
-            .page-header h1 {
-                font-size: 1.25rem;
-            }
-
-            .progress-percentage {
-                font-size: 2.5rem;
-            }
-
-            .stat-box h5 {
-                font-size: 1.1rem;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="{% static 'css/dashboard_emprendimiento.css' %}">
 </head>
 <body>
     <!-- Loader Global -->
@@ -559,7 +37,7 @@
                     <li class="nav-item">
                         {# NUEVA URL - Emprendimiento #}
                         <a class="nav-link active" href="{% url 'emprendimiento:mi_credito' %}">
-                            <i class="bi bi-speedometer2 me-1"></i> Dashboard
+                            <i class="bi bi-speedometer2 me-1"></i> Mi Crédito
                         </a>
                     </li>
                     <li class="nav-item">
@@ -611,34 +89,50 @@
                             <i class="bi bi-chevron-down ms-2"></i>
                         </div> 
 
-                        <!-- Desplegable detallado estilo billetera -->
-                        <div class="dropdown-menu dropdown-menu-end user-menu p-3" aria-labelledby="userDropdown">
-                            <div class="user-menu-header mb-2">
-                                <h6 class="mb-0 fw-bold">Mi Cuenta</h6>
-                                <small class="text-muted">{{ user.email }}</small>
+                        <!-- Desplegable mejorado -->
+                        <div class="dropdown-menu dropdown-menu-end user-menu" aria-labelledby="userDropdown">
+                            <div class="user-menu-header">
+                                <h6 class="mb-1 fw-bold">Mi Cuenta</h6>
+                                <small class="text-muted d-block">{{ user.email }}</small>
                             </div>
-                            <div class="user-menu-item d-flex gap-2 align-items-start my-2">
-                                <i class="bi bi-person text-primary"></i>
-                                <div>
-                                    <div class="fw-semibold">Nombre:</div>
+
+                            <div class="user-menu-item">
+                                <i class="bi bi-person-circle text-primary"></i>
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold" style="font-size: 0.85rem;">Nombre completo</div>
                                     <small class="text-muted">{{ user.get_full_name|default:"Usuario" }}</small>
                                 </div>
                             </div>
-                            <div class="user-menu-item d-flex gap-2 align-items-start my-2">
-                                <i class="bi bi-envelope text-success"></i>
-                                <div>
-                                    <div class="fw-semibold">Correo:</div>
+
+                            <div class="user-menu-item">
+                                <i class="bi bi-envelope-fill text-info"></i>
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold" style="font-size: 0.85rem;">Correo electrónico</div>
                                     <small class="text-muted">{{ user.email }}</small>
                                 </div>
                             </div>
-                            <div class="user-menu-item d-flex gap-2 align-items-center my-2">
-                                <i class="bi bi-person-badge text-warning"></i>
-                                <span>Información Personal</span>
+
+                            <div class="user-menu-item">
+                                <i class="bi bi-shield-check text-success"></i>
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold" style="font-size: 0.85rem;">Tipo de cuenta</div>
+                                    <small class="text-muted">Emprendimiento</small>
+                                </div>
                             </div>
-                            <hr class="my-2">
-                            <div class="user-menu-item d-flex gap-2 align-items-center text-danger">
-                                <i class="bi bi-box-arrow-right"></i>
-                                <a href="{% url 'account_logout' %}" class="text-decoration-none text-danger">Cerrar Sesión</a>
+
+                            {% if credito_actual %}
+                            <div class="user-menu-item">
+                                <i class="bi bi-credit-card text-warning"></i>
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold" style="font-size: 0.85rem;">Crédito activo</div>
+                                    <small class="text-muted">{{ credito_actual.get_linea_display }}</small>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            <div class="user-menu-item logout-item">
+                                <i class="bi bi-box-arrow-right text-danger"></i>
+                                <a href="{% url 'account_logout' %}" class="text-decoration-none text-danger fw-semibold">Cerrar Sesión</a>
                             </div>
                         </div>
                     </div>
@@ -650,107 +144,170 @@
     <main class="container my-4">
         {% if creditos_usuario %}
             {% if credito_actual.estado not in 'EN_REVISION' %}
-            <div class="page-header">
-                <div class="row align-items-center">
-                    <div class="col-md-8">
-                        <h1 class="mb-1">{{ credito_actual.get_linea_display }}</h1>
-                        <p class="text-muted mb-0">
-                            <i class="bi bi-calendar3 me-2"></i>
-                            Solicitado el {{ credito_actual.fecha_solicitud|date:"d M, Y" }}
-                        </p>
-                    </div>
-                    <div class="col-md-4 text-end mt-3 mt-md-0">
-                        <span class="status-badge status-{{ credito_actual.estado|lower }}">
-                            {{ credito_actual.get_estado_display }}
-                        </span>
+            <!-- Header Mejorado -->
+            <div class="page-header-modern">
+                <div class="header-content">
+                    <div class="row align-items-center g-3">
+                        <div class="col-lg-8">
+                            <div class="credit-type-badge mb-2">
+                                <i class="bi bi-briefcase-fill me-2"></i>
+                                Línea de Crédito
+                            </div>
+                            <h1 class="header-title mb-2">{{ credito_actual.get_linea_display }}</h1>
+                            <div class="d-flex align-items-center gap-3 flex-wrap">
+                                <div class="header-meta">
+                                    <i class="bi bi-calendar3 me-2"></i>
+                                    <span>Solicitado el <strong>{{ credito_actual.fecha_solicitud|date:"d \d\e F, Y" }}</strong></span>
+                                </div>
+                                <div class="header-meta">
+                                    <i class="bi bi-hash me-2"></i>
+                                    <span>Crédito <strong>{{ credito_actual.numero_credito }}</strong></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+                            <span class="status-badge-modern status-{{ credito_actual.estado|lower }}">
+                                <i class="bi bi-check-circle-fill me-2"></i>
+                                {{ credito_actual.get_estado_display }}
+                            </span>
+                        </div>
                     </div>
                 </div>
-                <hr class="my-3">
-                <h6 class="mb-2">
-                    <i class="bi bi-credit-card-2-front me-2"></i>
-                    Mis Créditos y Solicitudes
-                </h6>
-                <select class="form-select" onchange="cambiarCredito(this.value)">
-                    {% for credito in creditos_usuario %}
-                        <option value="{{ credito.id }}" {% if credito.id == credito_actual.id %}selected{% endif %}>
-                            {{ credito.get_linea_display }} - {{ credito.get_estado_display }}
-                        </option>
-                    {% endfor %}
-                </select>
+
+                <!-- Selector de Créditos Mejorado -->
+                {% if creditos_usuario|length > 1 %}
+                <div class="credit-selector-modern">
+                    <div class="selector-header">
+                        <i class="bi bi-wallet2 me-2"></i>
+                        <h6 class="mb-0">Mis Créditos y Solicitudes</h6>
+                        <span class="badge bg-primary ms-auto">{{ creditos_usuario|length }}</span>
+                    </div>
+                    <select class="form-select-modern" onchange="cambiarCredito(this.value)">
+                        {% for credito in creditos_usuario %}
+                            <option value="{{ credito.id }}" {% if credito.id == credito_actual.id %}selected{% endif %}>
+                                {{ credito.get_linea_display }} - {{ credito.get_estado_display }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
             </div>
             {% endif %}
 
             {% if credito_actual.estado in 'APROBADO,ACTIVO,PAGADO,EN_MORA,FIRMADO' %}
-                <!-- Contenido para créditos aprobados -->
+                <!-- Contenido para créditos aprobados - DISEÑO MEJORADO -->
                 <div class="progress-card">
                     <div class="row align-items-center">
-                        <div class="col-lg-8">
-                            <h4>Progreso de tu crédito</h4>
-                            <div class="progress mb-4">
-                                <div class="progress-bar" 
-                                     style="width: {{ porcentaje_capital_pagado }}%;" 
-                                     role="progressbar" 
-                                     aria-valuenow="{{ porcentaje_capital_pagado }}" 
-                                     aria-valuemin="0" 
+                        <div class="col-lg-7">
+                            <h4><i class="bi bi-graph-up me-2"></i>Progreso de tu crédito</h4>
+                            <div class="progress mb-4" style="height: 16px;">
+                                <div class="progress-bar"
+                                     style="width: {{ porcentaje_capital_pagado }}%;"
+                                     role="progressbar"
+                                     aria-valuenow="{{ porcentaje_capital_pagado }}"
+                                     aria-valuemin="0"
                                      aria-valuemax="100">
                                 </div>
                             </div>
-                            <div class="row text-center">
+                            <div class="row text-center g-3">
                                 <div class="col-4">
                                     <div class="stat-box">
-                                        <small class="text-muted d-block mb-1">Capital Pagado</small>
+                                        <small class="d-block">CAPITAL PAGADO</small>
                                         <h5 class="mb-0 text-success">${{ capital_pagado_monto|intcomma }}</h5>
                                     </div>
                                 </div>
                                 <div class="col-4">
                                     <div class="stat-box">
-                                        <small class="text-muted d-block mb-1">Capital Pendiente</small>
+                                        <small class="d-block">CAPITAL PENDIENTE</small>
                                         <h5 class="mb-0 text-warning">${{ credito_actual.capital_pendiente|intcomma }}</h5>
                                     </div>
                                 </div>
                                 <div class="col-4">
                                     <div class="stat-box">
-                                        <small class="text-muted d-block mb-1">Monto Solicitado</small>
+                                        <small class="d-block">MONTO SOLICITADO</small>
                                         <h5 class="mb-0 text-primary">${{ credito_actual.monto_aprobado|intcomma }}</h5>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-lg-4 text-center mt-4 mt-lg-0">
-                            <div class="progress-percentage">{{ porcentaje_capital_pagado }}%</div>
-                            <p class="mb-3 text-muted">de tu capital solicitado</p>
-                            
+                        <div class="col-lg-5 text-center mt-4 mt-lg-0">
+                            <!-- Progreso Circular SVG -->
+                            <div class="circular-progress-container mb-3">
+                                <svg class="circular-progress" width="180" height="180">
+                                    <defs>
+                                        <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" style="stop-color:#4A90E2;stop-opacity:1" />
+                                            <stop offset="50%" style="stop-color:#FFCD00;stop-opacity:1" />
+                                            <stop offset="100%" style="stop-color:#10B981;stop-opacity:1" />
+                                        </linearGradient>
+                                    </defs>
+                                    <circle class="progress-circle-bg" cx="90" cy="90" r="70"></circle>
+                                    <circle class="progress-circle" cx="90" cy="90" r="70"
+                                            style="stroke-dasharray: 439.8; stroke-dashoffset: calc(439.8 - (439.8 * {{ porcentaje_capital_pagado }} / 100))"></circle>
+                                </svg>
+                                <div class="progress-percentage">
+                                    {{ porcentaje_capital_pagado }}%
+                                    <span class="progress-label">pagado</span>
+                                </div>
+                            </div>
+
                             {% if not es_empleado and credito_actual.estado == 'ACTIVO' and credito_actual.linea != 'LIBRANZA' %}
-                            <button class="btn btn-payment" data-bs-toggle="modal" data-bs-target="#pagoModal">
-                                <i class="bi bi-credit-card me-2"></i>
-                                Realizar Pago
-                            </button>
+                            <div class="d-flex flex-column gap-2">
+                                <a class="btn btn-payment" href="{% url 'emprendimiento:pagar_wompi' credito_actual.id %}">
+                                    <i class="bi bi-credit-card-fill me-2"></i>
+                                    Realizar Pago
+                                </a>
+                                <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#abonoModal">
+                                    <i class="bi bi-calculator-fill me-2"></i>
+                                    Opciones Especiales
+                                </button>
+                            </div>
                             {% endif %}
                         </div>
                     </div>
                 </div>
 
-                <!-- Información del Crédito -->
-                <div class="row mb-4">
+                <!-- Información del Crédito MEJORADA -->
+                <div class="row mb-4 g-3">
                     <div class="col-md-12">
                         <div class="payment-card">
-                            <h5><i class="bi bi-graph-up me-2"></i>Resumen de tu Crédito</h5>
-                            <div class="row">
-                                <div class="col-6 col-md-3 mb-3">
-                                    <small class="text-muted d-block">Cuotas Restantes</small>
-                                    <strong>{{ cuotas_restantes }} de {{ credito_actual.plazo }}</strong>
+                            <h5><i class="bi bi-graph-up-arrow"></i>Resumen de tu Crédito</h5>
+                            <div class="row g-3">
+                                <div class="col-6 col-md-3">
+                                    <div class="info-card-item">
+                                        <div class="icon-wrapper">
+                                            <i class="bi bi-list-ol"></i>
+                                        </div>
+                                        <div class="label">Cuotas Restantes</div>
+                                        <div class="value">{{ cuotas_restantes }}<span style="font-size: 1rem; color: #6B7280;"> / {{ credito_actual.plazo }}</span></div>
+                                    </div>
                                 </div>
-                                <div class="col-6 col-md-3 mb-3">
-                                    <small class="text-muted d-block">Valor Próxima Cuota</small>
-                                    <strong>${{ credito_actual.valor_cuota|floatformat:2|intcomma }}</strong>
+                                <div class="col-6 col-md-3">
+                                    <div class="info-card-item">
+                                        <div class="icon-wrapper">
+                                            <i class="bi bi-cash-stack"></i>
+                                        </div>
+                                        <div class="label">Próxima Cuota</div>
+                                        <div class="value">${{ valor_cuota_pendiente|floatformat:0|intcomma }}</div>
+                                    </div>
                                 </div>
-                                <div class="col-6 col-md-3 mb-3">
-                                    <small class="text-muted d-block">Próximo Vencimiento</small>
-                                    <strong>{{ credito_actual.fecha_proximo_pago|date:"d M, Y" }}</strong>
+                                <div class="col-6 col-md-3">
+                                    <div class="info-card-item">
+                                        <div class="icon-wrapper">
+                                            <i class="bi bi-calendar-event"></i>
+                                        </div>
+                                        <div class="label">Próximo Vencimiento</div>
+                                        <div class="value" style="font-size: 1rem;">{{ credito_actual.fecha_proximo_pago|date:"d M, Y" }}</div>
+                                    </div>
                                 </div>
-                                <div class="col-6 col-md-3 mb-3">
-                                    <small class="text-muted d-block">Total Pagado</small>
-                                    <strong>${{ monto_total_pagado|floatformat:2|intcomma }}</strong>
+                                <div class="col-6 col-md-3">
+                                    <div class="info-card-item">
+                                        <div class="icon-wrapper">
+                                            <i class="bi bi-check-circle"></i>
+                                        </div>
+                                        <div class="label">Total Pagado</div>
+                                        <div class="value">${{ monto_total_pagado|floatformat:0|intcomma }}</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -765,16 +322,24 @@
                         <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Historial de Pagos</h5>
                         <div class="d-flex gap-2">
                             {# NUEVA URL - Emprendimiento #}
-                            <a href="{% url 'emprendimiento:descargar_plan_pagos' credito_actual.id %}" 
-                               class="btn btn-outline-primary btn-sm">
+                            <a href="{% url 'emprendimiento:descargar_plan_pagos' credito_actual.id %}"
+                               class="btn btn-outline-primary btn-sm"
+                               data-download="true">
                                 <i class="bi bi-download me-1"></i>
                                 Descargar Plan de Pagos
                             </a>
                             {# NUEVA URL - Emprendimiento #}
-                            <a href="{% url 'emprendimiento:descargar_extracto' credito_actual.id %}" 
-                               class="btn btn-outline-primary btn-sm">
+                            <a href="{% url 'emprendimiento:descargar_extracto' credito_actual.id %}"
+                               class="btn btn-outline-primary btn-sm"
+                               data-download="true">
                                 <i class="bi bi-file-earmark-pdf me-1"></i>
                                 Descargar Extracto
+                            </a>
+                            {# NUEVA URL - Historial Abonos #}
+                            <a href="{% url 'emprendimiento:historial_abonos' credito_actual.id %}"
+                               class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-clock-history me-1"></i>
+                                Historial Abonos
                             </a>
                         </div>
                     </div>
@@ -1004,106 +569,278 @@
         </div>
     </footer>
 
-    <!-- Modal de Pago (solo para emprendedores) -->
     {% if not es_empleado %}
-    <div class="modal fade" id="pagoModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header" style="background: linear-gradient(135deg, var(--azul-cielo), var(--azul-colombia)); color: white;">
-                    <h5 class="modal-title">
-                        <i class="bi bi-credit-card me-2"></i>
-                        Realizar Pago
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="formPago" method="post" action="#">
-                        {% csrf_token %}
-                        <div class="alert alert-info">
-                            <i class="bi bi-info-circle me-2"></i>
-                            <strong>Valor de la cuota:</strong> ${{ credito_actual.valor_cuota|intcomma }}
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Selecciona el método de pago</label>
-                            <div class="d-grid gap-2">
-                                <button type="button" class="btn btn-outline-primary text-start" disabled>
-                                    <i class="bi bi-credit-card me-2"></i>
-                                    Tarjeta de Crédito/Débito
-                                    <span class="badge bg-warning text-dark ms-2">Próximamente</span>
-                                </button>
-                                <button type="button" class="btn btn-outline-primary text-start" disabled>
-                                    <i class="bi bi-bank me-2"></i>
-                                    PSE - Pago en Línea
-                                    <span class="badge bg-warning text-dark ms-2">Próximamente</span>
-                                </button>
-                                <button type="button" class="btn btn-primary text-start" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#pagoOfflineModal">
-                                    <i class="bi bi-file-earmark-arrow-up me-2"></i>
-                                    Comprobante de Pago (Offline)
-                                </button>
+    <!-- Modal de Abonos y Reestructuración - ULTRA COMPACTO -->
+    <div class="modal fade" id="abonoModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 600px;">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 20px; overflow: hidden;">
+                <div class="modal-header border-0 py-4 px-4" style="background: white;">
+                    <div>
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #E0F2FE, #BFDBFE); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                                <i class="bi bi-credit-card-2-front" style="font-size: 1.25rem; color: #0284C7;"></i>
                             </div>
+                            <h5 class="modal-title mb-0 fw-bold" style="color: #111827;">Opciones de Pago</h5>
                         </div>
-                        
-                        <div class="alert alert-warning mt-3">
-                            <i class="bi bi-exclamation-triangle me-2"></i>
-                            <small>Los pagos online estarán disponibles próximamente. Por ahora, puedes subir tu comprobante de pago.</small>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Pago Offline -->
-    <div class="modal fade" id="pagoOfflineModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header" style="background: linear-gradient(135deg, var(--amarillo-colombia), #FFA500);">
-                    <h5 class="modal-title">
-                        <i class="bi bi-file-earmark-arrow-up me-2"></i>
-                        Subir Comprobante de Pago
-                    </h5>
+                        <p class="text-muted mb-0" style="font-size: 0.875rem; padding-left: 48px;">Selecciona cómo deseas realizar tu pago</p>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
-                        Sube tu comprobante de pago y lo revisaremos en las próximas 24 horas.
-                    </div>
-                    
-                    <form id="formComprobanteCredito" method="post" enctype="multipart/form-data">
-                        {% csrf_token %}
-                        <div class="mb-3">
-                            <label for="montoPago" class="form-label fw-semibold">Monto Pagado</label>
-                            <div class="input-group">
-                                <span class="input-group-text">$</span>
-                                <input type="number" class="form-control" id="montoPago" name="monto" 
-                                       value="{{ credito_actual.valor_cuota }}" min="1000" step="1000" required>
+                <div class="modal-body p-4" style="background: #F9FAFB;">
+                    <!-- Selección de Tipo de Pago - MODERNIZADO -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-12">
+                            <div class="tipo-abono-card-modern" data-tipo="CAPITAL" style="cursor: pointer;">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div style="width: 48px; height: 48px; background: #DBEAFE; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                        <i class="bi bi-piggy-bank" style="font-size: 1.4rem; color: #0284C7;"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center gap-2 mb-1">
+                                            <h6 class="mb-0 fw-bold" style="color: #111827; font-size: 0.95rem;">Abono a Capital</h6>
+                                            <span class="badge" style="background: #0EA5E9; font-size: 0.7rem; padding: 0.3rem 0.6rem;">Solo 1 vez</span>
+                                        </div>
+                                        <p class="text-muted mb-0" style="font-size: 0.875rem;">Reestructura tu crédito con nuevos intereses y cuotas</p>
+                                    </div>
+                                    <i class="bi bi-chevron-right text-muted" style="font-size: 1.1rem;"></i>
+                                </div>
                             </div>
-                            <small class="text-muted">Puedes pagar la cuota completa o un abono parcial</small>
+                        </div>
+                        <div class="col-12">
+                            <div class="tipo-abono-card-modern" data-tipo="NORMAL" style="cursor: pointer;">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div style="width: 48px; height: 48px; background: #FEF3C7; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                        <i class="bi bi-cash-coin" style="font-size: 1.4rem; color: #D97706;"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center gap-2 mb-1">
+                                            <h6 class="mb-0 fw-bold" style="color: #111827; font-size: 0.95rem;">Abono Normal</h6>
+                                            <span class="badge" style="background: #F59E0B; font-size: 0.7rem; padding: 0.3rem 0.6rem;">Flexible</span>
+                                        </div>
+                                        <p class="text-muted mb-0" style="font-size: 0.875rem;">Realiza un pago parcial sobre tu deuda actual</p>
+                                    </div>
+                                    <i class="bi bi-chevron-right text-muted" style="font-size: 1.1rem;"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="tipo-abono-card-modern" data-tipo="TOTAL" style="cursor: pointer;">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div style="width: 48px; height: 48px; background: #D1FAE5; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                        <i class="bi bi-check-circle-fill" style="font-size: 1.4rem; color: #059669;"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center gap-2 mb-1">
+                                            <h6 class="mb-0 fw-bold" style="color: #111827; font-size: 0.95rem;">Pago Total</h6>
+                                            <span class="badge" style="background: #10B981; font-size: 0.7rem; padding: 0.3rem 0.6rem;">Incluye intereses</span>
+                                        </div>
+                                        <p class="text-muted mb-0" style="font-size: 0.875rem;">Liquida completamente tu deuda pendiente</p>
+                                    </div>
+                                    <i class="bi bi-chevron-right text-muted" style="font-size: 1.1rem;"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Formulario de Abono a Capital -->
+                    <div id="form-capital" class="d-none">
+                        <div class="alert alert-info py-1 px-2 mb-2" style="font-size: 0.75rem;">
+                            <i class="bi bi-info-circle me-1"></i>
+                            <strong>Abono a Capital:</strong> Reestructuramos tu crédito con nuevos intereses y cuotas.
                         </div>
 
-                        <div class="mb-3">
-                            <label for="comprobanteCredito" class="form-label fw-semibold">Comprobante de Pago</label>
-                            <input type="file" class="form-control" id="comprobanteCredito" name="comprobante" 
-                                   accept=".pdf,.jpg,.jpeg,.png" required>
-                            <small class="text-muted">Formatos: PDF, JPG, PNG (Máx. 5MB)</small>
+                        <div class="mb-2">
+                            <label for="monto-capital" class="form-label fw-semibold mb-1" style="font-size: 0.8rem;">
+                                Monto del abono
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text" style="font-size: 0.8rem;">$</span>
+                                <input type="number" class="form-control" id="monto-capital" style="font-size: 0.8rem;"
+                                       min="50000"
+                                       max="{{ credito_actual.capital_pendiente|unlocalize }}"
+                                       step="10000"
+                                       placeholder="Ingresa el monto">
+                            </div>
+                            <small class="text-muted" style="font-size: 0.7rem;">
+                                Min: $50.000 | Máx: ${{ credito_actual.capital_pendiente|intcomma }}
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Formulario de Abono Normal -->
+                    <div id="form-normal" class="d-none">
+                        <div class="alert alert-primary py-1 px-2 mb-2" style="font-size: 0.75rem;">
+                            <i class="bi bi-info-circle me-1"></i>
+                            <strong>Abono Normal:</strong> Reduce el valor de la proxima cuota.
                         </div>
 
-                        <div class="mb-3">
-                            <label for="referenciaCredito" class="form-label fw-semibold">Número de Referencia (Opcional)</label>
-                            <input type="text" class="form-control" id="referenciaCredito" name="referencia" 
-                                   placeholder="Ej: 123456789">
+                        <div class="mb-2">
+                            <label for="monto-normal" class="form-label fw-semibold mb-1" style="font-size: 0.8rem;">
+                                Monto del abono
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text" style="font-size: 0.8rem;">$</span>
+                                <input type="number" class="form-control" id="monto-normal" style="font-size: 0.8rem;"
+                                       min="1000"
+                                       max="{{ valor_cuota_pendiente|unlocalize }}"
+                                       step="1000"
+                                       placeholder="Ingresa el monto"
+                                       data-max-cuota="{{ valor_cuota_pendiente|unlocalize }}"
+                                       data-max-saldo="{{ credito_actual.saldo_pendiente|unlocalize }}">
+                            </div>
+                            <small class="text-muted" style="font-size: 0.7rem;">
+                                Maximo: ${{ valor_cuota_pendiente|intcomma }}
+                            </small>
+                            <div class="text-muted mt-1" id="abono-normal-formato" style="font-size: 0.7rem;">
+                                $0
+                            </div>
+                            <div id="normal-error" class="text-danger mt-1 d-none" style="font-size: 0.7rem;"></div>
                         </div>
 
-                        <div id="feedback-pago" class="d-none"></div>
-                    </form>
+                        <div class="card border-info">
+                            <div class="card-body p-2">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <small class="text-muted" style="font-size: 0.7rem;">Cuota actual:</small>
+                                    <strong style="font-size: 0.85rem;" id="cuota-actual">${{ valor_cuota_pendiente|default:credito_actual.valor_cuota|intcomma }}</strong>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <small class="text-muted" style="font-size: 0.7rem;">Abono:</small>
+                                    <strong style="font-size: 0.85rem;" id="abono-normal">$0</strong>
+                                </div>
+                                <hr class="my-1">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <strong style="font-size: 0.8rem;">Cuota restante:</strong>
+                                    <h5 class="mb-0 text-primary" id="cuota-restante" style="font-size: 1.1rem;">$0</h5>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Formulario de Pago Total -->
+                    <div id="form-total" class="d-none">
+                        <div class="alert alert-success py-1 px-2 mb-2" style="font-size: 0.75rem;">
+                            <i class="bi bi-check-circle me-1"></i>
+                            <strong>Pago Total:</strong> Liquida completamente tu deuda con intereses y comisiones pendientes.
+                        </div>
+
+                        <div class="mb-2">
+                            <div class="card border-success">
+                                <div class="card-body p-2">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <small class="text-muted" style="font-size: 0.7rem;">Capital Pendiente:</small>
+                                        <strong style="font-size: 0.85rem;" id="capital-pendiente-total">${{ credito_actual.capital_pendiente|intcomma }}</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <small class="text-muted" style="font-size: 0.7rem;">Intereses Acumulados:</small>
+                                        <strong style="font-size: 0.85rem;" id="intereses-acumulados">$0</strong>
+                                    </div>
+                                    <hr class="my-1">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <strong style="font-size: 0.8rem;">Total a Pagar:</strong>
+                                        <h5 class="mb-0 text-success" id="total-pagar" style="font-size: 1.1rem;">$0</h5>
+                                    </div>
+                                </div>
+                            </div>
+                            <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">
+                                <i class="bi bi-info-circle me-1"></i>
+                                El pago total incluye intereses y comisiones pendientes.
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Botón Analizar - ULTRA COMPACTO -->
+                    <div class="text-center mb-2" id="btn-analizar-container" style="display: none;">
+                        <button type="button" class="btn btn-primary btn-sm px-3" id="btn-analizar-abono" style="font-size: 0.8rem;">
+                            <i class="bi bi-search me-1"></i>
+                            Analizar Impacto
+                        </button>
+                    </div>
+
+                    <!-- Resultados del Análisis - ULTRA COMPACTO -->
+                    <div id="resultados-analisis" class="d-none">
+                        <hr class="my-1">
+                        <div class="fw-bold mb-2" style="font-size: 0.85rem;">
+                            <i class="bi bi-graph-up me-1"></i>
+                            Análisis del Impacto
+                        </div>
+
+                        <!-- Alerta de Error -->
+                        <div id="error-analisis" class="alert alert-danger py-1 px-2 d-none" style="font-size: 0.75rem;">
+                            <i class="bi bi-exclamation-circle me-1"></i>
+                            <span id="error-mensaje"></span>
+                        </div>
+
+                        <!-- Comparación de Planes - ULTRA COMPACTO -->
+                        <div id="comparacion-planes">
+                            <div class="row g-2 mb-2">
+                                <div class="col-6">
+                                    <div class="card border-secondary h-100">
+                                        <div class="card-header bg-secondary text-white py-1 px-2">
+                                            <div class="mb-0" style="font-size: 0.7rem;"><i class="bi bi-calendar3 me-1"></i>Plan Actual</div>
+                                        </div>
+                                        <div class="card-body p-2" style="font-size: 0.7rem;">
+                                            <div class="mb-1">
+                                                <small class="text-muted d-block" style="font-size: 0.65rem;">Cuotas</small>
+                                                <strong style="font-size: 0.75rem;" id="plan-actual-cuotas">-</strong>
+                                            </div>
+                                            <div class="mb-1">
+                                                <small class="text-muted d-block" style="font-size: 0.65rem;">Valor Cuota</small>
+                                                <strong style="font-size: 0.75rem;" id="plan-actual-valor-cuota">-</strong>
+                                            </div>
+                                            <div class="mb-1">
+                                                <small class="text-muted d-block" style="font-size: 0.65rem;">Capital</small>
+                                                <strong style="font-size: 0.75rem;" id="plan-actual-capital">-</strong>
+                                            </div>
+                                            <div>
+                                                <small class="text-muted d-block" style="font-size: 0.65rem;">Intereses</small>
+                                                <strong style="font-size: 0.75rem;" id="plan-actual-intereses">-</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="card border-success h-100">
+                                        <div class="card-header bg-success text-white py-1 px-2">
+                                            <div class="mb-0" style="font-size: 0.7rem;"><i class="bi bi-calendar-check me-1"></i>Plan Nuevo</div>
+                                        </div>
+                                        <div class="card-body p-2" style="font-size: 0.7rem;">
+                                            <div class="mb-1">
+                                                <small class="text-muted d-block" style="font-size: 0.65rem;">Cuotas</small>
+                                                <strong class="text-success" style="font-size: 0.75rem;" id="plan-nuevo-cuotas">-</strong>
+                                            </div>
+                                            <div class="mb-1">
+                                                <small class="text-muted d-block" style="font-size: 0.65rem;">Valor Cuota</small>
+                                                <strong class="text-success" style="font-size: 0.75rem;" id="plan-nuevo-valor-cuota">-</strong>
+                                            </div>
+                                            <div class="mb-1">
+                                                <small class="text-muted d-block" style="font-size: 0.65rem;">Capital</small>
+                                                <strong class="text-success" style="font-size: 0.75rem;" id="plan-nuevo-capital">-</strong>
+                                            </div>
+                                            <div>
+                                                <small class="text-muted d-block" style="font-size: 0.65rem;">Intereses</small>
+                                                <strong class="text-success" style="font-size: 0.75rem;" id="plan-nuevo-intereses">-</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Ahorro en Intereses - ULTRA COMPACTO -->
+                            <div class="alert alert-success text-center py-1 px-2 mb-0">
+                                <div class="mb-1" style="font-size: 0.7rem;">
+                                    <i class="bi bi-piggy-bank me-1"></i>
+                                    <strong>Ahorrarás en Intereses</strong>
+                                </div>
+                                <h5 class="mb-0 fw-bold text-success" id="ahorro-intereses" style="font-size: 1.1rem;">$0</h5>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" id="btnEnviarComprobante">
-                        <i class="bi bi-upload me-2"></i>
-                        Enviar Comprobante
+                <div class="modal-footer py-1 px-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal" style="font-size: 0.75rem;">Cancelar</button>
+                    <button type="button" class="btn btn-success btn-sm d-none" id="btn-confirmar-abono" style="font-size: 0.75rem;">
+                        <i class="bi bi-check-circle me-1"></i>
+                        Confirmar
                     </button>
                 </div>
             </div>
@@ -1113,11 +850,8 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+    <script src="{% static 'js/dashboard_emprendimiento.js' %}"></script>
     <script>
-        // ===== LOADER GLOBAL =====
-        const globalLoader = document.getElementById('globalLoader');
-        let lottieAnimation;
-
         // Inicializar animación Lottie
         document.addEventListener('DOMContentLoaded', function() {
             lottieAnimation = lottie.loadAnimation({
@@ -1127,130 +861,17 @@
                 autoplay: true,
                 path: '{% static "animations/loading.json" %}'
             });
-        });
 
-        // Funciones para mostrar/ocultar loader
-        function showLoader(text = 'Cargando...') {
-            const loaderText = document.querySelector('.loader-text');
-            if (loaderText) loaderText.textContent = text;
-            globalLoader.classList.add('active');
-        }
-
-        function hideLoader() {
-            globalLoader.classList.remove('active');
-        }
-
-        // Mostrar loader en navegación entre páginas
-        window.addEventListener('beforeunload', function() {
-            showLoader('Cargando...');
-        });
-
-        // Ocultar loader cuando la página carga
-        window.addEventListener('load', function() {
-            hideLoader();
-        });
-
-        // Mostrar loader en clics de links (excepto # y javascript:)
-        document.addEventListener('click', function(e) {
-            const link = e.target.closest('a');
-            if (link && link.href && !link.href.includes('#') && !link.href.includes('javascript:') && link.target !== '_blank') {
-                showLoader('Cargando...');
-            }
-        });
-
-        // Función para usar en formularios
-        function submitWithLoader(form, loaderText = 'Procesando...') {
-            showLoader(loaderText);
-            form.submit();
-        }
-
-        function cambiarCredito(creditoId) {
-            if (creditoId) {
-                // NUEVA URL - Emprendimiento
-                window.location.href = `/emprendimiento/mi-credito/${creditoId}/`;
-            }
-        }
-
-        // Envío de comprobante de pago para crédito
-        {% if not es_empleado %}
-        document.getElementById('btnEnviarComprobante')?.addEventListener('click', function() {
-            const form = document.getElementById('formComprobanteCredito');
-            const formData = new FormData(form);
-            const feedback = document.getElementById('feedback-pago');
-            const btn = this;
-
-            // Validaciones
-            const monto = document.getElementById('montoPago').value;
-            const comprobante = document.getElementById('comprobanteCredito').files[0];
-
-            if (!monto || parseFloat(monto) < 1000) {
-                feedback.className = 'alert alert-danger';
-                feedback.textContent = 'El monto mínimo es $1,000';
-                feedback.classList.remove('d-none');
-                return;
-            }
-
-            if (!comprobante) {
-                feedback.className = 'alert alert-danger';
-                feedback.textContent = 'Debes adjuntar un comprobante';
-                feedback.classList.remove('d-none');
-                return;
-            }
-
-            if (comprobante.size > 5 * 1024 * 1024) {
-                feedback.className = 'alert alert-danger';
-                feedback.textContent = 'El archivo no debe superar 5MB';
-                feedback.classList.remove('d-none');
-                return;
-            }
-
-            // Deshabilitar botón
-            btn.disabled = true;
-            btn.innerHTML = '<i class="spinner-border spinner-border-sm me-2"></i>Enviando...';
-
-            // Enviar con AJAX
-            {% comment %} fetch('{% url "usuariocreditos:subir_comprobante_pago" credito_actual.id %}', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            }) {% endcomment %}
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    feedback.className = 'alert alert-success';
-                    feedback.textContent = '¡Comprobante enviado exitosamente! Será revisado en las próximas 24 horas.';
-                    feedback.classList.remove('d-none');
-
-                    setTimeout(() => {
-                        location.reload();
-                    }, 2000);
-                } else {
-                    feedback.className = 'alert alert-danger';
-                    feedback.textContent = data.error || 'Error al enviar el comprobante';
-                    feedback.classList.remove('d-none');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                feedback.className = 'alert alert-danger';
-                feedback.textContent = 'Ocurrió un error inesperado';
-                feedback.classList.remove('d-none');
-            })
-            .finally(() => {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="bi bi-upload me-2"></i>Enviar Comprobante';
+            // Inicializar modal de abonos si existe credito
+            {% if credito_actual %}
+            initModalAbonos({
+                creditoId: {{ credito_actual.id }},
+                csrfToken: '{{ csrf_token }}',
+                valorCuota: parseFloat('{{ valor_cuota_pendiente|default:credito_actual.valor_cuota|unlocalize }}'),
+                saldoPendiente: parseFloat('{{ credito_actual.saldo_pendiente|unlocalize }}'),
+                capitalPendiente: parseFloat('{{ credito_actual.capital_pendiente|unlocalize }}')
             });
-        });
-        {% endif %}
-
-        // Actualizar año en el footer dinámicamente
-        document.addEventListener('DOMContentLoaded', function() {
-            const yearElement = document.querySelector('.footer-aprobado p');
-            if (yearElement) {
-                yearElement.textContent = `© ${new Date().getFullYear()} Aprobado. Todos los derechos reservados.`;
-            }
+            {% endif %}
         });
     </script>
 </body>

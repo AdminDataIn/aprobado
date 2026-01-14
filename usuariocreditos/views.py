@@ -88,6 +88,11 @@ def dashboard_libranza_view(request, credito_id=None):
     capital_pagado_monto = credito_actual.capital_pagado
     porcentaje_capital_pagado = int(credito_actual.porcentaje_pagado)
 
+    cuota_proxima = credito_actual.tabla_amortizacion.filter(pagada=False).order_by('numero_cuota').first()
+    valor_cuota_pendiente = credito_actual.valor_cuota
+    if cuota_proxima and cuota_proxima.monto_pagado:
+        valor_cuota_pendiente = max(Decimal('0.00'), cuota_proxima.valor_cuota - cuota_proxima.monto_pagado)
+
     # --- Calcular días transcurridos desde la activación ---
     dias_transcurridos = 0
     fecha_activacion = HistorialEstado.objects.filter(
@@ -110,6 +115,7 @@ def dashboard_libranza_view(request, credito_id=None):
         'dias_transcurridos': dias_transcurridos,
         'cuotas_pagadas': cuotas_pagadas,
         'cuotas_restantes': cuotas_restantes,
+        'valor_cuota_pendiente': valor_cuota_pendiente,
         'porcentaje_capital_pagado': porcentaje_capital_pagado,
         'capital_pagado_monto': capital_pagado_monto,
         'plan_pagos': plan_pagos,

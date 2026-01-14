@@ -195,6 +195,34 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', f'Aprobado <{EMAIL_HOS
 SERVER_EMAIL = EMAIL_HOST_USER
 
 # ========================
+# Configuración de WOMPI (Pasarela de Pagos)
+# ========================
+WOMPI_PUBLIC_KEY = os.environ.get('WOMPI_PUBLIC_KEY', 'pub_test_xxxxx')
+WOMPI_PRIVATE_KEY = os.environ.get('WOMPI_PRIVATE_KEY', 'priv_test_xxxxx')
+WOMPI_INTEGRITY_KEY = os.environ.get('WOMPI_INTEGRITY_KEY', 'int_test_xxxxx')
+WOMPI_EVENTS_SECRET = os.environ.get('WOMPI_EVENTS_SECRET', 'evt_test_xxxxx')
+WOMPI_ENVIRONMENT = os.environ.get('WOMPI_ENVIRONMENT', 'sandbox')  # 'sandbox' o 'production'
+
+# URL base se calcula automáticamente según el ambiente
+WOMPI_API_BASE_URL = (
+    'https://sandbox.wompi.co/v1'
+    if WOMPI_ENVIRONMENT == 'sandbox'
+    else 'https://production.wompi.co/v1'
+)
+
+# ========================
+# Configuración de ZapSign (Firma Electrónica de Pagarés)
+# ========================
+ZAPSIGN_API_TOKEN = os.environ.get('ZAPSIGN_API_TOKEN', '')
+ZAPSIGN_WEBHOOK_SECRET = os.environ.get('ZAPSIGN_WEBHOOK_SECRET', '')
+ZAPSIGN_WEBHOOK_HEADER = os.environ.get('ZAPSIGN_WEBHOOK_HEADER', 'X-ZapSign-Secret')
+ZAPSIGN_ENVIRONMENT = os.environ.get('ZAPSIGN_ENVIRONMENT', 'sandbox')  # 'sandbox' o 'production'
+
+# Configuración del dominio público para URLs de descarga de PDFs
+SITE_DOMAIN = os.environ.get('SITE_DOMAIN', 'localhost:8000')
+SITE_HTTPS = os.environ.get('SITE_HTTPS', 'False').lower() == 'true'
+
+# ========================
 # Configuración de Email con Gmail API (COMENTADO - Para uso futuro)
 # ========================
 # Para implementar Gmail API en el futuro, consulta: GMAIL_API_SETUP.md

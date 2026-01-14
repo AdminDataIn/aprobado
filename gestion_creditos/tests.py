@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
-from django.test import TestCase, RequestFactory
+from django.test import TestCase, RequestFactory, override_settings
+from django.urls import reverse
+from django.conf import settings
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth.models import User
 from decimal import Decimal
-from gestion_creditos.models import Credito, CreditoLibranza, CreditoEmprendimiento, Empresa
+import json
+from gestion_creditos.models import Credito, CreditoLibranza, CreditoEmprendimiento, Empresa, Pagare, ZapSignWebhookLog
 from gestion_creditos.services import filtrar_creditos, get_billetera_context, procesar_pagos_masivos_csv
 import io
 from datetime import date
@@ -176,3 +180,121 @@ class PagosMasivosCSVServiceTest(TestCase):
         self.assertEqual(len(errores), 2)
         self.assertIn("No se encontró un crédito activo para la cédula 999999", errores[0])
         self.assertIn("Monto 'monto_invalido' no es un número válido", errores[1])
+
+
+@override_settings(ZAPSIGN_WEBHOOK_SECRET='test-secret', ZAPSIGN_WEBHOOK_HEADER='X-ZapSign-Secret')
+class ZapSignWebhookViewTest(TestCase):
+    """Pruebas para el webhook robusto de ZapSign."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='zapsign_user', password='123')
+        self.credito = Credito.objects.create(
+            usuario=self.user,
+            linea=Credito.LineaCredito.EMPRENDIMIENTO,
+            estado=Credito.EstadoCredito.PENDIENTE_FIRMA,
+            monto_solicitado=Decimal('1000000.00'),
+            plazo_solicitado=3
+        )
+        self.pdf_file = SimpleUploadedFile(
+            'pagare.pdf',
+            b'%PDF-1.4 test',
+            content_type='application/pdf'
+        )
+        self.pagare = Pagare.objects.create(
+            credito=self.credito,
+            archivo_pdf=self.pdf_file,
+            zapsign_doc_token='token-123',
+            estado=Pagare.EstadoPagare.SENT
+        )
+        self.url = reverse('zapsign_webhook')
+        self.secret = settings.ZAPSIGN_WEBHOOK_SECRET
+
+    def _post(self, payload, secret=None):
+        headers = {}
+        if secret is not None:
+            headers['HTTP_X_ZAPSIGN_SECRET'] = secret
+        return self.client.post(
+            self.url,
+            data=json.dumps(payload),
+            content_type='application/json',
+            **headers
+        )
+
+    def test_webhook_rechaza_secret_invalido(self):
+        payload = {
+            'event': 'doc_signed',
+            'token': 'token-123',
+            'status': 'signed',
+            'signers': [{'ip': '1.2.3.4'}]
+        }
+        response = self._post(payload, secret='bad-secret')
+        self.assertEqual(response.status_code, 403)
+
+        log = ZapSignWebhookLog.objects.latest('received_at')
+        self.assertFalse(log.signature_valid)
+        self.assertFalse(log.processed)
+        self.assertIn('Secret', log.error_message)
+
+    def test_webhook_doc_signed_actualiza_estado(self):
+        payload = {
+            'event': 'doc_signed',
+            'token': 'token-123',
+            'status': 'signed',
+            'signers': [{'ip': '1.2.3.4'}]
+        }
+        response = self._post(payload, secret=self.secret)
+        self.assertEqual(response.status_code, 200)
+
+        self.pagare.refresh_from_db()
+        self.credito.refresh_from_db()
+
+        self.assertEqual(self.pagare.estado, Pagare.EstadoPagare.SIGNED)
+        self.assertIsNotNone(self.pagare.fecha_firma)
+        self.assertEqual(self.credito.estado, Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA)
+
+        log = ZapSignWebhookLog.objects.latest('received_at')
+        self.assertTrue(log.signature_valid)
+        self.assertTrue(log.processed)
+
+    def test_webhook_doc_signed_idempotente(self):
+        payload = {
+            'event': 'doc_signed',
+            'token': 'token-123',
+            'status': 'signed',
+            'signers': [{'ip': '1.2.3.4'}]
+        }
+        self._post(payload, secret=self.secret)
+        response = self._post(payload, secret=self.secret)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json().get('status'), 'already_processed')
+        self.assertEqual(ZapSignWebhookLog.objects.count(), 2)
+
+    def test_webhook_doc_refused(self):
+        credito_refused = Credito.objects.create(
+            usuario=self.user,
+            linea=Credito.LineaCredito.EMPRENDIMIENTO,
+            estado=Credito.EstadoCredito.PENDIENTE_FIRMA,
+            monto_solicitado=Decimal('500000.00'),
+            plazo_solicitado=2
+        )
+        pagare_refused = Pagare.objects.create(
+            credito=credito_refused,
+            archivo_pdf=self.pdf_file,
+            zapsign_doc_token='token-refused',
+            estado=Pagare.EstadoPagare.SENT
+        )
+        payload = {
+            'event': 'doc_refused',
+            'token': 'token-refused',
+            'status': 'refused'
+        }
+        response = self._post(payload, secret=self.secret)
+        self.assertEqual(response.status_code, 200)
+
+        pagare_refused.refresh_from_db()
+        credito_refused.refresh_from_db()
+
+        self.assertEqual(pagare_refused.estado, Pagare.EstadoPagare.REFUSED)
+        self.assertIsNotNone(pagare_refused.fecha_rechazo)
+        self.assertEqual(credito_refused.estado, Credito.EstadoCredito.PENDIENTE_FIRMA)

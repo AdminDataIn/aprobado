@@ -857,3 +857,327 @@ class Notificacion(models.Model):
             self.leida = True
             self.fecha_leida = timezone.now()
             self.save(update_fields=['leida', 'fecha_leida'])
+
+
+#? ----- Modelo de reestructuración de crédito -----
+class ReestructuracionCredito(models.Model):
+    """
+    Registra las reestructuraciones realizadas a un crédito cuando se hacen abonos
+    mayores a 2 cuotas o abonos a capital.
+    """
+    class TipoAbono(models.TextChoices):
+        NORMAL = 'NORMAL', 'Abono Normal'
+        CAPITAL = 'CAPITAL', 'Abono a Capital'
+        MAYOR = 'MAYOR', 'Abono Mayor (>2 cuotas)'
+
+    credito = models.ForeignKey(
+        Credito,
+        on_delete=models.CASCADE,
+        related_name='reestructuraciones'
+    )
+    fecha_reestructuracion = models.DateTimeField(auto_now_add=True)
+
+    # Información del abono
+    monto_abonado = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Monto total abonado que generó la reestructuración"
+    )
+    tipo_abono = models.CharField(
+        max_length=20,
+        choices=TipoAbono.choices,
+        default=TipoAbono.NORMAL
+    )
+
+    # Plan de pagos antes y después
+    plan_anterior = models.JSONField(
+        help_text="Plan de pagos antes del abono (JSON con cuotas restantes)"
+    )
+    plan_nuevo = models.JSONField(
+        help_text="Plan de pagos después del abono (JSON con cuotas recalculadas)"
+    )
+
+    # Datos financieros antes de la reestructuración
+    saldo_pendiente_anterior = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text="Saldo pendiente antes del abono"
+    )
+    capital_pendiente_anterior = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text="Capital pendiente antes del abono"
+    )
+    plazo_restante_anterior = models.IntegerField(
+        help_text="Cuotas restantes antes del abono"
+    )
+
+    # Datos financieros después de la reestructuración
+    saldo_pendiente_nuevo = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text="Saldo pendiente después del abono"
+    )
+    capital_pendiente_nuevo = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text="Capital pendiente después del abono"
+    )
+    plazo_restante_nuevo = models.IntegerField(
+        help_text="Cuotas restantes después del abono"
+    )
+
+    # Beneficios de la reestructuración
+    ahorro_intereses = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Ahorro en intereses debido a la reestructuración"
+    )
+    cuota_mensual_nueva = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Nueva cuota mensual (si cambió)"
+    )
+
+    # Aprobación y seguimiento
+    aprobado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reestructuraciones_aprobadas',
+        help_text="Usuario que aprobó la reestructuración (puede ser el cliente)"
+    )
+    observaciones = models.TextField(
+        blank=True,
+        help_text="Observaciones adicionales sobre la reestructuración"
+    )
+
+    # Referencia al pago que generó la reestructuración
+    pago_relacionado = models.ForeignKey(
+        'HistorialPago',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reestructuracion',
+        help_text="Pago que generó esta reestructuración"
+    )
+
+    class Meta:
+        verbose_name = 'Reestructuración de Crédito'
+        verbose_name_plural = 'Reestructuraciones de Crédito'
+        ordering = ['-fecha_reestructuracion']
+        indexes = [
+            models.Index(fields=['credito', '-fecha_reestructuracion']),
+            models.Index(fields=['tipo_abono']),
+        ]
+
+    def __str__(self):
+        return f"Reestructuración {self.credito.numero_credito} - {self.get_tipo_abono_display()} - ${self.monto_abonado}"
+
+
+#? ----- INTEGRACIÓN ZAPSIGN: Firma Electrónica de Pagarés -----
+
+class Pagare(models.Model):
+    """
+    Modelo para gestionar pagarés electrónicos firmados vía ZapSign.
+    Almacena toda la información de trazabilidad legal y evidencia forense.
+    """
+    class EstadoPagare(models.TextChoices):
+        CREATED = 'CREATED', 'Creado'
+        SENT = 'SENT', 'Enviado a ZapSign'
+        SIGNED = 'SIGNED', 'Firmado'
+        REFUSED = 'REFUSED', 'Rechazado por Cliente'
+        CANCELLED = 'CANCELLED', 'Cancelado'
+
+    # Relación con crédito
+    credito = models.OneToOneField(
+        Credito,
+        on_delete=models.CASCADE,
+        related_name='pagare'
+    )
+
+    # Identificación
+    numero_pagare = models.CharField(
+        max_length=30,
+        unique=True,
+        editable=False,
+        help_text="Ej: PAG-2026-00123"
+    )
+    estado = models.CharField(
+        max_length=20,
+        choices=EstadoPagare.choices,
+        default=EstadoPagare.CREATED
+    )
+    version_plantilla = models.CharField(
+        max_length=10,
+        default='1.0',
+        help_text="Versión de la plantilla legal usada"
+    )
+
+    # Archivos PDF
+    archivo_pdf = models.FileField(
+        upload_to='pagares/%Y/%m/',
+        help_text="PDF original generado"
+    )
+    archivo_pdf_firmado = models.FileField(
+        upload_to='pagares_firmados/%Y/%m/',
+        null=True,
+        blank=True,
+        help_text="PDF firmado descargado de ZapSign"
+    )
+    hash_pdf = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        help_text="SHA-256 del PDF original (trazabilidad)"
+    )
+
+    # 🔑 Integración ZapSign (campos críticos)
+    zapsign_doc_token = models.CharField(
+        max_length=100,
+        unique=True,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Token del documento en ZapSign (PRIMARY KEY de integración)"
+    )
+    zapsign_sign_url = models.URLField(
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text="URL de firma enviada al cliente"
+    )
+    zapsign_signed_file_url = models.URLField(
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text="URL del PDF firmado en ZapSign"
+    )
+    zapsign_status = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        help_text="Status reportado por ZapSign (pending, signed, refused)"
+    )
+
+    # 📅 Fechas (auditoría temporal)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_envio = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Cuándo se envió a ZapSign"
+    )
+    fecha_firma = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp de firma del cliente (from webhook)"
+    )
+    fecha_rechazo = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Si el cliente rechazó firmar"
+    )
+
+    # 🔐 Evidencia Forense (trazabilidad legal)
+    ip_firmante = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        help_text="IP del cliente al firmar (evidencia)"
+    )
+    evidencias = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Datos completos del webhook (auditoría)"
+    )
+
+    # 👤 Auditoría de creación
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='pagares_creados',
+        help_text="Usuario que generó el pagaré"
+    )
+
+    class Meta:
+        ordering = ['-fecha_creacion']
+        verbose_name = 'Pagaré'
+        verbose_name_plural = 'Pagarés'
+        indexes = [
+            models.Index(fields=['zapsign_doc_token']),
+            models.Index(fields=['estado', 'fecha_creacion']),
+        ]
+
+    def __str__(self):
+        return f"{self.numero_pagare} - {self.credito.numero_credito} ({self.get_estado_display()})"
+
+    def save(self, *args, **kwargs):
+        if not self.numero_pagare:
+            from django.utils import timezone
+            ultimo = Pagare.objects.order_by('-id').first()
+            numero = (ultimo.id + 1) if ultimo else 1
+            self.numero_pagare = f"PAG-{timezone.now().year}-{numero:05d}"
+        super().save(*args, **kwargs)
+
+
+class ZapSignWebhookLog(models.Model):
+    """
+    Registro de todos los webhooks recibidos de ZapSign.
+    Auditoría completa para trazabilidad legal y debugging.
+    """
+    # Identificación
+    doc_token = models.CharField(
+        max_length=100,
+        db_index=True,
+        help_text="Token del documento de ZapSign"
+    )
+    event = models.CharField(
+        max_length=50,
+        help_text="Tipo de evento (doc_signed, doc_viewed, etc)"
+    )
+
+    # Contenido completo
+    payload = models.JSONField(
+        help_text="Payload completo del webhook"
+    )
+    headers = models.JSONField(
+        default=dict,
+        help_text="Headers HTTP recibidos"
+    )
+
+    # Validación
+    signature_valid = models.BooleanField(
+        default=False,
+        help_text="Si la firma/secret fue validada correctamente"
+    )
+    processed = models.BooleanField(
+        default=False,
+        help_text="Si el webhook fue procesado exitosamente"
+    )
+    error_message = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Mensaje de error si el procesamiento falló"
+    )
+
+    # Metadata
+    received_at = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(
+        help_text="IP desde donde vino el webhook"
+    )
+
+    class Meta:
+        ordering = ['-received_at']
+        verbose_name = 'Log de Webhook ZapSign'
+        verbose_name_plural = 'Logs de Webhooks ZapSign'
+        indexes = [
+            models.Index(fields=['doc_token', '-received_at']),
+            models.Index(fields=['event', 'processed']),
+        ]
+
+    def __str__(self):
+        status = "✅" if self.processed else "❌"
+        return f"{status} {self.event} - {self.doc_token} ({self.received_at})"

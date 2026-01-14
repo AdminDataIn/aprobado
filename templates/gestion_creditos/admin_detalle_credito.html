@@ -459,27 +459,7 @@
                 </div>
                 {% endif %}
 
-                {% if credito.estado == 'PENDIENTE_FIRMA' %}
-                <!-- Simulate Signature -->
-                <div class="card" style="margin-bottom: 2rem;">
-                    <div class="card-header bg-info text-dark">
-                        <h2 class="card-title">
-                            <i class="bi bi-pencil-square me-2"></i>
-                            Simular Firma
-                        </h2>
-                    </div>
-                    <div class="card-content">
-                        <p class="text-muted">Este crédito está pendiente de firma. Use este botón para simular la recepción del documento firmado y pasar al desembolso.</p>
-                        <form method="post" action="{% url 'gestion:credito_simular_firma' credito.id %}">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-info" style="width: 100%;">
-                                <i class="bi bi-check-square-fill me-2"></i>
-                                Forzar Firma y Continuar
-                            </button>
-                        </form>
-                    </div>
-                </div>
-                {% endif %}
+                
 
                 {% if credito.estado == 'PENDIENTE_TRANSFERENCIA' %}
                 <!-- Confirm Disbursement -->

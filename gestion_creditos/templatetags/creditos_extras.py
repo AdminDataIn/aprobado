@@ -28,3 +28,37 @@ def sum_attr(queryset, attr_name):
         if value:
             total += Decimal(str(value))
     return total
+
+
+@register.filter(name='sum_monto_abonado')
+def sum_monto_abonado(reestructuraciones):
+    """
+    Suma el monto_abonado de todas las reestructuraciones.
+
+    Uso en template:
+        {{ reestructuraciones|sum_monto_abonado }}
+
+    Args:
+        reestructuraciones: QuerySet o lista de ReestructuracionCredito
+
+    Returns:
+        Decimal: Suma total de montos abonados
+    """
+    return sum_attr(reestructuraciones, 'monto_abonado')
+
+
+@register.filter(name='sum_ahorro_intereses')
+def sum_ahorro_intereses(reestructuraciones):
+    """
+    Suma el ahorro_intereses de todas las reestructuraciones.
+
+    Uso en template:
+        {{ reestructuraciones|sum_ahorro_intereses }}
+
+    Args:
+        reestructuraciones: QuerySet o lista de ReestructuracionCredito
+
+    Returns:
+        Decimal: Suma total de ahorros en intereses
+    """
+    return sum_attr(reestructuraciones, 'ahorro_intereses')

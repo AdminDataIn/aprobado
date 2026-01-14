@@ -12,7 +12,7 @@ from celery import shared_task
 from django.utils import timezone
 from datetime import timedelta
 from .models import Credito
-from .services import marcar_creditos_en_mora, gestionar_cambio_estado_credito
+from .credit_services import marcar_creditos_en_mora, gestionar_cambio_estado_credito
 from .email_service import (
     enviar_recordatorio_pago,
     enviar_alerta_mora,
@@ -280,3 +280,4 @@ def generar_reporte_cartera_mensual():
             'error': str(e),
             'timestamp': timezone.now().isoformat()
         }
+

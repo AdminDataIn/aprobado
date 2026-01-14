@@ -1,28 +1,38 @@
 {% extends "emails/base_email.html" %}
 
-{% block title %}Recordatorio de pago - Crédito {{ numero_credito }}{% endblock %}
+{% block title %}Recordatorio de pago - Credito {{ numero_credito }}{% endblock %}
 
-{% block header %}💳 Recordatorio de Pago{% endblock %}
+{% block header %}Recordatorio de Pago{% endblock %}
 
 {% block content %}
+    <span class="badge">Credito {{ numero_credito }}</span>
     <h2>Hola, {{ nombre_cliente }}</h2>
 
-    <p>Te recordamos que tienes una cuota próxima a vencer de tu crédito <strong>{{ numero_credito }}</strong>.</p>
+    <p>
+        Tu proxima cuota esta cerca. Para evitar mora y mantener tu historial al dia,
+        realiza el pago antes del <strong>{{ fecha_vencimiento|date:"d/m/Y" }}</strong>.
+    </p>
 
-    <div class="highlight">
-        <p><strong>📅 Información de pago:</strong></p>
-        <ul>
-            <li><strong>Valor a pagar:</strong> {{ valor_cuota }}</li>
-            <li><strong>Fecha de vencimiento:</strong> {{ fecha_vencimiento|date:"d/m/Y" }}</li>
-            <li><strong>Días restantes:</strong> {{ dias_restantes }} días</li>
-        </ul>
+    <div class="card">
+        <table class="info-table" role="presentation">
+            <tr>
+                <td class="info-label">Valor a pagar</td>
+                <td class="info-value">{{ valor_cuota }}</td>
+            </tr>
+            <tr>
+                <td class="info-label">Fecha de vencimiento</td>
+                <td class="info-value">{{ fecha_vencimiento|date:"d/m/Y" }}</td>
+            </tr>
+            <tr>
+                <td class="info-label">Dias restantes</td>
+                <td class="info-value">{{ dias_restantes }} dias</td>
+            </tr>
+        </table>
     </div>
 
-    <p>Para evitar intereses de mora, te recomendamos realizar el pago antes de la fecha de vencimiento.</p>
-
     <center>
-        <a href="https://aprobado.com.co/mi-credito/{{ credito.id }}/" class="button">Realizar Pago</a>
+        <a href="https://aprobado.com.co/mi-credito/{{ credito.id }}/" class="button">Realizar pago seguro</a>
     </center>
 
-    <p>Si ya realizaste el pago, puedes ignorar este mensaje.</p>
+    <p class="muted">Si ya realizaste el pago, puedes ignorar este mensaje.</p>
 {% endblock %}

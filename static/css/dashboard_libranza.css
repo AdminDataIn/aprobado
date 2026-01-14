@@ -1,0 +1,104 @@
+/* Libranza palette overrides */
+:root {
+    --azul-colombia: #1F2937;
+    --azul-cielo: #0F766E;
+    --amarillo-colombia: #E7B85A;
+    --rojo-colombia: #DC2626;
+    --gris-claro: #F4F2EE;
+    --gris-medio: #E5E7EB;
+    --verde-exito: #16A34A;
+    --naranja-alerta: #D97706;
+    --morado-acento: #A16207;
+}
+
+body {
+    background: linear-gradient(135deg, #F7F2EA 0%, #EEF2F5 100%);
+}
+
+.nav-link:hover {
+    color: var(--azul-cielo) !important;
+    background: #F3F5F2;
+}
+
+.nav-link.active {
+    color: var(--azul-cielo) !important;
+    background: #EAF3F1;
+}
+
+.user-menu-item:hover {
+    background: linear-gradient(135deg, #F0F7F4 0%, #DFF1EA 50%);
+}
+
+.credit-type-badge {
+    background: linear-gradient(135deg, #E8F1EF 0%, #DDE9E4 100%);
+    color: var(--azul-colombia);
+}
+
+.page-header-modern {
+    border: 1px solid rgba(15, 118, 110, 0.15);
+}
+
+.page-header-modern::before {
+    background: linear-gradient(90deg, var(--azul-cielo) 0%, var(--amarillo-colombia) 55%, var(--verde-exito) 100%);
+}
+
+.progress-card {
+    border: 1px solid rgba(15, 118, 110, 0.15);
+}
+
+.form-select-modern:hover {
+    border-color: var(--azul-cielo);
+    box-shadow: 0 4px 12px rgba(15, 118, 110, 0.12);
+}
+
+.form-select-modern:focus {
+    border-color: var(--azul-cielo);
+    box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
+}
+
+.btn-payment {
+    box-shadow: 0 4px 15px rgba(15, 118, 110, 0.3);
+}
+
+.btn-payment:hover {
+    box-shadow: 0 8px 25px rgba(15, 118, 110, 0.35);
+}
+
+.btn-outline-primary:hover {
+    box-shadow: 0 6px 20px rgba(15, 118, 110, 0.25);
+}
+
+.status-badge-modern.status-activo {
+    background: linear-gradient(135deg, #E6F4F1 0%, #BFE7DC 100%);
+    color: var(--azul-colombia);
+}
+
+.status-activo {
+    background: #E6F4F1;
+    color: var(--azul-colombia);
+    border-color: #BFE7DC;
+}
+
+.badge.bg-primary {
+    background: var(--azul-cielo) !important;
+}
+
+.text-primary {
+    color: var(--azul-cielo) !important;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--azul-cielo) 0%, #0B5F57 100%);
+    border-color: var(--azul-cielo);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #0E836F 0%, #0B5F57 100%);
+    border-color: #0E836F;
+}
+
+.alert-info {
+    color: #0F3D36;
+    background-color: #E9F5F1;
+    border-color: #CFE7DF;
+}

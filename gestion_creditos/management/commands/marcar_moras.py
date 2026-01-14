@@ -5,7 +5,7 @@ Uso:
     python manage.py marcar_moras
 """
 from django.core.management.base import BaseCommand
-from gestion_creditos.services import marcar_creditos_en_mora
+from gestion_creditos.credit_services import marcar_creditos_en_mora
 
 
 class Command(BaseCommand):
@@ -26,3 +26,4 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.SUCCESS('✓ No hay créditos para marcar en mora')
             )
+

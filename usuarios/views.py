@@ -13,13 +13,13 @@ def index(request):
     return render(request, 'index.html')
 
 #def aplicar_formulario(request):
-#    return render(request, 'aplicando.html')
+#    return render(request, 'emprendimiento/aplicando.html')
 
 @login_required
 def aplicar_formulario(request):
     # if not SocialAccount.objects.filter(user=request.user, provider='google').exists():
         # return redirect('/accounts/google/login/?next=/usuarios/aplicar/')
-    return render(request, 'aplicando.html')
+    return render(request, 'emprendimiento/aplicando.html')
 
 
 #? Simulador de EMPRENDIMIENTO
@@ -31,7 +31,7 @@ def simulador(request):
     context = {
         'es_empleado': False  # SIEMPRE False porque este es el simulador de EMPRENDIMIENTO
     }
-    return render(request, 'simulacion.html', context)
+    return render(request, 'emprendimiento/simulacion.html', context)
 
 
 # def simulador(request):
@@ -46,7 +46,7 @@ def simulador(request):
 #     context = {
 #         'es_empleado': es_empleado
 #     }
-#     return render(request, 'simulacion.html', context)
+#     return render(request, 'emprendimiento/simulacion.html', context)
 
 
 class EmpresaLoginView(LoginView):
@@ -99,13 +99,13 @@ def libranza_landing(request):
     - Llamados a la acción para solicitar el crédito
 
     Returns:
-        Renderiza 'libranza_landing.html'
+        Renderiza 'libranza/libranza_landing.html'
     """
     context = {
         # Se puede agregar contexto adicional si es necesario en el futuro
         # Por ejemplo: tasas, montos, convenios, etc.
     }
-    return render(request, 'libranza_landing.html', context)
+    return render(request, 'libranza/libranza_landing.html', context)
 
 
 # Vista para el Simulador de Crédito de Libranza
@@ -123,31 +123,31 @@ def simulador_libranza(request):
     - Total a pagar
 
     Returns:
-        Renderiza 'simulacion_libranza.html'
+        Renderiza 'libranza/simulacion_libranza.html'
     """
     context = {
         # Se puede agregar contexto adicional si es necesario
         # Por ejemplo: tasas dinámicas, rangos personalizados, etc.
     }
-    return render(request, 'simulacion_libranza.html', context)
+    return render(request, 'libranza/simulacion_libranza.html', context)
 
 
 # Vista para el login de Libranza
 class LoginLibranzaView(TemplateView):
     """
     Vista que muestra la página de login específica para Libranza.
-    Usa el template base_libranza.html con navbar y footer de Libranza.
+    Usa el template libranza/base_libranza.html con navbar y footer de Libranza.
     """
-    template_name = 'account/login_libranza.html'
+    template_name = 'libranza/login.html'
 
 
 # Vista para el login de Emprendimiento
 class LoginEmprendimientoView(TemplateView):
     """
     Vista que muestra la página de login específica para Emprendimiento.
-    Usa el template base_emprendimiento.html con navbar y footer de Emprendimiento.
+    Usa el template emprendimiento/base_emprendimiento.html con navbar y footer de Emprendimiento.
     """
-    template_name = 'account/login_emprendimiento.html'
+    template_name = 'emprendimiento/login.html'
 
 
 class CustomLogoutView(LogoutView):

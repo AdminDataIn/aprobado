@@ -292,8 +292,8 @@
 
                         {% if credito.estado == 'ACTIVO' or credito.estado == 'EN_MORA' %}
                         <div class="mt-4">
-                            <a href="{% url 'pagador:pagar_individual' credito.id %}" class="btn btn-pagar w-100">
-                                Pagar Cuota (${{ credito.valor_cuota|intcomma }})
+                            <a href="{% url 'pagador:pagar_wompi' credito.id %}" class="btn btn-pagar w-100">
+                                <i class="bi bi-credit-card me-2"></i>Pagar Cuota con WOMPI (${{ credito.valor_cuota|intcomma }})
                             </a>
                         </div>
                         {% endif %}

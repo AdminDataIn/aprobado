@@ -125,17 +125,15 @@ config/
 token.json
 
 # ARCHIVOS DE DOCUMENTACION GUIA
-CONFIGURACION_EMAILS_CELERY.md
-DOCUMENTACION_LANDING_LIBRANZA.md
-GMAIL_API_SETUP.md
-MIGRACION_FORMULARIO_EMPRENDIMIENTO.md
-QUICK_START_EMAIL.md
-RESUMEN_IMPLEMENTACION.md
-runtime.txt
-MIGRACION_URLS.md
-REFERENCIA_URLS.md
 PENDIENTES.md
 DOCUMENTACION_APROBADO.md
 Loading.json
-nul
 Check_Animation.json
+INTEGRACION_WOMPI_ESENCIAL.md
+README.md
+Flujo de Pago.md
+test_email.py
+test_pagare.py
+test_zapsign_integration.py
+ZapSign.md
+generar_pagare_manual.py

@@ -1,0 +1,352 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pagaré - {{ numero_pagare|default:"" }}</title>
+  <style>
+    /* Configuración de página */
+    @page {
+      size: Letter;
+      margin: 1.5cm 2cm 1.5cm 2cm;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 9pt;
+      color: #000;
+      line-height: 1.3;
+    }
+
+    /* Header con logo */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #000;
+    }
+
+    .logo {
+      max-height: 60px;
+      width: auto;
+    }
+
+    .header-info {
+      text-align: right;
+      font-size: 8pt;
+    }
+
+    /* Título del pagaré */
+    .titulo {
+      text-align: center;
+      font-size: 14pt;
+      font-weight: bold;
+      margin: 15px 0 10px 0;
+      letter-spacing: 1px;
+    }
+
+    .numero-pagare {
+      text-align: center;
+      font-size: 10pt;
+      font-weight: bold;
+      margin-bottom: 15px;
+    }
+
+    /* Párrafos del contenido */
+    .contenido {
+      text-align: justify;
+      margin-bottom: 12px;
+    }
+
+    .contenido p {
+      margin-bottom: 8px;
+    }
+
+    /* Líneas para llenar */
+    .linea {
+      display: inline-block;
+      border-bottom: 1px solid #000;
+      min-width: 100px;
+      padding: 0 4px;
+    }
+
+    .linea-corta {
+      min-width: 60px;
+    }
+
+    .linea-media {
+      min-width: 140px;
+    }
+
+    .linea-larga {
+      min-width: 300px;
+    }
+
+    /* Secciones con valores */
+    .seccion-valores {
+      margin: 12px 0;
+      padding-left: 30px;
+    }
+
+    .seccion-valores p {
+      margin: 6px 0;
+    }
+
+    /* Negritas */
+    .negrita {
+      font-weight: bold;
+    }
+
+    /* Sección de firma */
+    .seccion-firma {
+      margin-top: 30px;
+      page-break-inside: avoid;
+    }
+
+    .firma-bloque {
+      margin-top: 50px;
+    }
+
+    .firma-linea {
+      width: 280px;
+      border-top: 1px solid #000;
+      margin: 0 auto;
+      text-align: center;
+      padding-top: 4px;
+      font-size: 9pt;
+    }
+
+    .firma-datos {
+      margin-top: 15px;
+      line-height: 1.6;
+    }
+
+    .firma-datos p {
+      font-size: 8.5pt;
+      margin: 5px 0;
+    }
+
+    /* Footer */
+    .footer {
+      position: fixed;
+      bottom: 10px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 8pt;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header con Logo -->
+  <div class="header">
+    <img src="file:///C:/.vscode/Project_aprobado/static/images/logo-dark.png" alt="Aprobado" class="logo">
+    <div class="header-info">
+      <strong>Aprobado Fintech SAS</strong><br>
+      NIT 901.949.137-2<br>
+      Bogotá D.C., Colombia
+    </div>
+  </div>
+
+  <!-- Título del Pagaré -->
+  <div class="titulo">PAGARÉ</div>
+  <div class="numero-pagare">No. {{ numero_pagare|default:"___________" }}</div>
+
+  <!-- Contenido del Pagaré -->
+  <div class="contenido">
+    <p>
+      Yo (Nosotros), <span class="linea linea-larga negrita">{{ deudor_nombres|default:"" }}</span>
+      mayor(es) de edad, con domicilio en la ciudad de
+      <span class="linea linea-media negrita">{{ ciudad_domicilio|default:"" }}</span>,
+      identificado(s) como aparece(mos) al pie de mi(nuestras) firma(s),
+      obrando en mi (nuestro) propio nombre, o en la condición indicada al pie de mi(nuestras) firma(s),
+      declaro(amos):
+      <span class="negrita">PRIMERO:</span> Que me(nos) obligo(amos) a pagar solidaria, indivisible, irrevocable e
+      incondicionalmente a la orden del <span class="negrita">{{ acreedor_nombre|default:"ACREEDOR" }}</span>
+      <span class="negrita">{{ acreedor_detalle|default:"" }}</span>
+      en adelante <span class="negrita">EL ACREEDOR</span>, o a quien represente sus derechos, el día
+      (<span class="linea linea-corta">{{ dia_pago|default:"" }}</span>)
+      del mes de <span class="linea linea-media">{{ mes_pago|default:"" }}</span> del año
+      <span class="linea linea-corta">{{ anio_pago|default:"" }}</span>,
+      en sus oficinas del país o en los puntos de pago autorizados expresamente para el efecto,
+      las siguientes sumas de dinero:
+    </p>
+
+    <div class="seccion-valores">
+      <p>
+        <span class="negrita">POR CAPITAL:</span><br>
+        ( <span class="negrita">$</span> <span class="linea">{{ capital_valor|default:"" }}</span> ) <span class="negrita">M.C.</span>
+      </p>
+
+      <p>
+        <span class="negrita">POR INTERESES CAUSADOS Y NO PAGADOS:</span><br>
+        ( <span class="negrita">$</span> <span class="linea">{{ intereses_valor|default:"" }}</span> ) <span class="negrita">M.C.</span>
+      </p>
+
+      <p>
+        <span class="negrita">POR OTROS CONCEPTOS:</span><br>
+        ( <span class="negrita">$</span> <span class="linea">{{ otros_conceptos_valor|default:"" }}</span> ) <span class="negrita">M.C.</span>
+      </p>
+    </div>
+
+    <p>
+      <span class="negrita">SEGUNDO:</span> Que pagare(mos) intereses moratorios a la tasa máxima legalmente autorizada sobre la suma de
+      capital insoluto. <span class="negrita">TERCERO:</span> Que acepto(amos) expresamente cualquier endoso o cesión que de este pagaré
+      haga EL ACREEDOR y reconozco(emos) desde ya al endosatario o cesionario dentro de cualquier proceso judicial.
+      <span class="negrita">CUARTO:</span> Como estoy(amos) renunciando(amos) expresamente a cualquier requerimiento para ser
+      constituido(s) en mora en los casos de Ley. <span class="negrita">QUINTO:</span> EL ACREEDOR se podrá acoger a los términos del
+      artículo 886 del Código de Comercio para el cobro de intereses. El presente pagaré no está sujeto a la presentación para su pago,
+      ni aviso de rechazo, ni el proceso de notificaciones e instrucciones previstas en los artículos 621 a 625 y demás efectos legales
+      y se suscribe para ser llenado por EL ACREEDOR o su representante según las instrucciones impartidas por mí(nosotros),
+      las cuales están en la carta de autorizaciones e instrucciones adjunta al presente documento, todo de conformidad con lo dispuesto
+      en el artículo 622 del Código de Comercio.
+    </p>
+
+    <p>
+      Para constancia se firma en la ciudad de <span class="negrita">{{ ciudad_firma|default:"Villavicencio" }}</span>,
+      en un (1) original, con destino a {{ acreedor_nombre|default:"ACREEDOR" }} {{ acreedor_detalle|default:"" }}.
+    </p>
+
+    <p>
+      El día (<span class="linea linea-corta">{{ dia_firma|default:"" }}</span>) del mes de
+      <span class="linea linea-media">{{ mes_firma|default:"" }}</span> del año
+      <span class="linea linea-corta">{{ anio_firma|default:"" }}</span>.
+    </p>
+  </div>
+
+  <!-- Sección de Firma -->
+  <div class="seccion-firma">
+    <div class="firma-bloque">
+      <div class="firma-linea">
+        Firma del Deudor
+      </div>
+
+      <div class="firma-datos">
+        <p>NOMBRES Y APELLIDOS: <span class="linea linea-larga">{{ deudor_nombres|default:"" }}</span></p>
+        <p>IDENTIFICACIÓN (C.C., C.E.): <span class="linea">{{ cedula_deudor|default:"" }}</span></p>
+        <p>DIRECCIÓN: <span class="linea linea-larga">{{ direccion_deudor|default:"" }}</span></p>
+        <p>CELULAR: <span class="linea">{{ telefono_deudor|default:"" }}</span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    Aprobado Fintech SAS - NIT 901.949.137-2 - Bogotá D.C., Colombia
+  </div>
+
+  <!-- SEGUNDA PÁGINA: CARTA DE INSTRUCCIONES -->
+  <div style="page-break-before: always;"></div>
+
+  <!-- Header de segunda página -->
+  <div class="header">
+    <img src="file:///C:/.vscode/Project_aprobado/static/images/logo-dark.png" alt="Aprobado" class="logo">
+    <div class="header-info">
+      <strong>Aprobado Fintech SAS</strong><br>
+      NIT 901.949.137-2<br>
+      Bogotá D.C., Colombia
+    </div>
+  </div>
+
+  <!-- Título de Carta de Instrucciones -->
+  <div class="titulo">CARTA DE INSTRUCCIONES</div>
+
+  <!-- Contenido de instrucciones -->
+  <div class="contenido">
+    <p>
+      Yo (Nosotros), <span class="linea linea-larga negrita">{{ deudor_nombres|default:"" }}</span>
+      identificado(s) como aparece(mos) al pie de mi(nuestras) firma(s), obrando en mi (nuestro) propio
+      nombre, o en la condición indicada al pie de mi(nuestras) firma(s), declaro(amos) que por medio de
+      la presente carta autorizo(amos) e instruyo(imos) irrevocablemente a <span class="negrita">{{ acreedor_nombre|default:"ACREEDOR" }}</span>
+      <span class="negrita">{{ acreedor_detalle|default:"" }}</span> en adelante <span class="negrita">EL ACREEDOR</span>,
+      su representante legal o apoderado, para que en mi(nuestro) nombre y representación llene el Pagaré
+      No. <span class="negrita">{{ numero_pagare|default:"___________" }}</span> que he(mos) suscrito
+      simultáneamente con la presente carta, con sujeción a las siguientes instrucciones:
+    </p>
+
+    <p>
+      <span class="negrita">1.</span> Que EL ACREEDOR podrá diligenciar el pagaré por una suma igual al
+      capital insoluto que en mi(nuestro) cargo aparezca en libros de contabilidad de EL ACREEDOR, más
+      los intereses causados y no pagados, y demás sumas que yo(nosotros) adeude(mos), con el fin de
+      obtener el pago de las sumas que yo(nosotros) adeude(mos), en virtud de cualquiera de las
+      obligaciones que tenga(mos) con EL ACREEDOR.
+    </p>
+
+    <p>
+      <span class="negrita">2.</span> La fecha de pago del pagaré será cualquiera que escoja EL ACREEDOR,
+      pero no anterior a la fecha en que efectivamente incurra(mos) en mora con EL ACREEDOR, ni posterior
+      al plazo de prescripción de la(s) obligación(es) que con el pagaré se respalda(n).
+    </p>
+
+    <p>
+      <span class="negrita">3.</span> Los espacios en blanco que hayan quedado en el pagaré podrán llenarse
+      por EL ACREEDOR con sujeción a lo pactado en esta carta de instrucciones, sin perjuicio de la validez
+      del pagaré que en ningún caso requerirá de nueva firma de mi(nuestra) parte.
+    </p>
+
+    <p>
+      <span class="negrita">4.</span> Los intereses moratorios se liquidarán a la tasa máxima legal autorizada
+      vigente al momento del llenado del pagaré y se calcularán sobre el valor del capital vencido y no pagado
+      o de las cuotas vencidas y no pagadas.
+    </p>
+
+    <p>
+      <span class="negrita">5.</span> Acepto(amos) que el pagaré no requiere presentación para pago ni aviso
+      de rechazo, ni el proceso de notificaciones e instrucciones previstas en los artículos 621 a 625 del
+      Código de Comercio.
+    </p>
+
+    <p>
+      <span class="negrita">6.</span> EL ACREEDOR podrá endosar o ceder este pagaré junto con esta carta de
+      instrucciones a cualquier persona natural o jurídica, quien tendrá los mismos derechos que el acreedor
+      original.
+    </p>
+
+    <p>
+      <span class="negrita">7.</span> Declaro(amos) expresamente que renuncio(amos) a exigir la presentación
+      del pagaré para su pago y a cualquier otro requisito formal que exija la ley para el cobro del mismo,
+      y me(nos) obligo(amos) a pagar los gastos en que incurra EL ACREEDOR con motivo del cobro del pagaré,
+      incluyendo pero sin limitarse a honorarios de abogados, gastos de cobranza judicial y extrajudicial.
+    </p>
+
+    <p>
+      <span class="negrita">8.</span> Esta carta de instrucciones y el pagaré constituyen un solo documento
+      y las obligaciones en ellos contenidas son solidarias, indivisibles, irrevocables e incondicionales.
+    </p>
+
+    <p>
+      Para constancia se firma en la ciudad de <span class="negrita">{{ ciudad_firma|default:"Villavicencio" }}</span>,
+      en un (1) original, el día (<span class="linea linea-corta">{{ dia_firma|default:"" }}</span>) del mes de
+      <span class="linea linea-media">{{ mes_firma|default:"" }}</span> del año
+      <span class="linea linea-corta">{{ anio_firma|default:"" }}</span>.
+    </p>
+  </div>
+
+  <!-- Sección de Firma para Carta de Instrucciones -->
+  <div class="seccion-firma">
+    <div class="firma-bloque">
+      <div class="firma-linea">
+        Firma del Deudor
+      </div>
+
+      <div class="firma-datos">
+        <p>NOMBRES Y APELLIDOS: <span class="linea linea-larga">{{ deudor_nombres|default:"" }}</span></p>
+        <p>IDENTIFICACIÓN (C.C., C.E.): <span class="linea">{{ cedula_deudor|default:"" }}</span></p>
+        <p>DIRECCIÓN: <span class="linea linea-larga">{{ direccion_deudor|default:"" }}</span></p>
+        <p>CELULAR: <span class="linea">{{ telefono_deudor|default:"" }}</span></p>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

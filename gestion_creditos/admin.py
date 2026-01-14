@@ -1,7 +1,8 @@
 from django.contrib import admin
 from .models import (
     Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago,
-    CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, ImagenNegocio, Notificacion
+    CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, ImagenNegocio, Notificacion,
+    Pagare, ZapSignWebhookLog
 )
 from django.utils import timezone
 from datetime import timedelta
@@ -228,3 +229,71 @@ class NotificacionAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('usuario')
+
+
+#? ----- ADMINISTRACIÓN DE PAGARÉS (ZapSign) -----
+@admin.register(Pagare)
+class PagareAdmin(admin.ModelAdmin):
+    list_display = ('numero_pagare', 'credito', 'estado', 'fecha_creacion', 'fecha_firma', 'creado_por')
+    list_filter = ('estado', 'fecha_creacion', 'fecha_firma')
+    search_fields = ('numero_pagare', 'credito__numero_credito', 'zapsign_doc_token')
+    readonly_fields = (
+        'numero_pagare', 'fecha_creacion', 'fecha_envio', 'fecha_firma', 'fecha_rechazo',
+        'zapsign_doc_token', 'zapsign_sign_url', 'zapsign_signed_file_url', 'hash_pdf',
+        'ip_firmante', 'evidencias', 'creado_por'
+    )
+
+    fieldsets = (
+        ('Información del Pagaré', {
+            'fields': ('numero_pagare', 'credito', 'estado', 'version_plantilla')
+        }),
+        ('Archivos PDF', {
+            'fields': ('archivo_pdf', 'archivo_pdf_firmado', 'hash_pdf')
+        }),
+        ('Integración ZapSign', {
+            'fields': ('zapsign_doc_token', 'zapsign_sign_url', 'zapsign_signed_file_url', 'zapsign_status'),
+            'classes': ('collapse',)
+        }),
+        ('Fechas y Auditoría', {
+            'fields': ('fecha_creacion', 'fecha_envio', 'fecha_firma', 'fecha_rechazo', 'creado_por')
+        }),
+        ('Evidencia Forense', {
+            'fields': ('ip_firmante', 'evidencias'),
+            'classes': ('collapse',),
+            'description': 'Datos de trazabilidad legal para disputas'
+        }),
+    )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('credito', 'creado_por')
+
+
+@admin.register(ZapSignWebhookLog)
+class ZapSignWebhookLogAdmin(admin.ModelAdmin):
+    list_display = ('received_at', 'event', 'doc_token', 'signature_valid', 'processed', 'ip_address')
+    list_filter = ('event', 'signature_valid', 'processed', 'received_at')
+    search_fields = ('doc_token', 'event', 'ip_address')
+    readonly_fields = ('doc_token', 'event', 'payload', 'headers', 'signature_valid', 'processed', 'error_message', 'received_at', 'ip_address')
+    list_per_page = 50
+
+    fieldsets = (
+        ('Información del Evento', {
+            'fields': ('doc_token', 'event', 'received_at', 'ip_address')
+        }),
+        ('Validación', {
+            'fields': ('signature_valid', 'processed', 'error_message')
+        }),
+        ('Payload Completo', {
+            'fields': ('payload', 'headers'),
+            'classes': ('collapse',),
+            'description': 'Datos completos del webhook para auditoría'
+        }),
+    )
+
+    def has_add_permission(self, request):
+        # No permitir crear webhooks manualmente
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        # Solo lectura
+        return False

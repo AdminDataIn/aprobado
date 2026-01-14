@@ -1,13 +1,15 @@
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import uuid
+import json
 from django.shortcuts import get_object_or_404, render, redirect
+from django.urls import reverse
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_http_methods
 from django.conf import settings
-from .models import Credito, CreditoLibranza, CreditoEmprendimiento, Empresa, HistorialPago, HistorialEstado, CuentaAhorro, MovimientoAhorro
+from .models import Credito, CreditoLibranza, CreditoEmprendimiento, Empresa, HistorialPago, HistorialEstado, CuentaAhorro, MovimientoAhorro, Pagare, ZapSignWebhookLog
 from .forms import CreditoLibranzaForm, CreditoEmprendimientoForm, AbonoManualAdminForm, ConsignacionOfflineForm
-from . import services
+from . import credit_services
 from datetime import datetime, timedelta
 from django.db.models.functions import ExtractMonth, ExtractYear
 from django.db.models import DateField
@@ -31,84 +33,7 @@ from django.db.models import DurationField, ExpressionWrapper, Value
 logger = logging.getLogger(__name__)
 
 #! La función _registrar_cambio_estado fue eliminada.
-#! La lógica ahora está centralizada en services.gestionar_cambio_estado_credito.
-
-@csrf_exempt
-@transaction.atomic
-def webhook_firma_documento(request, numero_credito):
-    """
-    Webhook para simular la recepción de una firma de documento exitosa.
-    """
-    # Para una implementación real, aquí se validaría la autenticidad del webhook.
-    
-    try:
-        credito = Credito.objects.get(numero_credito=numero_credito)
-    except Credito.DoesNotExist:
-        logger.warning(f"Webhook recibió una llamada para un crédito no existente: {numero_credito}")
-        return JsonResponse({'status': 'error', 'message': 'Crédito no encontrado'}, status=404)
-
-    # Validar que el crédito esté en el estado correcto
-    if credito.estado != Credito.EstadoCredito.PENDIENTE_FIRMA:
-        logger.warning(f"Webhook para crédito {numero_credito} en estado incorrecto: {credito.estado}")
-        return JsonResponse({
-            'status': 'error', 
-            'message': f'El crédito no está en estado PENDIENTE_FIRMA (estado actual: {credito.estado})'
-        }, status=409)
-
-    try:
-        # 1. Cambiar estado a FIRMADO
-        services.gestionar_cambio_estado_credito(
-            credito=credito,
-            nuevo_estado=Credito.EstadoCredito.FIRMADO,
-            motivo="Documento (pagaré) firmado exitosamente (simulado por webhook).",
-            usuario_modificacion=None # Proceso automático
-        )
-
-        # 2. Iniciar el proceso de desembolso (cambia a PENDIENTE_TRANSFERENCIA)
-        services.iniciar_proceso_desembolso(credito)
-        
-        logger.info(f"Webhook procesado exitosamente para crédito {numero_credito}. Estado ahora: {credito.estado}")
-        return JsonResponse({'status': 'ok', 'message': 'Crédito actualizado a PENDIENTE_TRANSFERENCIA'})
-
-    except Exception as e:
-        logger.error(f"Error procesando el webhook para el crédito {numero_credito}: {e}", exc_info=True)
-        return JsonResponse({'status': 'error', 'message': 'Error interno del servidor'}, status=500)
-
-
-@staff_member_required
-@require_POST
-def simular_firma_view(request, credito_id):
-    """
-    Simula la firma de un documento que normalmente se haría por un webhook externo.
-    Uso temporal mientras la integración con el proveedor de firma no está lista.
-    """
-    credito = get_object_or_404(Credito, id=credito_id)
-
-    if credito.estado != Credito.EstadoCredito.PENDIENTE_FIRMA:
-        messages.error(request, f"El crédito no está en estado 'Pendiente Firma'. Estado actual: {credito.get_estado_display()}.")
-        return redirect('gestion:credito_detalle', credito_id=credito.id)
-
-    try:
-        with transaction.atomic():
-            # 1. Cambiar estado a FIRMADO
-            services.gestionar_cambio_estado_credito(
-                credito=credito,
-                nuevo_estado=Credito.EstadoCredito.FIRMADO,
-                motivo="Documento (pagaré) firmado exitosamente (SIMULADO por admin).",
-                usuario_modificacion=request.user
-            )
-
-            # 2. Iniciar el proceso de desembolso (cambia a PENDIENTE_TRANSFERENCIA)
-            services.iniciar_proceso_desembolso(credito)
-        
-        messages.success(request, f"Firma simulada exitosamente. El crédito {credito.numero_credito} ahora está PENDIENTE DE TRANSFERENCIA.")
-
-    except Exception as e:
-        messages.error(request, f"Error al simular la firma para el crédito {credito.id}: {e}")
-        logger.error(f"Error en simular_firma_view para crédito {credito.id}: {e}", exc_info=True)
-
-    return redirect('gestion:credito_detalle', credito_id=credito.id)
-
+#! La lógica ahora está centralizada en credit_services.gestionar_cambio_estado_credito.
 
 #? --------- VISTA DE CREDITO DE LIBRANZA ------------
 @login_required(login_url='/accounts/google/login/')
@@ -138,6 +63,38 @@ def solicitud_credito_libranza_view(request):
                 )
             except Exception as e:
                 logger.error(f"Error al enviar email de confirmación para crédito {credito_principal.id}: {e}")
+
+            try:
+                from gestion_creditos.email_service import enviar_email_simple
+                pagadores = PerfilPagador.objects.filter(
+                    empresa=credito_libranza_detalle.empresa,
+                    es_pagador=True
+                ).select_related('usuario')
+                if pagadores:
+                    monto_formateado = f"{credito_principal.monto_solicitado:,.0f}"
+                    dashboard_url = request.build_absolute_uri(reverse('pagador:dashboard'))
+                    login_url = request.build_absolute_uri(reverse('pagador:login'))
+                    for perfil in pagadores:
+                        if not perfil.usuario.email:
+                            continue
+                        mensaje = (
+                            "Se registro una nueva solicitud de credito de libranza.\n\n"
+                            f"Empleado: {credito_libranza_detalle.nombre_completo}\n"
+                            f"Cedula: {credito_libranza_detalle.cedula}\n"
+                            f"Monto solicitado: ${monto_formateado}\n"
+                            f"Plazo solicitado: {credito_principal.plazo_solicitado} meses\n\n"
+                            "Ingresa para aprobar o rechazar:\n"
+                            f"{dashboard_url}\n\n"
+                            "Si no has iniciado sesion:\n"
+                            f"{login_url}\n"
+                        )
+                        enviar_email_simple(
+                            perfil.usuario.email,
+                            "Nueva solicitud de credito de libranza",
+                            mensaje
+                        )
+            except Exception as e:
+                logger.error(f"Error al notificar a pagadores para credito {credito_principal.id}: {e}")
 
             if is_ajax:
                 return JsonResponse({'success': True})
@@ -224,7 +181,7 @@ def solicitud_credito_emprendimiento_view(request):
 
                 # Evaluar motivación con ChatGPT
                 desc_cred_nec = request.POST.get('desc_cred_nec', '').strip()
-                puntaje_motivacion = services.evaluar_motivacion_credito(desc_cred_nec)
+                puntaje_motivacion = credit_services.evaluar_motivacion_credito(desc_cred_nec)
 
                 # Calcular puntaje interno
                 datos_evaluacion = {
@@ -237,7 +194,7 @@ def solicitud_credito_emprendimiento_view(request):
                     'Dependientes': request.POST.get('depend_h'),
                     'Redes sociales': request.POST.get('redes_soc'),
                 }
-                puntaje_interno = services.obtener_puntaje_interno(datos_evaluacion)
+                puntaje_interno = credit_services.obtener_puntaje_interno(datos_evaluacion)
 
                 # Puntaje total combinado
                 puntaje_total = puntaje_interno + puntaje_motivacion + puntaje_imagenes
@@ -340,8 +297,8 @@ def solicitud_credito_emprendimiento_view(request):
                         'Dependientes': form.cleaned_data.get('depend_h'),
                         'Redes sociales': form.cleaned_data.get('redes_soc'),
                     }
-                    puntaje_interno = services.obtener_puntaje_interno(datos_evaluacion)
-                    puntaje_motivacion = services.evaluar_motivacion_credito(form.cleaned_data.get('desc_cred_nec'))
+                    puntaje_interno = credit_services.obtener_puntaje_interno(datos_evaluacion)
+                    puntaje_motivacion = credit_services.evaluar_motivacion_credito(form.cleaned_data.get('desc_cred_nec'))
                     puntaje_total = puntaje_interno + puntaje_motivacion
 
                     credito_principal = Credito.objects.create(
@@ -378,7 +335,7 @@ def solicitud_credito_emprendimiento_view(request):
     else:
         form = CreditoEmprendimientoForm()
 
-    return render(request, 'aplicando.html', {
+    return render(request, 'emprendimiento/aplicando.html', {
         'form': form,
         'es_empleado': False  # Formulario de emprendimiento siempre es False
     })
@@ -392,7 +349,7 @@ def admin_dashboard_view(request):
     a la función `get_admin_dashboard_context` en el módulo de servicios para
     mantener la vista limpia y centrada en la renderización.
     """
-    context = services.get_admin_dashboard_context(request.user)
+    context = credit_services.get_admin_dashboard_context(request.user)
     return render(request, 'gestion_creditos/admin_dashboard.html', context)
 
 @staff_member_required
@@ -400,7 +357,7 @@ def admin_solicitudes_view(request):
     """Vista para gestionar solicitudes pendientes"""
     
     solicitudes_base = Credito.objects.exclude(estado__in=['ACTIVO', 'PAGADO', 'EN_MORA'])
-    solicitudes_filtradas = services.filtrar_creditos(request, solicitudes_base)
+    solicitudes_filtradas = credit_services.filtrar_creditos(request, solicitudes_base)
     
     solicitudes = solicitudes_filtradas.select_related(
         'usuario', 'detalle_libranza', 'detalle_emprendimiento'
@@ -453,7 +410,7 @@ def admin_creditos_activos_view(request):
         fecha_desembolso__date=timezone.now().date()
     ).count()
 
-    creditos_filtrados = services.filtrar_creditos(request, creditos_base)
+    creditos_filtrados = credit_services.filtrar_creditos(request, creditos_base)
     
     creditos = creditos_filtrados.select_related(
         'usuario', 'detalle_libranza', 'detalle_emprendimiento'
@@ -487,7 +444,7 @@ def admin_cartera_view(request):
     creditos_en_mora = Credito.objects.filter(estado=Credito.EstadoCredito.EN_MORA)
 
     #? Aplicar filtros de búsqueda y línea de crédito
-    creditos_filtrados = services.filtrar_creditos(request, creditos_en_mora)
+    creditos_filtrados = credit_services.filtrar_creditos(request, creditos_en_mora)
     
     #? Anotaciones y ordenamiento
     # Se calcula la diferencia entre hoy y la fecha de vencimiento para poder ordenar por ella.
@@ -511,12 +468,14 @@ def admin_cartera_view(request):
     #? Estadísticas de la cartera en mora
     stats_cartera_mora = creditos_en_mora.aggregate(
         total_creditos=Count('id'),
-        monto_total_en_mora=Sum('saldo_pendiente'),
+        saldo_pendiente_total=Sum('saldo_pendiente'),
         monto_original_en_mora=Sum('total_a_pagar')
     )
+    monto_total_en_mora = credit_services.calcular_total_en_mora(creditos_en_mora)
+    stats_cartera_mora['monto_total_en_mora'] = monto_total_en_mora
 
     monto_original = stats_cartera_mora.get('monto_original_en_mora') or 0
-    monto_pendiente = stats_cartera_mora.get('monto_total_en_mora') or 0
+    monto_pendiente = stats_cartera_mora.get('saldo_pendiente_total') or 0
     
     monto_pagado = monto_original - monto_pendiente
 
@@ -577,7 +536,7 @@ def procesar_solicitud_view(request, credito_id):
     
     try:
         # Primer paso: Cambiar a APROBADO o RECHAZADO
-        services.gestionar_cambio_estado_credito(
+        credit_services.gestionar_cambio_estado_credito(
             credito=credito,
             nuevo_estado=nuevo_estado,
             usuario_modificacion=request.user,
@@ -586,7 +545,7 @@ def procesar_solicitud_view(request, credito_id):
 
         # Segundo paso (solo si se aprueba): Iniciar la preparación para la firma
         if nuevo_estado == Credito.EstadoCredito.APROBADO:
-            services.preparar_documento_para_firma(
+            credit_services.preparar_documento_para_firma(
                 credito=credito,
                 usuario_modificacion=request.user
             )
@@ -678,7 +637,7 @@ def confirmar_desembolso_view(request, credito_id):
 
     # 3. Ejecutar el cambio de estado a ACTIVO
     try:
-        services.gestionar_cambio_estado_credito(
+        credit_services.gestionar_cambio_estado_credito(
             credito=credito,
             nuevo_estado=Credito.EstadoCredito.ACTIVO,
             motivo="Desembolso confirmado y comprobante adjuntado por el equipo de finanzas.",
@@ -726,7 +685,7 @@ def agregar_pago_manual_view(request, credito_id):
 
             if detalle:
                 #? Actualizar saldo y estado usando el helper
-                services.actualizar_saldo_tras_pago(credito, monto_decimal)
+                credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
             
             messages.success(request, f"Abono de ${monto_decimal:,.2f} registrado exitosamente.")
 
@@ -837,7 +796,7 @@ def pagador_dashboard_view(request):
         'estados_choices': [choice for choice in Credito.EstadoCredito.choices if choice[0] not in ['RECHAZADO', 'SOLICITUD']],
     }
     
-    return render(request, 'gestion_creditos/pagador_dashboard.html', context)
+    return render(request, 'pagador/pagador_dashboard.html', context)
 
 @login_required
 @pagador_required
@@ -867,32 +826,189 @@ def pagador_detalle_credito_view(request, credito_id):
         'saldo_pendiente': saldo_pendiente,
     }
     
-    return render(request, 'gestion_creditos/pagador_detalle_credito.html', context)
+    return render(request, 'pagador/pagador_detalle_credito.html', context)
 
+
+@login_required
+@require_POST
+@pagador_required
+def pagador_decidir_solicitud_view(request, credito_id):
+    """
+    Permite al pagador aprobar o rechazar solicitudes de libranza de su empresa.
+    """
+    empresa = request.empresa
+    credito = get_object_or_404(
+        Credito,
+        id=credito_id,
+        linea=Credito.LineaCredito.LIBRANZA,
+        estado__in=[Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION]
+    )
+
+    if credito.detalle_libranza.empresa != empresa:
+        messages.error(request, "No tiene permiso para gestionar este credito.")
+        return redirect('pagador:dashboard')
+
+    action = request.POST.get('action')
+    motivo = (request.POST.get('motivo') or '').strip()
+
+    if action not in ['approve', 'reject']:
+        messages.error(request, "Accion no valida.")
+        return redirect('pagador:dashboard')
+
+    try:
+        if action == 'approve':
+            if credito.monto_aprobado is None:
+                credito.monto_aprobado = credito.monto_solicitado
+            if credito.plazo is None:
+                credito.plazo = credito.plazo_solicitado
+            credito.save(update_fields=['monto_aprobado', 'plazo'])
+
+            motivo_final = motivo or "Aprobado por pagador."
+            credit_services.gestionar_cambio_estado_credito(
+                credito=credito,
+                nuevo_estado=Credito.EstadoCredito.APROBADO,
+                usuario_modificacion=request.user,
+                motivo=motivo_final
+            )
+            credit_services.preparar_documento_para_firma(
+                credito=credito,
+                usuario_modificacion=request.user
+            )
+            messages.success(request, f"Credito {credito.numero_credito} aprobado.")
+        else:
+            motivo_final = motivo or "Rechazado por pagador."
+            credit_services.gestionar_cambio_estado_credito(
+                credito=credito,
+                nuevo_estado=Credito.EstadoCredito.RECHAZADO,
+                usuario_modificacion=request.user,
+                motivo=motivo_final
+            )
+            messages.warning(request, f"Credito {credito.numero_credito} rechazado.")
+    except Exception as e:
+        messages.error(request, f"Ocurrio un error al procesar la solicitud: {e}")
+        logger.error(f"Error al decidir solicitud {credito.id} por pagador: {e}", exc_info=True)
+
+    return redirect('pagador:dashboard')
 
 @login_required
 @require_POST
 @pagador_required
 def pagador_procesar_pagos_view(request):
     """
-    Procesa un archivo CSV de pagos masivos para los créditos de una empresa.
+    Valida un archivo CSV de pagos masivos y muestra confirmación para pagar con WOMPI.
     """
+    from .services.wompi_client import WompiClient, WompiAPIException
+
     empresa = request.empresa
     csv_file = request.FILES.get('csv_file')
 
     if not csv_file or not csv_file.name.endswith('.csv'):
         messages.error(request, "Por favor, suba un archivo CSV válido.")
-        return redirect('gestion_creditos:pagador_dashboard')
+        return redirect('pagador:dashboard')
 
-    pagos_exitosos, errores = services.procesar_pagos_masivos_csv(csv_file, empresa)
+    # Validar CSV sin aplicar pagos
+    pagos_validos, errores = credit_services.validar_csv_pagos_masivos(csv_file, empresa)
 
-    if pagos_exitosos > 0:
-        messages.success(request, f"Se procesaron {pagos_exitosos} pagos exitosamente.")
     if errores:
         request.session['errores_pago_masivo'] = errores
-        messages.warning(request, f"Se encontraron {len(errores)} errores. Revise los detalles.")
+        messages.error(request, f"Se encontraron {len(errores)} errores en el archivo. Por favor corrija y vuelva a intentar.")
+        return redirect('pagador:dashboard')
 
-    return redirect('gestion_creditos:pagador_dashboard')
+    if not pagos_validos:
+        messages.warning(request, "No se encontraron pagos válidos en el archivo.")
+        return redirect('pagador:dashboard')
+
+    # Calcular monto total
+    monto_total = sum(p['monto'] for p in pagos_validos)
+
+    # Guardar en sesión para procesarlos después del pago exitoso
+    request.session['pagos_csv_pendientes'] = [
+        {
+            'credito_id': p['credito_id'],
+            'cedula': p['cedula'],
+            'nombre': p['nombre'],
+            'monto': str(p['monto'])  # Convertir Decimal a string para JSON
+        }
+        for p in pagos_validos
+    ]
+
+    # Obtener tokens de WOMPI
+    client = WompiClient()
+    try:
+        acceptance_response = client.get_acceptance_token()
+        acceptance_token = acceptance_response['data']['presigned_acceptance']['acceptance_token']
+        bancos_pse = client.get_pse_financial_institutions()
+    except WompiAPIException as e:
+        logger.error(f"Error al obtener datos de WOMPI: {str(e)}")
+        messages.error(request, "Error al conectar con la pasarela de pagos. Por favor intenta más tarde.")
+        return redirect('pagador:dashboard')
+
+    context = {
+        'pagos_validos': pagos_validos,
+        'cantidad_pagos': len(pagos_validos),
+        'monto_total': int(monto_total),
+        'monto_total_centavos': int(monto_total * 100),
+        'referencia_pago': f"CSV-MASIVO-{timezone.now().strftime('%Y%m%d%H%M%S')}",
+        'acceptance_token': acceptance_token,
+        'bancos_pse': bancos_pse,
+        'customer_email': empresa.correo_contacto if hasattr(empresa, 'correo_contacto') else request.user.email,
+        'customer_name': empresa.nombre,
+        'customer_phone': empresa.telefono if hasattr(empresa, 'telefono') else '',
+        'wompi_public_key': settings.WOMPI_PUBLIC_KEY,
+    }
+
+    return render(request, 'pagador/confirmacion_pago_masivo.html', context)
+
+
+@login_required
+@pagador_required
+def descargar_csv_cuotas_pendientes_view(request):
+    """
+    Genera y descarga un archivo CSV con todas las cuotas pendientes de los empleados.
+    Los montos se redondean hacia arriba para evitar centavos.
+    """
+    import csv
+    import math
+    from django.http import HttpResponse
+
+    empresa = request.empresa
+
+    # Obtener todos los créditos activos de la empresa (incluye activos y en mora)
+    creditos = Credito.objects.filter(
+        linea=Credito.LineaCredito.LIBRANZA,
+        detalle_libranza__empresa=empresa,
+        estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]
+    ).select_related('detalle_libranza').order_by('detalle_libranza__cedula')
+
+    # Crear la respuesta HTTP con el tipo de contenido CSV
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="cuotas_pendientes_{empresa.nombre}_{timezone.now().strftime("%Y%m%d")}.csv"'
+
+    # Agregar BOM y separador para que Excel respete la coma como delimitador
+    response.write('\ufeffsep=,\n')
+
+    writer = csv.writer(response)
+    writer.writerow(['cedula', 'monto_a_pagar'])
+
+    from decimal import Decimal, ROUND_CEILING
+    for credito in creditos:
+        cedula = str(credito.detalle_libranza.cedula)
+
+        cuota = credito.tabla_amortizacion.filter(pagada=False).order_by('numero_cuota').first()
+        if cuota:
+            valor = cuota.valor_cuota - (cuota.monto_pagado or Decimal('0.00'))
+        else:
+            valor = credito.valor_cuota or Decimal('0.00')
+
+        if valor < 0:
+            valor = Decimal('0.00')
+
+        monto = int(valor.to_integral_value(rounding=ROUND_CEILING))
+
+        writer.writerow([cedula, monto])
+
+    return response
+
 
 @login_required
 @pagador_required
@@ -915,7 +1031,7 @@ def iniciar_pago_view(request, credito_id):
         'valor_cuota': valor_cuota,
         'referencia_pago': f"ONLINE-{credito.id}-{timezone.now().strftime('%Y%m%d%H%M%S%f')}"
     }
-    return render(request, 'gestion_creditos/simulacion_pago.html', context)
+    return render(request, 'pagador/simulacion_pago.html', context)
 
 
 @login_required
@@ -949,7 +1065,7 @@ def procesar_pago_callback_view(request):
                 )
 
                 #! Actualizar saldo y estado usando el helper
-                services.actualizar_saldo_tras_pago(credito, monto_decimal)
+                credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
                 
                 messages.success(request, f"Pago de ${monto_decimal:,.2f} para el crédito #{credito.id} procesado exitosamente.")
 
@@ -964,6 +1080,888 @@ def procesar_pago_callback_view(request):
 
 
 #? ============================================================================
+#? VISTAS DE WOMPI - PASARELA DE PAGOS
+#? ============================================================================
+
+@login_required
+@pagador_required
+def iniciar_pago_wompi_view(request, credito_id):
+    """
+    Muestra el formulario de selección de método de pago con WOMPI
+    """
+    from .services.wompi_client import WompiClient, WompiAPIException
+
+    credito = get_object_or_404(Credito, id=credito_id, linea=Credito.LineaCredito.LIBRANZA)
+
+    # Verificar que el pagador tenga permisos
+    if credito.detalle_libranza.empresa != request.empresa:
+        messages.error(request, "No tiene permisos para pagar este crédito.")
+        return redirect('pagador:dashboard')
+
+    valor_cuota = credito.valor_cuota
+    if not valor_cuota or valor_cuota <= 0:
+        messages.error(request, "El crédito no tiene un valor de cuota válido para pagar.")
+        return redirect('pagador:dashboard')
+
+    # Obtener acceptance token de WOMPI
+    client = WompiClient()
+    try:
+        acceptance_response = client.get_acceptance_token()
+        acceptance_token = acceptance_response['data']['presigned_acceptance']['acceptance_token']
+
+        # Obtener lista de bancos PSE
+        bancos_pse = client.get_pse_financial_institutions()
+    except WompiAPIException as e:
+        logger.error(f"Error al obtener datos de WOMPI: {str(e)}")
+        messages.error(request, "Error al conectar con la pasarela de pagos. Por favor intenta más tarde.")
+        return redirect('pagador:dashboard')
+
+    context = {
+        'credito': credito,
+        'valor_cuota': int(valor_cuota),
+        'valor_cuota_centavos': int(valor_cuota * 100),  # Convertir a centavos
+        'referencia_pago': f"CUOTA-{credito.id}-{timezone.now().strftime('%Y%m%d%H%M%S')}",
+        'acceptance_token': acceptance_token,
+        'bancos_pse': bancos_pse,
+        'customer_email': credito.detalle_libranza.correo_electronico,
+        'customer_name': credito.detalle_libranza.nombre_completo,
+        'customer_phone': credito.detalle_libranza.telefono,
+        'wompi_public_key': settings.WOMPI_PUBLIC_KEY,
+    }
+
+    return render(request, 'pagador/pago_wompi.html', context)
+
+
+@login_required
+def iniciar_pago_wompi_emprendimiento_view(request, credito_id):
+    """
+    Muestra el formulario de pago con WOMPI para clientes de emprendimiento.
+    """
+    from .services.wompi_client import WompiClient, WompiAPIException
+
+    if not settings.WOMPI_PUBLIC_KEY or not settings.WOMPI_PRIVATE_KEY:
+        messages.error(request, "Configuración WOMPI incompleta. Verifica las llaves en el entorno.")
+        return redirect('emprendimiento:mi_credito')
+
+    credito = get_object_or_404(
+        Credito,
+        id=credito_id,
+        linea=Credito.LineaCredito.EMPRENDIMIENTO,
+        usuario=request.user
+    )
+
+    tipo_pago = (request.GET.get('tipo') or 'CUOTA').upper()
+    monto_param = request.GET.get('monto')
+    monto = None
+
+    if monto_param:
+        try:
+            monto = Decimal(str(monto_param))
+        except Exception:
+            monto = None
+
+    cuotas_pendientes = credito.tabla_amortizacion.filter(pagada=False)
+    total_pagar = sum((cuota.valor_cuota for cuota in cuotas_pendientes), Decimal('0.00'))
+
+    if tipo_pago == 'TOTAL':
+        monto = total_pagar
+    elif tipo_pago == 'CAPITAL':
+        if monto is None or monto <= 0 or monto > credito.capital_pendiente:
+            messages.error(request, "El monto del abono a capital no es válido.")
+            return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+    elif tipo_pago == 'NORMAL':
+        if monto is None or monto <= 0 or not credito.valor_cuota or monto > credito.valor_cuota:
+            messages.error(request, "El monto del abono normal no es válido.")
+            return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+    else:
+        tipo_pago = 'CUOTA'
+
+    if monto is None:
+        monto = credito.valor_cuota
+
+    if not monto or monto <= 0:
+        messages.error(request, "El crédito no tiene un valor válido para pagar.")
+        return redirect('emprendimiento:mi_credito')
+
+    client = WompiClient()
+    try:
+        acceptance_response = client.get_acceptance_token()
+        acceptance_token = acceptance_response['data']['presigned_acceptance']['acceptance_token']
+        bancos_pse = client.get_pse_financial_institutions()
+    except WompiAPIException as e:
+        logger.error(f"Error al obtener datos de WOMPI: {str(e)}")
+        messages.error(request, "Error al conectar con la pasarela de pagos. Por favor intenta más tarde.")
+        return redirect('emprendimiento:mi_credito')
+
+    detalle = getattr(credito, 'detalle_emprendimiento', None)
+    customer_name = detalle.nombre if detalle else request.user.get_full_name()
+    customer_cedula = detalle.numero_cedula if detalle else ''
+    customer_phone = detalle.celular_wh if detalle else ''
+
+    context = {
+        'credito': credito,
+        'valor_cuota': int(monto),
+        'valor_cuota_centavos': int(monto * 100),
+        'referencia_pago': f"CUOTA-{credito.id}-{timezone.now().strftime('%Y%m%d%H%M%S')}",
+        'acceptance_token': acceptance_token,
+        'bancos_pse': bancos_pse,
+        'customer_email': request.user.email,
+        'customer_name': customer_name or request.user.username,
+        'customer_cedula': customer_cedula,
+        'customer_phone': customer_phone,
+        'wompi_public_key': settings.WOMPI_PUBLIC_KEY,
+        'tipo_pago': tipo_pago,
+    }
+
+    return render(request, 'usuariocreditos/pago_wompi_emprendimiento.html', context)
+
+
+@login_required
+@require_POST
+def procesar_pago_wompi_emprendimiento_view(request):
+    """
+    Procesa el pago con WOMPI para clientes de emprendimiento.
+    """
+    from .services.wompi_client import WompiClient, WompiAPIException
+
+    try:
+        payment_method_type = request.POST.get('payment_method')
+        credito_id = request.POST.get('credito_id')
+        amount_in_cents = int(request.POST.get('amount_in_cents'))
+        reference = request.POST.get('reference')
+        customer_email = request.POST.get('customer_email')
+        acceptance_token = request.POST.get('acceptance_token')
+        tipo_pago = (request.POST.get('tipo_pago') or 'CUOTA').upper()
+
+        credito = get_object_or_404(
+            Credito,
+            id=credito_id,
+            linea=Credito.LineaCredito.EMPRENDIMIENTO,
+            usuario=request.user
+        )
+
+        client = WompiClient()
+        redirect_url = request.build_absolute_uri(reverse('emprendimiento:pago_wompi_callback'))
+
+        if payment_method_type == 'CARD':
+            card_token_response = client.tokenize_card(
+                card_number=request.POST.get('card_number').replace(' ', ''),
+                cvc=request.POST.get('cvc'),
+                exp_month=request.POST.get('exp_month'),
+                exp_year=request.POST.get('exp_year'),
+                card_holder=request.POST.get('card_holder')
+            )
+            card_token = card_token_response['data']['id']
+
+            payment_method = WompiClient.build_card_payment_method(
+                token=card_token,
+                installments=int(request.POST.get('installments', 1))
+            )
+            customer_data = None
+
+        elif payment_method_type == 'PSE':
+            payment_method = WompiClient.build_pse_payment_method(
+                financial_institution_code=request.POST.get('financial_institution_code'),
+                user_type=int(request.POST.get('user_type')),
+                user_legal_id_type=request.POST.get('user_legal_id_type'),
+                user_legal_id=request.POST.get('user_legal_id'),
+                payment_description=f"Pago cuota {reference}"
+            )
+            customer_data = WompiClient.build_customer_data(
+                phone_number=f"57{request.POST.get('phone_number')}",
+                full_name=request.POST.get('full_name')
+            )
+
+        elif payment_method_type == 'NEQUI':
+            payment_method = WompiClient.build_nequi_payment_method(
+                phone_number=request.POST.get('nequi_phone')
+            )
+            customer_data = None
+
+        elif payment_method_type == 'BANCOLOMBIA_TRANSFER':
+            payment_method = WompiClient.build_bancolombia_transfer_payment_method(
+                payment_description=f"Pago cuota {reference}"
+            )
+            customer_data = None
+        else:
+            messages.error(request, "Método de pago no válido.")
+            return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+
+        transaction = client.create_transaction(
+            amount_in_cents=amount_in_cents,
+            currency='COP',
+            customer_email=customer_email,
+            payment_method=payment_method,
+            reference=reference,
+            acceptance_token=acceptance_token,
+            redirect_url=redirect_url,
+            customer_data=customer_data
+        )
+
+        request.session['wompi_transaction_id_empr'] = transaction['data']['id']
+        request.session['wompi_credito_id_empr'] = credito_id
+        request.session['wompi_reference_empr'] = reference
+        request.session['wompi_tipo_pago_empr'] = tipo_pago
+
+        if payment_method_type in ['PSE', 'NEQUI', 'BANCOLOMBIA_TRANSFER']:
+            async_url = transaction['data']['payment_method']['extra']['async_payment_url']
+            return redirect(async_url)
+
+        status = transaction['data']['status']
+        if status == 'APPROVED':
+            monto_decimal = Decimal(amount_in_cents) / 100
+            if tipo_pago == 'CAPITAL':
+                credit_services.aplicar_abono_credito(
+                    credito=credito,
+                    monto_abono=monto_decimal,
+                    tipo_abono='CAPITAL',
+                    usuario=request.user,
+                    referencia_pago=reference
+                )
+                messages.success(request, f"Abono a capital de ${monto_decimal:,.2f} aplicado exitosamente.")
+            else:
+                HistorialPago.objects.create(
+                    credito=credito,
+                    monto=monto_decimal,
+                    referencia_pago=reference,
+                    estado=HistorialPago.EstadoPago.EXITOSO
+                )
+                credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
+                messages.success(request, f"Pago de ${monto_decimal:,.2f} procesado exitosamente.")
+            return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+        elif status == 'DECLINED':
+            messages.error(request, "El pago fue rechazado. Por favor intenta con otro método.")
+            return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+        else:
+            messages.warning(request, "El pago está pendiente de confirmación.")
+            return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+
+    except WompiAPIException as e:
+        logger.error(f"Error en WOMPI: {str(e)}")
+        messages.error(request, f"Error al procesar el pago: {str(e)}")
+        return redirect('emprendimiento:mi_credito')
+    except Exception as e:
+        logger.error(f"Error inesperado: {str(e)}")
+        messages.error(request, "Ocurrió un error inesperado. Por favor intenta de nuevo.")
+        return redirect('emprendimiento:mi_credito')
+
+
+@login_required
+@require_http_methods(["GET"])
+def pago_wompi_emprendimiento_callback_view(request):
+    """
+    Callback de WOMPI para clientes de emprendimiento.
+    """
+    from .services.wompi_client import WompiClient, WompiAPIException
+
+    transaction_id = request.GET.get('id') or request.session.get('wompi_transaction_id_empr')
+
+    if not transaction_id:
+        messages.error(request, "No se encontró información de la transacción.")
+        return redirect('emprendimiento:mi_credito')
+
+    client = WompiClient()
+
+    try:
+        transaction = client.get_transaction(transaction_id)
+        status = transaction['data']['status']
+
+        credito_id = request.session.get('wompi_credito_id_empr')
+        reference = request.session.get('wompi_reference_empr')
+        tipo_pago = (request.session.get('wompi_tipo_pago_empr') or 'CUOTA').upper()
+
+        if not credito_id:
+            messages.error(request, "Sesión expirada. Por favor intenta de nuevo.")
+            return redirect('emprendimiento:mi_credito')
+
+        credito = get_object_or_404(
+            Credito,
+            id=credito_id,
+            linea=Credito.LineaCredito.EMPRENDIMIENTO,
+            usuario=request.user
+        )
+
+        if status == 'APPROVED':
+            monto_decimal = Decimal(transaction['data']['amount_in_cents']) / 100
+            if tipo_pago == 'CAPITAL':
+                credit_services.aplicar_abono_credito(
+                    credito=credito,
+                    monto_abono=monto_decimal,
+                    tipo_abono='CAPITAL',
+                    usuario=request.user,
+                    referencia_pago=reference
+                )
+                messages.success(request, f"Abono a capital de ${monto_decimal:,.2f} aplicado exitosamente.")
+            else:
+                HistorialPago.objects.create(
+                    credito=credito,
+                    monto=monto_decimal,
+                    referencia_pago=reference,
+                    estado=HistorialPago.EstadoPago.EXITOSO
+                )
+                credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
+                messages.success(request, f"Pago de ${monto_decimal:,.2f} procesado exitosamente.")
+        elif status == 'DECLINED':
+            messages.error(request, "El pago fue rechazado.")
+        else:
+            messages.warning(request, f"El pago está en estado: {status}")
+
+        request.session.pop('wompi_transaction_id_empr', None)
+        request.session.pop('wompi_credito_id_empr', None)
+        request.session.pop('wompi_reference_empr', None)
+        request.session.pop('wompi_tipo_pago_empr', None)
+
+        return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+
+    except WompiAPIException as e:
+        logger.error(f"Error al consultar transacción: {str(e)}")
+        messages.error(request, "Error al verificar el estado del pago.")
+        return redirect('emprendimiento:mi_credito')
+@login_required
+@pagador_required
+@require_POST
+def procesar_pago_wompi_view(request):
+    """
+    Procesa el pago con WOMPI según el método seleccionado
+    """
+    from .services.wompi_client import WompiClient, WompiAPIException
+
+    try:
+        # Obtener datos del formulario
+        payment_method_type = request.POST.get('payment_method')
+        credito_id = request.POST.get('credito_id')
+        amount_in_cents = int(request.POST.get('amount_in_cents'))
+        reference = request.POST.get('reference')
+        customer_email = request.POST.get('customer_email')
+        acceptance_token = request.POST.get('acceptance_token')
+
+        credito = get_object_or_404(Credito, id=credito_id)
+
+        # Verificar permisos
+        if credito.detalle_libranza.empresa != request.empresa:
+            messages.error(request, "No tiene permisos para pagar este crédito.")
+            return redirect('pagador:dashboard')
+
+        client = WompiClient()
+        redirect_url = request.build_absolute_uri('/pagador/pago/callback/')
+
+        # Construir payment_method según el tipo seleccionado
+        if payment_method_type == 'CARD':
+            # Tokenizar tarjeta
+            card_token_response = client.tokenize_card(
+                card_number=request.POST.get('card_number').replace(' ', ''),
+                cvc=request.POST.get('cvc'),
+                exp_month=request.POST.get('exp_month'),
+                exp_year=request.POST.get('exp_year'),
+                card_holder=request.POST.get('card_holder')
+            )
+            card_token = card_token_response['data']['id']
+
+            payment_method = WompiClient.build_card_payment_method(
+                token=card_token,
+                installments=int(request.POST.get('installments', 1))
+            )
+            customer_data = None
+
+        elif payment_method_type == 'PSE':
+            payment_method = WompiClient.build_pse_payment_method(
+                financial_institution_code=request.POST.get('financial_institution_code'),
+                user_type=int(request.POST.get('user_type')),
+                user_legal_id_type=request.POST.get('user_legal_id_type'),
+                user_legal_id=request.POST.get('user_legal_id'),
+                payment_description=f"Pago cuota {reference}"
+            )
+            customer_data = WompiClient.build_customer_data(
+                phone_number=f"57{request.POST.get('phone_number')}",
+                full_name=request.POST.get('full_name')
+            )
+
+        elif payment_method_type == 'NEQUI':
+            payment_method = WompiClient.build_nequi_payment_method(
+                phone_number=request.POST.get('nequi_phone')
+            )
+            customer_data = None
+
+        elif payment_method_type == 'BANCOLOMBIA_TRANSFER':
+            payment_method = WompiClient.build_bancolombia_transfer_payment_method(
+                payment_description=f"Pago cuota {reference}"
+            )
+            customer_data = None
+        else:
+            messages.error(request, "Método de pago no válido.")
+            return redirect('pagador:dashboard')
+
+        # Crear transacción en WOMPI
+        transaction = client.create_transaction(
+            amount_in_cents=amount_in_cents,
+            currency='COP',
+            customer_email=customer_email,
+            payment_method=payment_method,
+            reference=reference,
+            acceptance_token=acceptance_token,
+            redirect_url=redirect_url,
+            customer_data=customer_data
+        )
+
+        # Guardar transaction_id en sesión
+        request.session['wompi_transaction_id'] = transaction['data']['id']
+        request.session['credito_id'] = credito_id
+        request.session['reference'] = reference
+
+        # Si es método asíncrono, redirigir a la URL de pago
+        if payment_method_type in ['PSE', 'NEQUI', 'BANCOLOMBIA_TRANSFER']:
+            async_url = transaction['data']['payment_method']['extra']['async_payment_url']
+            return redirect(async_url)
+
+        # Si es tarjeta, verificar estado inmediatamente
+        status = transaction['data']['status']
+        if status == 'APPROVED':
+            # Registrar el pago
+            monto_decimal = Decimal(amount_in_cents) / 100
+            HistorialPago.objects.create(
+                credito=credito,
+                monto=monto_decimal,
+                referencia_pago=reference,
+                estado=HistorialPago.EstadoPago.EXITOSO
+            )
+            credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
+            messages.success(request, f"Pago de ${monto_decimal:,.2f} procesado exitosamente.")
+            return redirect('pagador:dashboard')
+        elif status == 'DECLINED':
+            messages.error(request, "El pago fue rechazado. Por favor intenta con otro método.")
+            return redirect('pagador:dashboard')
+        else:
+            messages.warning(request, "El pago está pendiente de confirmación.")
+            return redirect('pagador:dashboard')
+
+    except WompiAPIException as e:
+        logger.error(f"Error en WOMPI: {str(e)}")
+        messages.error(request, f"Error al procesar el pago: {str(e)}")
+        return redirect('pagador:dashboard')
+    except Exception as e:
+        logger.error(f"Error inesperado: {str(e)}")
+        messages.error(request, "Ocurrió un error inesperado. Por favor intenta de nuevo.")
+        return redirect('pagador:dashboard')
+
+
+@require_http_methods(["GET"])
+def pago_wompi_callback_view(request):
+    """
+    Callback después de que el usuario completa el pago en WOMPI (PSE, Nequi, Bancolombia)
+    """
+    from .services.wompi_client import WompiClient, WompiAPIException
+
+    transaction_id = request.GET.get('id') or request.session.get('wompi_transaction_id')
+
+    if not transaction_id:
+        messages.error(request, "No se encontró información de la transacción.")
+        return redirect('pagador:dashboard')
+
+    client = WompiClient()
+
+    try:
+        wompi_transaction = client.get_transaction(transaction_id)
+        status = wompi_transaction['data']['status']
+
+        # Verificar si es un pago masivo CSV
+        pagos_csv_pendientes = request.session.get('pagos_csv_pendientes')
+
+        if pagos_csv_pendientes:
+            # PAGO MASIVO CSV
+            reference = request.session.get('reference', f"CSV-MASIVO-{timezone.now().strftime('%Y%m%d%H%M%S')}")
+
+            if status == 'APPROVED':
+                monto_total = Decimal(wompi_transaction['data']['amount_in_cents']) / 100
+                pagos_exitosos = 0
+
+                with transaction.atomic():
+                    for pago_info in pagos_csv_pendientes:
+                        credito = Credito.objects.filter(id=pago_info['credito_id']).first()
+                        if credito:
+                            monto_pago = Decimal(pago_info['monto'])
+
+                            # Crear registro de pago
+                            HistorialPago.objects.create(
+                                credito=credito,
+                                monto=monto_pago,
+                                referencia_pago=f"{reference}-{credito.id}",
+                                estado=HistorialPago.EstadoPago.EXITOSO
+                            )
+
+                            # Actualizar saldo
+                            credit_services.actualizar_saldo_tras_pago(credito, monto_pago)
+                            pagos_exitosos += 1
+
+                messages.success(request, f"¡Pago masivo procesado exitosamente! Se aplicaron {pagos_exitosos} pagos por un total de ${monto_total:,.2f}")
+            elif status == 'DECLINED':
+                messages.error(request, "El pago fue rechazado. No se aplicaron los pagos del CSV.")
+            else:
+                messages.warning(request, f"El pago está en estado: {status}")
+
+            # Limpiar sesión
+            request.session.pop('pagos_csv_pendientes', None)
+            request.session.pop('wompi_transaction_id', None)
+            request.session.pop('reference', None)
+
+        else:
+            # PAGO INDIVIDUAL
+            credito_id = request.session.get('credito_id')
+            reference = request.session.get('reference')
+
+            if not credito_id:
+                messages.error(request, "Sesión expirada. Por favor intenta de nuevo.")
+                return redirect('pagador:dashboard')
+
+            credito = get_object_or_404(Credito, id=credito_id)
+
+            if status == 'APPROVED':
+                # Registrar el pago
+                monto_decimal = Decimal(wompi_transaction['data']['amount_in_cents']) / 100
+                HistorialPago.objects.create(
+                    credito=credito,
+                    monto=monto_decimal,
+                    referencia_pago=reference,
+                    estado=HistorialPago.EstadoPago.EXITOSO
+                )
+                credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
+                messages.success(request, f"Pago de ${monto_decimal:,.2f} procesado exitosamente.")
+            elif status == 'DECLINED':
+                messages.error(request, "El pago fue rechazado.")
+            else:
+                messages.warning(request, f"El pago está en estado: {status}")
+
+            # Limpiar sesión
+            request.session.pop('wompi_transaction_id', None)
+            request.session.pop('credito_id', None)
+            request.session.pop('reference', None)
+
+    except WompiAPIException as e:
+        logger.error(f"Error al consultar transacción: {str(e)}")
+        messages.error(request, "Error al verificar el estado del pago.")
+
+    return redirect('pagador:dashboard')
+
+
+@login_required
+@pagador_required
+def iniciar_pago_masivo_wompi_view(request):
+    """
+    Muestra el formulario de selección de método de pago con WOMPI para pagos masivos
+    """
+    from .services.wompi_client import WompiClient, WompiAPIException
+
+    if request.method != 'POST':
+        messages.error(request, "Método no permitido.")
+        return redirect('pagador:dashboard')
+
+    # Obtener IDs de créditos seleccionados
+    creditos_ids_str = request.POST.get('creditos_ids', '')
+    if not creditos_ids_str:
+        messages.error(request, "No se seleccionaron créditos para pagar.")
+        return redirect('pagador:dashboard')
+
+    try:
+        creditos_ids = [int(id.strip()) for id in creditos_ids_str.split(',') if id.strip()]
+    except ValueError:
+        messages.error(request, "IDs de créditos inválidos.")
+        return redirect('pagador:dashboard')
+
+    if not creditos_ids:
+        messages.error(request, "No se seleccionaron créditos válidos.")
+        return redirect('pagador:dashboard')
+
+    # Obtener créditos
+    creditos = Credito.objects.filter(
+        id__in=creditos_ids,
+        linea=Credito.LineaCredito.LIBRANZA,
+        detalle_libranza__empresa=request.empresa,
+        estado=Credito.EstadoCredito.ACTIVO
+    ).select_related('detalle_libranza')
+
+    if not creditos.exists():
+        messages.error(request, "No se encontraron créditos válidos para pagar.")
+        return redirect('pagador:dashboard')
+
+    # Calcular monto total
+    monto_total = sum(c.valor_cuota for c in creditos if c.valor_cuota)
+    if monto_total <= 0:
+        messages.error(request, "El monto total a pagar es inválido.")
+        return redirect('pagador:dashboard')
+
+    # Obtener acceptance token de WOMPI
+    client = WompiClient()
+    try:
+        acceptance_response = client.get_acceptance_token()
+        acceptance_token = acceptance_response['data']['presigned_acceptance']['acceptance_token']
+
+        # Obtener lista de bancos PSE
+        bancos_pse = client.get_pse_financial_institutions()
+    except WompiAPIException as e:
+        logger.error(f"Error al obtener datos de WOMPI: {str(e)}")
+        messages.error(request, "Error al conectar con la pasarela de pagos. Por favor intenta más tarde.")
+        return redirect('pagador:dashboard')
+
+    # Guardar en sesión
+    request.session['creditos_ids_pago_masivo'] = creditos_ids
+    request.session['monto_total_pago_masivo'] = str(monto_total)
+
+    context = {
+        'creditos': creditos,
+        'cantidad_creditos': creditos.count(),
+        'monto_total': int(monto_total),
+        'monto_total_centavos': int(monto_total * 100),  # Convertir a centavos
+        'referencia_pago': f"MASIVO-{timezone.now().strftime('%Y%m%d%H%M%S')}",
+        'acceptance_token': acceptance_token,
+        'bancos_pse': bancos_pse,
+        'customer_email': request.empresa.correo_contacto if hasattr(request.empresa, 'correo_contacto') else request.user.email,
+        'customer_name': request.empresa.nombre,
+        'customer_phone': request.empresa.telefono if hasattr(request.empresa, 'telefono') else '',
+        'wompi_public_key': settings.WOMPI_PUBLIC_KEY,
+    }
+
+    return render(request, 'pagador/pago_masivo_wompi.html', context)
+
+
+@require_http_methods(["GET"])
+def get_pse_banks_view(request):
+    """
+    API endpoint para obtener la lista de bancos PSE
+    """
+    from .services.wompi_client import WompiClient, WompiAPIException
+
+    client = WompiClient()
+    try:
+        banks = client.get_pse_financial_institutions()
+        return JsonResponse(banks, safe=False)
+    except WompiAPIException as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def wompi_webhook_view(request):
+    """
+    Webhook de WOMPI para recibir notificaciones de eventos de pago.
+
+    Eventos que maneja:
+    - transaction.updated: Cuando una transacción cambia de estado
+
+    IMPORTANTE: Este endpoint debe estar accesible públicamente sin autenticación
+    para que WOMPI pueda enviar las notificaciones.
+    """
+    from .services.wompi_client import WompiClient
+    import hashlib
+    import hmac
+
+    try:
+        # Leer el cuerpo de la petición
+        import json
+        payload = json.loads(request.body.decode('utf-8'))
+
+        # Validar la firma del webhook (integridad del mensaje)
+        signature_header = request.headers.get('X-Event-Checksum', '')
+
+        # Verificar la firma usando el EVENTS_SECRET
+        expected_signature = hmac.new(
+            settings.WOMPI_EVENTS_SECRET.encode('utf-8'),
+            request.body,
+            hashlib.sha256
+        ).hexdigest()
+
+        if not hmac.compare_digest(signature_header, expected_signature):
+            logger.warning(f"Firma inválida en webhook de WOMPI. Esperada: {expected_signature}, Recibida: {signature_header}")
+            return JsonResponse({'error': 'Invalid signature'}, status=401)
+
+        # Procesar el evento
+        event_type = payload.get('event')
+        data = payload.get('data', {})
+
+        logger.info(f"Webhook WOMPI recibido: {event_type}")
+
+        if event_type == 'transaction.updated':
+            transaction_data = data.get('transaction', {})
+            transaction_id = transaction_data.get('id')
+            status = transaction_data.get('status')
+            reference = transaction_data.get('reference')
+            amount_in_cents = transaction_data.get('amount_in_cents')
+
+            logger.info(f"Transacción {transaction_id} actualizada a estado: {status}, Referencia: {reference}")
+
+            # Buscar el crédito por la referencia
+            # La referencia tiene formato: CUOTA-{credito_id}-{timestamp}
+            if reference and reference.startswith('CUOTA-'):
+                try:
+                    credito_id = reference.split('-')[1]
+                    credito = Credito.objects.get(id=credito_id)
+
+                    if status == 'APPROVED':
+                        # Registrar el pago
+                        monto_decimal = Decimal(amount_in_cents) / 100
+
+                        # Verificar si el pago ya existe (evitar duplicados)
+                        pago_existente = HistorialPago.objects.filter(
+                            referencia_pago=reference
+                        ).first()
+
+                        if not pago_existente:
+                            with transaction.atomic():
+                                HistorialPago.objects.create(
+                                    credito=credito,
+                                    monto=monto_decimal,
+                                    referencia_pago=reference,
+                                    estado=HistorialPago.EstadoPago.EXITOSO
+                                )
+                                credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
+                                logger.info(f"Pago de ${monto_decimal} registrado exitosamente para crédito {credito_id}")
+                        else:
+                            logger.info(f"Pago con referencia {reference} ya existe, omitiendo.")
+
+                    elif status == 'DECLINED' or status == 'ERROR':
+                        logger.warning(f"Pago rechazado para crédito {credito_id}: {status}")
+                        # Opcionalmente registrar el intento fallido
+
+                except (IndexError, Credito.DoesNotExist) as e:
+                    logger.error(f"Error al procesar referencia {reference}: {str(e)}")
+
+        return JsonResponse({'status': 'ok'}, status=200)
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Error al decodificar JSON del webhook: {str(e)}")
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logger.error(f"Error inesperado en webhook de WOMPI: {str(e)}")
+        return JsonResponse({'error': 'Internal server error'}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def zapsign_webhook_view(request):
+    """
+    Webhook de ZapSign para eventos de firma de pagarés.
+    Este endpoint debe estar accesible públicamente sin autenticación.
+    """
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+    except json.JSONDecodeError as e:
+        logger.error(f"Error al decodificar JSON del webhook de ZapSign: {str(e)}")
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    doc_token = payload.get('token') or payload.get('doc_token')
+    event = payload.get('event') or payload.get('event_type') or ''
+
+    ip_address = request.META.get('REMOTE_ADDR') or '0.0.0.0'
+    headers = {
+        key: str(value)
+        for key, value in request.META.items()
+        if key.startswith('HTTP_')
+    }
+
+    webhook_log = ZapSignWebhookLog.objects.create(
+        doc_token=doc_token or '',
+        event=event or '',
+        payload=payload,
+        headers=headers,
+        ip_address=ip_address,
+        signature_valid=False,
+        processed=False
+    )
+
+    secret_expected = getattr(settings, 'ZAPSIGN_WEBHOOK_SECRET', '') or ''
+    header_name = getattr(settings, 'ZAPSIGN_WEBHOOK_HEADER', 'X-ZapSign-Secret') or 'X-ZapSign-Secret'
+    if secret_expected:
+        secret_received = request.headers.get(header_name, '')
+        if header_name.lower() == 'authorization' and secret_received.lower().startswith('bearer '):
+            secret_received = secret_received[7:]
+
+        if secret_received != secret_expected:
+            webhook_log.error_message = "Secret token inv?lido"
+            webhook_log.save(update_fields=['error_message'])
+            logger.warning(f"Webhook ZapSign rechazado: secret inv?lido desde {ip_address}")
+            return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+    webhook_log.signature_valid = True
+    webhook_log.save(update_fields=['signature_valid'])
+
+
+    try:
+        with transaction.atomic():
+            if event == 'doc_signed':
+                if not doc_token:
+                    webhook_log.error_message = "Falta token del documento"
+                    webhook_log.save(update_fields=['error_message'])
+                    return JsonResponse({'error': 'Missing document token'}, status=400)
+
+                pagare = Pagare.objects.select_for_update().get(zapsign_doc_token=doc_token)
+
+                if pagare.estado == Pagare.EstadoPagare.SIGNED:
+                    webhook_log.processed = True
+                    webhook_log.save(update_fields=['processed'])
+                    return JsonResponse({'status': 'already_processed'}, status=200)
+
+                credito = pagare.credito
+                if credito.estado != Credito.EstadoCredito.PENDIENTE_FIRMA:
+                    webhook_log.error_message = f"Estado inválido del crédito: {credito.estado}"
+                    webhook_log.save(update_fields=['error_message'])
+                    return JsonResponse({'error': 'Invalid credit state'}, status=400)
+
+                pagare.estado = Pagare.EstadoPagare.SIGNED
+                pagare.fecha_firma = timezone.now()
+                pagare.zapsign_status = payload.get('status')
+                signed_url = payload.get('signed_file_url') or payload.get('signed_file')
+                if signed_url:
+                    pagare.zapsign_signed_file_url = signed_url
+                signers = payload.get('signers') or []
+                if signers:
+                    ip_firmante = signers[0].get('ip') or signers[0].get('ip_address')
+                    if ip_firmante:
+                        pagare.ip_firmante = ip_firmante
+                pagare.evidencias = payload
+                pagare.save()
+
+                credit_services.gestionar_cambio_estado_credito(
+                    credito=credito,
+                    nuevo_estado=Credito.EstadoCredito.FIRMADO,
+                    motivo="Pagaré firmado por ZapSign"
+                )
+                credit_services.iniciar_proceso_desembolso(credito)
+
+                webhook_log.processed = True
+                webhook_log.save(update_fields=['processed'])
+                return JsonResponse({'status': 'ok'}, status=200)
+
+            if event == 'doc_refused':
+                if not doc_token:
+                    webhook_log.error_message = "Falta token del documento"
+                    webhook_log.save(update_fields=['error_message'])
+                    return JsonResponse({'error': 'Missing document token'}, status=400)
+
+                pagare = Pagare.objects.select_for_update().get(zapsign_doc_token=doc_token)
+                pagare.estado = Pagare.EstadoPagare.REFUSED
+                pagare.fecha_rechazo = timezone.now()
+                pagare.zapsign_status = payload.get('status')
+                pagare.evidencias = payload
+                pagare.save()
+
+                webhook_log.processed = True
+                webhook_log.save(update_fields=['processed'])
+                return JsonResponse({'status': 'refused_recorded'}, status=200)
+
+            webhook_log.processed = True
+            webhook_log.save(update_fields=['processed'])
+            return JsonResponse({'status': 'event_ignored'}, status=200)
+
+    except Pagare.DoesNotExist:
+        webhook_log.error_message = f"Documento no encontrado: {doc_token}"
+        webhook_log.save(update_fields=['error_message'])
+        return JsonResponse({'error': 'Document not found'}, status=404)
+    except Exception as e:
+        webhook_log.error_message = str(e)
+        webhook_log.save(update_fields=['error_message'])
+        logger.error(f"Error procesando webhook ZapSign {doc_token}: {str(e)}")
+        return JsonResponse({'error': 'Internal server error'}, status=500)
+
+
+#? ============================================================================
 #? VISTAS DE BILLETERA DIGITAL - USUARIO
 #? ============================================================================
 
@@ -973,7 +1971,7 @@ def billetera_digital_view(request):
     Vista principal de la billetera digital del usuario.
     Muestra saldo, estadísticas, movimientos e impacto social.
     """
-    context = services.get_billetera_context(request.user)
+    context = credit_services.get_billetera_context(request.user)
     return render(request, 'Billetera/billetera_digital.html', context)
 
 
@@ -1061,7 +2059,7 @@ def admin_billetera_dashboard_view(request):
         'form_abono_manual': form_abono_manual,
     }
     
-    return render(request, 'billetera/admin_billetera_dashboard.html', context)
+    return render(request, 'admin/billetera_dashboard.html', context)
 
 
 @staff_member_required
@@ -1072,7 +2070,7 @@ def aprobar_consignacion_view(request, movimiento_id):
     """
     nota_admin = request.POST.get('nota_admin', 'Consignación aprobada')
     try:
-        movimiento = services.gestionar_consignacion_billetera(
+        movimiento = credit_services.gestionar_consignacion_billetera(
             movimiento_id=movimiento_id,
             es_aprobado=True,
             usuario_admin=request.user,
@@ -1102,7 +2100,7 @@ def rechazar_consignacion_view(request, movimiento_id):
     """
     motivo_rechazo = request.POST.get('motivo', 'Sin motivo especificado')
     try:
-        movimiento = services.gestionar_consignacion_billetera(
+        movimiento = credit_services.gestionar_consignacion_billetera(
             movimiento_id=movimiento_id,
             es_aprobado=False,
             usuario_admin=request.user,
@@ -1131,7 +2129,7 @@ def cargar_abono_manual_view(request):
     
     if form.is_valid():
         try:
-            movimiento = services.crear_ajuste_manual_billetera(
+            movimiento = credit_services.crear_ajuste_manual_billetera(
                 admin_user=request.user,
                 user_email=form.cleaned_data['usuario_email'],
                 monto=form.cleaned_data['monto'],
@@ -1153,3 +2151,391 @@ def cargar_abono_manual_view(request):
                 messages.error(request, f'{field}: {error}')
     
     return redirect('gestion_creditos:admin_billetera_dashboard')
+
+
+#? ===================================================================
+#? VISTAS DE ABONOS AL CRÉDITO Y REESTRUCTURACIÓN
+#? ===================================================================
+
+@login_required
+@require_http_methods(["GET"])
+def calcular_pago_total_view(request, credito_id):
+    """
+    API endpoint que calcula el monto total para liquidar completamente el crédito.
+
+    Calcula: Capital Pendiente + Intereses Acumulados
+
+    Returns:
+        JSON con:
+        - capital_pendiente
+        - intereses_acumulados
+        - total_pagar
+    """
+    try:
+        credito = get_object_or_404(Credito, id=credito_id, usuario=request.user)
+
+        # Validar que el crédito esté activo
+        if credito.estado not in [Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]:
+            return JsonResponse({
+                'success': False,
+                'error': 'El crédito debe estar activo para calcular el pago total.'
+            }, status=400)
+
+        # Calcular el total desde la tabla de amortización pendiente
+        cuotas_pendientes = credito.tabla_amortizacion.filter(pagada=False)
+
+        capital_pendiente = sum(
+            (cuota.capital_a_pagar for cuota in cuotas_pendientes),
+            Decimal('0.00')
+        )
+        intereses_totales = sum(
+            (cuota.interes_a_pagar for cuota in cuotas_pendientes),
+            Decimal('0.00')
+        )
+        total_pagar = sum(
+            (cuota.valor_cuota for cuota in cuotas_pendientes),
+            Decimal('0.00')
+        )
+
+        return JsonResponse({
+            'success': True,
+            'capital_pendiente': float(capital_pendiente),
+            'intereses_acumulados': float(intereses_totales),
+            'total_pagar': float(total_pagar)
+        })
+
+    except Exception as e:
+        logger.error(f"Error al calcular pago total para crédito {credito_id}: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Error al calcular el pago total.'
+        }, status=500)
+
+
+def analizar_abono_credito_view(request, credito_id):
+    """
+    API endpoint que analiza un abono propuesto y devuelve información
+    sobre la reestructuración, ahorro de intereses, etc.
+
+    POST params:
+        - tipo_abono: 'CUOTAS' o 'CAPITAL'
+        - num_cuotas: número de cuotas a pagar (si tipo='CUOTAS')
+        - monto_capital: monto a abonar a capital (si tipo='CAPITAL')
+
+    Returns:
+        JSON con análisis del abono
+    """
+    try:
+        content_type = request.headers.get('Content-Type', '')
+        is_json = content_type.startswith('application/json')
+        data = request.POST
+        if is_json:
+            try:
+                data = json.loads(request.body.decode('utf-8') or '{}')
+            except json.JSONDecodeError:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'JSON inválido.'
+                }, status=400)
+
+        credito = get_object_or_404(Credito, id=credito_id, usuario=request.user)
+
+        # Validar que el crédito esté activo
+        if credito.estado not in [Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]:
+            return JsonResponse({
+                'success': False,
+                'error': 'El crédito debe estar activo para realizar abonos.'
+            }, status=400)
+
+        tipo_abono_ui = data.get('tipo_abono')  # 'CUOTAS' o 'CAPITAL'
+
+        if tipo_abono_ui == 'CUOTAS':
+            num_cuotas = int(data.get('num_cuotas') or 1)
+
+            # Validar número de cuotas
+            cuotas_restantes = credit_services.calcular_cuotas_restantes(credito)
+            if num_cuotas > cuotas_restantes:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Solo quedan {cuotas_restantes} cuotas pendientes.'
+                }, status=400)
+
+            if num_cuotas < 1:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Debe pagar al menos 1 cuota.'
+                }, status=400)
+
+            # Calcular monto total de las cuotas seleccionadas
+            monto_abono = credito.valor_cuota * num_cuotas
+
+            # Determinar tipo de abono para el servicio
+            if num_cuotas <= 2:
+                tipo_abono_servicio = 'NORMAL'
+            else:
+                tipo_abono_servicio = 'MAYOR'
+
+        elif tipo_abono_ui == 'CAPITAL':
+            # REGLA DE ORO: Solo 1 abono a capital por crédito
+            from .models import ReestructuracionCredito
+
+            ya_tiene_abono_capital = ReestructuracionCredito.objects.filter(
+                credito=credito,
+                tipo_abono='CAPITAL'
+            ).exists()
+
+            if ya_tiene_abono_capital:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Ya realizó un abono a capital en este crédito. Solo se permite 1 abono a capital por crédito.'
+                }, status=400)
+
+            monto_abono = Decimal(str(data.get('monto_capital') or '0'))
+
+            if monto_abono <= 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'El monto debe ser mayor a cero.'
+                }, status=400)
+
+            if monto_abono > credito.capital_pendiente:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'El monto no puede ser mayor al capital pendiente (${credito.capital_pendiente:,.0f}).'
+                }, status=400)
+
+            tipo_abono_servicio = 'CAPITAL'
+
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': 'Tipo de abono inválido.'
+            }, status=400)
+
+        # Analizar el abono
+        analisis = credit_services.analizar_abono_credito(credito, monto_abono, tipo_abono_servicio)
+
+        plan_actual = analisis['plan_actual']
+        plan_nuevo = analisis['plan_nuevo']
+        valor_cuota_actual = float(credito.valor_cuota or 0)
+        capital_actual = float(credito.capital_pendiente or plan_actual.get('total_capital', 0))
+
+        capital_nuevo = plan_nuevo.get('total_capital', 0)
+        if tipo_abono_servicio == 'CAPITAL':
+            capital_nuevo = float(max(Decimal('0.00'), (credito.capital_pendiente or Decimal('0.00')) - monto_abono))
+
+        valor_cuota_nuevo = valor_cuota_actual
+        if plan_nuevo.get('cuotas'):
+            valor_cuota_nuevo = float(plan_nuevo['cuotas'][0]['cuota'])
+
+        plan_actual_ui = {
+            'cuotas_restantes': plan_actual.get('num_cuotas', 0),
+            'valor_cuota': valor_cuota_actual,
+            'capital_pendiente': capital_actual,
+            'total_intereses': float(plan_actual.get('total_intereses', 0))
+        }
+        plan_nuevo_ui = {
+            'cuotas_restantes': plan_nuevo.get('num_cuotas', 0),
+            'valor_cuota': valor_cuota_nuevo,
+            'capital_pendiente': float(capital_nuevo),
+            'total_intereses': float(plan_nuevo.get('total_intereses', 0))
+        }
+
+        # Preparar respuesta
+        return JsonResponse({
+            'success': True,
+            'monto_abono': float(monto_abono),
+            'tipo_abono': tipo_abono_servicio,
+            'requiere_reestructuracion': analisis['requiere_reestructuracion'],
+            'ahorro_intereses': analisis['ahorro_intereses'],
+            'plazo_actual': analisis['plazo_actual'],
+            'nuevo_plazo': analisis['nuevo_plazo'],
+            'cuota_actual': analisis['cuota_actual'],
+            'nueva_cuota': analisis['nueva_cuota'],
+            'advertencia': analisis['advertencia'],
+            'plan_actual': plan_actual_ui,
+            'plan_nuevo': plan_nuevo_ui
+        })
+
+    except ValueError as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error en los datos: {str(e)}'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error al analizar abono para crédito {credito_id}: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Error al procesar la solicitud.'
+        }, status=500)
+
+
+@login_required
+@require_POST
+def confirmar_abono_credito_view(request, credito_id):
+    """
+    Confirma y aplica un abono al crédito después de que el usuario
+    ha revisado el análisis y aceptado los términos.
+
+    POST params:
+        - tipo_abono: 'CUOTAS' o 'CAPITAL'
+        - num_cuotas: número de cuotas (si tipo='CUOTAS')
+        - monto_capital: monto (si tipo='CAPITAL')
+        - confirmacion: 'true' para confirmar
+    """
+    try:
+        content_type = request.headers.get('Content-Type', '')
+        is_json = content_type.startswith('application/json')
+        data = request.POST
+        if is_json:
+            try:
+                data = json.loads(request.body.decode('utf-8') or '{}')
+            except json.JSONDecodeError:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'JSON inválido.'
+                }, status=400)
+
+        credito = get_object_or_404(Credito, id=credito_id, usuario=request.user)
+
+        # Validar confirmación
+        if data.get('confirmacion') != 'true':
+            if is_json:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Debe confirmar el abono antes de proceder.'
+                }, status=400)
+            messages.error(request, 'Debe confirmar el abono antes de proceder.')
+            return redirect('usuariocreditos:dashboard_emprendimiento')
+
+        # Validar que el crédito esté activo
+        if credito.estado not in [Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]:
+            messages.error(request, 'El crédito debe estar activo para realizar abonos.')
+            return redirect('usuariocreditos:dashboard_emprendimiento')
+
+        tipo_abono_ui = data.get('tipo_abono')
+
+        # Calcular monto y tipo de abono
+        if tipo_abono_ui == 'CUOTAS':
+            num_cuotas = int(data.get('num_cuotas') or 1)
+            monto_abono = credito.valor_cuota * num_cuotas
+            tipo_abono_servicio = 'NORMAL' if num_cuotas <= 2 else 'MAYOR'
+            descripcion = f'{num_cuotas} cuota(s)'
+        elif tipo_abono_ui == 'CAPITAL':
+            # REGLA DE ORO: Validar que no haya un abono a capital previo
+            from .models import ReestructuracionCredito
+
+            ya_tiene_abono_capital = ReestructuracionCredito.objects.filter(
+                credito=credito,
+                tipo_abono='CAPITAL'
+            ).exists()
+
+            if ya_tiene_abono_capital:
+                messages.error(request, 'Ya realizó un abono a capital en este crédito. Solo se permite 1 abono a capital por crédito.')
+                return redirect('usuariocreditos:dashboard_emprendimiento')
+
+            monto_abono = Decimal(str(data.get('monto_capital') or '0'))
+            tipo_abono_servicio = 'CAPITAL'
+            descripcion = f'abono a capital'
+        else:
+            if is_json:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Tipo de abono inválido.'
+                }, status=400)
+            messages.error(request, 'Tipo de abono inválido.')
+            return redirect('usuariocreditos:dashboard_emprendimiento')
+
+        # Generar referencia única
+        import uuid
+        referencia = f"ABONO-{credito.numero_credito}-{uuid.uuid4().hex[:8].upper()}"
+
+        # Aplicar el abono
+        pago, reestructuracion = credit_services.aplicar_abono_credito(
+            credito=credito,
+            monto_abono=monto_abono,
+            tipo_abono=tipo_abono_servicio,
+            usuario=request.user,
+            referencia_pago=referencia
+        )
+
+        # Crear notificación
+        if reestructuracion:
+            Notificacion.objects.create(
+                usuario=request.user,
+                tipo=Notificacion.TipoNotificacion.SISTEMA,
+                titulo='Abono aplicado con reestructuración',
+                mensaje=(
+                    f'Se aplicó un abono de ${monto_abono:,.0f} ({descripcion}) a su crédito {credito.numero_credito}. '
+                    f'Su plan de pagos ha sido reestructurado. '
+                    f'Ahorro en intereses: ${reestructuracion.ahorro_intereses:,.0f}. '
+                    f'Nuevo plazo: {reestructuracion.plazo_restante_nuevo} cuotas.'
+                ),
+                url=f'/emprendimiento/mi-credito/'
+            )
+            messages.success(
+                request,
+                f'¡Abono aplicado exitosamente! Ahorrará ${reestructuracion.ahorro_intereses:,.0f} en intereses. '
+                f'Su nuevo plan tiene {reestructuracion.plazo_restante_nuevo} cuotas.'
+            )
+        else:
+            Notificacion.objects.create(
+                usuario=request.user,
+                tipo=Notificacion.TipoNotificacion.PAGO_RECIBIDO,
+                titulo='Pago recibido',
+                mensaje=(
+                    f'Se registró su pago de ${monto_abono:,.0f} ({descripcion}) '
+                    f'para el crédito {credito.numero_credito}. '
+                    f'Nuevo saldo: ${credito.saldo_pendiente:,.0f}.'
+                ),
+                url=f'/emprendimiento/mi-credito/'
+            )
+            messages.success(
+                request,
+                f'Pago de ${monto_abono:,.0f} aplicado exitosamente. '
+                f'Nuevo saldo: ${credito.saldo_pendiente:,.0f}.'
+            )
+
+        logger.info(
+            f"Abono aplicado por usuario {request.user.username} al crédito {credito.numero_credito}. "
+            f"Monto: ${monto_abono}, Tipo: {tipo_abono_servicio}, Referencia: {referencia}"
+        )
+
+        if is_json:
+            return JsonResponse({
+                'success': True,
+                'monto_abono': float(monto_abono),
+                'tipo_abono': tipo_abono_servicio
+            })
+        return redirect('usuariocreditos:dashboard_emprendimiento')
+
+    except Exception as e:
+        logger.error(f"Error al confirmar abono para crédito {credito_id}: {e}")
+        if is_json:
+            return JsonResponse({
+                'success': False,
+                'error': f'Error al procesar el abono: {str(e)}'
+            }, status=500)
+        messages.error(request, f'Error al procesar el abono: {str(e)}')
+        return redirect('usuariocreditos:dashboard_emprendimiento')
+
+
+@login_required
+def historial_reestructuraciones_view(request, credito_id):
+    """
+    Muestra el historial de reestructuraciones realizadas a un crédito.
+    """
+    from .models import ReestructuracionCredito
+
+    credito = get_object_or_404(Credito, id=credito_id, usuario=request.user)
+
+    reestructuraciones = ReestructuracionCredito.objects.filter(
+        credito=credito
+    ).select_related('aprobado_por', 'pago_relacionado').order_by('-fecha_reestructuracion')
+
+    context = {
+        'credito': credito,
+        'reestructuraciones': reestructuraciones,
+    }
+
+    return render(request, 'emprendimiento/historial_reestructuraciones.html', context)

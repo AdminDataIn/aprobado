@@ -29,5 +29,4 @@ urlpatterns = [
     path('credito/<int:credito_id>/documentos/', views.descargar_documentos_view, name='credito_documentos'),
 
     # Desarrollo (simulación)
-    path('credito/<int:credito_id>/simular-firma/', views.simular_firma_view, name='credito_simular_firma'),
 ]
