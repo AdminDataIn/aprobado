@@ -601,6 +601,7 @@ def activar_credito(credito):
     saldo_capital_restante = capital_financiado  # ✅ CORRECCIÓN: Amortizar el capital financiado total
     fecha_cuota = credito.fecha_proximo_pago
 
+    cuotas = []
     for i in range(1, credito.plazo + 1):
         # Calcular interés sobre el saldo restante
         interes_a_pagar = saldo_capital_restante * tasa_mensual
@@ -622,18 +623,23 @@ def activar_credito(credito):
             saldo_capital_restante = Decimal('0.00')
 
         # Crear cuota en la tabla de amortización
-        CuotaAmortizacion.objects.create(
-            credito=credito,
-            numero_cuota=i,
-            fecha_vencimiento=fecha_cuota,
-            capital_a_pagar=capital_a_pagar,
-            interes_a_pagar=interes_a_pagar,
-            valor_cuota=credito.valor_cuota,
-            saldo_capital_pendiente=saldo_capital_restante
+        cuotas.append(
+            CuotaAmortizacion(
+                credito=credito,
+                numero_cuota=i,
+                fecha_vencimiento=fecha_cuota,
+                capital_a_pagar=capital_a_pagar,
+                interes_a_pagar=interes_a_pagar,
+                valor_cuota=credito.valor_cuota,
+                saldo_capital_pendiente=saldo_capital_restante
+            )
         )
 
         # Avanzar a la siguiente fecha de cuota
         fecha_cuota += relativedelta(months=1)
+
+    if cuotas:
+        CuotaAmortizacion.objects.bulk_create(cuotas, ignore_conflicts=True)
 
     logger.info(
         f"Crédito {credito.numero_credito} activado exitosamente. "

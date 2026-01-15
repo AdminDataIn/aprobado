@@ -18,7 +18,7 @@ import decimal
 import logging
 import zipfile
 import io
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.contrib import messages
 from django.db.models import Q, Count, Sum, Case, When, DecimalField, F, Subquery, Value, CharField, Avg
 from django.db.models.functions import Coalesce, TruncMonth, Concat
@@ -1827,29 +1827,35 @@ def wompi_webhook_view(request):
             if reference and reference.startswith('CUOTA-'):
                 try:
                     credito_id = reference.split('-')[1]
-                    credito = Credito.objects.get(id=credito_id)
 
                     if status == 'APPROVED':
                         # Registrar el pago
                         monto_decimal = Decimal(amount_in_cents) / 100
 
-                        # Verificar si el pago ya existe (evitar duplicados)
-                        pago_existente = HistorialPago.objects.filter(
-                            referencia_pago=reference
-                        ).first()
-
-                        if not pago_existente:
+                        try:
                             with transaction.atomic():
-                                HistorialPago.objects.create(
-                                    credito=credito,
-                                    monto=monto_decimal,
+                                credito = Credito.objects.select_for_update().get(id=credito_id)
+                                pago, created = HistorialPago.objects.get_or_create(
                                     referencia_pago=reference,
-                                    estado=HistorialPago.EstadoPago.EXITOSO
+                                    defaults={
+                                        'credito': credito,
+                                        'monto': monto_decimal,
+                                        'estado': HistorialPago.EstadoPago.EXITOSO
+                                    }
                                 )
-                                credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
-                                logger.info(f"Pago de ${monto_decimal} registrado exitosamente para crédito {credito_id}")
-                        else:
-                            logger.info(f"Pago con referencia {reference} ya existe, omitiendo.")
+
+                                if not created:
+                                    logger.info(f"Pago con referencia {reference} ya existe, omitiendo.")
+                                else:
+                                    credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
+                                    logger.info(f"Pago de ${monto_decimal} registrado exitosamente para crédito {credito_id}")
+                        except IntegrityError as e:
+                            # Puede ocurrir por concurrencia - verificar si el pago ya se procesó
+                            logger.warning(f"IntegrityError al procesar pago {reference}: {e}. Verificando si ya existe...")
+                            if HistorialPago.objects.filter(referencia_pago=reference).exists():
+                                logger.info(f"Pago {reference} ya fue procesado por otra instancia.")
+                            else:
+                                raise
 
                     elif status == 'DECLINED' or status == 'ERROR':
                         logger.warning(f"Pago rechazado para crédito {credito_id}: {status}")
