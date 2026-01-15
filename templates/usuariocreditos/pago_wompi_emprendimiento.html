@@ -207,7 +207,7 @@
                     {% csrf_token %}
                     <input type="hidden" name="payment_method" id="payment_method" value="">
                     <input type="hidden" name="credito_id" value="{{ credito.id }}">
-                    <input type="hidden" name="amount_in_cents" value="{{ valor_cuota_centavos }}">
+                    <input type="hidden" name="amount_in_cents" value="{{ valor_cuota_centavos|stringformat:"d" }}">
                     <input type="hidden" name="reference" value="{{ referencia_pago }}">
                     <input type="hidden" name="customer_email" value="{{ customer_email }}">
                     <input type="hidden" name="acceptance_token" value="{{ acceptance_token }}">

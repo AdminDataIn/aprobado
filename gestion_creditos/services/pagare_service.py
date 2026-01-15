@@ -41,6 +41,7 @@ def generar_pagare_pdf(credito, usuario_creador=None):
 
     estados_permitidos = [
         Credito.EstadoCredito.APROBADO,
+        Credito.EstadoCredito.PENDIENTE_FIRMA,
         Credito.EstadoCredito.FIRMADO,
         Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA,
         Credito.EstadoCredito.ACTIVO,

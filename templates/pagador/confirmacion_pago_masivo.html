@@ -291,7 +291,7 @@
     <script>
         const WOMPI_PUBLIC_KEY = '{{ wompi_public_key }}';
         const ACCEPTANCE_TOKEN = '{{ acceptance_token }}';
-        const AMOUNT_IN_CENTS = {{ monto_total_centavos }};
+        const AMOUNT_IN_CENTS = {{ monto_total_centavos|stringformat:"d" }};
         const REFERENCE = '{{ referencia_pago }}';
         const CUSTOMER_EMAIL = '{{ customer_email }}';
         const CALLBACK_URL = window.location.origin + '{% url "pagador:pago_wompi_callback" %}';
