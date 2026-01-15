@@ -1303,8 +1303,18 @@ def procesar_pago_wompi_emprendimiento_view(request):
         request.session['wompi_reference_empr'] = reference
         request.session['wompi_tipo_pago_empr'] = tipo_pago
 
+        logger.info(f"Wompi transaction response (emprendimiento): {transaction}")
+
         if payment_method_type in ['PSE', 'NEQUI', 'BANCOLOMBIA_TRANSFER']:
-            async_url = transaction['data']['payment_method']['extra']['async_payment_url']
+            payment_method_data = transaction.get('data', {}).get('payment_method', {})
+            extra_data = payment_method_data.get('extra', {})
+            async_url = extra_data.get('async_payment_url')
+
+            if not async_url:
+                logger.error(f"No async_payment_url en respuesta de Wompi. Payment method data: {payment_method_data}")
+                messages.error(request, "Error: No se recibió URL de pago de Wompi.")
+                return redirect('emprendimiento:mi_credito')
+
             return redirect(async_url)
 
         status = transaction['data']['status']
@@ -1508,9 +1518,19 @@ def procesar_pago_wompi_view(request):
         request.session['credito_id'] = credito_id
         request.session['reference'] = reference
 
+        logger.info(f"Wompi transaction response: {transaction}")
+
         # Si es método asíncrono, redirigir a la URL de pago
         if payment_method_type in ['PSE', 'NEQUI', 'BANCOLOMBIA_TRANSFER']:
-            async_url = transaction['data']['payment_method']['extra']['async_payment_url']
+            payment_method_data = transaction.get('data', {}).get('payment_method', {})
+            extra_data = payment_method_data.get('extra', {})
+            async_url = extra_data.get('async_payment_url')
+
+            if not async_url:
+                logger.error(f"No async_payment_url en respuesta de Wompi. Payment method data: {payment_method_data}")
+                messages.error(request, "Error: No se recibió URL de pago de Wompi.")
+                return redirect('pagador:dashboard')
+
             return redirect(async_url)
 
         # Si es tarjeta, verificar estado inmediatamente
@@ -1759,17 +1779,32 @@ def wompi_webhook_view(request):
         payload = json.loads(request.body.decode('utf-8'))
 
         # Validar la firma del webhook (integridad del mensaje)
-        signature_header = request.headers.get('X-Event-Checksum', '')
+        # Según documentación de Wompi:
+        # checksum = SHA256(properties concatenadas en orden + timestamp + events_secret)
+        signature_data = payload.get('signature', {})
+        received_checksum = signature_data.get('checksum', '')
+        properties = signature_data.get('properties', [])
+        timestamp = payload.get('timestamp', '')
 
-        # Verificar la firma usando el EVENTS_SECRET
-        expected_signature = hmac.new(
-            settings.WOMPI_EVENTS_SECRET.encode('utf-8'),
-            request.body,
-            hashlib.sha256
-        ).hexdigest()
+        # Construir la cadena concatenando los valores de las propiedades
+        transaction_data = payload.get('data', {}).get('transaction', {})
+        concat_values = ''
+        for prop in properties:
+            # prop tiene formato "transaction.id", "transaction.status", etc.
+            field_name = prop.replace('transaction.', '')
+            value = transaction_data.get(field_name, '')
+            concat_values += str(value)
 
-        if not hmac.compare_digest(signature_header, expected_signature):
-            logger.warning(f"Firma inválida en webhook de WOMPI. Esperada: {expected_signature}, Recibida: {signature_header}")
+        # Agregar timestamp y events_secret
+        events_secret = getattr(settings, 'WOMPI_EVENTS_SECRET', '')
+        string_to_hash = f"{concat_values}{timestamp}{events_secret}"
+
+        # Calcular el checksum esperado
+        expected_checksum = hashlib.sha256(string_to_hash.encode('utf-8')).hexdigest()
+
+        if not hmac.compare_digest(received_checksum, expected_checksum):
+            logger.warning(f"Firma inválida en webhook de WOMPI. Esperada: {expected_checksum}, Recibida: {received_checksum}")
+            logger.debug(f"String to hash: {concat_values}{timestamp}[SECRET]")
             return JsonResponse({'error': 'Invalid signature'}, status=401)
 
         # Procesar el evento
