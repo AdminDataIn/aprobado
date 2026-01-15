@@ -218,11 +218,12 @@ def actualizar_saldo_tras_pago(credito, monto_pagado):
     # ✅ Guardar cambios en el crédito
     credito.save()
 
+    capital_pendiente_log = credito.capital_pendiente if credito.capital_pendiente is not None else Decimal('0.00')
     logger.info(
         f"Pago procesado para crédito {credito.numero_credito}: "
         f"Monto: ${monto_pagado:,.2f}, Interés: ${abono_a_interes:,.2f}, "
         f"Capital: ${abono_a_capital:,.2f}, Nuevo saldo: ${credito.saldo_pendiente:,.2f}, "
-        f"Capital pendiente: ${credito.capital_pendiente:,.2f if credito.capital_pendiente else 0}"
+        f"Capital pendiente: ${capital_pendiente_log:,.2f}"
     )
 
     # Enviar confirmación de pago por email
