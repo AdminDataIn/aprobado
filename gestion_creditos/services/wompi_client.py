@@ -167,12 +167,16 @@ class WompiClient:
                 error_data = response.json() if response.text else {}
                 error_type = error_data.get('error', {}).get('type', 'UNKNOWN_ERROR')
                 error_reason = error_data.get('error', {}).get('reason', 'Error desconocido')
+                error_messages = error_data.get('error', {}).get('messages', {})
                 error_message = f"{error_type}: {error_reason}"
+                if error_messages:
+                    error_message += f" - Detalles: {error_messages}"
             except:
                 error_data = {}
-                error_message = f"Error HTTP {response.status_code}: {response.text[:200]}"
+                error_message = f"Error HTTP {response.status_code}: {response.text[:500]}"
 
             logger.error(f"Wompi API Error: {error_message}")
+            logger.error(f"Wompi Response completo: {response.text[:1000]}")
             raise WompiAPIException(
                 message=error_message,
                 status_code=response.status_code,
