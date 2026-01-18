@@ -1,24 +1,128 @@
 {% extends "emails/base_email.html" %}
+{% load static %}
 
-{% block title %}Actualización sobre tu Solicitud de Crédito{% endblock %}
+{% block title %}Solicitud No Aprobada - Aprobado{% endblock %}
 
-{% block header %}Actualización de Solicitud{% endblock %}
+{% block email_content %}
+<!-- Header -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 24px 32px;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                    <td align="left" valign="top">
+                        <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" style="height: 32px; width: auto;">
+                    </td>
+                    <td align="right" valign="top">
+                        <div style="width: 40px; height: 40px; background-color: #F3F4F6; border-radius: 8px; display: inline-block; text-align: center; line-height: 40px;">
+                            <span style="color: #6B7280; font-size: 18px;">&#10005;</span>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
 
-{% block content %}
-    <h2>Hola, {{ nombre_cliente }}</h2>
+<!-- Badge -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 0 32px 16px 32px;">
+            <span style="display: inline-block; padding: 6px 12px; background-color: #F3F4F6; color: #6B7280; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Solicitud No Aprobada</span>
+        </td>
+    </tr>
+</table>
 
-    <p>Lamentamos informarte que después de revisar tu solicitud de crédito, no pudimos aprobarla en esta ocasión.</p>
+<!-- Content -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 0 32px 32px 32px;">
+            <!-- Greeting -->
+            <h1 style="font-size: 28px; font-weight: 700; color: #111827; margin: 0 0 8px 0; line-height: 1.2;">Hola {{ nombre_cliente }}</h1>
+            <p style="font-size: 15px; color: #6B7280; margin: 0 0 24px 0; line-height: 1.5;">Lamentamos informarte que despues de revisar tu solicitud, no pudimos aprobarla en esta ocasion.</p>
 
-    <div class="highlight">
-        <p><strong>Motivo:</strong> {{ motivo|default:"Documentación incompleta o criterios no cumplidos" }}</p>
-    </div>
+            <!-- Info Card -->
+            <div style="background-color: #F9FAFB; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                <p style="font-size: 12px; color: #6B7280; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.3px;">Solicitud {{ numero_credito }}</p>
+                <p style="font-size: 14px; color: #111827; margin: 12px 0 0 0; line-height: 1.5;"><strong>Motivo:</strong> {{ motivo|default:"Documentacion incompleta o criterios no cumplidos" }}</p>
+            </div>
 
-    <p><strong>¿Qué puedes hacer?</strong></p>
-    <ul>
-        <li>Puedes volver a solicitar un crédito en 30 días</li>
-        <li>Asegúrate de tener toda la documentación completa</li>
-        <li>Contáctanos si necesitas asesoría</li>
-    </ul>
+            <!-- Next Steps -->
+            <div style="margin: 24px 0;">
+                <p style="font-size: 14px; font-weight: 600; color: #111827; margin: 0 0 16px 0;">Que puedes hacer?</p>
 
-    <p>Gracias por considerar nuestros servicios.</p>
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 12px;">
+                    <tr>
+                        <td width="32" valign="top">
+                            <span style="color: #2563EB; font-size: 14px;">1.</span>
+                        </td>
+                        <td valign="top">
+                            <p style="font-size: 14px; color: #374151; margin: 0;">Puedes volver a solicitar un credito en 30 dias</p>
+                        </td>
+                    </tr>
+                </table>
+
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 12px;">
+                    <tr>
+                        <td width="32" valign="top">
+                            <span style="color: #2563EB; font-size: 14px;">2.</span>
+                        </td>
+                        <td valign="top">
+                            <p style="font-size: 14px; color: #374151; margin: 0;">Asegurate de tener toda la documentacion completa</p>
+                        </td>
+                    </tr>
+                </table>
+
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                    <tr>
+                        <td width="32" valign="top">
+                            <span style="color: #2563EB; font-size: 14px;">3.</span>
+                        </td>
+                        <td valign="top">
+                            <p style="font-size: 14px; color: #374151; margin: 0;">Contactanos si necesitas asesoria</p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- CTA Box -->
+            <div style="background-color: #374151; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;">
+                <h3 style="font-size: 16px; font-weight: 700; color: #ffffff; margin: 0 0 8px 0;">Necesitas mas informacion?</h3>
+                <p style="font-size: 13px; color: rgba(255, 255, 255, 0.85); margin: 0 0 16px 0; line-height: 1.4;">Nuestro equipo esta disponible para ayudarte a entender los requisitos.</p>
+                <a href="mailto:info@aprobado.com.co" style="display: inline-block; padding: 12px 32px; background-color: #ffffff; color: #111827; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600;">Contactar Soporte</a>
+            </div>
+
+            <!-- Contact Section -->
+            <div style="text-align: center; padding: 24px 0; border-top: 1px solid #E5E7EB; margin-top: 24px;">
+                <p style="font-size: 13px; color: #6B7280; margin: 0 0 12px 0;">Necesitas ayuda? Contactanos</p>
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
+                    <tr>
+                        <td style="padding: 0 12px;">
+                            <a href="https://wa.me/573132477352" style="font-size: 13px; color: #374151; text-decoration: none;">+57 313 247 7352</a>
+                        </td>
+                        <td style="padding: 0 12px;">
+                            <a href="mailto:info@aprobado.com.co" style="font-size: 13px; color: #374151; text-decoration: none;">Escribir</a>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </td>
+    </tr>
+</table>
+
+<!-- Footer -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 24px 32px; text-align: center; border-top: 1px solid #E5E7EB;">
+            <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" style="height: 24px; margin-bottom: 12px;">
+            <p style="font-size: 12px; color: #6B7280; margin: 0 0 4px 0;">APROBADO SOLUCIONES DIGITALES SAS - NIT 901949137-2</p>
+            <p style="font-size: 12px; color: #9CA3AF; margin: 0 0 16px 0;">Villavicencio, Meta</p>
+            <p style="font-size: 12px; color: #6B7280; margin: 0;">
+                <a href="https://aprobado.com.co/terminos" style="color: #6B7280; text-decoration: none; margin: 0 8px;">Terminos</a>
+                <a href="https://aprobado.com.co/privacidad" style="color: #6B7280; text-decoration: none; margin: 0 8px;">Privacidad</a>
+                <a href="https://aprobado.com.co/ayuda" style="color: #6B7280; text-decoration: none; margin: 0 8px;">Ayuda</a>
+            </p>
+        </td>
+    </tr>
+</table>
 {% endblock %}

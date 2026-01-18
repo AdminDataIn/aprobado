@@ -75,8 +75,8 @@ MODIFICAR:
         <ul class="footer-list">
           {# ✅ NUEVAS URLs - Libranza #}
           <li><a href="{% url 'libranza:landing' %}#preguntas-frecuentes" class="footer-item">Preguntas Frecuentes</a></li>
-          <li><a href="#" class="footer-item">Términos y Condiciones</a></li>
-          <li><a href="#" class="footer-item">Política de Privacidad</a></li>
+          <li><a href="{% url 'terminos_condiciones' %}" class="footer-item">Términos y Condiciones</a></li>
+          <li><a href="{% url 'politica_privacidad' %}" class="footer-item">Política de Privacidad</a></li>
           <li><a href="#" class="footer-item">Contacto</a></li>
           <li><a href="{% url 'pagador:login' %}" class="footer-item">🏢 Acceso Pagadores</a></li>
           {% if request.user.is_authenticated %}

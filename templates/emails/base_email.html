@@ -3,144 +3,370 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Aprobado - Notificación{% endblock %}</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>{% block title %}Aprobado{% endblock %}</title>
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
     <style>
+        /* Reset */
+        body, table, td, p, a, li, blockquote {
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+        table, td {
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+        }
+        img {
+            -ms-interpolation-mode: bicubic;
+            border: 0;
+            height: auto;
+            line-height: 100%;
+            outline: none;
+            text-decoration: none;
+        }
+
+        /* Base */
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #0b0f17;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f3f4f6;
             margin: 0;
             padding: 0;
-            color: #e2e8f0;
+            width: 100%;
+            -webkit-font-smoothing: antialiased;
         }
-        .container {
-            max-width: 640px;
-            margin: 24px auto;
-            background-color: #111827;
-            border-radius: 18px;
+
+        /* Container */
+        .email-wrapper {
+            width: 100%;
+            background-color: #f3f4f6;
+            padding: 40px 20px;
+        }
+        .email-container {
+            max-width: 480px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 16px;
             overflow: hidden;
-            box-shadow: 0 18px 45px rgba(0,0,0,0.45);
-            border: 1px solid rgba(148, 163, 184, 0.18);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
-        .header {
-            background: linear-gradient(120deg, #0f172a, #0ea5e9 45%, #1d4ed8);
-            color: #f8fafc;
-            padding: 34px 24px;
-            text-align: center;
+
+        /* Header */
+        .email-header {
+            padding: 24px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
         }
-        .header h1 {
-            margin: 0;
-            font-size: 24px;
+        .logo {
+            height: 32px;
+            width: auto;
+        }
+        .header-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Badge */
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0 32px 16px 32px;
+        }
+        .badge-red { background-color: #FEE2E2; color: #DC2626; }
+        .badge-green { background-color: #D1FAE5; color: #059669; }
+        .badge-blue { background-color: #DBEAFE; color: #2563EB; }
+        .badge-yellow { background-color: #FEF3C7; color: #D97706; }
+        .badge-gray { background-color: #F3F4F6; color: #6B7280; }
+
+        /* Content */
+        .email-content {
+            padding: 0 32px 32px 32px;
+        }
+        .greeting {
+            font-size: 28px;
+            font-weight: 700;
+            color: #111827;
+            margin: 0 0 8px 0;
+            line-height: 1.2;
+        }
+        .subtitle {
+            font-size: 15px;
+            color: #6B7280;
+            margin: 0 0 24px 0;
+            line-height: 1.5;
+        }
+
+        /* Info Card */
+        .info-card {
+            background-color: #F9FAFB;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        .info-label {
+            font-size: 12px;
+            color: #6B7280;
+            margin: 0 0 4px 0;
+            text-transform: uppercase;
             letter-spacing: 0.3px;
         }
-        .content {
-            padding: 32px;
-            color: #e2e8f0;
-            line-height: 1.7;
+        .info-amount {
+            font-size: 32px;
+            font-weight: 700;
+            color: #111827;
+            margin: 0 0 4px 0;
         }
-        .content h2 {
-            color: #f8fafc;
-            margin-top: 0;
-            font-size: 20px;
+        .info-amount.green { color: #059669; }
+        .info-amount.red { color: #DC2626; }
+        .info-sublabel {
+            font-size: 13px;
+            color: #9CA3AF;
+            margin: 0;
         }
-        .muted {
-            color: #94a3b8;
-            font-size: 14px;
-        }
-        .badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 999px;
-            background: rgba(14, 165, 233, 0.15);
-            border: 1px solid rgba(14, 165, 233, 0.3);
-            color: #7dd3fc;
-            font-size: 12px;
-            letter-spacing: 0.6px;
-            text-transform: uppercase;
-        }
-        .card {
-            background: rgba(15, 23, 42, 0.7);
-            border: 1px solid rgba(148, 163, 184, 0.2);
-            border-radius: 14px;
-            padding: 16px;
-            margin: 16px 0;
-        }
-        .divider {
-            height: 1px;
-            background: #1f2937;
-            margin: 20px 0;
-        }
-        .button {
-            display: inline-block;
-            padding: 12px 30px;
-            background: linear-gradient(135deg, #0ea5e9, #1d4ed8);
-            color: #ffffff !important;
-            text-decoration: none;
-            border-radius: 999px;
-            margin: 20px 0;
-            font-weight: 600;
-        }
-        .footer {
-            background-color: #0b1220;
-            padding: 20px;
-            text-align: center;
-            font-size: 12px;
-            color: #94a3b8;
-        }
-        .highlight {
-            background-color: rgba(15, 23, 42, 0.9);
-            padding: 14px;
-            border: 1px solid rgba(148, 163, 184, 0.2);
-            border-left: 4px solid #38bdf8;
-            border-radius: 12px;
-            margin: 16px 0;
-        }
-        .success {
-            border-left-color: #22c55e;
-        }
-        .danger {
-            border-left-color: #ef4444;
-        }
+
+        /* Info Table */
         .info-table {
             width: 100%;
             border-collapse: collapse;
+            margin-top: 16px;
         }
         .info-table td {
-            padding: 10px 0;
-            border-bottom: 1px solid #1f2937;
+            padding: 12px 0;
+            border-bottom: 1px solid #E5E7EB;
+            font-size: 14px;
         }
         .info-table tr:last-child td {
             border-bottom: none;
         }
-        .info-label {
-            color: #94a3b8;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.6px;
+        .info-table .label {
+            color: #6B7280;
         }
-        .info-value {
-            color: #f8fafc;
-            font-size: 16px;
+        .info-table .value {
+            color: #111827;
             font-weight: 600;
             text-align: right;
         }
-        a {
-            color: #7dd3fc;
+
+        /* CTA Box */
+        .cta-box {
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            margin: 24px 0;
+        }
+        .cta-box.green { background-color: #059669; }
+        .cta-box.red { background-color: #DC2626; }
+        .cta-box.blue { background-color: #2563EB; }
+        .cta-box.yellow { background-color: #D97706; }
+        .cta-box.gray { background-color: #374151; }
+
+        .cta-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #ffffff;
+            margin: 0 0 8px 0;
+        }
+        .cta-subtitle {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.85);
+            margin: 0 0 16px 0;
+            line-height: 1.4;
+        }
+        .cta-button {
+            display: inline-block;
+            padding: 12px 32px;
+            background-color: #ffffff;
+            color: #111827 !important;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        /* Saldo Box */
+        .saldo-box {
+            background-color: #F9FAFB;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin: 24px 0;
+        }
+        .saldo-label {
+            font-size: 12px;
+            color: #6B7280;
+            margin: 0 0 4px 0;
+        }
+        .saldo-amount {
+            font-size: 28px;
+            font-weight: 700;
+            color: #111827;
+            margin: 0 0 4px 0;
+        }
+        .saldo-sublabel {
+            font-size: 12px;
+            color: #9CA3AF;
+            margin: 0;
+        }
+
+        /* Steps */
+        .steps {
+            margin: 24px 0;
+        }
+        .step-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #111827;
+            margin: 0 0 16px 0;
+        }
+        .step-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+        .step-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        .step-icon.green { background-color: #D1FAE5; color: #059669; }
+        .step-icon.gray { background-color: #F3F4F6; color: #9CA3AF; }
+        .step-icon.blue { background-color: #DBEAFE; color: #2563EB; }
+        .step-content h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #111827;
+            margin: 0 0 2px 0;
+        }
+        .step-content p {
+            font-size: 12px;
+            color: #6B7280;
+            margin: 0;
+        }
+
+        /* Contact */
+        .contact-section {
+            text-align: center;
+            padding: 24px 0;
+            border-top: 1px solid #E5E7EB;
+            margin-top: 24px;
+        }
+        .contact-label {
+            font-size: 13px;
+            color: #6B7280;
+            margin: 0 0 12px 0;
+        }
+        .contact-links {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+        }
+        .contact-link {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #374151;
+            text-decoration: none;
+        }
+
+        /* Footer */
+        .email-footer {
+            padding: 24px 32px;
+            text-align: center;
+            border-top: 1px solid #E5E7EB;
+        }
+        .footer-logo {
+            height: 24px;
+            margin-bottom: 12px;
+        }
+        .footer-company {
+            font-size: 12px;
+            color: #6B7280;
+            margin: 0 0 4px 0;
+        }
+        .footer-address {
+            font-size: 12px;
+            color: #9CA3AF;
+            margin: 0 0 16px 0;
+        }
+        .footer-links {
+            font-size: 12px;
+            color: #6B7280;
+        }
+        .footer-links a {
+            color: #6B7280;
+            text-decoration: none;
+            margin: 0 8px;
+        }
+        .footer-unsubscribe {
+            font-size: 11px;
+            color: #9CA3AF;
+            margin-top: 12px;
+        }
+        .footer-unsubscribe a {
+            color: #9CA3AF;
+            text-decoration: underline;
+        }
+
+        /* Helper Text */
+        .helper-text {
+            font-size: 12px;
+            color: #6B7280;
+            text-align: center;
+            margin-top: 12px;
+        }
+
+        /* Responsive */
+        @media only screen and (max-width: 520px) {
+            .email-wrapper {
+                padding: 20px 12px;
+            }
+            .email-header, .email-content, .email-footer {
+                padding-left: 20px;
+                padding-right: 20px;
+            }
+            .greeting {
+                font-size: 24px;
+            }
+            .info-amount {
+                font-size: 28px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>{% block header %}Aprobado{% endblock %}</h1>
-        </div>
-        <div class="content">
-            {% block content %}{% endblock %}
-        </div>
-        <div class="footer">
-            <p><strong>Aprobado</strong> - Soluciones Financieras</p>
-            <p>Este es un correo automático, por favor no responder.</p>
-            <p>Si tienes alguna pregunta, contáctanos en <a href="mailto:soporte@aprobado.com.co">soporte@aprobado.com.co</a></p>
-        </div>
+    <div class="email-wrapper">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+            <tr>
+                <td align="center">
+                    <div class="email-container">
+                        {% block email_content %}{% endblock %}
+                    </div>
+                </td>
+            </tr>
+        </table>
     </div>
 </body>
 </html>

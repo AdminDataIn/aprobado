@@ -83,8 +83,34 @@ def preparar_documento_para_firma(credito, usuario_modificacion):
 
         pagare = generar_pagare_pdf(credito, usuario_modificacion)
         if pagare.estado == Pagare.EstadoPagare.CREATED:
-            url_pdf_publica = generar_url_publica_temporal(pagare)
-            enviar_pagare_a_zapsign(pagare, url_pdf_publica)
+            pagare_id = pagare.id
+
+            def _enviar_pagare():
+                try:
+                    pagare_db = Pagare.objects.get(id=pagare_id)
+                    if not pagare_db.archivo_pdf or not pagare_db.archivo_pdf.storage.exists(pagare_db.archivo_pdf.name):
+                        logger.error(
+                            f"PDF del pagare no disponible para credito {pagare_db.credito_id}. "
+                            f"Archivo: {pagare_db.archivo_pdf.name if pagare_db.archivo_pdf else 'N/A'}"
+                        )
+                        return
+
+                    url_pdf_publica = generar_url_publica_temporal(pagare_db)
+                    pagare_enviado = enviar_pagare_a_zapsign(pagare_db, url_pdf_publica)
+
+                    credito_db = pagare_enviado.credito
+                    credito_db.documento_enviado = pagare_enviado.estado in [
+                        Pagare.EstadoPagare.SENT,
+                        Pagare.EstadoPagare.SIGNED
+                    ]
+                    credito_db.save(update_fields=['documento_enviado'])
+                except ZapSignAPIError as e:
+                    logger.error(f"Error al enviar el pagare a ZapSign para credito {credito.id}: {e}")
+                except Exception as e:
+                    logger.error(f"Error inesperado al enviar pagare a ZapSign para credito {credito.id}: {e}")
+
+            # Asegurar que el pagaré y su PDF ya estén comprometidos en la BD antes de enviarlo a ZapSign.
+            transaction.on_commit(_enviar_pagare)
 
         credito.documento_enviado = pagare.estado in [Pagare.EstadoPagare.SENT, Pagare.EstadoPagare.SIGNED]
         credito.save(update_fields=['documento_enviado'])
@@ -113,6 +139,7 @@ def iniciar_proceso_desembolso(credito):
 
 
 
+@transaction.atomic
 def actualizar_saldo_tras_pago(credito, monto_pagado):
     """
     Actualiza el saldo del crédito después de recibir un pago.
@@ -139,6 +166,9 @@ def actualizar_saldo_tras_pago(credito, monto_pagado):
     Returns:
         None (actualiza el crédito directamente)
     """
+    credito_id = credito.id
+    credito = Credito.objects.select_for_update().get(id=credito_id)
+
     # ✅ Validar que el crédito tenga los campos necesarios
     if not all([credito.tasa_interes, credito.saldo_pendiente is not None, credito.monto_aprobado]):
         logger.warning(f"No se puede actualizar saldo para crédito {credito.numero_credito}: faltan datos clave")

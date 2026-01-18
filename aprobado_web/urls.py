@@ -48,6 +48,16 @@ urlpatterns = [
     path('libranza/', include('usuarios.urls_libranza')),
 
     # ========================================
+    # LEGALES
+    # ========================================
+    path('privacidad/', TemplateView.as_view(
+        template_name='legal/politica_privacidad.html'
+    ), name='politica_privacidad'),
+    path('terminos/', TemplateView.as_view(
+        template_name='legal/terminos_condiciones.html'
+    ), name='terminos_condiciones'),
+
+    # ========================================
     # ROLES ADMINISTRATIVOS
     # ========================================
     path('gestion/', include('gestion_creditos.urls_gestion')),

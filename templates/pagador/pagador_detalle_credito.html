@@ -91,6 +91,34 @@
             </div>
 
             <div class="d-flex flex-column gap-4">
+                {% if credito.estado == 'EN_REVISION' %}
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="bi bi-check2-circle me-2"></i>Decidir Solicitud</h3>
+                    </div>
+                    <div class="card-content">
+                        <p class="text-muted">Revise la solicitud y confirme si desea aprobarla o rechazarla.</p>
+                        <form method="post" action="{% url 'pagador:decidir_solicitud' credito.id %}">
+                            {% csrf_token %}
+                            <div class="form-group mb-3">
+                                <label for="motivo-detalle" class="form-label">Campo de estudio (opcional)</label>
+                                <textarea id="motivo-detalle" name="motivo" class="form-control" rows="3"
+                                          placeholder="Ej: Aprobado por antiguedad / Rechazado por endeudamiento"></textarea>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="submit" name="action" value="reject" class="btn btn-outline-danger btn-decision">
+                                    <i class="bi bi-x-circle"></i>
+                                    <span>Rechazar</span>
+                                </button>
+                                <button type="submit" name="action" value="approve" class="btn btn-success btn-decision">
+                                    <i class="bi bi-check-circle"></i>
+                                    <span>Aprobar</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title"><i class="bi bi-file-text me-2"></i>Resumen del Crédito</h3>
@@ -99,8 +127,8 @@
                         {% if credito.estado == 'EN_REVISION' %}
                         <div class="alert alert-info text-center">
                             <i class="bi bi-hourglass-split me-2"></i>
-                            <strong>Crédito en Revisión</strong>
-                            <p class="mb-0 mt-2">Este crédito está siendo evaluado. Los detalles financieros estarán disponibles una vez sea aprobado.</p>
+                            <strong>Solicitud pendiente de aprobación</strong>
+                            <p class="mb-0 mt-2">Esta solicitud requiere tu decisión como pagador. Revisa el monto y el plazo antes de aprobar o rechazar.</p>
                         </div>
                         <div class="row text-center mt-3">
                             <div class="col-6">

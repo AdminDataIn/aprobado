@@ -1,38 +1,104 @@
 {% extends "emails/base_email.html" %}
+{% load static %}
 
-{% block title %}Recordatorio de pago - Credito {{ numero_credito }}{% endblock %}
+{% block title %}Recordatorio de Pago - Aprobado{% endblock %}
 
-{% block header %}Recordatorio de Pago{% endblock %}
+{% block email_content %}
+<!-- Header -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 24px 32px;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                    <td align="left" valign="top">
+                        <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" style="height: 32px; width: auto;">
+                    </td>
+                    <td align="right" valign="top">
+                        <div style="width: 40px; height: 40px; background-color: #FEF3C7; border-radius: 8px; display: inline-block; text-align: center; line-height: 40px;">
+                            <span style="color: #D97706; font-size: 18px;">&#128276;</span>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
 
-{% block content %}
-    <span class="badge">Credito {{ numero_credito }}</span>
-    <h2>Hola, {{ nombre_cliente }}</h2>
+<!-- Badge -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 0 32px 16px 32px;">
+            <span style="display: inline-block; padding: 6px 12px; background-color: #FEF3C7; color: #D97706; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Recordatorio de Pago</span>
+        </td>
+    </tr>
+</table>
 
-    <p>
-        Tu proxima cuota esta cerca. Para evitar mora y mantener tu historial al dia,
-        realiza el pago antes del <strong>{{ fecha_vencimiento|date:"d/m/Y" }}</strong>.
-    </p>
+<!-- Content -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 0 32px 32px 32px;">
+            <!-- Greeting -->
+            <h1 style="font-size: 28px; font-weight: 700; color: #111827; margin: 0 0 8px 0; line-height: 1.2;">Hola {{ nombre_cliente }}</h1>
+            <p style="font-size: 15px; color: #6B7280; margin: 0 0 24px 0; line-height: 1.5;">Tu proxima cuota vence pronto. Te invitamos a realizar el pago para mantener tu historial al dia.</p>
 
-    <div class="card">
-        <table class="info-table" role="presentation">
-            <tr>
-                <td class="info-label">Valor a pagar</td>
-                <td class="info-value">{{ valor_cuota }}</td>
-            </tr>
-            <tr>
-                <td class="info-label">Fecha de vencimiento</td>
-                <td class="info-value">{{ fecha_vencimiento|date:"d/m/Y" }}</td>
-            </tr>
-            <tr>
-                <td class="info-label">Dias restantes</td>
-                <td class="info-value">{{ dias_restantes }} dias</td>
-            </tr>
-        </table>
-    </div>
+            <!-- Info Card -->
+            <div style="background-color: #F9FAFB; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                <p style="font-size: 12px; color: #6B7280; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.3px;">Credito {{ numero_credito }}</p>
+                <p style="font-size: 32px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">{{ valor_cuota }}</p>
+                <p style="font-size: 13px; color: #9CA3AF; margin: 0;">Valor de la cuota</p>
 
-    <center>
-        <a href="https://aprobado.com.co/mi-credito/{{ credito.id }}/" class="button">Realizar pago seguro</a>
-    </center>
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-top: 16px;">
+                    <tr>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #6B7280;">Fecha de vencimiento</td>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ fecha_vencimiento|date:"d \d\e F \d\e Y" }}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 12px 0; font-size: 14px; color: #6B7280;">Dias restantes</td>
+                        <td style="padding: 12px 0; font-size: 14px; color: #D97706; font-weight: 600; text-align: right;">{{ dias_restantes }} dias</td>
+                    </tr>
+                </table>
+            </div>
 
-    <p class="muted">Si ya realizaste el pago, puedes ignorar este mensaje.</p>
+            <!-- CTA Box -->
+            <div style="background-color: #D97706; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;">
+                <h3 style="font-size: 16px; font-weight: 700; color: #ffffff; margin: 0 0 8px 0;">Evita intereses de mora</h3>
+                <p style="font-size: 13px; color: rgba(255, 255, 255, 0.85); margin: 0 0 16px 0; line-height: 1.4;">Realiza tu pago a tiempo y mantiene tu historial crediticio impecable.</p>
+                <a href="https://aprobado.com.co/libranza/login/" style="display: inline-block; padding: 12px 32px; background-color: #ffffff; color: #111827; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600;">Pagar Ahora</a>
+            </div>
+
+            <p style="font-size: 12px; color: #6B7280; text-align: center; margin-top: 12px;">Si ya realizaste el pago, puedes ignorar este mensaje.</p>
+
+            <!-- Contact Section -->
+            <div style="text-align: center; padding: 24px 0; border-top: 1px solid #E5E7EB; margin-top: 24px;">
+                <p style="font-size: 13px; color: #6B7280; margin: 0 0 12px 0;">Necesitas ayuda? Contactanos</p>
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
+                    <tr>
+                        <td style="padding: 0 12px;">
+                            <a href="https://wa.me/573132477352" style="font-size: 13px; color: #374151; text-decoration: none;">+57 313 247 7352</a>
+                        </td>
+                        <td style="padding: 0 12px;">
+                            <a href="mailto:info@aprobado.com.co" style="font-size: 13px; color: #374151; text-decoration: none;">Escribir</a>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </td>
+    </tr>
+</table>
+
+<!-- Footer -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 24px 32px; text-align: center; border-top: 1px solid #E5E7EB;">
+            <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" style="height: 24px; margin-bottom: 12px;">
+            <p style="font-size: 12px; color: #6B7280; margin: 0 0 4px 0;">APROBADO SOLUCIONES DIGITALES SAS - NIT 901949137-2</p>
+            <p style="font-size: 12px; color: #9CA3AF; margin: 0 0 16px 0;">Villavicencio, Meta</p>
+            <p style="font-size: 12px; color: #6B7280; margin: 0;">
+                <a href="https://aprobado.com.co/terminos" style="color: #6B7280; text-decoration: none; margin: 0 8px;">Terminos</a>
+                <a href="https://aprobado.com.co/privacidad" style="color: #6B7280; text-decoration: none; margin: 0 8px;">Privacidad</a>
+                <a href="https://aprobado.com.co/ayuda" style="color: #6B7280; text-decoration: none; margin: 0 8px;">Ayuda</a>
+            </p>
+        </td>
+    </tr>
+</table>
 {% endblock %}

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import (
-    Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago,
+    Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago, WompiIntent,
     CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, ImagenNegocio, Notificacion,
     Pagare, ZapSignWebhookLog
 )
@@ -182,6 +182,13 @@ class HistorialPagoAdmin(admin.ModelAdmin):
     list_display = ('credito', 'fecha_pago', 'monto', 'estado', 'referencia_pago')
     list_filter = ('estado', 'fecha_pago')
     search_fields = ('credito__numero_credito', 'referencia_pago')
+
+@admin.register(WompiIntent)
+class WompiIntentAdmin(admin.ModelAdmin):
+    list_display = ('credito', 'referencia', 'amount_in_cents', 'status', 'wompi_transaction_id', 'created_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('credito__numero_credito', 'referencia', 'wompi_transaction_id')
+    readonly_fields = ('created_at', 'updated_at')
 
 @admin.register(CuentaAhorro)
 class CuentaAhorroAdmin(admin.ModelAdmin):

@@ -436,8 +436,15 @@ class CreditoLibranza(models.Model):
         on_delete=models.CASCADE,
         verbose_name="Empresa donde labora"
     )
+    ingresos_mensuales = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Ingresos mensuales"
+    )
 
-    #? Archivos adjuntos requeridos
+    #? Archivos adjuntos
     cedula_frontal = models.FileField(
         upload_to='credito_libranza/cedulas/',
         verbose_name="Cédula (frontal)"
@@ -448,10 +455,14 @@ class CreditoLibranza(models.Model):
     )
     certificado_laboral = models.FileField(
         upload_to='credito_libranza/certificados_laborales/',
+        null=True,
+        blank=True,
         verbose_name="Certificado laboral"
     )
     desprendible_nomina = models.FileField(
         upload_to='credito_libranza/desprendibles_nomina/',
+        null=True,
+        blank=True,
         verbose_name="Desprendible de nómina"
     )
     certificado_bancario = models.FileField(
@@ -533,6 +544,46 @@ class HistorialPago(models.Model):
 
     def __str__(self):
         return f"Pago {self.referencia_pago} - ${self.monto} ({self.get_estado_display()})"
+
+
+#? ----- Modelo de intentos de pago WOMPI -----
+class WompiIntent(models.Model):
+    """
+    Registra intentos de pago generados contra WOMPI para auditoria y control de duplicados.
+    """
+    class Estado(models.TextChoices):
+        CREATED = 'CREATED', 'Created'
+        PENDING = 'PENDING', 'Pending'
+        APPROVED = 'APPROVED', 'Approved'
+        DECLINED = 'DECLINED', 'Declined'
+        ERROR = 'ERROR', 'Error'
+        EXPIRED = 'EXPIRED', 'Expired'
+
+    credito = models.ForeignKey(Credito, on_delete=models.CASCADE, related_name='wompi_intentos')
+    referencia = models.CharField(max_length=100)
+    amount_in_cents = models.BigIntegerField()
+    payment_method = models.CharField(max_length=30, blank=True)
+    status = models.CharField(max_length=20, choices=Estado.choices, default=Estado.CREATED)
+    wompi_transaction_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True)
+    referer = models.CharField(max_length=255, blank=True)
+    attempts = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Wompi Intent'
+        verbose_name_plural = 'Wompi Intents'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['credito', 'status'], name='wompi_intent_credito_status_idx'),
+            models.Index(fields=['referencia'], name='wompi_intent_referencia_idx'),
+        ]
+
+    def __str__(self):
+        return f"WompiIntent {self.referencia} - {self.status}"
 
 
 #? ----- Modelo de historial de estados -----

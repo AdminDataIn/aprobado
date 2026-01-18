@@ -212,15 +212,16 @@
                                 </span>
                             </td>
                             <td>
-                                <div class="d-flex flex-column gap-2">
+                                <div class="d-flex flex-column align-items-start gap-2">
                                     <a href="{% url 'pagador:credito_detalle' credito.id %}" class="action-btn">
                                         <i class="bi bi-eye"></i> Ver Detalle
                                     </a>
                                     {% if credito.estado == 'EN_REVISION' %}
-                                    <button class="btn btn-sm btn-success"
+                                    <button class="btn btn-sm btn-outline-success btn-decision"
                                             data-bs-toggle="modal"
                                             data-bs-target="#decisionModal-{{ credito.id }}">
-                                        <i class="bi bi-check2-circle me-1"></i> Aprobar / Rechazar
+                                        <i class="bi bi-check2-circle"></i>
+                                        <span>Decidir</span>
                                     </button>
                                     {% endif %}
                                 </div>

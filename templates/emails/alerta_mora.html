@@ -1,36 +1,102 @@
 {% extends "emails/base_email.html" %}
+{% load static %}
 
-{% block title %}URGENTE: Crédito en Mora - {{ numero_credito }}{% endblock %}
+{% block title %}Alerta de Mora - Aprobado{% endblock %}
 
-{% block header %}⚠️ Alerta de Mora{% endblock %}
+{% block email_content %}
+<!-- Header -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 24px 32px;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                    <td align="left" valign="top">
+                        <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" style="height: 32px; width: auto;">
+                    </td>
+                    <td align="right" valign="top">
+                        <div style="width: 40px; height: 40px; background-color: #FEE2E2; border-radius: 8px; display: inline-block; text-align: center; line-height: 40px;">
+                            <span style="color: #DC2626; font-size: 20px;">!</span>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
 
-{% block content %}
-    <h2>URGENTE: {{ nombre_cliente }}</h2>
+<!-- Badge -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 0 32px 16px 32px;">
+            <span style="display: inline-block; padding: 6px 12px; background-color: #FEE2E2; color: #DC2626; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">{{ dias_mora }} dias en mora</span>
+        </td>
+    </tr>
+</table>
 
-    <p>Te informamos que tu crédito <strong>{{ numero_credito }}</strong> se encuentra en mora.</p>
+<!-- Content -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 0 32px 32px 32px;">
+            <!-- Greeting -->
+            <h1 style="font-size: 28px; font-weight: 700; color: #111827; margin: 0 0 8px 0; line-height: 1.2;">{{ nombre_cliente }}, necesitamos hablar</h1>
+            <p style="font-size: 15px; color: #6B7280; margin: 0 0 24px 0; line-height: 1.5;">Tu credito presenta un atraso. Te invitamos a regularizar tu situacion para evitar consecuencias.</p>
 
-    <div class="highlight danger">
-        <p><strong>⚠️ Estado de tu crédito:</strong></p>
-        <ul>
-            <li><strong>Días en mora:</strong> {{ dias_mora }} días</li>
-            <li><strong>Saldo pendiente:</strong> {{ saldo_pendiente }}</li>
-            <li><strong>Valor de cuota:</strong> {{ valor_cuota }}</li>
-        </ul>
-    </div>
+            <!-- Info Card -->
+            <div style="background-color: #F9FAFB; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                <p style="font-size: 12px; color: #6B7280; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.3px;">Credito {{ numero_credito }}</p>
+                <p style="font-size: 32px; font-weight: 700; color: #DC2626; margin: 0 0 4px 0;">{{ saldo_pendiente }}</p>
+                <p style="font-size: 13px; color: #9CA3AF; margin: 0;">Saldo pendiente</p>
 
-    <p><strong>Es importante que regularices tu situación lo antes posible para evitar:</strong></p>
-    <ul>
-        <li>Incremento de intereses moratorios</li>
-        <li>Afectación de tu historial crediticio</li>
-        <li>Posibles acciones de cobranza</li>
-    </ul>
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-top: 16px;">
+                    <tr>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #6B7280;">Dias en mora</td>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ dias_mora }} dias</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 12px 0; font-size: 14px; color: #6B7280;">Valor de cuota</td>
+                        <td style="padding: 12px 0; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ valor_cuota }}</td>
+                    </tr>
+                </table>
+            </div>
 
-    <center>
-        <a href="https://aprobado.com.co/mi-credito/{{ credito.id }}/" class="button">Pagar Ahora</a>
-    </center>
+            <!-- CTA Box -->
+            <div style="background-color: #DC2626; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;">
+                <h3 style="font-size: 16px; font-weight: 700; color: #ffffff; margin: 0 0 8px 0;">Evita consecuencias</h3>
+                <p style="font-size: 13px; color: rgba(255, 255, 255, 0.85); margin: 0 0 16px 0; line-height: 1.4;">Regulariza tu situacion lo antes posible para evitar intereses moratorios y afectacion de tu historial crediticio.</p>
+                <a href="https://aprobado.com.co/libranza/login/" style="display: inline-block; padding: 12px 32px; background-color: #ffffff; color: #111827; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600;">Pagar Ahora</a>
+            </div>
 
-    <p>Si tienes alguna dificultad para realizar el pago, contáctanos para buscar una solución.</p>
+            <!-- Contact Section -->
+            <div style="text-align: center; padding: 24px 0; border-top: 1px solid #E5E7EB; margin-top: 24px;">
+                <p style="font-size: 13px; color: #6B7280; margin: 0 0 12px 0;">Necesitas ayuda? Contactanos</p>
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
+                    <tr>
+                        <td style="padding: 0 12px;">
+                            <a href="https://wa.me/573132477352" style="font-size: 13px; color: #374151; text-decoration: none;">+57 313 247 7352</a>
+                        </td>
+                        <td style="padding: 0 12px;">
+                            <a href="mailto:info@aprobado.com.co" style="font-size: 13px; color: #374151; text-decoration: none;">Escribir</a>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </td>
+    </tr>
+</table>
 
-    <p><strong>Teléfono de contacto:</strong> +57 300 123 4567<br>
-    <strong>Email:</strong> cobranza@aprobado.com.co</p>
+<!-- Footer -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 24px 32px; text-align: center; border-top: 1px solid #E5E7EB;">
+            <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" style="height: 24px; margin-bottom: 12px;">
+            <p style="font-size: 12px; color: #6B7280; margin: 0 0 4px 0;">APROBADO SOLUCIONES DIGITALES SAS - NIT 901949137-2</p>
+            <p style="font-size: 12px; color: #9CA3AF; margin: 0 0 16px 0;">Villavicencio, Meta</p>
+            <p style="font-size: 12px; color: #6B7280; margin: 0;">
+                <a href="https://aprobado.com.co/terminos" style="color: #6B7280; text-decoration: none; margin: 0 8px;">Terminos</a>
+                <a href="https://aprobado.com.co/privacidad" style="color: #6B7280; text-decoration: none; margin: 0 8px;">Privacidad</a>
+                <a href="https://aprobado.com.co/ayuda" style="color: #6B7280; text-decoration: none; margin: 0 8px;">Ayuda</a>
+            </p>
+        </td>
+    </tr>
+</table>
 {% endblock %}

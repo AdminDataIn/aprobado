@@ -210,6 +210,29 @@ WOMPI_API_BASE_URL = (
     else 'https://production.wompi.co/v1'
 )
 
+# Controles de duplicidad y rate limiting para WOMPI
+WOMPI_DUPLICATE_COOLDOWN_SECONDS = int(os.environ.get('WOMPI_DUPLICATE_COOLDOWN_SECONDS', '300'))
+WOMPI_DUPLICATE_WINDOW_MINUTES = int(os.environ.get('WOMPI_DUPLICATE_WINDOW_MINUTES', '10'))
+WOMPI_RATE_LIMIT_ATTEMPTS = int(os.environ.get('WOMPI_RATE_LIMIT_ATTEMPTS', '3'))
+WOMPI_RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get('WOMPI_RATE_LIMIT_WINDOW_SECONDS', '60'))
+
+# Cache (usar Redis si esta disponible)
+REDIS_URL = os.environ.get('REDIS_URL', '')
+if REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': REDIS_URL,
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'aprobado-cache',
+        }
+    }
+
 # ========================
 # Configuración de ZapSign (Firma Electrónica de Pagarés)
 # ========================

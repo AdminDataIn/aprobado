@@ -459,6 +459,20 @@ body {
     text-decoration: none;
 }
 
+.btn-decision {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+}
+
+.btn-decision i {
+    font-size: 0.85rem;
+}
+
 /* ===== FORMULARIOS ===== */
 .form-group {
     margin-bottom: 1.5rem;

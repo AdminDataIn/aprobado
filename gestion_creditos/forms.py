@@ -7,6 +7,7 @@ from django.core.validators import FileExtensionValidator
 #? --------- FORMULARIO DE CREDITO DE LIBRANZA ------------
 class CreditoLibranzaForm(forms.ModelForm):
     valor_credito = forms.CharField(label='Valor crédito solicitado', required=True)
+    ingresos_mensuales = forms.CharField(label='Ingresos mensuales', required=True)
     plazo = forms.ChoiceField(
         choices=[
             ('', 'Seleccione una opción'),
@@ -30,6 +31,7 @@ class CreditoLibranzaForm(forms.ModelForm):
             'telefono',
             'correo_electronico',
             'empresa',
+            'ingresos_mensuales',
             'cedula_frontal',
             'cedula_trasera',
             'certificado_laboral',
@@ -64,15 +66,23 @@ class CreditoLibranzaForm(forms.ModelForm):
             'required': 'El correo electrónico es requerido.',
             'invalid': 'Ingrese un correo electrónico válido.',
         }
-        
-        archivos = ['cedula_frontal', 'cedula_trasera', 'certificado_laboral', 
-                   'desprendible_nomina', 'certificado_bancario']
+
+        self.fields['ingresos_mensuales'].error_messages = {
+            'required': 'Los ingresos mensuales son requeridos.',
+            'invalid': 'Ingrese un valor numérico válido.',
+        }
+
+        archivos = ['cedula_frontal', 'cedula_trasera', 'certificado_bancario']
         
         for archivo in archivos:
             if archivo in self.fields:
                 self.fields[archivo].error_messages = {
                     'required': f'El archivo {archivo.replace("_", " ")} es requerido.',
                 }
+
+        for optional_field in ['certificado_laboral', 'desprendible_nomina']:
+            if optional_field in self.fields:
+                self.fields[optional_field].required = False
     
     def clean_valor_credito(self):
         valor_str = self.cleaned_data.get('valor_credito')
@@ -91,6 +101,26 @@ class CreditoLibranzaForm(forms.ModelForm):
         
         if valor < 100000:
             raise forms.ValidationError('El valor del crédito debe ser de al menos $100.000.')
+
+        if valor > 2000000:
+            raise forms.ValidationError('El valor del crédito no puede ser mayor a $2.000.000.')
+
+        return valor
+
+    def clean_ingresos_mensuales(self):
+        valor_str = self.cleaned_data.get('ingresos_mensuales')
+        if not valor_str:
+            raise forms.ValidationError(self.fields['ingresos_mensuales'].error_messages['required'])
+
+        valor_str_cleaned = ''.join(filter(str.isdigit, valor_str))
+
+        try:
+            valor = Decimal(valor_str_cleaned)
+        except (ValueError, TypeError):
+            raise forms.ValidationError(self.fields['ingresos_mensuales'].error_messages['invalid'])
+
+        if valor <= 0:
+            raise forms.ValidationError('Los ingresos mensuales deben ser mayores a 0.')
 
         return valor
     

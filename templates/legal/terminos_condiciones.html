@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminos y condiciones - Aprobado</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+</head>
+<body class="body-index">
+<div class="div-body-main">
+    {% include 'base/navbar.html' %}
+
+    <main style="background-color: #f9fafb; padding: 48px 16px;">
+        <section style="max-width: 900px; margin: 0 auto; background: #ffffff; padding: 32px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);">
+            <h1 style="font-size: 28px; margin-bottom: 8px;">Terminos y condiciones</h1>
+            <p style="color: #6b7280; margin-top: 0;">Ultima actualizacion: 17 de enero de 2026</p>
+
+            <p>
+                Al usar los canales digitales de Aprobado, usted acepta estos terminos y condiciones.
+                Si no esta de acuerdo, por favor no utilice los servicios.
+            </p>
+
+            <h2 style="font-size: 18px; margin-top: 24px;">1. Alcance del servicio</h2>
+            <p>
+                Aprobado facilita la recepcion y analisis de solicitudes de credito. La aprobacion
+                esta sujeta a evaluacion de riesgo, verificacion de identidad y politicas internas.
+            </p>
+
+            <h2 style="font-size: 18px; margin-top: 24px;">2. Requisitos y veracidad</h2>
+            <ul>
+                <li>El solicitante debe ser mayor de edad y contar con capacidad legal.</li>
+                <li>La informacion suministrada debe ser veraz, completa y actualizada.</li>
+                <li>La entrega de documentos es voluntaria y puede ser requerida para la evaluacion.</li>
+            </ul>
+
+            <h2 style="font-size: 18px; margin-top: 24px;">3. Uso de datos personales</h2>
+            <p>
+                El tratamiento de datos personales se rige por la Politica de privacidad disponible en
+                este sitio. Al enviar una solicitud, usted autoriza el tratamiento de sus datos para las
+                finalidades informadas.
+            </p>
+
+            <h2 style="font-size: 18px; margin-top: 24px;">4. Comunicaciones</h2>
+            <p>
+                Aprobado podra contactarlo por correo, telefono o canales digitales para confirmar datos,
+                informar el estado de la solicitud o enviar notificaciones relacionadas con el servicio.
+            </p>
+
+            <h2 style="font-size: 18px; margin-top: 24px;">5. Propiedad intelectual</h2>
+            <p>
+                Los contenidos, marcas y elementos del sitio son propiedad de Aprobado o de terceros
+                autorizados y no pueden ser usados sin permiso previo.
+            </p>
+
+            <h2 style="font-size: 18px; margin-top: 24px;">6. Limitacion de responsabilidad</h2>
+            <p>
+                Aprobado no garantiza la aprobacion del credito ni responde por decisiones de terceros.
+                El uso del sitio es bajo su propio riesgo y esta sujeto a disponibilidad.
+            </p>
+
+            <h2 style="font-size: 18px; margin-top: 24px;">7. Modificaciones</h2>
+            <p>
+                Aprobado puede actualizar estos terminos en cualquier momento. La version vigente estara
+                publicada en esta pagina.
+            </p>
+
+            <h2 style="font-size: 18px; margin-top: 24px;">8. Ley aplicable</h2>
+            <p>
+                Estos terminos se interpretan conforme a las leyes de la Republica de Colombia.
+            </p>
+
+            <h2 style="font-size: 18px; margin-top: 24px;">9. Contacto</h2>
+            <p>
+                Para consultas, escriba a <a href="mailto:info@aprobado.com.co">info@aprobado.com.co</a>.
+            </p>
+        </section>
+    </main>
+
+    {% include 'base/footer.html' %}
+</div>
+</body>
+</html>

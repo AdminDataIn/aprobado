@@ -4,6 +4,7 @@ Incluye generacion de hash SHA-256 para trazabilidad legal.
 """
 
 import hashlib
+import locale
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -16,6 +17,27 @@ from weasyprint import HTML
 
 from gestion_creditos.models import Credito, Pagare
 from .pagare_utils import numero_a_letras, numero_a_letras_simple, formatear_cop
+
+
+# Diccionario de meses en español
+MESES_ESPANOL = {
+    1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril',
+    5: 'mayo', 6: 'junio', 7: 'julio', 8: 'agosto',
+    9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre'
+}
+
+
+def _fecha_en_espanol(fecha):
+    """Formatea una fecha en español: 'dd de mes de yyyy'"""
+    dia = fecha.day
+    mes = MESES_ESPANOL.get(fecha.month, '')
+    anio = fecha.year
+    return f"{dia} de {mes} de {anio}"
+
+
+def _mes_en_espanol(fecha):
+    """Retorna el nombre del mes en español"""
+    return MESES_ESPANOL.get(fecha.month, '')
 
 
 def generar_pagare_pdf(credito, usuario_creador=None):
@@ -132,8 +154,8 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
         direccion_deudor = detalle.direccion or "NO REGISTRADA"
         email_deudor = usuario.email
 
-    nombre_acreedor = "Aprobado Fintech SAS"
-    nit_acreedor = "901.949.137-2"
+    nombre_acreedor = "APROBADO SOLUCIONES DIGITALES SAS"
+    nit_acreedor = "901949137-2"
 
     monto_base = credito.monto_aprobado or credito.monto_solicitado or Decimal('0.00')
     comision = credito.comision if credito.comision is not None else (monto_base * Decimal('0.10'))
@@ -146,8 +168,9 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
     else:
         valor_cuota = Decimal(str(valor_cuota)).quantize(Decimal('0.01'))
 
-    fecha_expedicion = timezone.now().date().strftime('%d de %B de %Y')
-    fecha_primer_pago = credito.fecha_proximo_pago or (timezone.now().date() + timedelta(days=30))
+    hoy = timezone.now().date()
+    fecha_expedicion = _fecha_en_espanol(hoy)
+    fecha_primer_pago = credito.fecha_proximo_pago or (hoy + timedelta(days=30))
     fecha_vencimiento = _calcular_fecha_vencimiento(fecha_primer_pago, credito.plazo or 0)
 
     plazo_cuotas = credito.plazo or 0
@@ -161,8 +184,8 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
         # Para emprendimiento, extraer de la dirección o usar default
         ciudad_deudor = "Villavicencio"
 
-    lugar_expedicion = "Bogota D.C., Colombia"
-    lugar_pago = f"{ciudad_deudor}, Meta. Colombia"
+    lugar_expedicion = "Villavicencio, Meta, Colombia"
+    lugar_pago = f"{ciudad_deudor}, Meta, Colombia"
 
     # Calcular intereses totales
     valor_total_pagar = valor_cuota * Decimal(str(plazo_cuotas))
@@ -170,15 +193,14 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
     if intereses_totales < 0:
         intereses_totales = Decimal('0.00')
 
-    # Fecha actual en partes
-    hoy = timezone.now().date()
+    # Fecha actual en partes (en español)
     dia_actual = hoy.day
-    mes_actual = hoy.strftime('%B')  # Mes en texto (ej: "Enero")
+    mes_actual = _mes_en_espanol(hoy)
     anio_actual = hoy.year
 
-    # Fecha de vencimiento en partes
+    # Fecha de vencimiento en partes (en español)
     dia_vencimiento = fecha_vencimiento.day
-    mes_vencimiento = fecha_vencimiento.strftime('%B')
+    mes_vencimiento = _mes_en_espanol(fecha_vencimiento)
     anio_vencimiento = fecha_vencimiento.year
 
     return {
@@ -199,15 +221,15 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
         'valor_cuota': formatear_cop(valor_cuota),
         'tasa_interes': f"{tasa_interes:.2f}",
         'fecha_expedicion': fecha_expedicion,
-        'fecha_vencimiento': fecha_vencimiento.strftime('%d de %B de %Y'),
-        'fecha_primer_pago': fecha_primer_pago.strftime('%d de %B de %Y'),
+        'fecha_vencimiento': _fecha_en_espanol(fecha_vencimiento),
+        'fecha_primer_pago': _fecha_en_espanol(fecha_primer_pago),
         'lugar_expedicion': lugar_expedicion,
         'lugar_pago': lugar_pago,
         'ciudad_firma': ciudad_deudor,
         'plazo_cuotas': plazo_cuotas,
         'plazo_cuotas_letras': plazo_cuotas_letras,
         'periodicidad': periodicidad,
-        # Fechas en partes
+        # Fechas en partes (en español)
         'dia_pago': dia_vencimiento,
         'mes_pago': mes_vencimiento,
         'anio_pago': anio_vencimiento,

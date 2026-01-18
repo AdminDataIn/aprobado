@@ -16,8 +16,6 @@ FLUJO DEL FORMULARIO:
 
 DOCUMENTOS REQUERIDOS:
 - Cédula (frontal y trasera)
-- Certificado laboral
-- Último desprendible de pago
 - Certificado bancario
 
 PROCESAMIENTO:
@@ -171,6 +169,10 @@ MODIFICAR:
                                 <label for="id_empresa" class="form-label required">Nombre de la empresa:</label>
                                 {{ form.empresa }}
                             </div>
+                            <div class="form-field">
+                                <label for="ingresos_mensuales" class="form-label required">Ingresos mensuales:</label>
+                                <input type="text" id="ingresos_mensuales" name="ingresos_mensuales" class="form-input" required>
+                            </div>
                             <!-- Adjuntar la cédula por ambas caras -->
                             <div class="form-field">
                                 <label for="cedula_frontal" class="form-label required">Cédula (frontal):</label>
@@ -179,16 +181,6 @@ MODIFICAR:
                             <div class="form-field">
                                 <label for="cedula_trasera" class="form-label required">Cédula (trasera):</label>
                                 <input type="file" id="cedula_trasera" name="cedula_trasera" class="form-input" accept="image/*,application/pdf" required>
-                            </div>
-                            <!-- Adjuntar Certificado Laboral -->
-                            <div class="form-field">
-                                <label for="certificado_laboral" class="form-label required">Certificado Laboral:</label>
-                                <input type="file" id="certificado_laboral" name="certificado_laboral" class="form-input" accept="image/*,application/pdf" required>
-                            </div>
-                            <!-- Adjuntar el Último desprendible -->
-                            <div class="form-field">
-                                <label for="desprendible_nomina" class="form-label required">Último Desprendible de Pago:</label>
-                                <input type="file" id="desprendible_nomina" name="desprendible_nomina" class="form-input" accept="image/*,application/pdf" required>
                             </div>
                             <!-- Adjuntar el Certificado Bancario -->
                             <div class="form-field">
@@ -202,7 +194,7 @@ MODIFICAR:
                             <div class="terms-content">
                                 <input type="checkbox" id="terms" required>
                                 <label for="terms" class="terms-text">
-                                    Acepto los <a href="#" class="terms-link">términos y condiciones</a> y autorizo el tratamiento de mis datos personales de acuerdo con la <a href="#" class="terms-link">política de privacidad</a>.
+                                    Acepto los <a href="{% url 'terminos_condiciones' %}" class="terms-link">términos y condiciones</a> y autorizo el tratamiento de mis datos personales de acuerdo con la <a href="{% url 'politica_privacidad' %}" class="terms-link">política de privacidad</a>.
                                 </label>
                             </div>
                         </div>
@@ -383,24 +375,98 @@ MODIFICAR:
     document.addEventListener('DOMContentLoaded', function() {
         loadFormData();
 
+        const maxValorCredito = 2000000;
         const valorCreditoInput = document.getElementById('valor_credito');
+        const ingresosMensualesInput = document.getElementById('ingresos_mensuales');
+        const plazoSelect = document.getElementById('plazo');
+        let lockedMonto = null;
+        let lockedPlazo = null;
+
+        function formatCurrencyNoDecimals(value) {
+            return new Intl.NumberFormat('es-CO', {
+                style: 'currency',
+                currency: 'COP',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(value);
+        }
+
+        function aplicarDatosSimulador() {
+            const params = new URLSearchParams(window.location.search);
+            const montoParam = params.get('monto');
+            const plazoParam = params.get('plazo');
+
+            if (montoParam && valorCreditoInput) {
+                let montoValue = parseInt(montoParam, 10);
+                if (!Number.isNaN(montoValue)) {
+                    if (montoValue > maxValorCredito) {
+                        montoValue = maxValorCredito;
+                    }
+                    if (montoValue > 0) {
+                        lockedMonto = montoValue;
+                        valorCreditoInput.value = formatCurrencyNoDecimals(montoValue);
+                        valorCreditoInput.readOnly = true;
+                        valorCreditoInput.setAttribute('data-locked', 'true');
+                    }
+                }
+            }
+
+            if (plazoParam && plazoSelect) {
+                let plazoValue = parseInt(plazoParam, 10);
+                if (!Number.isNaN(plazoValue) && plazoValue >= 1 && plazoValue <= 6) {
+                    lockedPlazo = plazoValue;
+                    plazoSelect.value = String(plazoValue);
+                    plazoSelect.setAttribute('disabled', 'disabled');
+                    plazoSelect.setAttribute('data-locked', 'true');
+
+                    let plazoLockedInput = document.getElementById('plazo_locked');
+                    if (!plazoLockedInput) {
+                        plazoLockedInput = document.createElement('input');
+                        plazoLockedInput.type = 'hidden';
+                        plazoLockedInput.id = 'plazo_locked';
+                        plazoLockedInput.name = 'plazo';
+                        plazoSelect.parentNode.appendChild(plazoLockedInput);
+                    }
+                    plazoLockedInput.value = String(plazoValue);
+                }
+            }
+        }
 
         if (valorCreditoInput) {
             valorCreditoInput.addEventListener('input', function(e) {
+                if (valorCreditoInput.dataset.locked === 'true') {
+                    if (lockedMonto !== null) {
+                        e.target.value = formatCurrencyNoDecimals(lockedMonto);
+                    }
+                    return;
+                }
+
                 let value = e.target.value.replace(/\D/g, '');
                 if (value) {
-                    const numberValue = parseInt(value, 10);
-                    e.target.value = new Intl.NumberFormat('es-CO', {
-                        style: 'currency',
-                        currency: 'COP',
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0
-                    }).format(numberValue);
+                    let numberValue = parseInt(value, 10);
+                    if (numberValue > maxValorCredito) {
+                        numberValue = maxValorCredito;
+                    }
+                    e.target.value = formatCurrencyNoDecimals(numberValue);
                 } else {
                     e.target.value = '';
                 }
             });
         }
+
+        if (ingresosMensualesInput) {
+            ingresosMensualesInput.addEventListener('input', function(e) {
+                let value = e.target.value.replace(/\D/g, '');
+                if (value) {
+                    const numberValue = parseInt(value, 10);
+                    e.target.value = formatCurrencyNoDecimals(numberValue);
+                } else {
+                    e.target.value = '';
+                }
+            });
+        }
+
+        aplicarDatosSimulador();
 
         const formulario = document.getElementById('formularioLibranza');
         const modal = document.getElementById("modalMensaje");
@@ -510,6 +576,12 @@ MODIFICAR:
                 const numericValue = originalFormattedValue.replace(/\D/g, '');
                 valorCreditoInput.value = numericValue;
             }
+            const ingresosMensualesInput = document.getElementById('ingresos_mensuales');
+            const originalIngresosValue = ingresosMensualesInput ? ingresosMensualesInput.value : '';
+            if (ingresosMensualesInput && originalIngresosValue) {
+                const numericIngresosValue = originalIngresosValue.replace(/\D/g, '');
+                ingresosMensualesInput.value = numericIngresosValue;
+            }
 
             const formData = new FormData(formulario);
 
@@ -572,6 +644,9 @@ MODIFICAR:
                 // Restore formatted value
                 if (originalFormattedValue) {
                     valorCreditoInput.value = originalFormattedValue;
+                }
+                if (ingresosMensualesInput && originalIngresosValue) {
+                    ingresosMensualesInput.value = originalIngresosValue;
                 }
             });
         }

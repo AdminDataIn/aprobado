@@ -45,7 +45,7 @@ MODIFICAR:
                         <p>Calcula tu cuota mensual y conoce las condiciones de tu crédito de libranza.
                            Financiamiento con descuento directo de nómina para empleados públicos y privados.</p>
                         {# NUEVA URL - Libranza #}
-                        <a href="{% url 'libranza:solicitar' %}" class="simulador-cta-button">Aplicar ahora</a>
+                        <a href="{% url 'libranza:solicitar' %}" class="simulador-cta-button" id="simulador-aplicar-ahora">Aplicar ahora</a>
                     </div>
 
                     <div class="simulador-card">
@@ -148,6 +148,8 @@ MODIFICAR:
         const afianzadoraInput = document.getElementById("afianzadora");
         const totalPagarInput = document.getElementById("totalPagar");
         const cuotaMensualInput = document.getElementById("cuotaMensual");
+        const aplicarAhora = document.getElementById("simulador-aplicar-ahora");
+        const aplicarBaseUrl = aplicarAhora ? aplicarAhora.getAttribute("href") : "";
 
         /**
          * Calcula la cuota usando la fórmula de anualidad (amortización francesa)
@@ -200,6 +202,8 @@ ivaComisionInput.value = formatColombianNumber(ivaComision);
             afianzadoraInput.value = formatColombianNumber(totalAfianzadora);
             totalPagarInput.value = formatColombianNumber(totalAPagar);
             cuotaMensualInput.value = formatColombianNumber(cuotaMensual);
+
+            actualizarAplicarLink();
         }
 
         // Configuración de sliders
@@ -253,6 +257,22 @@ ivaComisionInput.value = formatColombianNumber(ivaComision);
             progress2.style.width = `${percent}%`;
 
             actualizarCalculosLibranza();
+        }
+
+        function actualizarAplicarLink() {
+            if (!aplicarAhora || !aplicarBaseUrl) {
+                return;
+            }
+
+            const monto = parseInt(slider1.value, 10);
+            const plazo = parseInt(slider2.value, 10);
+
+            if (Number.isNaN(monto) || Number.isNaN(plazo)) {
+                aplicarAhora.href = aplicarBaseUrl;
+                return;
+            }
+
+            aplicarAhora.href = `${aplicarBaseUrl}?monto=${monto}&plazo=${plazo}`;
         }
 
         // Event listeners para los sliders

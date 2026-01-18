@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_http_methods
 from django.conf import settings
-from .models import Credito, CreditoLibranza, CreditoEmprendimiento, Empresa, HistorialPago, HistorialEstado, CuentaAhorro, MovimientoAhorro, Pagare, ZapSignWebhookLog
+from .models import Credito, CreditoLibranza, CreditoEmprendimiento, Empresa, HistorialPago, HistorialEstado, CuentaAhorro, MovimientoAhorro, Pagare, ZapSignWebhookLog, WompiIntent
 from .forms import CreditoLibranzaForm, CreditoEmprendimientoForm, AbonoManualAdminForm, ConsignacionOfflineForm
 from . import credit_services
 from datetime import datetime, timedelta
@@ -20,6 +20,7 @@ import zipfile
 import io
 from django.db import transaction, IntegrityError
 from django.contrib import messages
+from django.core.cache import cache
 from django.db.models import Q, Count, Sum, Case, When, DecimalField, F, Subquery, Value, CharField, Avg
 from django.db.models.functions import Coalesce, TruncMonth, Concat
 from django.utils import timezone
@@ -501,12 +502,27 @@ def procesar_solicitud_view(request, credito_id):
         messages.error(request, "Método no permitido.")
         return redirect('gestion:credito_detalle', credito_id=credito_id)
 
-    credito = get_object_or_404(Credito, id=credito_id, estado__in=['SOLICITUD', 'EN_REVISION'])
+    credito = get_object_or_404(
+        Credito,
+        id=credito_id,
+        estado__in=[Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION, Credito.EstadoCredito.APROBADO]
+    )
     action = request.POST.get('action')
+    pagador_aprobado = False
+
+    if credito.linea == Credito.LineaCredito.LIBRANZA:
+        pagador_aprobado = HistorialEstado.objects.filter(
+            credito=credito,
+            usuario_modificacion__perfil_pagador__isnull=False,
+            estado_nuevo=Credito.EstadoCredito.APROBADO
+        ).exists()
     
     nuevo_estado = None
     if action == 'approve':
         nuevo_estado = Credito.EstadoCredito.APROBADO
+        if credito.linea == Credito.LineaCredito.LIBRANZA and not pagador_aprobado:
+            messages.error(request, "El pagador aún no ha aprobado la solicitud.")
+            return redirect('gestion:credito_detalle', credito_id=credito_id)
         try:
             # El frontend ya envía el número en formato "1400000.50".
             # No se necesita limpieza manual, solo convertir a Decimal.
@@ -583,8 +599,24 @@ def detalle_credito_view(request, credito_id):
     # Tabla de amortización (si existe)
     tabla_amortizacion = credito.tabla_amortizacion.all().order_by('numero_cuota')
 
+    pagador_decision = None
+    pagador_aprobado = False
+    pagador_rechazado = False
+
+    if credito.linea == Credito.LineaCredito.LIBRANZA:
+        pagador_decision = HistorialEstado.objects.filter(
+            credito=credito,
+            usuario_modificacion__perfil_pagador__isnull=False,
+            estado_nuevo__in=[Credito.EstadoCredito.APROBADO, Credito.EstadoCredito.RECHAZADO]
+        ).order_by('-fecha').first()
+        if pagador_decision:
+            pagador_aprobado = pagador_decision.estado_nuevo == Credito.EstadoCredito.APROBADO
+            pagador_rechazado = pagador_decision.estado_nuevo == Credito.EstadoCredito.RECHAZADO
+
     # Determinar si el crédito puede ser procesado (aprobado/rechazado)
     puede_procesar = credito.estado in [Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION]
+    if credito.linea == Credito.LineaCredito.LIBRANZA and pagador_aprobado and credito.estado == Credito.EstadoCredito.APROBADO:
+        puede_procesar = True
     print("Monto solicitado: ",credito.monto_solicitado)
     context = {
         'credito': credito,
@@ -610,6 +642,9 @@ def detalle_credito_view(request, credito_id):
         'cuotas_pagadas': cuotas_pagadas,
         'cuotas_restantes': cuotas_restantes,
         'tabla_amortizacion': tabla_amortizacion,  # ⭐ NUEVA: Tabla de amortización
+        'pagador_decision': pagador_decision,
+        'pagador_aprobado': pagador_aprobado,
+        'pagador_rechazado': pagador_rechazado,
     }
     
     return render(request, 'gestion_creditos/admin_detalle_credito.html', context)
@@ -870,10 +905,6 @@ def pagador_decidir_solicitud_view(request, credito_id):
                 usuario_modificacion=request.user,
                 motivo=motivo_final
             )
-            credit_services.preparar_documento_para_firma(
-                credito=credito,
-                usuario_modificacion=request.user
-            )
             messages.success(request, f"Credito {credito.numero_credito} aprobado.")
         else:
             motivo_final = motivo or "Rechazado por pagador."
@@ -1083,6 +1114,23 @@ def procesar_pago_callback_view(request):
 #? VISTAS DE WOMPI - PASARELA DE PAGOS
 #? ============================================================================
 
+def _map_wompi_status_to_intent(status):
+    if not status:
+        return WompiIntent.Estado.PENDING
+    normalized = str(status).upper()
+    if normalized in {
+        WompiIntent.Estado.CREATED,
+        WompiIntent.Estado.PENDING,
+        WompiIntent.Estado.APPROVED,
+        WompiIntent.Estado.DECLINED,
+        WompiIntent.Estado.ERROR,
+        WompiIntent.Estado.EXPIRED,
+    }:
+        return normalized
+    if normalized in {'VOIDED', 'EXPIRED'}:
+        return WompiIntent.Estado.EXPIRED
+    return WompiIntent.Estado.PENDING
+
 @login_required
 @pagador_required
 def iniciar_pago_wompi_view(request, credito_id):
@@ -1103,6 +1151,11 @@ def iniciar_pago_wompi_view(request, credito_id):
         messages.error(request, "El crédito no tiene un valor de cuota válido para pagar.")
         return redirect('pagador:dashboard')
 
+    cuota_pendiente = credito.tabla_amortizacion.filter(pagada=False).order_by('numero_cuota').first()
+    if not cuota_pendiente:
+        messages.error(request, "Este credito no tiene cuotas pendientes por pagar.")
+        return redirect('pagador:dashboard')
+
     # Obtener acceptance token de WOMPI
     client = WompiClient()
     try:
@@ -1120,7 +1173,7 @@ def iniciar_pago_wompi_view(request, credito_id):
         'credito': credito,
         'valor_cuota': int(valor_cuota),
         'valor_cuota_centavos': int(valor_cuota * 100),  # Convertir a centavos
-        'referencia_pago': f"CUOTA-{credito.id}-{timezone.now().strftime('%Y%m%d%H%M%S')}",
+        'referencia_pago': f"CUOTA-{credito.id}-{cuota_pendiente.numero_cuota}",
         'acceptance_token': acceptance_token,
         'bancos_pse': bancos_pse,
         'customer_email': credito.detalle_libranza.correo_electronico,
@@ -1183,6 +1236,16 @@ def iniciar_pago_wompi_emprendimiento_view(request, credito_id):
         messages.error(request, "El crédito no tiene un valor válido para pagar.")
         return redirect('emprendimiento:mi_credito')
 
+    referencia_pago = f"ABONO-{credito.id}-{timezone.now().strftime('%Y%m%d%H%M%S')}"
+    if tipo_pago == 'CUOTA':
+        cuota_pendiente = credito.tabla_amortizacion.filter(pagada=False).order_by('numero_cuota').first()
+        if not cuota_pendiente:
+            messages.error(request, "Este credito no tiene cuotas pendientes por pagar.")
+            return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+        referencia_pago = f"CUOTA-{credito.id}-{cuota_pendiente.numero_cuota}"
+    elif tipo_pago == 'TOTAL':
+        referencia_pago = f"TOTAL-{credito.id}"
+
     client = WompiClient()
     try:
         acceptance_response = client.get_acceptance_token()
@@ -1202,7 +1265,7 @@ def iniciar_pago_wompi_emprendimiento_view(request, credito_id):
         'credito': credito,
         'valor_cuota': int(monto),
         'valor_cuota_centavos': int(monto * 100),
-        'referencia_pago': f"CUOTA-{credito.id}-{timezone.now().strftime('%Y%m%d%H%M%S')}",
+        'referencia_pago': referencia_pago,
         'acceptance_token': acceptance_token,
         'bancos_pse': bancos_pse,
         'customer_email': request.user.email,
@@ -1224,14 +1287,26 @@ def procesar_pago_wompi_emprendimiento_view(request):
     """
     from .services.wompi_client import WompiClient, WompiAPIException
 
+    intent = None
+
     try:
         payment_method_type = request.POST.get('payment_method')
         credito_id = request.POST.get('credito_id')
-        amount_in_cents = int(request.POST.get('amount_in_cents'))
+        amount_in_cents_raw = request.POST.get('amount_in_cents')
         reference = request.POST.get('reference')
         customer_email = request.POST.get('customer_email')
         acceptance_token = request.POST.get('acceptance_token')
         tipo_pago = (request.POST.get('tipo_pago') or 'CUOTA').upper()
+
+        if not amount_in_cents_raw or not reference:
+            messages.error(request, 'Datos de pago incompletos.')
+            return redirect('emprendimiento:mi_credito')
+
+        try:
+            amount_in_cents = int(amount_in_cents_raw)
+        except (TypeError, ValueError):
+            messages.error(request, 'Monto invalido.')
+            return redirect('emprendimiento:mi_credito')
 
         credito = get_object_or_404(
             Credito,
@@ -1239,9 +1314,111 @@ def procesar_pago_wompi_emprendimiento_view(request):
             linea=Credito.LineaCredito.EMPRENDIMIENTO,
             usuario=request.user
         )
+        monto_decimal = Decimal(amount_in_cents) / 100
+        client_ip = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip() or request.META.get('REMOTE_ADDR')
+        user_label = request.user.username if request.user.is_authenticated else 'anonymous'
+        user_agent = (request.META.get('HTTP_USER_AGENT') or '')[:255]
+        referer = (request.META.get('HTTP_REFERER') or '')[:255]
+        request_id = (request.META.get('HTTP_X_REQUEST_ID') or '')[:64]
+        logger.info(
+            'Wompi intento pago: view=emprendimiento credito=%s user=%s ip=%s ref=%s method=%s amount=%s req=%s',
+            credito.id,
+            user_label,
+            client_ip,
+            reference,
+            payment_method_type,
+            amount_in_cents,
+            request_id
+        )
+
+        if payment_method_type not in ['CARD', 'PSE', 'NEQUI', 'BANCOLOMBIA_TRANSFER']:
+            messages.error(request, 'Metodo de pago no valido.')
+            return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+
+        if not acceptance_token:
+            messages.error(request, 'Falta acceptance token.')
+            return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+
+        if reference and reference.startswith('CUOTA-'):
+            parts = reference.split('-')
+            if len(parts) < 3 or parts[1] != str(credito.id):
+                messages.error(request, 'Referencia de pago invalida.')
+                return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+            try:
+                cuota_num = int(parts[2])
+            except (TypeError, ValueError):
+                messages.error(request, 'Referencia de pago invalida.')
+                return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+            cuota = credito.tabla_amortizacion.filter(numero_cuota=cuota_num).first()
+            if not cuota:
+                messages.error(request, 'La cuota indicada no existe.')
+                return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+            if cuota.pagada:
+                messages.warning(request, 'Esta cuota ya esta pagada.')
+                return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+
+        rate_limit = getattr(settings, 'WOMPI_RATE_LIMIT_ATTEMPTS', 3)
+        rate_window = getattr(settings, 'WOMPI_RATE_LIMIT_WINDOW_SECONDS', 60)
+        attempt_key = f'wompi:attempts:empr:{credito.id}:{client_ip}'
+        attempts = cache.get(attempt_key, 0)
+        if attempts >= rate_limit:
+            messages.warning(request, 'Demasiados intentos. Espera un momento y vuelve a intentar.')
+            return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+        cache.set(attempt_key, attempts + 1, timeout=rate_window)
+
+        cooldown_seconds = getattr(settings, 'WOMPI_DUPLICATE_COOLDOWN_SECONDS', 300)
+        window_minutes = getattr(settings, 'WOMPI_DUPLICATE_WINDOW_MINUTES', 10)
+        lock_key = f'wompi:lock:empr:{credito.id}:{reference}:{amount_in_cents}'
+        if not cache.add(lock_key, True, timeout=cooldown_seconds):
+            logger.warning(
+                'Pago duplicado bloqueado por lock: credito=%s user=%s ip=%s ref=%s',
+                credito.id,
+                user_label,
+                client_ip,
+                reference
+            )
+            messages.warning(request, 'Ya hay un pago en proceso para este credito. Espera unos minutos y verifica el estado.')
+            return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+
+        reciente = timezone.now() - timedelta(minutes=window_minutes)
+        active_intent = WompiIntent.objects.filter(
+            credito=credito,
+            referencia=reference,
+            status__in=[WompiIntent.Estado.CREATED, WompiIntent.Estado.PENDING]
+        ).order_by('-created_at').first()
+        if active_intent and active_intent.created_at >= reciente:
+            messages.warning(request, 'Ya hay un pago en proceso para esta cuota.')
+            return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+        if WompiIntent.objects.filter(
+            credito=credito,
+            referencia=reference,
+            status=WompiIntent.Estado.APPROVED
+        ).exists():
+            messages.warning(request, 'Esta cuota ya fue pagada.')
+            return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+
+        if HistorialPago.objects.filter(referencia_pago=reference).exists():
+            messages.warning(request, 'Ya registramos un pago para esta referencia.')
+            return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+
+        if not customer_email:
+            customer_email = request.user.email
 
         client = WompiClient()
+
         redirect_url = request.build_absolute_uri(reverse('emprendimiento:pago_wompi_callback'))
+
+        intent = WompiIntent.objects.create(
+            credito=credito,
+            referencia=reference,
+            amount_in_cents=amount_in_cents,
+            payment_method=payment_method_type,
+            status=WompiIntent.Estado.CREATED,
+            usuario=request.user,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            referer=referer
+        )
 
         if payment_method_type == 'CARD':
             card_token_response = client.tokenize_card(
@@ -1265,7 +1442,7 @@ def procesar_pago_wompi_emprendimiento_view(request):
                 user_type=int(request.POST.get('user_type')),
                 user_legal_id_type=request.POST.get('user_legal_id_type'),
                 user_legal_id=request.POST.get('user_legal_id'),
-                payment_description=f"Pago cuota {reference}"
+                payment_description=f'Pago cuota {reference}'
             )
             customer_data = WompiClient.build_customer_data(
                 phone_number=f"57{request.POST.get('phone_number')}",
@@ -1280,11 +1457,11 @@ def procesar_pago_wompi_emprendimiento_view(request):
 
         elif payment_method_type == 'BANCOLOMBIA_TRANSFER':
             payment_method = WompiClient.build_bancolombia_transfer_payment_method(
-                payment_description=f"Pago cuota {reference}"
+                payment_description=f'Pago cuota {reference}'
             )
             customer_data = None
         else:
-            messages.error(request, "Método de pago no válido.")
+            messages.error(request, 'Metodo de pago no valido.')
             return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
 
         transaction = client.create_transaction(
@@ -1298,61 +1475,82 @@ def procesar_pago_wompi_emprendimiento_view(request):
             customer_data=customer_data
         )
 
-        request.session['wompi_transaction_id_empr'] = transaction['data']['id']
+        transaction_data = transaction.get('data', {})
+        transaction_id = transaction_data.get('id')
+        transaction_status = transaction_data.get('status')
+        if intent:
+            intent.status = _map_wompi_status_to_intent(transaction_status)
+            if transaction_id:
+                intent.wompi_transaction_id = transaction_id
+            intent.save(update_fields=['status', 'wompi_transaction_id', 'updated_at'])
+
+        request.session['wompi_transaction_id_empr'] = transaction_data.get('id')
         request.session['wompi_credito_id_empr'] = credito_id
         request.session['wompi_reference_empr'] = reference
         request.session['wompi_tipo_pago_empr'] = tipo_pago
 
-        logger.info(f"Wompi transaction response (emprendimiento): {transaction}")
+        logger.info(f'Wompi transaction response (emprendimiento): {transaction}')
 
         if payment_method_type in ['PSE', 'NEQUI', 'BANCOLOMBIA_TRANSFER']:
-            payment_method_data = transaction.get('data', {}).get('payment_method', {})
+            payment_method_data = transaction_data.get('payment_method', {})
             extra_data = payment_method_data.get('extra', {})
             async_url = extra_data.get('async_payment_url')
 
             if not async_url:
-                logger.error(f"No async_payment_url en respuesta de Wompi. Payment method data: {payment_method_data}")
-                messages.error(request, "Error: No se recibió URL de pago de Wompi.")
-                return redirect('emprendimiento:mi_credito')
+                logger.warning(f'No async_payment_url en respuesta de Wompi. Payment method data: {payment_method_data}')
+                wait_url = f"{reverse('emprendimiento:pago_wompi_callback')}?wait=1&id={transaction_data.get('id')}"
+                return redirect(wait_url)
 
             return redirect(async_url)
 
-        status = transaction['data']['status']
+        status = transaction_status
         if status == 'APPROVED':
-            monto_decimal = Decimal(amount_in_cents) / 100
             if tipo_pago == 'CAPITAL':
-                credit_services.aplicar_abono_credito(
-                    credito=credito,
-                    monto_abono=monto_decimal,
-                    tipo_abono='CAPITAL',
-                    usuario=request.user,
-                    referencia_pago=reference
-                )
-                messages.success(request, f"Abono a capital de ${monto_decimal:,.2f} aplicado exitosamente.")
+                if not HistorialPago.objects.filter(referencia_pago=reference).exists():
+                    credit_services.aplicar_abono_credito(
+                        credito=credito,
+                        monto_abono=monto_decimal,
+                        tipo_abono='CAPITAL',
+                        usuario=request.user,
+                        referencia_pago=reference
+                    )
+                messages.success(request, f'Abono a capital de ${monto_decimal:,.2f} aplicado exitosamente.')
             else:
-                HistorialPago.objects.create(
-                    credito=credito,
-                    monto=monto_decimal,
+                pago, created = HistorialPago.objects.get_or_create(
                     referencia_pago=reference,
-                    estado=HistorialPago.EstadoPago.EXITOSO
+                    defaults={
+                        'credito': credito,
+                        'monto': monto_decimal,
+                        'estado': HistorialPago.EstadoPago.EXITOSO,
+                    }
                 )
-                credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
-                messages.success(request, f"Pago de ${monto_decimal:,.2f} procesado exitosamente.")
+                if created:
+                    credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
+                messages.success(request, f'Pago de ${monto_decimal:,.2f} procesado exitosamente.')
             return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
-        elif status == 'DECLINED':
-            messages.error(request, "El pago fue rechazado. Por favor intenta con otro método.")
-            return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
-        else:
-            messages.warning(request, "El pago está pendiente de confirmación.")
+        if status == 'DECLINED':
+            messages.error(request, 'El pago fue rechazado. Por favor intenta con otro metodo.')
+            if intent:
+                intent.status = WompiIntent.Estado.DECLINED
+                intent.save(update_fields=['status', 'updated_at'])
             return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
 
+        messages.warning(request, 'El pago esta pendiente de confirmacion.')
+        return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
+
     except WompiAPIException as e:
-        logger.error(f"Error en WOMPI: {str(e)}")
-        messages.error(request, f"Error al procesar el pago: {str(e)}")
+        logger.error(f'Error en WOMPI: {str(e)}')
+        if intent:
+            intent.status = WompiIntent.Estado.ERROR
+            intent.save(update_fields=['status', 'updated_at'])
+        messages.error(request, f'Error al procesar el pago: {str(e)}')
         return redirect('emprendimiento:mi_credito')
     except Exception as e:
-        logger.error(f"Error inesperado: {str(e)}")
-        messages.error(request, "Ocurrió un error inesperado. Por favor intenta de nuevo.")
+        logger.error(f'Error inesperado: {str(e)}')
+        if intent:
+            intent.status = WompiIntent.Estado.ERROR
+            intent.save(update_fields=['status', 'updated_at'])
+        messages.error(request, 'Ocurrio un error inesperado. Por favor intenta de nuevo.')
         return redirect('emprendimiento:mi_credito')
 
 
@@ -1367,21 +1565,52 @@ def pago_wompi_emprendimiento_callback_view(request):
     transaction_id = request.GET.get('id') or request.session.get('wompi_transaction_id_empr')
 
     if not transaction_id:
-        messages.error(request, "No se encontró información de la transacción.")
+        messages.error(request, 'No se encontro informacion de la transaccion.')
         return redirect('emprendimiento:mi_credito')
 
     client = WompiClient()
 
     try:
         transaction = client.get_transaction(transaction_id)
-        status = transaction['data']['status']
+        transaction_data = transaction.get('data', {})
+        status = transaction_data.get('status')
+
+        if transaction_id:
+            WompiIntent.objects.filter(wompi_transaction_id=transaction_id).update(
+                status=_map_wompi_status_to_intent(status)
+            )
+
+        try:
+            attempt = int(request.GET.get('attempt', 0))
+        except (TypeError, ValueError):
+            attempt = 0
+        max_attempts = 12
+
+        if status not in ['APPROVED', 'DECLINED']:
+            if attempt < max_attempts:
+                refresh_url = f"{reverse('emprendimiento:pago_wompi_callback')}?wait=1&attempt={attempt + 1}&id={transaction_id}"
+                return render(request, 'usuariocreditos/pago_wompi_espera.html', {
+                    'refresh_url': refresh_url,
+                    'attempts_left': max_attempts - attempt,
+                })
+            messages.warning(request, f'El pago esta en estado: {status}')
+            request.session.pop('wompi_transaction_id_empr', None)
+            request.session.pop('wompi_credito_id_empr', None)
+            request.session.pop('wompi_reference_empr', None)
+            request.session.pop('wompi_tipo_pago_empr', None)
+            return redirect('emprendimiento:mi_credito')
 
         credito_id = request.session.get('wompi_credito_id_empr')
-        reference = request.session.get('wompi_reference_empr')
+        reference = request.session.get('wompi_reference_empr') or transaction_data.get('reference')
         tipo_pago = (request.session.get('wompi_tipo_pago_empr') or 'CUOTA').upper()
 
+        if not credito_id and reference and '-' in reference:
+            parts = reference.split('-')
+            if len(parts) >= 2:
+                credito_id = parts[1]
+
         if not credito_id:
-            messages.error(request, "Sesión expirada. Por favor intenta de nuevo.")
+            messages.error(request, 'Sesion expirada. Por favor intenta de nuevo.')
             return redirect('emprendimiento:mi_credito')
 
         credito = get_object_or_404(
@@ -1392,29 +1621,33 @@ def pago_wompi_emprendimiento_callback_view(request):
         )
 
         if status == 'APPROVED':
-            monto_decimal = Decimal(transaction['data']['amount_in_cents']) / 100
+            monto_decimal = Decimal(transaction_data.get('amount_in_cents', 0)) / 100
             if tipo_pago == 'CAPITAL':
-                credit_services.aplicar_abono_credito(
-                    credito=credito,
-                    monto_abono=monto_decimal,
-                    tipo_abono='CAPITAL',
-                    usuario=request.user,
-                    referencia_pago=reference
-                )
-                messages.success(request, f"Abono a capital de ${monto_decimal:,.2f} aplicado exitosamente.")
+                if reference and not HistorialPago.objects.filter(referencia_pago=reference).exists():
+                    credit_services.aplicar_abono_credito(
+                        credito=credito,
+                        monto_abono=monto_decimal,
+                        tipo_abono='CAPITAL',
+                        usuario=request.user,
+                        referencia_pago=reference
+                    )
+                messages.success(request, f'Abono a capital de ${monto_decimal:,.2f} aplicado exitosamente.')
             else:
-                HistorialPago.objects.create(
-                    credito=credito,
-                    monto=monto_decimal,
+                pago, created = HistorialPago.objects.get_or_create(
                     referencia_pago=reference,
-                    estado=HistorialPago.EstadoPago.EXITOSO
+                    defaults={
+                        'credito': credito,
+                        'monto': monto_decimal,
+                        'estado': HistorialPago.EstadoPago.EXITOSO,
+                    }
                 )
-                credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
-                messages.success(request, f"Pago de ${monto_decimal:,.2f} procesado exitosamente.")
+                if created:
+                    credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
+                messages.success(request, f'Pago de ${monto_decimal:,.2f} procesado exitosamente.')
         elif status == 'DECLINED':
-            messages.error(request, "El pago fue rechazado.")
+            messages.error(request, 'El pago fue rechazado.')
         else:
-            messages.warning(request, f"El pago está en estado: {status}")
+            messages.warning(request, f'El pago esta en estado: {status}')
 
         request.session.pop('wompi_transaction_id_empr', None)
         request.session.pop('wompi_credito_id_empr', None)
@@ -1424,84 +1657,237 @@ def pago_wompi_emprendimiento_callback_view(request):
         return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
 
     except WompiAPIException as e:
-        logger.error(f"Error al consultar transacción: {str(e)}")
-        messages.error(request, "Error al verificar el estado del pago.")
+        logger.error(f'Error al consultar transaccion: {str(e)}')
+        messages.error(request, 'Error al verificar el estado del pago.')
         return redirect('emprendimiento:mi_credito')
+
+
 @login_required
 @pagador_required
 @require_POST
 def procesar_pago_wompi_view(request):
     """
-    Procesa el pago con WOMPI según el método seleccionado
+    Procesa el pago con WOMPI segun el metodo seleccionado.
     """
     from .services.wompi_client import WompiClient, WompiAPIException
 
+    intent = None
+    wants_json = 'application/json' in (request.content_type or '')
+
     try:
-        # Obtener datos del formulario
-        payment_method_type = request.POST.get('payment_method')
-        credito_id = request.POST.get('credito_id')
-        amount_in_cents = int(request.POST.get('amount_in_cents'))
-        reference = request.POST.get('reference')
-        customer_email = request.POST.get('customer_email')
-        acceptance_token = request.POST.get('acceptance_token')
+        payload = request.POST
+        if wants_json:
+            try:
+                payload = json.loads(request.body.decode('utf-8'))
+            except json.JSONDecodeError:
+                return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
-        credito = get_object_or_404(Credito, id=credito_id)
+        payment_method_type = payload.get('payment_method')
+        credito_id = payload.get('credito_id')
+        amount_in_cents_raw = payload.get('amount_in_cents')
+        reference = payload.get('reference')
+        customer_email = payload.get('customer_email')
+        acceptance_token = payload.get('acceptance_token')
 
-        # Verificar permisos
-        if credito.detalle_libranza.empresa != request.empresa:
-            messages.error(request, "No tiene permisos para pagar este crédito.")
+        if not amount_in_cents_raw or not reference or not credito_id:
+            if wants_json:
+                return JsonResponse({'error': 'Missing payment data'}, status=400)
+            messages.error(request, 'Datos de pago incompletos.')
             return redirect('pagador:dashboard')
 
-        client = WompiClient()
-        redirect_url = request.build_absolute_uri('/pagador/pago/callback/')
+        try:
+            amount_in_cents = int(amount_in_cents_raw)
+        except (TypeError, ValueError):
+            if wants_json:
+                return JsonResponse({'error': 'Invalid amount'}, status=400)
+            messages.error(request, 'Monto invalido.')
+            return redirect('pagador:dashboard')
 
-        # Construir payment_method según el tipo seleccionado
+        credito = get_object_or_404(
+            Credito,
+            id=credito_id,
+            linea=Credito.LineaCredito.LIBRANZA
+        )
+
+        if credito.detalle_libranza.empresa != request.empresa:
+            if wants_json:
+                return JsonResponse({'error': 'Forbidden'}, status=403)
+            messages.error(request, 'No tiene permisos para pagar este credito.')
+            return redirect('pagador:dashboard')
+
+        monto_decimal = Decimal(amount_in_cents) / 100
+        client_ip = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip() or request.META.get('REMOTE_ADDR')
+        user_label = request.user.username if request.user.is_authenticated else 'anonymous'
+        user_agent = (request.META.get('HTTP_USER_AGENT') or '')[:255]
+        referer = (request.META.get('HTTP_REFERER') or '')[:255]
+        request_id = (request.META.get('HTTP_X_REQUEST_ID') or '')[:64]
+        logger.info(
+            'Wompi intento pago: view=pagador credito=%s user=%s ip=%s ref=%s method=%s amount=%s req=%s',
+            credito.id,
+            user_label,
+            client_ip,
+            reference,
+            payment_method_type,
+            amount_in_cents,
+            request_id
+        )
+
+        if payment_method_type not in ['CARD', 'PSE', 'NEQUI', 'BANCOLOMBIA_TRANSFER']:
+            if wants_json:
+                return JsonResponse({'error': 'Invalid payment method'}, status=400)
+            messages.error(request, 'Metodo de pago no valido.')
+            return redirect('pagador:dashboard')
+
+        if not acceptance_token:
+            if wants_json:
+                return JsonResponse({'error': 'Missing acceptance token'}, status=400)
+            messages.error(request, 'Falta acceptance token.')
+            return redirect('pagador:dashboard')
+
+        if reference and reference.startswith('CUOTA-'):
+            parts = reference.split('-')
+            if len(parts) < 3 or parts[1] != str(credito.id):
+                if wants_json:
+                    return JsonResponse({'error': 'Invalid reference'}, status=400)
+                messages.error(request, 'Referencia de pago invalida.')
+                return redirect('pagador:dashboard')
+            try:
+                cuota_num = int(parts[2])
+            except (TypeError, ValueError):
+                if wants_json:
+                    return JsonResponse({'error': 'Invalid reference'}, status=400)
+                messages.error(request, 'Referencia de pago invalida.')
+                return redirect('pagador:dashboard')
+            cuota = credito.tabla_amortizacion.filter(numero_cuota=cuota_num).first()
+            if not cuota:
+                if wants_json:
+                    return JsonResponse({'error': 'Cuota not found'}, status=404)
+                messages.error(request, 'La cuota indicada no existe.')
+                return redirect('pagador:dashboard')
+            if cuota.pagada:
+                if wants_json:
+                    return JsonResponse({'error': 'Cuota already paid'}, status=409)
+                messages.warning(request, 'Esta cuota ya esta pagada.')
+                return redirect('pagador:dashboard')
+
+        rate_limit = getattr(settings, 'WOMPI_RATE_LIMIT_ATTEMPTS', 3)
+        rate_window = getattr(settings, 'WOMPI_RATE_LIMIT_WINDOW_SECONDS', 60)
+        attempt_key = f'wompi:attempts:pagador:{credito.id}:{client_ip}'
+        attempts = cache.get(attempt_key, 0)
+        if attempts >= rate_limit:
+            if wants_json:
+                return JsonResponse({'error': 'Rate limit'}, status=429)
+            messages.warning(request, 'Demasiados intentos. Espera un momento y vuelve a intentar.')
+            return redirect('pagador:credito_detalle', credito_id=credito.id)
+        cache.set(attempt_key, attempts + 1, timeout=rate_window)
+
+        cooldown_seconds = getattr(settings, 'WOMPI_DUPLICATE_COOLDOWN_SECONDS', 300)
+        window_minutes = getattr(settings, 'WOMPI_DUPLICATE_WINDOW_MINUTES', 10)
+        lock_key = f'wompi:lock:pagador:{credito.id}:{reference}:{amount_in_cents}'
+        if not cache.add(lock_key, True, timeout=cooldown_seconds):
+            logger.warning(
+                'Pago duplicado bloqueado por lock: credito=%s user=%s ip=%s ref=%s',
+                credito.id,
+                user_label,
+                client_ip,
+                reference
+            )
+            if wants_json:
+                return JsonResponse({'error': 'Duplicate payment'}, status=409)
+            messages.warning(request, 'Ya hay un pago en proceso para este credito. Espera unos minutos y verifica el estado.')
+            return redirect('pagador:credito_detalle', credito_id=credito.id)
+
+        reciente = timezone.now() - timedelta(minutes=window_minutes)
+        active_intent = WompiIntent.objects.filter(
+            credito=credito,
+            referencia=reference,
+            status__in=[WompiIntent.Estado.CREATED, WompiIntent.Estado.PENDING]
+        ).order_by('-created_at').first()
+        if active_intent and active_intent.created_at >= reciente:
+            if wants_json:
+                return JsonResponse({'error': 'Payment already pending'}, status=409)
+            messages.warning(request, 'Ya hay un pago en proceso para esta cuota.')
+            return redirect('pagador:credito_detalle', credito_id=credito.id)
+        if WompiIntent.objects.filter(
+            credito=credito,
+            referencia=reference,
+            status=WompiIntent.Estado.APPROVED
+        ).exists():
+            if wants_json:
+                return JsonResponse({'error': 'Payment already approved'}, status=409)
+            messages.warning(request, 'Esta cuota ya fue pagada.')
+            return redirect('pagador:credito_detalle', credito_id=credito.id)
+
+        if HistorialPago.objects.filter(referencia_pago=reference).exists():
+            if wants_json:
+                return JsonResponse({'error': 'Payment already recorded'}, status=409)
+            messages.warning(request, 'Ya registramos un pago para esta referencia.')
+            return redirect('pagador:credito_detalle', credito_id=credito.id)
+
+        if not customer_email:
+            customer_email = getattr(credito.detalle_libranza, 'correo_electronico', '') or request.user.email
+
+        client = WompiClient()
+        redirect_url = request.build_absolute_uri(reverse('pagador:pago_wompi_callback'))
+
+        intent = WompiIntent.objects.create(
+            credito=credito,
+            referencia=reference,
+            amount_in_cents=amount_in_cents,
+            payment_method=payment_method_type,
+            status=WompiIntent.Estado.CREATED,
+            usuario=request.user,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            referer=referer
+        )
+
         if payment_method_type == 'CARD':
-            # Tokenizar tarjeta
             card_token_response = client.tokenize_card(
-                card_number=request.POST.get('card_number').replace(' ', ''),
-                cvc=request.POST.get('cvc'),
-                exp_month=request.POST.get('exp_month'),
-                exp_year=request.POST.get('exp_year'),
-                card_holder=request.POST.get('card_holder')
+                card_number=payload.get('card_number', '').replace(' ', ''),
+                cvc=payload.get('cvc'),
+                exp_month=payload.get('exp_month'),
+                exp_year=payload.get('exp_year'),
+                card_holder=payload.get('card_holder')
             )
             card_token = card_token_response['data']['id']
 
             payment_method = WompiClient.build_card_payment_method(
                 token=card_token,
-                installments=int(request.POST.get('installments', 1))
+                installments=int(payload.get('installments', 1))
             )
             customer_data = None
 
         elif payment_method_type == 'PSE':
             payment_method = WompiClient.build_pse_payment_method(
-                financial_institution_code=request.POST.get('financial_institution_code'),
-                user_type=int(request.POST.get('user_type')),
-                user_legal_id_type=request.POST.get('user_legal_id_type'),
-                user_legal_id=request.POST.get('user_legal_id'),
-                payment_description=f"Pago cuota {reference}"
+                financial_institution_code=payload.get('financial_institution_code'),
+                user_type=int(payload.get('user_type')),
+                user_legal_id_type=payload.get('user_legal_id_type'),
+                user_legal_id=payload.get('user_legal_id'),
+                payment_description=f'Pago cuota {reference}'
             )
             customer_data = WompiClient.build_customer_data(
-                phone_number=f"57{request.POST.get('phone_number')}",
-                full_name=request.POST.get('full_name')
+                phone_number=f"57{payload.get('phone_number')}",
+                full_name=payload.get('full_name')
             )
 
         elif payment_method_type == 'NEQUI':
             payment_method = WompiClient.build_nequi_payment_method(
-                phone_number=request.POST.get('nequi_phone')
+                phone_number=payload.get('nequi_phone')
             )
             customer_data = None
 
         elif payment_method_type == 'BANCOLOMBIA_TRANSFER':
             payment_method = WompiClient.build_bancolombia_transfer_payment_method(
-                payment_description=f"Pago cuota {reference}"
+                payment_description=f'Pago cuota {reference}'
             )
             customer_data = None
         else:
-            messages.error(request, "Método de pago no válido.")
+            if wants_json:
+                return JsonResponse({'error': 'Invalid payment method'}, status=400)
+            messages.error(request, 'Metodo de pago no valido.')
             return redirect('pagador:dashboard')
 
-        # Crear transacción en WOMPI
         transaction = client.create_transaction(
             amount_in_cents=amount_in_cents,
             currency='COP',
@@ -1513,85 +1899,139 @@ def procesar_pago_wompi_view(request):
             customer_data=customer_data
         )
 
-        # Guardar transaction_id en sesión
-        request.session['wompi_transaction_id'] = transaction['data']['id']
+        transaction_data = transaction.get('data', {})
+        transaction_id = transaction_data.get('id')
+        transaction_status = transaction_data.get('status')
+        if intent:
+            intent.status = _map_wompi_status_to_intent(transaction_status)
+            if transaction_id:
+                intent.wompi_transaction_id = transaction_id
+            intent.save(update_fields=['status', 'wompi_transaction_id', 'updated_at'])
+
+        request.session['wompi_transaction_id'] = transaction_data.get('id')
         request.session['credito_id'] = credito_id
         request.session['reference'] = reference
 
-        logger.info(f"Wompi transaction response: {transaction}")
+        logger.info(f'Wompi transaction response: {transaction}')
 
-        # Si es método asíncrono, redirigir a la URL de pago
         if payment_method_type in ['PSE', 'NEQUI', 'BANCOLOMBIA_TRANSFER']:
-            payment_method_data = transaction.get('data', {}).get('payment_method', {})
+            payment_method_data = transaction_data.get('payment_method', {})
             extra_data = payment_method_data.get('extra', {})
             async_url = extra_data.get('async_payment_url')
 
             if not async_url:
-                logger.error(f"No async_payment_url en respuesta de Wompi. Payment method data: {payment_method_data}")
-                messages.error(request, "Error: No se recibió URL de pago de Wompi.")
-                return redirect('pagador:dashboard')
+                logger.warning(f'No async_payment_url en respuesta de Wompi. Payment method data: {payment_method_data}')
+                wait_url = f"{reverse('pagador:pago_wompi_callback')}?wait=1&id={transaction_data.get('id')}"
+                if wants_json:
+                    return JsonResponse({'status': transaction_status, 'wait_url': wait_url})
+                return redirect(wait_url)
 
+            if wants_json:
+                return JsonResponse({'status': transaction_status, 'async_url': async_url, 'transaction_id': transaction_id})
             return redirect(async_url)
 
-        # Si es tarjeta, verificar estado inmediatamente
-        status = transaction['data']['status']
+        status = transaction_status
         if status == 'APPROVED':
-            # Registrar el pago
-            monto_decimal = Decimal(amount_in_cents) / 100
-            HistorialPago.objects.create(
-                credito=credito,
-                monto=monto_decimal,
+            pago, created = HistorialPago.objects.get_or_create(
                 referencia_pago=reference,
-                estado=HistorialPago.EstadoPago.EXITOSO
+                defaults={
+                    'credito': credito,
+                    'monto': monto_decimal,
+                    'estado': HistorialPago.EstadoPago.EXITOSO,
+                }
             )
-            credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
-            messages.success(request, f"Pago de ${monto_decimal:,.2f} procesado exitosamente.")
-            return redirect('pagador:dashboard')
-        elif status == 'DECLINED':
-            messages.error(request, "El pago fue rechazado. Por favor intenta con otro método.")
-            return redirect('pagador:dashboard')
-        else:
-            messages.warning(request, "El pago está pendiente de confirmación.")
-            return redirect('pagador:dashboard')
+            if created:
+                credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
+            if wants_json:
+                return JsonResponse({'status': 'APPROVED', 'transaction_id': transaction_id})
+            messages.success(request, f'Pago de ${monto_decimal:,.2f} procesado exitosamente.')
+            return redirect('pagador:credito_detalle', credito_id=credito.id)
+        if status == 'DECLINED':
+            if intent:
+                intent.status = WompiIntent.Estado.DECLINED
+                intent.save(update_fields=['status', 'updated_at'])
+            if wants_json:
+                return JsonResponse({'status': 'DECLINED', 'transaction_id': transaction_id})
+            messages.error(request, 'El pago fue rechazado. Por favor intenta con otro metodo.')
+            return redirect('pagador:credito_detalle', credito_id=credito.id)
+
+        if wants_json:
+            return JsonResponse({'status': status or 'PENDING', 'transaction_id': transaction_id})
+        messages.warning(request, 'El pago esta pendiente de confirmacion.')
+        return redirect('pagador:credito_detalle', credito_id=credito.id)
 
     except WompiAPIException as e:
-        logger.error(f"Error en WOMPI: {str(e)}")
-        messages.error(request, f"Error al procesar el pago: {str(e)}")
+        logger.error(f'Error en WOMPI: {str(e)}')
+        if intent:
+            intent.status = WompiIntent.Estado.ERROR
+            intent.save(update_fields=['status', 'updated_at'])
+        if wants_json:
+            return JsonResponse({'error': str(e)}, status=400)
+        messages.error(request, f'Error al procesar el pago: {str(e)}')
         return redirect('pagador:dashboard')
     except Exception as e:
-        logger.error(f"Error inesperado: {str(e)}")
-        messages.error(request, "Ocurrió un error inesperado. Por favor intenta de nuevo.")
+        logger.error(f'Error inesperado: {str(e)}')
+        if intent:
+            intent.status = WompiIntent.Estado.ERROR
+            intent.save(update_fields=['status', 'updated_at'])
+        if wants_json:
+            return JsonResponse({'error': 'Internal server error'}, status=500)
+        messages.error(request, 'Ocurrio un error inesperado. Por favor intenta de nuevo.')
         return redirect('pagador:dashboard')
 
 
 @require_http_methods(["GET"])
 def pago_wompi_callback_view(request):
     """
-    Callback después de que el usuario completa el pago en WOMPI (PSE, Nequi, Bancolombia)
+    Callback despues de que el usuario completa el pago en WOMPI (PSE, Nequi, Bancolombia)
     """
     from .services.wompi_client import WompiClient, WompiAPIException
 
     transaction_id = request.GET.get('id') or request.session.get('wompi_transaction_id')
 
     if not transaction_id:
-        messages.error(request, "No se encontró información de la transacción.")
+        messages.error(request, 'No se encontro informacion de la transaccion.')
         return redirect('pagador:dashboard')
 
     client = WompiClient()
 
     try:
         wompi_transaction = client.get_transaction(transaction_id)
-        status = wompi_transaction['data']['status']
+        transaction_data = wompi_transaction.get('data', {})
+        status = transaction_data.get('status')
 
-        # Verificar si es un pago masivo CSV
+        if transaction_id:
+            WompiIntent.objects.filter(wompi_transaction_id=transaction_id).update(
+                status=_map_wompi_status_to_intent(status)
+            )
+
+        try:
+            attempt = int(request.GET.get('attempt', 0))
+        except (TypeError, ValueError):
+            attempt = 0
+        max_attempts = 12
+
+        if status not in ['APPROVED', 'DECLINED']:
+            if attempt < max_attempts:
+                refresh_url = f"{reverse('pagador:pago_wompi_callback')}?wait=1&attempt={attempt + 1}&id={transaction_id}"
+                return render(request, 'pagador/pago_wompi_espera.html', {
+                    'refresh_url': refresh_url,
+                    'attempts_left': max_attempts - attempt,
+                })
+            messages.warning(request, f'El pago esta en estado: {status}')
+            request.session.pop('pagos_csv_pendientes', None)
+            request.session.pop('wompi_transaction_id', None)
+            request.session.pop('reference', None)
+            request.session.pop('credito_id', None)
+            return redirect('pagador:dashboard')
+
         pagos_csv_pendientes = request.session.get('pagos_csv_pendientes')
 
         if pagos_csv_pendientes:
-            # PAGO MASIVO CSV
             reference = request.session.get('reference', f"CSV-MASIVO-{timezone.now().strftime('%Y%m%d%H%M%S')}")
 
             if status == 'APPROVED':
-                monto_total = Decimal(wompi_transaction['data']['amount_in_cents']) / 100
+                monto_total = Decimal(transaction_data.get('amount_in_cents', 0)) / 100
                 pagos_exitosos = 0
 
                 with transaction.atomic():
@@ -1600,66 +2040,76 @@ def pago_wompi_callback_view(request):
                         if credito:
                             monto_pago = Decimal(pago_info['monto'])
 
-                            # Crear registro de pago
-                            HistorialPago.objects.create(
-                                credito=credito,
-                                monto=monto_pago,
+                            pago, created = HistorialPago.objects.get_or_create(
                                 referencia_pago=f"{reference}-{credito.id}",
-                                estado=HistorialPago.EstadoPago.EXITOSO
+                                defaults={
+                                    'credito': credito,
+                                    'monto': monto_pago,
+                                    'estado': HistorialPago.EstadoPago.EXITOSO,
+                                }
                             )
 
-                            # Actualizar saldo
-                            credit_services.actualizar_saldo_tras_pago(credito, monto_pago)
-                            pagos_exitosos += 1
+                            if created:
+                                credit_services.actualizar_saldo_tras_pago(credito, monto_pago)
+                                pagos_exitosos += 1
 
-                messages.success(request, f"¡Pago masivo procesado exitosamente! Se aplicaron {pagos_exitosos} pagos por un total de ${monto_total:,.2f}")
+                messages.success(
+                    request,
+                    f'Pago masivo procesado exitosamente. Se aplicaron {pagos_exitosos} pagos por un total de ${monto_total:,.2f}'
+                )
             elif status == 'DECLINED':
-                messages.error(request, "El pago fue rechazado. No se aplicaron los pagos del CSV.")
+                messages.error(request, 'El pago fue rechazado. No se aplicaron los pagos del CSV.')
             else:
-                messages.warning(request, f"El pago está en estado: {status}")
+                messages.warning(request, f'El pago esta en estado: {status}')
 
-            # Limpiar sesión
             request.session.pop('pagos_csv_pendientes', None)
             request.session.pop('wompi_transaction_id', None)
             request.session.pop('reference', None)
 
-        else:
-            # PAGO INDIVIDUAL
-            credito_id = request.session.get('credito_id')
-            reference = request.session.get('reference')
+            return redirect('pagador:dashboard')
 
-            if not credito_id:
-                messages.error(request, "Sesión expirada. Por favor intenta de nuevo.")
-                return redirect('pagador:dashboard')
+        credito_id = request.session.get('credito_id')
+        reference = request.session.get('reference') or transaction_data.get('reference')
 
-            credito = get_object_or_404(Credito, id=credito_id)
+        if not credito_id and reference and '-' in reference:
+            parts = reference.split('-')
+            if len(parts) >= 2:
+                credito_id = parts[1]
 
-            if status == 'APPROVED':
-                # Registrar el pago
-                monto_decimal = Decimal(wompi_transaction['data']['amount_in_cents']) / 100
-                HistorialPago.objects.create(
-                    credito=credito,
-                    monto=monto_decimal,
-                    referencia_pago=reference,
-                    estado=HistorialPago.EstadoPago.EXITOSO
-                )
+        if not credito_id:
+            messages.error(request, 'Sesion expirada. Por favor intenta de nuevo.')
+            return redirect('pagador:dashboard')
+
+        credito = get_object_or_404(Credito, id=credito_id)
+
+        if status == 'APPROVED':
+            monto_decimal = Decimal(transaction_data.get('amount_in_cents', 0)) / 100
+            pago, created = HistorialPago.objects.get_or_create(
+                referencia_pago=reference,
+                defaults={
+                    'credito': credito,
+                    'monto': monto_decimal,
+                    'estado': HistorialPago.EstadoPago.EXITOSO,
+                }
+            )
+            if created:
                 credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
-                messages.success(request, f"Pago de ${monto_decimal:,.2f} procesado exitosamente.")
-            elif status == 'DECLINED':
-                messages.error(request, "El pago fue rechazado.")
-            else:
-                messages.warning(request, f"El pago está en estado: {status}")
+            messages.success(request, f'Pago de ${monto_decimal:,.2f} procesado exitosamente.')
+        elif status == 'DECLINED':
+            messages.error(request, 'El pago fue rechazado.')
+        else:
+            messages.warning(request, f'El pago esta en estado: {status}')
 
-            # Limpiar sesión
-            request.session.pop('wompi_transaction_id', None)
-            request.session.pop('credito_id', None)
-            request.session.pop('reference', None)
+        request.session.pop('wompi_transaction_id', None)
+        request.session.pop('credito_id', None)
+        request.session.pop('reference', None)
+
+        return redirect('pagador:credito_detalle', credito_id=credito.id)
 
     except WompiAPIException as e:
-        logger.error(f"Error al consultar transacción: {str(e)}")
-        messages.error(request, "Error al verificar el estado del pago.")
-
-    return redirect('pagador:dashboard')
+        logger.error(f'Error al consultar transaccion: {str(e)}')
+        messages.error(request, 'Error al verificar el estado del pago.')
+        return redirect('pagador:dashboard')
 
 
 @login_required
@@ -1821,6 +2271,17 @@ def wompi_webhook_view(request):
             amount_in_cents = transaction_data.get('amount_in_cents')
 
             logger.info(f"Transacción {transaction_id} actualizada a estado: {status}, Referencia: {reference}")
+            mapped_status = _map_wompi_status_to_intent(status)
+            intent_updated = 0
+            if transaction_id:
+                intent_updated = WompiIntent.objects.filter(wompi_transaction_id=transaction_id).update(
+                    status=mapped_status
+                )
+            if not intent_updated and reference:
+                intent = WompiIntent.objects.filter(referencia=reference).order_by('-created_at').first()
+                if intent:
+                    intent.status = mapped_status
+                    intent.save(update_fields=['status', 'updated_at'])
 
             # Buscar el crédito por la referencia
             # La referencia tiene formato: CUOTA-{credito_id}-{timestamp}

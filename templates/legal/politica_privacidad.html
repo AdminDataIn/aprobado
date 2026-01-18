@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Politica de privacidad - Aprobado</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+</head>
+<body class="body-index">
+<div class="div-body-main">
+    {% include 'base/navbar.html' %}
+
+    <main style="background-color: #f9fafb; padding: 48px 16px;">
+        <section style="max-width: 900px; margin: 0 auto; background: #ffffff; padding: 32px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);">
+            <h1 style="font-size: 28px; margin-bottom: 8px;">Politica de privacidad y tratamiento de datos</h1>
+            <p style="color: #6b7280; margin-top: 0;">Ultima actualizacion: 17 de enero de 2026</p>
+
+            <p>
+                Esta politica describe el tratamiento de datos personales realizado por Aprobado en Colombia,
+                de conformidad con la Ley 1581 de 2012 y el Decreto 1377 de 2013.
+            </p>
+
+            <h2 style="font-size: 18px; margin-top: 24px;">1. Responsable del tratamiento</h2>
+            <p>
+                Aprobado es responsable del tratamiento de los datos personales recolectados en sus formularios
+                y canales digitales. Para solicitudes relacionadas con datos personales, escriba a
+                <a href="mailto:info@aprobado.com.co">info@aprobado.com.co</a>.
+            </p>
+
+            <h2 style="font-size: 18px; margin-top: 24px;">2. Datos que recolectamos</h2>
+            <ul>
+                <li>Datos de identificacion y contacto.</li>
+                <li>Datos laborales y financieros necesarios para el analisis crediticio.</li>
+                <li>Documentos de soporte aportados voluntariamente por el titular.</li>
+            </ul>
+
+            <h2 style="font-size: 18px; margin-top: 24px;">3. Finalidades del tratamiento</h2>
+            <ul>
+                <li>Gestionar solicitudes de credito y procesos de evaluacion.</li>
+                <li>Verificar identidad, informacion laboral y capacidad de pago.</li>
+                <li>Enviar comunicaciones sobre el estado de la solicitud y el credito.</li>
+                <li>Cumplir obligaciones legales y contractuales.</li>
+            </ul>
+
+            <h2 style="font-size: 18px; margin-top: 24px;">4. Derechos del titular</h2>
+            <p>El titular puede:</p>
+            <ul>
+                <li>Conocer, actualizar y rectificar sus datos personales.</li>
+                <li>Solicitar prueba de la autorizacion otorgada.</li>
+                <li>Solicitar la supresion de sus datos cuando sea procedente.</li>
+                <li>Revocar la autorizacion en los casos permitidos por la ley.</li>
+                <li>Presentar quejas ante la Superintendencia de Industria y Comercio.</li>
+            </ul>
+
+            <h2 style="font-size: 18px; margin-top: 24px;">5. Seguridad y conservacion</h2>
+            <p>
+                Aprobado aplica medidas razonables de seguridad para proteger la informacion y conserva los datos
+                por el tiempo necesario para cumplir las finalidades descritas o las obligaciones legales.
+            </p>
+
+            <h2 style="font-size: 18px; margin-top: 24px;">6. Transferencias y encargados</h2>
+            <p>
+                Los datos pueden ser compartidos con proveedores que apoyen la operacion del servicio, bajo
+                acuerdos de confidencialidad y solo para las finalidades autorizadas.
+            </p>
+        </section>
+    </main>
+
+    {% include 'base/footer.html' %}
+</div>
+</body>
+</html>

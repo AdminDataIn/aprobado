@@ -423,6 +423,30 @@
                         </h2>
                     </div>
                     <div class="card-content">
+                        {% if credito.linea == 'LIBRANZA' %}
+                            {% if not pagador_decision %}
+                                <div class="alert alert-warning mb-3">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                    El pagador aún no ha aprobado la solicitud.
+                                </div>
+                            {% elif pagador_aprobado %}
+                                <div class="alert alert-success mb-3">
+                                    <i class="bi bi-check-circle me-2"></i>
+                                    Pagador aprobó la solicitud.
+                                    {% if pagador_decision.motivo %}
+                                        <div class="small mt-1">Motivo: {{ pagador_decision.motivo }}</div>
+                                    {% endif %}
+                                </div>
+                            {% elif pagador_rechazado %}
+                                <div class="alert alert-danger mb-3">
+                                    <i class="bi bi-x-circle me-2"></i>
+                                    Pagador rechazó la solicitud.
+                                    {% if pagador_decision.motivo %}
+                                        <div class="small mt-1">Motivo: {{ pagador_decision.motivo }}</div>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        {% endif %}
                         <p class="text-muted">Tome una decisión sobre esta solicitud de crédito. Puede aprobarla para continuar el flujo o rechazarla.</p>
                         <form id="process-form" method="post" action="{% url 'gestion:credito_aprobar' credito.id %}">
                             {% csrf_token %}
@@ -445,7 +469,8 @@
                                 <textarea name="observations" id="id_observations" class="form-control" rows="4" placeholder="Añada un motivo para la aprobación o rechazo..." required></textarea>
                             </div>
                             <div class="d-grid gap-2 mt-3">
-                                <button type="submit" name="action" value="approve" class="btn btn-success">
+                                <button type="submit" name="action" value="approve" class="btn btn-success"
+                                        {% if credito.linea == 'LIBRANZA' and not pagador_aprobado %}disabled{% endif %}>
                                     <i class="bi bi-check-lg me-2"></i>
                                     Aprobar
                                 </button>
