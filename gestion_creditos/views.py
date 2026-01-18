@@ -356,8 +356,12 @@ def admin_dashboard_view(request):
 @staff_member_required
 def admin_solicitudes_view(request):
     """Vista para gestionar solicitudes pendientes"""
-    
-    solicitudes_base = Credito.objects.exclude(estado__in=['ACTIVO', 'PAGADO', 'EN_MORA'])
+
+    estado_filter = request.GET.get('estado', '')
+    if estado_filter:
+        solicitudes_base = Credito.objects.all()
+    else:
+        solicitudes_base = Credito.objects.exclude(estado__in=['ACTIVO', 'PAGADO', 'EN_MORA'])
     solicitudes_filtradas = credit_services.filtrar_creditos(request, solicitudes_base)
     
     solicitudes = solicitudes_filtradas.select_related(
@@ -383,7 +387,7 @@ def admin_solicitudes_view(request):
     
     context = {
         'solicitudes': solicitudes_page,
-        'estado_filter': request.GET.get('estado', ''),
+        'estado_filter': estado_filter,
         'linea_filter': request.GET.get('linea', ''),
         'search': request.GET.get('search', ''),
         'estados_choices': Credito.EstadoCredito.choices,

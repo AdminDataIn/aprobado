@@ -502,13 +502,13 @@ def get_admin_dashboard_context(user):
         creditos_mes_emprendimiento = Credito.objects.filter(
             linea='EMPRENDIMIENTO',
             estado__in=['ACTIVO', 'EN_MORA', 'PAGADO'],
-            fecha_desembolso__lte=ultimo_dia_mes
+            fecha_desembolso__date__lte=ultimo_dia_mes
         ).aggregate(saldo=Coalesce(Sum('saldo_pendiente'), Decimal('0.00')))['saldo']
 
         creditos_mes_libranza = Credito.objects.filter(
             linea='LIBRANZA',
             estado__in=['ACTIVO', 'EN_MORA', 'PAGADO'],
-            fecha_desembolso__lte=ultimo_dia_mes
+            fecha_desembolso__date__lte=ultimo_dia_mes
         ).aggregate(saldo=Coalesce(Sum('saldo_pendiente'), Decimal('0.00')))['saldo']
 
         emprendimiento_data.append(float(creditos_mes_emprendimiento))

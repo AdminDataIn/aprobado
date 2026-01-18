@@ -78,7 +78,8 @@ class ZapSignClient:
             "signers": [{
                 "email": email_firmante,
                 "name": nombre_firmante,
-                "auth_mode": "email"
+                "auth_mode": "email",
+                "send_automatic_email": True
             }],
             "brand_name": brand_name,
             "lang": "es"

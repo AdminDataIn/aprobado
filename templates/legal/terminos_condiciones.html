@@ -1,84 +1,434 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    {% load static %}
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terminos y condiciones - Aprobado</title>
-    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
-</head>
-<body class="body-index">
-<div class="div-body-main">
-    {% include 'base/navbar.html' %}
+{% extends 'libranza/base_libranza.html' %}
+{% load static %}
 
-    <main style="background-color: #f9fafb; padding: 48px 16px;">
-        <section style="max-width: 900px; margin: 0 auto; background: #ffffff; padding: 32px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);">
-            <h1 style="font-size: 28px; margin-bottom: 8px;">Terminos y condiciones</h1>
-            <p style="color: #6b7280; margin-top: 0;">Ultima actualizacion: 17 de enero de 2026</p>
+{% block title %}Términos y Condiciones - Aprobado{% endblock %}
 
-            <p>
-                Al usar los canales digitales de Aprobado, usted acepta estos terminos y condiciones.
-                Si no esta de acuerdo, por favor no utilice los servicios.
-            </p>
+{% block extra_head %}
+<style>
+    .legal-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 48px 24px;
+    }
+    
+    .legal-header {
+        text-align: center;
+        margin-bottom: 48px;
+    }
+    
+    .legal-header h1 {
+        font-size: 36px;
+        font-weight: 700;
+        color: #111827;
+        margin-bottom: 12px;
+    }
+    
+    .legal-header .update-date {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: #f3f4f6;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 14px;
+        color: #6b7280;
+    }
+    
+    .legal-header .update-date svg {
+        width: 16px;
+        height: 16px;
+    }
+    
+    .legal-intro {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        color: white;
+        padding: 24px 32px;
+        border-radius: 16px;
+        margin-bottom: 32px;
+    }
+    
+    .legal-intro p {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.6;
+    }
+    
+    .legal-card {
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+        overflow: hidden;
+        margin-bottom: 24px;
+    }
+    
+    .legal-section {
+        padding: 24px 32px;
+        border-bottom: 1px solid #f3f4f6;
+    }
+    
+    .legal-section:last-child {
+        border-bottom: none;
+    }
+    
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+    
+    .section-number {
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        color: white;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 16px;
+        flex-shrink: 0;
+    }
+    
+    .section-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #111827;
+        margin: 0;
+    }
+    
+    .section-content {
+        color: #4b5563;
+        line-height: 1.7;
+        font-size: 15px;
+    }
+    
+    .section-content p {
+        margin: 0 0 12px 0;
+    }
+    
+    .section-content p:last-child {
+        margin-bottom: 0;
+    }
+    
+    .section-content ul {
+        margin: 12px 0;
+        padding-left: 0;
+        list-style: none;
+    }
+    
+    .section-content li {
+        position: relative;
+        padding-left: 28px;
+        margin-bottom: 10px;
+    }
+    
+    .section-content li::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 8px;
+        width: 8px;
+        height: 8px;
+        background: #2563eb;
+        border-radius: 50%;
+    }
+    
+    .contact-card {
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        color: white;
+        padding: 32px;
+        border-radius: 16px;
+        text-align: center;
+    }
+    
+    .contact-card h3 {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0 0 8px 0;
+    }
+    
+    .contact-card p {
+        margin: 0 0 20px 0;
+        opacity: 0.9;
+    }
+    
+    .contact-card a {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: white;
+        color: #059669;
+        padding: 12px 24px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .contact-card a:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    
+    .company-info {
+        text-align: center;
+        margin-top: 32px;
+        padding: 24px;
+        background: #f9fafb;
+        border-radius: 12px;
+    }
+    
+    .company-info p {
+        margin: 4px 0;
+        color: #6b7280;
+        font-size: 14px;
+    }
+    
+    .company-info .company-name {
+        font-weight: 600;
+        color: #111827;
+        font-size: 15px;
+    }
+    
+    @media (max-width: 640px) {
+        .legal-container {
+            padding: 24px 16px;
+        }
+        
+        .legal-header h1 {
+            font-size: 28px;
+        }
+        
+        .legal-section {
+            padding: 20px;
+        }
+        
+        .section-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+        }
+    }
+</style>
+{% endblock %}
 
-            <h2 style="font-size: 18px; margin-top: 24px;">1. Alcance del servicio</h2>
-            <p>
-                Aprobado facilita la recepcion y analisis de solicitudes de credito. La aprobacion
-                esta sujeta a evaluacion de riesgo, verificacion de identidad y politicas internas.
-            </p>
-
-            <h2 style="font-size: 18px; margin-top: 24px;">2. Requisitos y veracidad</h2>
-            <ul>
-                <li>El solicitante debe ser mayor de edad y contar con capacidad legal.</li>
-                <li>La informacion suministrada debe ser veraz, completa y actualizada.</li>
-                <li>La entrega de documentos es voluntaria y puede ser requerida para la evaluacion.</li>
-            </ul>
-
-            <h2 style="font-size: 18px; margin-top: 24px;">3. Uso de datos personales</h2>
-            <p>
-                El tratamiento de datos personales se rige por la Politica de privacidad disponible en
-                este sitio. Al enviar una solicitud, usted autoriza el tratamiento de sus datos para las
-                finalidades informadas.
-            </p>
-
-            <h2 style="font-size: 18px; margin-top: 24px;">4. Comunicaciones</h2>
-            <p>
-                Aprobado podra contactarlo por correo, telefono o canales digitales para confirmar datos,
-                informar el estado de la solicitud o enviar notificaciones relacionadas con el servicio.
-            </p>
-
-            <h2 style="font-size: 18px; margin-top: 24px;">5. Propiedad intelectual</h2>
-            <p>
-                Los contenidos, marcas y elementos del sitio son propiedad de Aprobado o de terceros
-                autorizados y no pueden ser usados sin permiso previo.
-            </p>
-
-            <h2 style="font-size: 18px; margin-top: 24px;">6. Limitacion de responsabilidad</h2>
-            <p>
-                Aprobado no garantiza la aprobacion del credito ni responde por decisiones de terceros.
-                El uso del sitio es bajo su propio riesgo y esta sujeto a disponibilidad.
-            </p>
-
-            <h2 style="font-size: 18px; margin-top: 24px;">7. Modificaciones</h2>
-            <p>
-                Aprobado puede actualizar estos terminos en cualquier momento. La version vigente estara
-                publicada en esta pagina.
-            </p>
-
-            <h2 style="font-size: 18px; margin-top: 24px;">8. Ley aplicable</h2>
-            <p>
-                Estos terminos se interpretan conforme a las leyes de la Republica de Colombia.
-            </p>
-
-            <h2 style="font-size: 18px; margin-top: 24px;">9. Contacto</h2>
-            <p>
-                Para consultas, escriba a <a href="mailto:info@aprobado.com.co">info@aprobado.com.co</a>.
-            </p>
-        </section>
-    </main>
-
-    {% include 'base/footer.html' %}
+{% block content %}
+<div class="legal-container">
+    <!-- Header -->
+    <div class="legal-header">
+        <h1>Términos y Condiciones</h1>
+        <span class="update-date">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            Última actualización: 18 de enero de 2026
+        </span>
+    </div>
+    
+    <!-- Intro -->
+    <div class="legal-intro">
+        <p>
+            Al utilizar los canales digitales de <strong>APROBADO SOLUCIONES DIGITALES SAS</strong>, 
+            usted acepta estos términos y condiciones. Si no está de acuerdo con alguno de ellos, 
+            le solicitamos no utilizar nuestros servicios.
+        </p>
+    </div>
+    
+    <!-- Sections -->
+    <div class="legal-card">
+        <div class="legal-section">
+            <div class="section-header">
+                <span class="section-number">1</span>
+                <h2 class="section-title">Alcance del Servicio</h2>
+            </div>
+            <div class="section-content">
+                <p>
+                    Aprobado facilita la recepción y análisis de solicitudes de crédito de libranza 
+                    para empleados del sector público y privado. La aprobación de cualquier solicitud 
+                    está sujeta a:
+                </p>
+                <ul>
+                    <li>Evaluación de riesgo crediticio</li>
+                    <li>Verificación de identidad y documentación</li>
+                    <li>Validación de información laboral</li>
+                    <li>Políticas internas de la compañía</li>
+                    <li>Disponibilidad de cupo de descuento por nómina</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="legal-section">
+            <div class="section-header">
+                <span class="section-number">2</span>
+                <h2 class="section-title">Requisitos y Veracidad</h2>
+            </div>
+            <div class="section-content">
+                <p>Para acceder a nuestros servicios, el solicitante debe cumplir con:</p>
+                <ul>
+                    <li>Ser mayor de edad (18 años) y contar con capacidad legal para contratar</li>
+                    <li>Ser empleado activo con contrato laboral vigente</li>
+                    <li>Proporcionar información veraz, completa y actualizada</li>
+                    <li>Autorizar la consulta en centrales de riesgo</li>
+                    <li>Entregar los documentos requeridos para la evaluación</li>
+                </ul>
+                <p>
+                    <strong>Importante:</strong> La entrega de información falsa o incompleta puede 
+                    resultar en el rechazo de la solicitud y posibles acciones legales.
+                </p>
+            </div>
+        </div>
+        
+        <div class="legal-section">
+            <div class="section-header">
+                <span class="section-number">3</span>
+                <h2 class="section-title">Tratamiento de Datos Personales</h2>
+            </div>
+            <div class="section-content">
+                <p>
+                    El tratamiento de datos personales se rige por nuestra 
+                    <a href="{% url 'politica_privacidad' %}" style="color: #2563eb; text-decoration: none; font-weight: 500;">Política de Privacidad</a>, 
+                    disponible en este sitio. Al enviar una solicitud, usted autoriza expresamente:
+                </p>
+                <ul>
+                    <li>La recolección y almacenamiento de sus datos personales</li>
+                    <li>La consulta en centrales de información crediticia</li>
+                    <li>El tratamiento de sus datos para las finalidades informadas</li>
+                    <li>La comunicación con su empleador para validar información laboral</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="legal-section">
+            <div class="section-header">
+                <span class="section-number">4</span>
+                <h2 class="section-title">Comunicaciones</h2>
+            </div>
+            <div class="section-content">
+                <p>
+                    Aprobado podrá contactarlo a través de los siguientes canales para gestionar 
+                    su solicitud y crédito:
+                </p>
+                <ul>
+                    <li>Correo electrónico registrado</li>
+                    <li>Mensajes de texto (SMS)</li>
+                    <li>WhatsApp al número registrado</li>
+                    <li>Llamadas telefónicas</li>
+                    <li>Notificaciones en la plataforma</li>
+                </ul>
+                <p>
+                    Estas comunicaciones incluyen: confirmación de datos, estado de la solicitud, 
+                    recordatorios de pago, información sobre su crédito y notificaciones importantes.
+                </p>
+            </div>
+        </div>
+        
+        <div class="legal-section">
+            <div class="section-header">
+                <span class="section-number">5</span>
+                <h2 class="section-title">Obligaciones del Usuario</h2>
+            </div>
+            <div class="section-content">
+                <p>Al utilizar nuestros servicios, usted se compromete a:</p>
+                <ul>
+                    <li>Mantener la confidencialidad de sus credenciales de acceso</li>
+                    <li>Notificar inmediatamente cualquier uso no autorizado de su cuenta</li>
+                    <li>Cumplir con las obligaciones de pago según el plan acordado</li>
+                    <li>Informar cambios en su situación laboral o datos de contacto</li>
+                    <li>No utilizar la plataforma para fines ilícitos</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="legal-section">
+            <div class="section-header">
+                <span class="section-number">6</span>
+                <h2 class="section-title">Propiedad Intelectual</h2>
+            </div>
+            <div class="section-content">
+                <p>
+                    Todos los contenidos, marcas, logos, diseños y elementos del sitio son propiedad 
+                    de APROBADO SOLUCIONES DIGITALES SAS o de terceros que han autorizado su uso. 
+                    Queda prohibido:
+                </p>
+                <ul>
+                    <li>Reproducir, distribuir o modificar cualquier contenido sin autorización</li>
+                    <li>Usar las marcas o logos para fines comerciales</li>
+                    <li>Realizar ingeniería inversa del software o sistemas</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="legal-section">
+            <div class="section-header">
+                <span class="section-number">7</span>
+                <h2 class="section-title">Limitación de Responsabilidad</h2>
+            </div>
+            <div class="section-content">
+                <p>Aprobado no será responsable por:</p>
+                <ul>
+                    <li>La no aprobación de solicitudes de crédito</li>
+                    <li>Decisiones tomadas por terceros (empleadores, centrales de riesgo)</li>
+                    <li>Interrupciones del servicio por causas de fuerza mayor</li>
+                    <li>Daños derivados del uso indebido de la plataforma</li>
+                    <li>Información incorrecta proporcionada por el usuario</li>
+                </ul>
+                <p>
+                    El uso del sitio es bajo su propio riesgo y está sujeto a disponibilidad.
+                </p>
+            </div>
+        </div>
+        
+        <div class="legal-section">
+            <div class="section-header">
+                <span class="section-number">8</span>
+                <h2 class="section-title">Modificaciones</h2>
+            </div>
+            <div class="section-content">
+                <p>
+                    Aprobado se reserva el derecho de modificar estos términos en cualquier momento. 
+                    Los cambios serán publicados en esta página con la fecha de actualización. 
+                    El uso continuado de los servicios después de cualquier modificación constituye 
+                    la aceptación de los nuevos términos.
+                </p>
+            </div>
+        </div>
+        
+        <div class="legal-section">
+            <div class="section-header">
+                <span class="section-number">9</span>
+                <h2 class="section-title">Ley Aplicable y Jurisdicción</h2>
+            </div>
+            <div class="section-content">
+                <p>
+                    Estos términos se rigen por las leyes de la República de Colombia. 
+                    Para cualquier controversia derivada de estos términos, las partes 
+                    se someten a la jurisdicción de los jueces y tribunales de la ciudad 
+                    de Villavicencio, Meta.
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Contact Card -->
+    <div class="contact-card">
+        <h3>¿Tienes preguntas?</h3>
+        <p>Nuestro equipo está disponible para ayudarte con cualquier duda sobre estos términos.</p>
+        <a href="mailto:info@aprobado.com.co">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+            info@aprobado.com.co
+        </a>
+    </div>
+    
+    <!-- Company Info -->
+    <div class="company-info">
+        <p class="company-name">APROBADO SOLUCIONES DIGITALES SAS</p>
+        <p>NIT: 901949137-2</p>
+        <p>Villavicencio, Meta, Colombia</p>
+        <p>WhatsApp: +57 313 247 7352</p>
+    </div>
 </div>
-</body>
-</html>
+{% endblock %}

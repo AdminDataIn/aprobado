@@ -1,74 +1,549 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    {% load static %}
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Politica de privacidad - Aprobado</title>
-    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
-</head>
-<body class="body-index">
-<div class="div-body-main">
-    {% include 'base/navbar.html' %}
+{% extends 'libranza/base_libranza.html' %}
+{% load static %}
 
-    <main style="background-color: #f9fafb; padding: 48px 16px;">
-        <section style="max-width: 900px; margin: 0 auto; background: #ffffff; padding: 32px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);">
-            <h1 style="font-size: 28px; margin-bottom: 8px;">Politica de privacidad y tratamiento de datos</h1>
-            <p style="color: #6b7280; margin-top: 0;">Ultima actualizacion: 17 de enero de 2026</p>
+{% block title %}Política de Privacidad - Aprobado{% endblock %}
 
-            <p>
-                Esta politica describe el tratamiento de datos personales realizado por Aprobado en Colombia,
-                de conformidad con la Ley 1581 de 2012 y el Decreto 1377 de 2013.
-            </p>
+{% block extra_head %}
+<style>
+    .legal-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 48px 24px;
+    }
+    
+    .legal-header {
+        text-align: center;
+        margin-bottom: 48px;
+    }
+    
+    .legal-header h1 {
+        font-size: 36px;
+        font-weight: 700;
+        color: #111827;
+        margin-bottom: 12px;
+    }
+    
+    .legal-header .update-date {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: #f3f4f6;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 14px;
+        color: #6b7280;
+    }
+    
+    .legal-header .update-date svg {
+        width: 16px;
+        height: 16px;
+    }
+    
+    .legal-intro {
+        background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+        color: white;
+        padding: 24px 32px;
+        border-radius: 16px;
+        margin-bottom: 32px;
+    }
+    
+    .legal-intro p {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.6;
+    }
+    
+    .legal-intro a {
+        color: white;
+        text-decoration: underline;
+    }
+    
+    .legal-card {
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+        overflow: hidden;
+        margin-bottom: 24px;
+    }
+    
+    .legal-section {
+        padding: 24px 32px;
+        border-bottom: 1px solid #f3f4f6;
+    }
+    
+    .legal-section:last-child {
+        border-bottom: none;
+    }
+    
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+    
+    .section-number {
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+        color: white;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 16px;
+        flex-shrink: 0;
+    }
+    
+    .section-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #111827;
+        margin: 0;
+    }
+    
+    .section-content {
+        color: #4b5563;
+        line-height: 1.7;
+        font-size: 15px;
+    }
+    
+    .section-content p {
+        margin: 0 0 12px 0;
+    }
+    
+    .section-content p:last-child {
+        margin-bottom: 0;
+    }
+    
+    .section-content ul {
+        margin: 12px 0;
+        padding-left: 0;
+        list-style: none;
+    }
+    
+    .section-content li {
+        position: relative;
+        padding-left: 28px;
+        margin-bottom: 10px;
+    }
+    
+    .section-content li::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 8px;
+        width: 8px;
+        height: 8px;
+        background: #7c3aed;
+        border-radius: 50%;
+    }
+    
+    .highlight-box {
+        background: #faf5ff;
+        border-left: 4px solid #7c3aed;
+        padding: 16px 20px;
+        border-radius: 0 8px 8px 0;
+        margin: 16px 0;
+    }
+    
+    .highlight-box p {
+        margin: 0;
+        color: #6d28d9;
+    }
+    
+    .rights-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 16px;
+        margin-top: 16px;
+    }
+    
+    .right-card {
+        background: #f9fafb;
+        padding: 16px;
+        border-radius: 12px;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .right-card svg {
+        width: 24px;
+        height: 24px;
+        color: #7c3aed;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+    
+    .right-card .right-text {
+        font-size: 14px;
+        color: #374151;
+        line-height: 1.5;
+    }
+    
+    .contact-card {
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        color: white;
+        padding: 32px;
+        border-radius: 16px;
+        text-align: center;
+    }
+    
+    .contact-card h3 {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0 0 8px 0;
+    }
+    
+    .contact-card p {
+        margin: 0 0 20px 0;
+        opacity: 0.9;
+    }
+    
+    .contact-buttons {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+    
+    .contact-card a {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: white;
+        color: #059669;
+        padding: 12px 24px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .contact-card a:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    
+    .company-info {
+        text-align: center;
+        margin-top: 32px;
+        padding: 24px;
+        background: #f9fafb;
+        border-radius: 12px;
+    }
+    
+    .company-info p {
+        margin: 4px 0;
+        color: #6b7280;
+        font-size: 14px;
+    }
+    
+    .company-info .company-name {
+        font-weight: 600;
+        color: #111827;
+        font-size: 15px;
+    }
+    
+    .sic-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: #fef3c7;
+        color: #92400e;
+        padding: 12px 20px;
+        border-radius: 8px;
+        margin-top: 16px;
+        font-size: 13px;
+    }
+    
+    .sic-badge svg {
+        width: 20px;
+        height: 20px;
+    }
+    
+    @media (max-width: 640px) {
+        .legal-container {
+            padding: 24px 16px;
+        }
+        
+        .legal-header h1 {
+            font-size: 28px;
+        }
+        
+        .legal-section {
+            padding: 20px;
+        }
+        
+        .section-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        
+        .contact-buttons {
+            flex-direction: column;
+        }
+        
+        .contact-card a {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
 
-            <h2 style="font-size: 18px; margin-top: 24px;">1. Responsable del tratamiento</h2>
-            <p>
-                Aprobado es responsable del tratamiento de los datos personales recolectados en sus formularios
-                y canales digitales. Para solicitudes relacionadas con datos personales, escriba a
-                <a href="mailto:info@aprobado.com.co">info@aprobado.com.co</a>.
-            </p>
-
-            <h2 style="font-size: 18px; margin-top: 24px;">2. Datos que recolectamos</h2>
-            <ul>
-                <li>Datos de identificacion y contacto.</li>
-                <li>Datos laborales y financieros necesarios para el analisis crediticio.</li>
-                <li>Documentos de soporte aportados voluntariamente por el titular.</li>
-            </ul>
-
-            <h2 style="font-size: 18px; margin-top: 24px;">3. Finalidades del tratamiento</h2>
-            <ul>
-                <li>Gestionar solicitudes de credito y procesos de evaluacion.</li>
-                <li>Verificar identidad, informacion laboral y capacidad de pago.</li>
-                <li>Enviar comunicaciones sobre el estado de la solicitud y el credito.</li>
-                <li>Cumplir obligaciones legales y contractuales.</li>
-            </ul>
-
-            <h2 style="font-size: 18px; margin-top: 24px;">4. Derechos del titular</h2>
-            <p>El titular puede:</p>
-            <ul>
-                <li>Conocer, actualizar y rectificar sus datos personales.</li>
-                <li>Solicitar prueba de la autorizacion otorgada.</li>
-                <li>Solicitar la supresion de sus datos cuando sea procedente.</li>
-                <li>Revocar la autorizacion en los casos permitidos por la ley.</li>
-                <li>Presentar quejas ante la Superintendencia de Industria y Comercio.</li>
-            </ul>
-
-            <h2 style="font-size: 18px; margin-top: 24px;">5. Seguridad y conservacion</h2>
-            <p>
-                Aprobado aplica medidas razonables de seguridad para proteger la informacion y conserva los datos
-                por el tiempo necesario para cumplir las finalidades descritas o las obligaciones legales.
-            </p>
-
-            <h2 style="font-size: 18px; margin-top: 24px;">6. Transferencias y encargados</h2>
-            <p>
-                Los datos pueden ser compartidos con proveedores que apoyen la operacion del servicio, bajo
-                acuerdos de confidencialidad y solo para las finalidades autorizadas.
-            </p>
-        </section>
-    </main>
-
-    {% include 'base/footer.html' %}
+{% block content %}
+<div class="legal-container">
+    <!-- Header -->
+    <div class="legal-header">
+        <h1>Política de Privacidad</h1>
+        <span class="update-date">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            Última actualización: 18 de enero de 2026
+        </span>
+    </div>
+    
+    <!-- Intro -->
+    <div class="legal-intro">
+        <p>
+            Esta política describe el tratamiento de datos personales realizado por 
+            <strong>APROBADO SOLUCIONES DIGITALES SAS</strong> en Colombia, de conformidad con la 
+            <strong>Ley 1581 de 2012</strong> (Ley de Protección de Datos Personales) y el 
+            <strong>Decreto 1377 de 2013</strong>. Su privacidad es importante para nosotros.
+        </p>
+    </div>
+    
+    <!-- Sections -->
+    <div class="legal-card">
+        <div class="legal-section">
+            <div class="section-header">
+                <span class="section-number">1</span>
+                <h2 class="section-title">Responsable del Tratamiento</h2>
+            </div>
+            <div class="section-content">
+                <p>
+                    <strong>APROBADO SOLUCIONES DIGITALES SAS</strong> es el responsable del tratamiento 
+                    de los datos personales recolectados a través de sus formularios, plataforma web 
+                    y canales digitales.
+                </p>
+                <div class="highlight-box">
+                    <p>
+                        <strong>Datos de contacto del responsable:</strong><br>
+                        📧 Email: <a href="mailto:info@aprobado.com.co" style="color: #6d28d9;">info@aprobado.com.co</a><br>
+                        📱 WhatsApp: +57 313 247 7352<br>
+                        📍 Dirección: Villavicencio, Meta, Colombia<br>
+                        🏢 NIT: 901949137-2
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="legal-section">
+            <div class="section-header">
+                <span class="section-number">2</span>
+                <h2 class="section-title">Datos que Recolectamos</h2>
+            </div>
+            <div class="section-content">
+                <p>Recolectamos los siguientes tipos de datos personales:</p>
+                <ul>
+                    <li><strong>Datos de identificación:</strong> Nombre completo, número de cédula, fecha de nacimiento, lugar de expedición</li>
+                    <li><strong>Datos de contacto:</strong> Dirección, teléfono celular, correo electrónico</li>
+                    <li><strong>Datos laborales:</strong> Empresa empleadora, cargo, antigüedad, tipo de contrato, salario</li>
+                    <li><strong>Datos financieros:</strong> Información bancaria, historial crediticio, capacidad de endeudamiento</li>
+                    <li><strong>Documentos de soporte:</strong> Cédula, certificado laboral, desprendibles de nómina, certificación bancaria</li>
+                </ul>
+                <div class="highlight-box">
+                    <p>
+                        <strong>Nota:</strong> No recolectamos datos sensibles como origen racial, opiniones políticas, 
+                        convicciones religiosas, datos de salud o vida sexual, salvo que sea estrictamente necesario 
+                        y cuente con autorización expresa.
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="legal-section">
+            <div class="section-header">
+                <span class="section-number">3</span>
+                <h2 class="section-title">Finalidades del Tratamiento</h2>
+            </div>
+            <div class="section-content">
+                <p>Sus datos personales serán utilizados para:</p>
+                <ul>
+                    <li>Gestionar y evaluar solicitudes de crédito de libranza</li>
+                    <li>Verificar su identidad e información laboral</li>
+                    <li>Consultar su historial en centrales de información crediticia</li>
+                    <li>Determinar su capacidad de pago y nivel de riesgo</li>
+                    <li>Comunicar el estado de su solicitud y crédito</li>
+                    <li>Enviar recordatorios de pago y notificaciones importantes</li>
+                    <li>Gestionar la cartera y realizar cobro de obligaciones</li>
+                    <li>Cumplir obligaciones legales, contables y tributarias</li>
+                    <li>Mejorar nuestros productos y servicios</li>
+                    <li>Prevenir fraudes y actividades ilícitas</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="legal-section">
+            <div class="section-header">
+                <span class="section-number">4</span>
+                <h2 class="section-title">Derechos del Titular</h2>
+            </div>
+            <div class="section-content">
+                <p>Como titular de los datos, usted tiene derecho a:</p>
+                <div class="rights-grid">
+                    <div class="right-card">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                        </svg>
+                        <span class="right-text"><strong>Conocer</strong> sus datos personales y cómo son tratados</span>
+                    </div>
+                    <div class="right-card">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                        </svg>
+                        <span class="right-text"><strong>Actualizar y rectificar</strong> información inexacta o incompleta</span>
+                    </div>
+                    <div class="right-card">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <span class="right-text"><strong>Solicitar prueba</strong> de la autorización otorgada</span>
+                    </div>
+                    <div class="right-card">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                        <span class="right-text"><strong>Solicitar supresión</strong> de datos cuando sea procedente</span>
+                    </div>
+                    <div class="right-card">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                        </svg>
+                        <span class="right-text"><strong>Revocar</strong> la autorización en casos permitidos por ley</span>
+                    </div>
+                    <div class="right-card">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <span class="right-text"><strong>Presentar quejas</strong> ante la Superintendencia de Industria y Comercio</span>
+                    </div>
+                </div>
+                <div class="sic-badge">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span>Superintendencia de Industria y Comercio: www.sic.gov.co | Línea gratuita: 01 8000 910 165</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="legal-section">
+            <div class="section-header">
+                <span class="section-number">5</span>
+                <h2 class="section-title">Seguridad y Conservación</h2>
+            </div>
+            <div class="section-content">
+                <p>
+                    Aprobado implementa medidas técnicas, administrativas y físicas para proteger 
+                    sus datos personales contra acceso no autorizado, pérdida, alteración o destrucción:
+                </p>
+                <ul>
+                    <li>Cifrado de datos en tránsito y en reposo</li>
+                    <li>Control de acceso basado en roles</li>
+                    <li>Monitoreo y auditoría de sistemas</li>
+                    <li>Capacitación del personal en protección de datos</li>
+                    <li>Respaldos periódicos de información</li>
+                </ul>
+                <p>
+                    Los datos serán conservados por el tiempo necesario para cumplir las finalidades 
+                    descritas y las obligaciones legales aplicables (mínimo 10 años para documentos 
+                    contables y tributarios).
+                </p>
+            </div>
+        </div>
+        
+        <div class="legal-section">
+            <div class="section-header">
+                <span class="section-number">6</span>
+                <h2 class="section-title">Transferencias y Encargados</h2>
+            </div>
+            <div class="section-content">
+                <p>
+                    Sus datos pueden ser compartidos con terceros que apoyan la operación del servicio, 
+                    siempre bajo acuerdos de confidencialidad y solo para las finalidades autorizadas:
+                </p>
+                <ul>
+                    <li><strong>Centrales de riesgo:</strong> Para consulta y reporte de información crediticia</li>
+                    <li><strong>Empleadores:</strong> Para validación de información laboral y descuento por nómina</li>
+                    <li><strong>Entidades financieras:</strong> Para procesamiento de desembolsos y pagos</li>
+                    <li><strong>Proveedores tecnológicos:</strong> Para almacenamiento y procesamiento de datos</li>
+                    <li><strong>Autoridades:</strong> Cuando sea requerido por ley o proceso judicial</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="legal-section">
+            <div class="section-header">
+                <span class="section-number">7</span>
+                <h2 class="section-title">Cookies y Tecnologías Similares</h2>
+            </div>
+            <div class="section-content">
+                <p>
+                    Nuestro sitio web utiliza cookies y tecnologías similares para mejorar su experiencia, 
+                    analizar el uso del sitio y personalizar contenidos. Puede configurar su navegador 
+                    para rechazar cookies, aunque esto puede afectar algunas funcionalidades.
+                </p>
+            </div>
+        </div>
+        
+        <div class="legal-section">
+            <div class="section-header">
+                <span class="section-number">8</span>
+                <h2 class="section-title">Cambios en la Política</h2>
+            </div>
+            <div class="section-content">
+                <p>
+                    Esta política puede ser actualizada periódicamente. Los cambios serán publicados 
+                    en esta página con la fecha de actualización. Le recomendamos revisar esta política 
+                    regularmente para estar informado sobre cómo protegemos sus datos.
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Contact Card -->
+    <div class="contact-card">
+        <h3>Ejerce tus derechos</h3>
+        <p>Para consultas, solicitudes o reclamos relacionados con tus datos personales, contáctanos:</p>
+        <div class="contact-buttons">
+            <a href="mailto:info@aprobado.com.co">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                </svg>
+                info@aprobado.com.co
+            </a>
+            <a href="https://wa.me/573132477352" target="_blank">
+                <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                </svg>
+                WhatsApp
+            </a>
+        </div>
+    </div>
+    
+    <!-- Company Info -->
+    <div class="company-info">
+        <p class="company-name">APROBADO SOLUCIONES DIGITALES SAS</p>
+        <p>NIT: 901949137-2</p>
+        <p>Villavicencio, Meta, Colombia</p>
+        <p>WhatsApp: +57 313 247 7352</p>
+    </div>
 </div>
-</body>
-</html>
+{% endblock %}
