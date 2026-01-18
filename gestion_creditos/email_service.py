@@ -96,6 +96,11 @@ def enviar_notificacion_cambio_estado(credito, nuevo_estado, motivo=""):
 
     config = configuraciones.get(nuevo_estado)
     if not config:
+        if nuevo_estado in {
+            Credito.EstadoCredito.APROBADO,
+            Credito.EstadoCredito.PENDIENTE_FIRMA,
+        }:
+            return False
         logger.warning(f"No hay configuración de email para el estado: {nuevo_estado}")
         return False
 

@@ -72,14 +72,16 @@ class ZapSignClient:
         """
         endpoint = f"{self.base_url}/docs/"
 
+        auth_mode = getattr(settings, 'ZAPSIGN_AUTH_MODE', 'assinaturaTela')
+        send_automatic_email = getattr(settings, 'ZAPSIGN_SEND_AUTOMATIC_EMAIL', True)
         payload = {
             "name": nombre,
             "url_pdf": url_pdf,
             "signers": [{
                 "email": email_firmante,
                 "name": nombre_firmante,
-                "auth_mode": "email",
-                "send_automatic_email": True
+                "auth_mode": auth_mode,
+                "send_automatic_email": send_automatic_email
             }],
             "brand_name": brand_name,
             "lang": "es"
@@ -259,15 +261,33 @@ def enviar_pagare_a_zapsign(pagare: Pagare, url_pdf_publica: str) -> Pagare:
             brand_name="Aprobado"
         )
 
-        # Actualizar pagaré con datos de ZapSign
+        sign_url = response_data['signers'][0].get('sign_url')
+
+        # Actualizar pagar? con datos de ZapSign
         pagare.zapsign_doc_token = response_data['token']
-        pagare.zapsign_sign_url = response_data['signers'][0]['sign_url']
+        pagare.zapsign_sign_url = sign_url
         pagare.estado = Pagare.EstadoPagare.SENT
         pagare.fecha_envio = timezone.now()
         pagare.save()
 
+        enviar_email_local = getattr(settings, 'ZAPSIGN_SEND_LOCAL_EMAIL', False)
+        if getattr(settings, 'ZAPSIGN_ENVIRONMENT', 'sandbox') == 'sandbox':
+            enviar_email_local = True
+        if enviar_email_local and sign_url:
+            try:
+                from gestion_creditos.email_service import enviar_email_simple
+                asunto = f"Firma de pagar? {pagare.numero_pagare}"
+                mensaje = (
+                    f"Hola {nombre_firmante},\n\n"
+                    f"Ya puedes firmar tu pagar? desde este enlace:\n{sign_url}\n\n"
+                    "Si no solicitaste este cr?dito, por favor ignora este mensaje."
+                )
+                enviar_email_simple(email_firmante, asunto, mensaje)
+            except Exception as e:
+                logger.error(f"Error al enviar email local de firma para pagar? {pagare.numero_pagare}: {e}")
+
         logger.info(
-            f"Pagaré {pagare.numero_pagare} enviado exitosamente a ZapSign. "
+            f"Pagar? {pagare.numero_pagare} enviado exitosamente a ZapSign. "
             f"Token: {pagare.zapsign_doc_token}"
         )
 
