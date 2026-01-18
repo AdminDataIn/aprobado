@@ -34,8 +34,8 @@ class Migration(migrations.Migration):
                 'verbose_name_plural': 'Wompi Intents',
                 'ordering': ['-created_at'],
                 'indexes': [
-                    models.Index(fields=['credito', 'status'], name='wompi_intent_credito_status_idx'),
-                    models.Index(fields=['referencia'], name='wompi_intent_referencia_idx'),
+                    models.Index(fields=['credito', 'status'], name='wompi_int_c_s_idx'),
+                    models.Index(fields=['referencia'], name='wompi_int_ref_idx'),
                 ],
             },
         ),
