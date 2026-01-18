@@ -78,7 +78,12 @@ def preparar_documento_para_firma(credito, usuario_modificacion):
         if pagare and pagare.estado in [Pagare.EstadoPagare.SENT, Pagare.EstadoPagare.SIGNED]:
             credito.documento_enviado = True
             credito.save(update_fields=['documento_enviado'])
-            logger.info(f"El pagare del credito {credito.id} ya fue enviado o firmado.")
+            logger.info(
+                "Pagare %s ya en estado %s, no se reenvia. credito=%s",
+                pagare.numero_pagare,
+                pagare.estado,
+                credito.id
+            )
             return
 
         pagare = generar_pagare_pdf(credito, usuario_modificacion)
@@ -93,10 +98,21 @@ def preparar_documento_para_firma(credito, usuario_modificacion):
                             f"PDF del pagare no disponible para credito {pagare_db.credito_id}. "
                             f"Archivo: {pagare_db.archivo_pdf.name if pagare_db.archivo_pdf else 'N/A'}"
                         )
+                        logger.error(
+                            "Pagare %s no enviado: PDF no disponible. credito=%s",
+                            pagare_db.numero_pagare,
+                            pagare_db.credito_id
+                        )
                         return
 
                     url_pdf_publica = generar_url_publica_temporal(pagare_db)
                     pagare_enviado = enviar_pagare_a_zapsign(pagare_db, url_pdf_publica)
+                    logger.info(
+                        "Pagare %s enviado a ZapSign. credito=%s token=%s",
+                        pagare_enviado.numero_pagare,
+                        pagare_enviado.credito_id,
+                        pagare_enviado.zapsign_doc_token
+                    )
 
                     credito_db = pagare_enviado.credito
                     credito_db.documento_enviado = pagare_enviado.estado in [
@@ -106,11 +122,27 @@ def preparar_documento_para_firma(credito, usuario_modificacion):
                     credito_db.save(update_fields=['documento_enviado'])
                 except ZapSignAPIError as e:
                     logger.error(f"Error al enviar el pagare a ZapSign para credito {credito.id}: {e}")
+                    logger.error(
+                        "Pagare no enviado: ZapSignAPIError. credito=%s",
+                        credito.id
+                    )
                 except Exception as e:
                     logger.error(f"Error inesperado al enviar pagare a ZapSign para credito {credito.id}: {e}")
+                    logger.error(
+                        "Pagare no enviado: error inesperado. credito=%s",
+                        credito.id
+                    )
 
             # Asegurar que el pagaré y su PDF ya estén comprometidos en la BD antes de enviarlo a ZapSign.
             transaction.on_commit(_enviar_pagare)
+
+        if pagare.estado != Pagare.EstadoPagare.CREATED:
+            logger.warning(
+                "Pagare %s en estado %s, no se envia a ZapSign. credito=%s",
+                pagare.numero_pagare,
+                pagare.estado,
+                credito.id
+            )
 
         credito.documento_enviado = pagare.estado in [Pagare.EstadoPagare.SENT, Pagare.EstadoPagare.SIGNED]
         credito.save(update_fields=['documento_enviado'])
