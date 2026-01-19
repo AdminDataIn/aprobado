@@ -36,6 +36,8 @@ urlpatterns = [
     path('pago/wompi/<int:credito_id>/', views.iniciar_pago_wompi_view, name='pagar_wompi'),
     path('pago/wompi/procesar/', views.procesar_pago_wompi_view, name='procesar_pago_wompi'),
     path('pago/wompi/callback/', views.pago_wompi_callback_view, name='pago_wompi_callback'),
+    path('pago/wompi/resumen/<str:transaction_id>/', views.pagador_pago_resumen_wompi_view, name='pago_wompi_resumen'),
+    path('pago/wompi/comprobante/<str:transaction_id>/', views.pagador_pago_comprobante_wompi_view, name='pago_wompi_comprobante'),
 
     # ========================================
     # PAGO MASIVO CON WOMPI

@@ -1135,6 +1135,95 @@ def _map_wompi_status_to_intent(status):
         return WompiIntent.Estado.EXPIRED
     return WompiIntent.Estado.PENDING
 
+
+def _parse_wompi_datetime(value):
+    if not value:
+        return None
+    try:
+        return timezone.localtime(datetime.fromisoformat(value.replace('Z', '+00:00')))
+    except (ValueError, TypeError):
+        return None
+
+
+def _extract_credito_id_from_reference(reference):
+    if not reference or '-' not in reference:
+        return None
+    parts = reference.split('-')
+    if len(parts) < 2:
+        return None
+    try:
+        return int(parts[1])
+    except (TypeError, ValueError):
+        return None
+
+
+def _get_metodo_pago_wompi(transaction_data):
+    payment_method = transaction_data.get('payment_method') or {}
+    method_type = transaction_data.get('payment_method_type') or payment_method.get('type')
+    if not method_type:
+        return None, None
+
+    extra = payment_method.get('extra') or {}
+    banco = extra.get('financial_institution_name') or extra.get('financial_institution_code')
+    detalle = None
+    last_four = extra.get('last_four') or extra.get('card_last_four')
+    if last_four:
+        detalle = f"**** {last_four}"
+    elif payment_method.get('phone_number'):
+        detalle = payment_method.get('phone_number')
+    return method_type, banco or detalle
+
+
+def _enviar_resumen_pago_pagador(request, credito, transaction_data):
+    try:
+        from gestion_creditos.email_service import enviar_confirmacion_pago
+    except Exception:
+        return
+
+    pagador_email = request.user.email
+    if not pagador_email:
+        return
+
+    transaction_id = transaction_data.get('id')
+    reference = transaction_data.get('reference')
+    cache_key = f"wompi:pagador:email:{reference or transaction_id}:{pagador_email}"
+    if not cache.add(cache_key, True, timeout=86400):
+        return
+
+    monto_pagado = Decimal(transaction_data.get('amount_in_cents', 0)) / 100
+    metodo_pago, banco = _get_metodo_pago_wompi(transaction_data)
+    fecha_pago = _parse_wompi_datetime(
+        transaction_data.get('finalized_at') or transaction_data.get('created_at')
+    )
+    cta_url = request.build_absolute_uri(
+        reverse('pagador:pago_wompi_resumen', kwargs={'transaction_id': transaction_id})
+    ) if transaction_id else request.build_absolute_uri(reverse('pagador:dashboard'))
+
+    enviar_confirmacion_pago(
+        credito,
+        monto_pagado,
+        credito.saldo_pendiente or Decimal('0.00'),
+        destinatario=pagador_email,
+        nombre_destinatario=request.user.get_full_name() or request.user.username,
+        referencia=reference,
+        metodo_pago=metodo_pago,
+        banco=banco,
+        fecha_pago=fecha_pago,
+        cta_url=cta_url,
+        cta_label='Ver comprobante'
+    )
+
+
+def _get_credito_pagador_from_reference(request, reference):
+    credito_id = request.session.get('credito_id') or _extract_credito_id_from_reference(reference)
+    if not credito_id:
+        return None
+    return Credito.objects.filter(
+        id=credito_id,
+        linea=Credito.LineaCredito.LIBRANZA,
+        detalle_libranza__empresa=request.empresa
+    ).select_related('detalle_libranza').first()
+
 @login_required
 @pagador_required
 def iniciar_pago_wompi_view(request, credito_id):
@@ -1692,6 +1781,7 @@ def procesar_pago_wompi_view(request):
         reference = payload.get('reference')
         customer_email = payload.get('customer_email')
         acceptance_token = payload.get('acceptance_token')
+        tipo_pago = (payload.get('tipo_pago') or '').upper()
 
         if not amount_in_cents_raw or not reference or not credito_id:
             if wants_json:
@@ -1946,10 +2036,14 @@ def procesar_pago_wompi_view(request):
             )
             if created:
                 credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
+            if tipo_pago != 'MASIVO':
+                credito.refresh_from_db()
+                _enviar_resumen_pago_pagador(request, credito, transaction_data)
             if wants_json:
-                return JsonResponse({'status': 'APPROVED', 'transaction_id': transaction_id})
+                receipt_url = reverse('pagador:pago_wompi_resumen', kwargs={'transaction_id': transaction_id})
+                return JsonResponse({'status': 'APPROVED', 'transaction_id': transaction_id, 'receipt_url': receipt_url})
             messages.success(request, f'Pago de ${monto_decimal:,.2f} procesado exitosamente.')
-            return redirect('pagador:credito_detalle', credito_id=credito.id)
+            return redirect('pagador:pago_wompi_resumen', transaction_id=transaction_id)
         if status == 'DECLINED':
             if intent:
                 intent.status = WompiIntent.Estado.DECLINED
@@ -2098,6 +2192,8 @@ def pago_wompi_callback_view(request):
             )
             if created:
                 credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
+            credito.refresh_from_db()
+            _enviar_resumen_pago_pagador(request, credito, transaction_data)
             messages.success(request, f'Pago de ${monto_decimal:,.2f} procesado exitosamente.')
         elif status == 'DECLINED':
             messages.error(request, 'El pago fue rechazado.')
@@ -2108,12 +2204,129 @@ def pago_wompi_callback_view(request):
         request.session.pop('credito_id', None)
         request.session.pop('reference', None)
 
+        if status == 'APPROVED':
+            return redirect('pagador:pago_wompi_resumen', transaction_id=transaction_id)
         return redirect('pagador:credito_detalle', credito_id=credito.id)
 
     except WompiAPIException as e:
         logger.error(f'Error al consultar transaccion: {str(e)}')
         messages.error(request, 'Error al verificar el estado del pago.')
         return redirect('pagador:dashboard')
+
+
+@login_required
+@pagador_required
+def pagador_pago_resumen_wompi_view(request, transaction_id):
+    """
+    Muestra el resumen de pago para el pagador.
+    """
+    from .services.wompi_client import WompiClient, WompiAPIException
+
+    client = WompiClient()
+    try:
+        wompi_transaction = client.get_transaction(transaction_id)
+        transaction_data = wompi_transaction.get('data', {})
+    except WompiAPIException as e:
+        logger.error(f"Error consultando transaccion WOMPI {transaction_id}: {e}")
+        messages.error(request, "No pudimos obtener el resumen del pago.")
+        return redirect('pagador:dashboard')
+
+    status = transaction_data.get('status')
+    if status != 'APPROVED':
+        messages.warning(request, f"El pago esta en estado: {status}")
+        return redirect('pagador:dashboard')
+
+    reference = transaction_data.get('reference')
+    credito = _get_credito_pagador_from_reference(request, reference)
+    if not credito:
+        messages.error(request, "No se encontro el credito asociado al pago.")
+        return redirect('pagador:dashboard')
+
+    monto_pagado = Decimal(transaction_data.get('amount_in_cents', 0)) / 100
+    metodo_pago, banco = _get_metodo_pago_wompi(transaction_data)
+    fecha_pago = _parse_wompi_datetime(
+        transaction_data.get('finalized_at') or transaction_data.get('created_at')
+    ) or timezone.now()
+
+    context = {
+        'credito': credito,
+        'pagador_nombre': request.user.get_full_name() or request.user.username,
+        'pagador_email': request.user.email,
+        'referencia_pago': reference,
+        'transaction_id': transaction_id,
+        'monto_pagado': monto_pagado,
+        'metodo_pago': metodo_pago,
+        'banco': banco,
+        'fecha_pago': fecha_pago,
+        'estado_pago': status,
+        'saldo_pendiente': credito.saldo_pendiente,
+        'fecha_proximo_pago': credito.fecha_proximo_pago,
+        'comprobante_url': reverse('pagador:pago_wompi_comprobante', kwargs={'transaction_id': transaction_id}),
+    }
+
+    return render(request, 'pagador/pago_wompi_confirmado.html', context)
+
+
+@login_required
+@pagador_required
+def pagador_pago_comprobante_wompi_view(request, transaction_id):
+    """
+    Genera el comprobante PDF del pago para el pagador.
+    """
+    from .services.wompi_client import WompiClient, WompiAPIException
+    from django.template.loader import render_to_string
+    from django.templatetags.static import static
+    from weasyprint import HTML
+
+    client = WompiClient()
+    try:
+        wompi_transaction = client.get_transaction(transaction_id)
+        transaction_data = wompi_transaction.get('data', {})
+    except WompiAPIException as e:
+        logger.error(f"Error consultando transaccion WOMPI {transaction_id}: {e}")
+        messages.error(request, "No pudimos generar el comprobante.")
+        return redirect('pagador:dashboard')
+
+    status = transaction_data.get('status')
+    if status != 'APPROVED':
+        messages.warning(request, f"El pago esta en estado: {status}")
+        return redirect('pagador:dashboard')
+
+    reference = transaction_data.get('reference')
+    credito = _get_credito_pagador_from_reference(request, reference)
+    if not credito:
+        messages.error(request, "No se encontro el credito asociado al pago.")
+        return redirect('pagador:dashboard')
+
+    monto_pagado = Decimal(transaction_data.get('amount_in_cents', 0)) / 100
+    metodo_pago, banco = _get_metodo_pago_wompi(transaction_data)
+    fecha_pago = _parse_wompi_datetime(
+        transaction_data.get('finalized_at') or transaction_data.get('created_at')
+    ) or timezone.now()
+
+    context = {
+        'logo_url': request.build_absolute_uri(static('images/logo-dark.png')),
+        'credito': credito,
+        'pagador_nombre': request.user.get_full_name() or request.user.username,
+        'pagador_email': request.user.email,
+        'referencia_pago': reference,
+        'transaction_id': transaction_id,
+        'monto_pagado': monto_pagado,
+        'metodo_pago': metodo_pago,
+        'banco': banco,
+        'fecha_pago': fecha_pago,
+        'estado_pago': status,
+        'saldo_pendiente': credito.saldo_pendiente,
+        'fecha_proximo_pago': credito.fecha_proximo_pago,
+    }
+
+    html = render_to_string('pagador/pago_wompi_comprobante.html', context)
+    pdf_bytes = HTML(string=html).write_pdf()
+
+    filename = f"comprobante_{reference or transaction_id}.pdf"
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename=\"{filename}\"'
+    return response
 
 
 @login_required

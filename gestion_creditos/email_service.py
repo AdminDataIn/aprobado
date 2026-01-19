@@ -176,7 +176,19 @@ def enviar_recordatorio_pago(credito, dias_restantes):
     )
 
 
-def enviar_confirmacion_pago(credito, monto_pagado, nuevo_saldo):
+def enviar_confirmacion_pago(
+    credito,
+    monto_pagado,
+    nuevo_saldo,
+    destinatario=None,
+    nombre_destinatario=None,
+    referencia=None,
+    metodo_pago=None,
+    banco=None,
+    fecha_pago=None,
+    cta_url=None,
+    cta_label=None,
+):
     """
     Envía confirmación de pago recibido.
 
@@ -189,15 +201,21 @@ def enviar_confirmacion_pago(credito, monto_pagado, nuevo_saldo):
 
     context = {
         'credito': credito,
-        'nombre_cliente': credito.nombre_cliente,
+        'nombre_cliente': nombre_destinatario or credito.nombre_cliente,
         'monto_pagado': f"${monto_pagado:,.2f}",
         'nuevo_saldo': f"${nuevo_saldo:,.2f}",
         'numero_credito': credito.numero_credito,
         'fecha_proximo_pago': credito.fecha_proximo_pago,
+        'fecha_pago': fecha_pago or timezone.now(),
+        'referencia_pago': referencia,
+        'metodo_pago': metodo_pago,
+        'banco': banco,
+        'cta_url': cta_url,
+        'cta_label': cta_label,
     }
 
     return enviar_email_html(
-        destinatario=credito.usuario.email,
+        destinatario=destinatario or credito.usuario.email,
         asunto=asunto,
         template_html='emails/confirmacion_pago.html',
         context=context

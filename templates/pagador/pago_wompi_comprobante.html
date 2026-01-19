@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+{% load humanize %}
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 12px;
+            color: #111827;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #E5E7EB;
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+        }
+        .title {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .section {
+            margin-bottom: 16px;
+        }
+        .section-title {
+            font-size: 13px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #6B7280;
+            margin-bottom: 8px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        td {
+            padding: 6px 0;
+        }
+        .label {
+            color: #6B7280;
+        }
+        .value {
+            text-align: right;
+            font-weight: bold;
+        }
+        .footer {
+            margin-top: 24px;
+            border-top: 1px solid #E5E7EB;
+            padding-top: 12px;
+            font-size: 11px;
+            color: #6B7280;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <div class="title">Comprobante de pago</div>
+            <div>Referencia: {{ referencia_pago|default:"-" }}</div>
+        </div>
+        {% if logo_url %}
+        <img src="{{ logo_url }}" alt="Aprobado" style="height: 28px;">
+        {% endif %}
+    </div>
+
+    <div class="section">
+        <div class="section-title">Datos del pago</div>
+        <table>
+            <tr>
+                <td class="label">Monto pagado</td>
+                <td class="value">${{ monto_pagado|floatformat:2|intcomma }}</td>
+            </tr>
+            <tr>
+                <td class="label">Metodo</td>
+                <td class="value">{{ metodo_pago|default:"-" }}</td>
+            </tr>
+            {% if banco %}
+            <tr>
+                <td class="label">Banco / Detalle</td>
+                <td class="value">{{ banco }}</td>
+            </tr>
+            {% endif %}
+            <tr>
+                <td class="label">Fecha</td>
+                <td class="value">{{ fecha_pago|date:"d/m/Y H:i" }}</td>
+            </tr>
+            <tr>
+                <td class="label">Estado</td>
+                <td class="value">{{ estado_pago }}</td>
+            </tr>
+            <tr>
+                <td class="label">Transaccion</td>
+                <td class="value">{{ transaction_id }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Credito</div>
+        <table>
+            <tr>
+                <td class="label">Credito</td>
+                <td class="value">{{ credito.numero_credito }}</td>
+            </tr>
+            <tr>
+                <td class="label">Saldo pendiente</td>
+                <td class="value">${{ saldo_pendiente|default:0|floatformat:2|intcomma }}</td>
+            </tr>
+            {% if fecha_proximo_pago %}
+            <tr>
+                <td class="label">Proximo vencimiento</td>
+                <td class="value">{{ fecha_proximo_pago|date:"d/m/Y" }}</td>
+            </tr>
+            {% endif %}
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Pagador</div>
+        <table>
+            <tr>
+                <td class="label">Nombre</td>
+                <td class="value">{{ pagador_nombre }}</td>
+            </tr>
+            <tr>
+                <td class="label">Email</td>
+                <td class="value">{{ pagador_email|default:"-" }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        Aprobado Soluciones Digitales SAS - NIT 901949137-2
+    </div>
+</body>
+</html>

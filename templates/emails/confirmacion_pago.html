@@ -43,7 +43,11 @@
 
             <!-- Info Card -->
             <div style="background-color: #F9FAFB; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                {% if referencia_pago %}
+                <p style="font-size: 12px; color: #6B7280; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.3px;">Referencia {{ referencia_pago }}</p>
+                {% else %}
                 <p style="font-size: 12px; color: #6B7280; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.3px;">Referencia PAY-{{ credito.id }}-{{ fecha_pago|date:"YmdHis"|default:"000000" }}</p>
+                {% endif %}
                 <p style="font-size: 32px; font-weight: 700; color: #059669; margin: 0 0 4px 0;">{{ monto_pagado }}</p>
 
                 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-top: 16px;">
@@ -51,6 +55,18 @@
                         <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #6B7280;">Credito</td>
                         <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ numero_credito }}</td>
                     </tr>
+                    {% if metodo_pago %}
+                    <tr>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #6B7280;">Metodo</td>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ metodo_pago }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if banco %}
+                    <tr>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #6B7280;">Banco</td>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ banco }}</td>
+                    </tr>
+                    {% endif %}
                     <tr>
                         <td style="padding: 12px 0; font-size: 14px; color: #6B7280;">Fecha de pago</td>
                         <td style="padding: 12px 0; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ fecha_pago|date:"d \d\e F \d\e Y"|default:"Hoy" }}</td>
@@ -69,7 +85,7 @@
 
             <!-- CTA Button -->
             <div style="text-align: center; margin: 24px 0;">
-                <a href="https://aprobado.com.co/libranza/login/" style="display: inline-block; padding: 12px 32px; background-color: #111827; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600;">Ver Estado de Cuenta</a>
+                <a href="{{ cta_url|default:'https://aprobado.com.co/libranza/login/' }}" style="display: inline-block; padding: 12px 32px; background-color: #111827; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600;">{{ cta_label|default:'Ver Estado de Cuenta' }}</a>
                 <p style="font-size: 12px; color: #6B7280; text-align: center; margin-top: 12px;">Guarda este correo como comprobante de pago.</p>
             </div>
 

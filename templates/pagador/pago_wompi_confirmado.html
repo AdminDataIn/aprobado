@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pago Confirmado - Aprobado</title>
+    {% load static %}
+    {% load humanize %}
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+    <style>
+        .summary-card {
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        .status-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: rgba(16, 185, 129, 0.12);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            text-align: left;
+        }
+        .summary-item {
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: #f8f9fb;
+        }
+        .summary-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: #6c757d;
+        }
+        .summary-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #212529;
+        }
+    </style>
+</head>
+<body class="theme-details">
+    <header class="page-header">
+        <div class="container-fluid" style="max-width: 1400px;">
+            <div class="d-flex align-items-center justify-content-between">
+                <a href="{% url 'pagador:dashboard' %}" class="logo">
+                    <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;">
+                </a>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="user-info">
+                        <div class="user-details">
+                            <h6 class="mb-0">{{ pagador_nombre }}</h6>
+                            <small>Pagador</small>
+                        </div>
+                        <div class="user-avatar">{{ pagador_nombre|slice:":1"|upper }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container-fluid py-4" style="max-width: 900px;">
+        <nav aria-label="breadcrumb" class="mb-4">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'pagador:dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+                <li class="breadcrumb-item active">Pago confirmado</li>
+            </ol>
+        </nav>
+
+        <div class="card summary-card">
+            <div class="card-header">
+                <h3 class="card-title mb-0"><i class="bi bi-check-circle-fill me-2 text-success"></i>Pago confirmado</h3>
+            </div>
+            <div class="card-content text-center py-4">
+                <div class="status-icon">
+                    <i class="bi bi-check-lg text-success fs-3"></i>
+                </div>
+                <h4 class="mb-1">Gracias, {{ pagador_nombre }}!</h4>
+                <p class="text-muted mb-4">Tu pago fue recibido y procesado exitosamente.</p>
+
+                <div class="summary-grid mb-4">
+                    <div class="summary-item">
+                        <div class="summary-label">Referencia</div>
+                        <div class="summary-value">{{ referencia_pago|default:"-" }}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Monto pagado</div>
+                        <div class="summary-value">${{ monto_pagado|floatformat:2|intcomma }}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Credito</div>
+                        <div class="summary-value">{{ credito.numero_credito }}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Metodo</div>
+                        <div class="summary-value">{{ metodo_pago|default:"-" }}</div>
+                    </div>
+                    {% if banco %}
+                    <div class="summary-item">
+                        <div class="summary-label">Banco / Detalle</div>
+                        <div class="summary-value">{{ banco }}</div>
+                    </div>
+                    {% endif %}
+                    <div class="summary-item">
+                        <div class="summary-label">Fecha</div>
+                        <div class="summary-value">{{ fecha_pago|date:"d/m/Y H:i" }}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Saldo pendiente</div>
+                        <div class="summary-value">${{ saldo_pendiente|default:0|floatformat:2|intcomma }}</div>
+                    </div>
+                    {% if fecha_proximo_pago %}
+                    <div class="summary-item">
+                        <div class="summary-label">Proximo vencimiento</div>
+                        <div class="summary-value">{{ fecha_proximo_pago|date:"d/m/Y" }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="d-flex flex-wrap justify-content-center gap-2">
+                    <a href="{{ comprobante_url }}" class="btn btn-primary">
+                        <i class="bi bi-download me-1"></i> Descargar comprobante
+                    </a>
+                    <a href="{% url 'pagador:credito_detalle' credito.id %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-eye me-1"></i> Ver credito
+                    </a>
+                    <a href="{% url 'pagador:dashboard' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-house-door me-1"></i> Volver al dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
