@@ -178,6 +178,8 @@
                             <td class="text-end amount-display">
                                 {% if credito.estado == 'EN_REVISION' %}
                                     <span class="text-muted fst-italic">En revisión</span>
+                                {% elif credito.estado == 'PAGADO' %}
+                                    <span class="text-success fw-semibold">$0</span>
                                 {% elif credito.saldo_pendiente %}
                                     ${{ credito.saldo_pendiente|intcomma }}
                                 {% else %}
@@ -187,6 +189,8 @@
                             <td class="text-end amount-display">
                                 {% if credito.estado == 'EN_REVISION' %}
                                     <span class="text-muted fst-italic">En revisión</span>
+                                {% elif credito.estado == 'PAGADO' %}
+                                    <span class="text-success fw-semibold">Pagado</span>
                                 {% elif credito.valor_cuota %}
                                     ${{ credito.valor_cuota|intcomma }}
                                 {% else %}
@@ -196,6 +200,8 @@
                             <td class="text-center date-display">
                                 {% if credito.estado == 'EN_REVISION' %}
                                     <span class="text-muted fst-italic">Pendiente</span>
+                                {% elif credito.estado == 'PAGADO' %}
+                                    <span class="text-success fw-semibold">Finalizado</span>
                                 {% elif credito.fecha_proximo_pago %}
                                     {{ credito.fecha_proximo_pago|date:"d/m/Y" }}
                                 {% else %}
