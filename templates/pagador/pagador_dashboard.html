@@ -114,8 +114,8 @@
                             <option value="monto_aprobado" {% if sort_by == 'monto_aprobado' %}selected{% endif %}>Monto Original (Menor a Mayor)</option>
                             <option value="-saldo_pendiente" {% if sort_by == '-saldo_pendiente' %}selected{% endif %}>Saldo Pendiente (Mayor a Menor)</option>
                             <option value="saldo_pendiente" {% if sort_by == 'saldo_pendiente' %}selected{% endif %}>Saldo Pendiente (Menor a Mayor)</option>
-                            <option value="detalle_libranza__nombre_completo" {% if sort_by == 'detalle_libranza__nombre_completo' %}selected{% endif %}>Empleado (A-Z)</option>
-                            <option value="-detalle_libranza__nombre_completo" {% if sort_by == '-detalle_libranza__nombre_completo' %}selected{% endif %}>Empleado (Z-A)</option>
+                            <option value="detalle_libranza__nombres" {% if sort_by == 'detalle_libranza__nombres' %}selected{% endif %}>Empleado (A-Z)</option>
+                            <option value="-detalle_libranza__nombres" {% if sort_by == '-detalle_libranza__nombres' %}selected{% endif %}>Empleado (Z-A)</option>
                             <option value="detalle_libranza__cedula" {% if sort_by == 'detalle_libranza__cedula' %}selected{% endif %}>Cédula (Asc)</option>
                             <option value="-detalle_libranza__cedula" {% if sort_by == '-detalle_libranza__cedula' %}selected{% endif %}>Cédula (Desc)</option>
                             <option value="estado" {% if sort_by == 'estado' %}selected{% endif %}>Estado (A-Z)</option>

@@ -804,7 +804,8 @@ def pagador_dashboard_view(request):
     #? Aplicar filtros de búsqueda
     if search_query:
         creditos_empresa = creditos_empresa.filter(
-            Q(detalle_libranza__nombre_completo__icontains=search_query) |
+            Q(detalle_libranza__nombres__icontains=search_query) |
+            Q(detalle_libranza__apellidos__icontains=search_query) |
             Q(detalle_libranza__cedula__icontains=search_query)
         )
 
@@ -813,7 +814,7 @@ def pagador_dashboard_view(request):
 
     #? Aplicar ordenamiento
     valid_sort_fields = [
-        'detalle_libranza__nombre_completo', '-detalle_libranza__nombre_completo',
+        'detalle_libranza__nombres', '-detalle_libranza__nombres',
         'detalle_libranza__cedula', '-detalle_libranza__cedula',
         'monto_aprobado', '-monto_aprobado',
         'saldo_pendiente', '-saldo_pendiente',
