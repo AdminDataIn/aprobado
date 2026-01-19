@@ -271,8 +271,6 @@ def enviar_pagare_a_zapsign(pagare: Pagare, url_pdf_publica: str) -> Pagare:
         pagare.save()
 
         enviar_email_local = getattr(settings, 'ZAPSIGN_SEND_LOCAL_EMAIL', False)
-        if getattr(settings, 'ZAPSIGN_ENVIRONMENT', 'sandbox') == 'sandbox':
-            enviar_email_local = True
         if enviar_email_local and sign_url:
             try:
                 from gestion_creditos.email_service import enviar_email_simple

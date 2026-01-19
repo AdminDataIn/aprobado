@@ -187,6 +187,9 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
     lugar_expedicion = "Villavicencio, Meta, Colombia"
     lugar_pago = f"{ciudad_deudor}, Meta, Colombia"
 
+    # Calcular otros conceptos (comision + IVA)
+    otros_conceptos = (comision or Decimal('0.00')) + (iva_comision or Decimal('0.00'))
+
     # Calcular intereses totales
     valor_total_pagar = valor_cuota * Decimal(str(plazo_cuotas))
     intereses_totales = valor_total_pagar - capital_financiado
@@ -215,7 +218,7 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
         'acreedor_detalle': f"(NIT {nit_acreedor})",
         'capital_valor': formatear_cop(monto_base),
         'intereses_valor': formatear_cop(intereses_totales),
-        'otros_conceptos_valor': '',
+        'otros_conceptos_valor': formatear_cop(otros_conceptos) if otros_conceptos > 0 else '',
         'monto_numeros': formatear_cop(monto_base),
         'monto_letras': numero_a_letras(monto_base),
         'valor_cuota': formatear_cop(valor_cuota),
