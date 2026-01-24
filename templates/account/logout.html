@@ -5,7 +5,7 @@
     <h2 style="color: #202124; margin-bottom: 1rem;">¿Seguro que desea cerrar sesión?</h2>
     <p style="color: #5f6368; margin-bottom: 2rem;">Dejarás de tener acceso a tu cuenta y tus créditos.</p>
 
-    <form method="post" action="{% url 'emprendimiento:logout' %}">
+    <form method="post" action="{% if es_libranza %}{% url 'libranza:logout' %}{% else %}{% url 'emprendimiento:logout' %}{% endif %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-danger" style="padding: 12px 48px; font-size: 1rem; border-radius: 8px; border: none; background: #dc3545; color: white; cursor: pointer; width: 100%; margin-bottom: 1rem;">
             Sí, cerrar sesión

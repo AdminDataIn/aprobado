@@ -10,6 +10,7 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}body-index{% endblock %}">
+{% include 'base/loader_global.html' %}
 <div class="div-body-main">
     {% include 'base/navbar_libranza.html' %}
 
@@ -21,5 +22,7 @@
     {% include 'base/footer_libranza.html' %}
 </div>
 {% block extra_scripts %}{% endblock %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script src="{% static 'js/global_loader.js' %}"></script>
 </body>
 </html>

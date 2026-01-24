@@ -14,6 +14,7 @@
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
 </head>
 <body class="theme-applications">
+{% include 'base/loader_global.html' %}
     <!-- Header -->
     <header class="page-header">
         <div class="container-fluid" style="max-width: 1400px;">
@@ -256,5 +257,7 @@
             }
         });
     </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script src="{% static 'js/global_loader.js' %}"></script>
 </body>
 </html>

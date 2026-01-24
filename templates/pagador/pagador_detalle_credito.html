@@ -12,6 +12,7 @@
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
 </head>
 <body class="theme-details">
+{% include 'base/loader_global.html' %}
     <header class="page-header">
         <div class="container-fluid" style="max-width: 1400px;">
             <div class="d-flex align-items-center justify-content-between">
@@ -26,7 +27,7 @@
                         </div>
                         <div class="user-avatar">{{ request.user.username|slice:":1"|upper }}</div>
                     </div>
-                    <form method="post" action="{% url 'account_logout' %}">
+                    <form method="post" action="{% url 'libranza:logout' %}">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-outline">
                             <i class="bi bi-box-arrow-right"></i>
@@ -110,7 +111,8 @@
                                     <i class="bi bi-x-circle"></i>
                                     <span>Rechazar</span>
                                 </button>
-                                <button type="submit" name="action" value="approve" class="btn btn-success btn-decision">
+                                <button type="submit" name="action" value="approve" class="btn btn-success btn-decision"
+                                        data-loader-type="check" data-loader-text="Aprobando solicitud...">
                                     <i class="bi bi-check-circle"></i>
                                     <span>Aprobar</span>
                                 </button>
@@ -397,5 +399,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script src="{% static 'js/global_loader.js' %}"></script>
 </body>
 </html>

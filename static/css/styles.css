@@ -2369,9 +2369,66 @@ body {
     background-color: #e5e7eb;
 }
 
+.step-item:last-child .step-connector {
+    display: none;
+}
+
+/* LOADER GLOBAL */
+#globalLoader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+#globalLoader.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+#lottieLoader {
+    width: 200px;
+    height: 200px;
+}
+
+.loader-text {
+    margin-top: 1rem;
+    color: #0ea5e9;
+    font-weight: 600;
+    font-size: 1.05rem;
+}
+
 /* Contenido principal */
 .form-main {
     padding: 1.5rem;
+}
+
+.form-main-grid {
+    display: grid;
+    gap: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+    .form-main-grid {
+        grid-template-columns: minmax(0, 1fr) 320px;
+        align-items: start;
+    }
+}
+
+.credito-resumen-panel {
+    position: sticky;
+    top: 1.5rem;
 }
 
 .step-title {
@@ -2387,6 +2444,55 @@ body {
 .form-grid {
     display: grid;
     gap: 1.5rem;
+}
+
+.credito-resumen {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    background-color: #f8fafc;
+}
+
+
+.credito-resumen-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.credito-resumen-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.9rem;
+    color: #334155;
+}
+
+.credito-resumen-row:last-child {
+    border-bottom: none;
+}
+
+.credito-resumen-row.muted {
+    color: #94a3b8;
+}
+
+.credito-resumen-row.total {
+    border-top: 2px solid #0ea5e9;
+    padding-top: 0.75rem;
+    margin-top: 0.5rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.credito-resumen-row.cuota {
+    font-weight: 700;
+    color: #0ea5e9;
 }
 
 .form-field {

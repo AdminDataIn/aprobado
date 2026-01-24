@@ -85,6 +85,7 @@ que requiere autenticación con Google (según especificaciones).
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
 </head>
 <body class="body-index">
+{% include 'base/loader_global.html' %}
 <div class="div-body-main">
     {% include 'base/navbar_libranza.html' %}
 
@@ -902,5 +903,7 @@ que requiere autenticación con Google (según especificaciones).
     });
 </script>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script src="{% static 'js/global_loader.js' %}"></script>
 </body>
 </html>

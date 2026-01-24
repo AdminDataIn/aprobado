@@ -18,13 +18,18 @@ class ProductoContextMiddleware:
         if request.user.is_authenticated:
             path = request.path
 
+            nuevo_producto = None
+
             # Detectar si viene de URLs de libranza
             if any(url_part in path for url_part in ['/libranza/', '/pagador/']):
-                request.session['producto_actual'] = 'LIBRANZA'
+                nuevo_producto = 'LIBRANZA'
 
             # Detectar si viene de URLs de emprendimiento
             elif any(url_part in path for url_part in ['/emprendimiento/', '/aplicando/']):
-                request.session['producto_actual'] = 'EMPRENDIMIENTO'
+                nuevo_producto = 'EMPRENDIMIENTO'
+
+            if nuevo_producto and request.session.get('producto_actual') != nuevo_producto:
+                request.session['producto_actual'] = nuevo_producto
 
             # Billetera y otras URLs no cambian el producto actual
             # Se mantiene el último producto detectado

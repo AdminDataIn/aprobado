@@ -201,11 +201,106 @@ def actualizar_saldo_tras_pago(credito, monto_pagado):
     credito_id = credito.id
     credito = Credito.objects.select_for_update().get(id=credito_id)
 
-    # ✅ Validar que el crédito tenga los campos necesarios
-    if not all([credito.tasa_interes, credito.saldo_pendiente is not None, credito.monto_aprobado]):
-        logger.warning(f"No se puede actualizar saldo para crédito {credito.numero_credito}: faltan datos clave")
+    # ✅ Validar y completar datos críticos si faltan
+    if credito.monto_aprobado is None:
+        logger.warning(
+            f"No se puede actualizar saldo para crédito {credito.numero_credito}: falta monto_aprobado"
+        )
         return
 
+    updated_fields = []
+
+    if credito.tasa_interes is None:
+        if credito.linea == Credito.LineaCredito.EMPRENDIMIENTO:
+            credito.tasa_interes = Decimal('3.5')
+        else:
+            credito.tasa_interes = Decimal('2.0')
+        updated_fields.append('tasa_interes')
+
+    if credito.comision is None:
+        credito.comision = credito.monto_aprobado * Decimal('0.10')
+        updated_fields.append('comision')
+
+    if credito.iva_comision is None:
+        credito.iva_comision = (credito.comision or Decimal('0.00')) * Decimal('0.19')
+        updated_fields.append('iva_comision')
+
+    capital_financiado_inicial = credito.monto_aprobado + (credito.comision or Decimal('0.00')) + (credito.iva_comision or Decimal('0.00'))
+
+    if credito.valor_cuota is None or credito.total_a_pagar is None:
+        if credito.plazo:
+            tasa_mensual_inicial = (credito.tasa_interes or Decimal('0.00')) / Decimal(100)
+            if credito.valor_cuota is None:
+                if tasa_mensual_inicial > 0:
+                    factor = (tasa_mensual_inicial * (1 + tasa_mensual_inicial) ** credito.plazo) / (
+                        ((1 + tasa_mensual_inicial) ** credito.plazo) - 1
+                    )
+                    credito.valor_cuota = capital_financiado_inicial * factor
+                else:
+                    credito.valor_cuota = capital_financiado_inicial / credito.plazo
+                updated_fields.append('valor_cuota')
+            if credito.total_a_pagar is None and credito.valor_cuota is not None:
+                credito.total_a_pagar = credito.valor_cuota * credito.plazo
+                updated_fields.append('total_a_pagar')
+
+    if credito.saldo_pendiente is None:
+        credito.saldo_pendiente = capital_financiado_inicial
+        updated_fields.append('saldo_pendiente')
+
+    if credito.capital_pendiente is None:
+        credito.capital_pendiente = credito.monto_aprobado
+        updated_fields.append('capital_pendiente')
+
+    if credito.fecha_proximo_pago is None:
+        hoy = timezone.now().date()
+        if hoy.day <= 15:
+            credito.fecha_proximo_pago = hoy + relativedelta(months=1)
+        else:
+            credito.fecha_proximo_pago = (hoy + relativedelta(months=2)).replace(day=1)
+        updated_fields.append('fecha_proximo_pago')
+
+    if updated_fields:
+        credito.save(update_fields=updated_fields)
+
+    if (
+        not credito.tabla_amortizacion.exists()
+        and credito.plazo
+        and credito.valor_cuota
+        and credito.fecha_proximo_pago
+    ):
+        saldo_capital_restante = capital_financiado_inicial
+        fecha_cuota = credito.fecha_proximo_pago
+        tasa_mensual_tabla = (credito.tasa_interes or Decimal('0.00')) / Decimal(100)
+        cuotas = []
+        for i in range(1, credito.plazo + 1):
+            interes_a_pagar = saldo_capital_restante * tasa_mensual_tabla
+            capital_a_pagar = credito.valor_cuota - interes_a_pagar
+            if i == credito.plazo:
+                capital_a_pagar = saldo_capital_restante
+                interes_a_pagar = credito.valor_cuota - capital_a_pagar
+                if interes_a_pagar < 0:
+                    interes_a_pagar = Decimal('0.00')
+                    capital_a_pagar = credito.valor_cuota
+
+            saldo_capital_restante -= capital_a_pagar
+            if saldo_capital_restante < 0:
+                saldo_capital_restante = Decimal('0.00')
+
+            cuotas.append(
+                CuotaAmortizacion(
+                    credito=credito,
+                    numero_cuota=i,
+                    fecha_vencimiento=fecha_cuota,
+                    capital_a_pagar=capital_a_pagar,
+                    interes_a_pagar=interes_a_pagar,
+                    valor_cuota=credito.valor_cuota,
+                    saldo_capital_pendiente=saldo_capital_restante
+                )
+            )
+            fecha_cuota += relativedelta(months=1)
+
+        if cuotas:
+            CuotaAmortizacion.objects.bulk_create(cuotas, ignore_conflicts=True)
     monto_pagado = Decimal(monto_pagado)
     tasa_mensual = credito.tasa_interes / Decimal(100)
 

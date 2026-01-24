@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 {% load humanize %}
@@ -10,12 +11,25 @@
             color: #111827;
         }
         .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
             border-bottom: 1px solid #E5E7EB;
             padding-bottom: 12px;
             margin-bottom: 16px;
+        }
+        .header-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .header-left,
+        .header-right {
+            vertical-align: middle;
+        }
+        .header-right {
+            text-align: right;
+            white-space: nowrap;
+        }
+        .logo {
+            height: 28px;
+            display: inline-block;
         }
         .title {
             font-size: 18px;
@@ -56,14 +70,21 @@
     </style>
 </head>
 <body>
+{% include 'base/loader_global.html' %}
     <div class="header">
-        <div>
-            <div class="title">Comprobante de pago</div>
-            <div>Referencia: {{ referencia_pago|default:"-" }}</div>
-        </div>
-        {% if logo_url %}
-        <img src="{{ logo_url }}" alt="Aprobado" style="height: 28px;">
-        {% endif %}
+        <table class="header-table">
+            <tr>
+                <td class="header-left">
+                    <div class="title">Comprobante de pago</div>
+                    <div>Referencia: {{ referencia_pago|default:"-" }}</div>
+                </td>
+                <td class="header-right">
+                    {% if logo_url %}
+                    <img class="logo" src="{{ logo_url }}" alt="Aprobado">
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
     </div>
 
     <div class="section">
@@ -135,5 +156,7 @@
     <div class="footer">
         Aprobado Soluciones Digitales SAS - NIT 901949137-2
     </div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script src="{% static 'js/global_loader.js' %}"></script>
 </body>
 </html>

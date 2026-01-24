@@ -48,6 +48,7 @@ urlpatterns = [
     # UTILIDADES Y REPORTES
     # ========================================
     path('descargar-csv-cuotas/', views.descargar_csv_cuotas_pendientes_view, name='descargar_csv_cuotas'),
+    path('descargar-reporte/', views.descargar_reporte_pagador_view, name='descargar_reporte'),
 
     # API endpoints
     path('api/bancos-pse/', views.get_pse_banks_view, name='api_bancos_pse'),

@@ -138,7 +138,12 @@
 
                             <div class="user-menu-item logout-item">
                                 <i class="bi bi-box-arrow-right text-danger"></i>
-                                <a href="{% url 'account_logout' %}" class="text-decoration-none text-danger fw-semibold">Cerrar Sesión</a>
+                                <form method="post" action="{% url 'libranza:logout' %}" class="m-0">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-link p-0 text-decoration-none text-danger fw-semibold">
+                                        Cerrar Sesión
+                                    </button>
+                                </form>
                             </div>
                         </div>
                     </div>

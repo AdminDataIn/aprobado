@@ -30,6 +30,7 @@ MODIFICAR:
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
 </head>
 <body class="body-index">
+{% include 'base/loader_global.html' %}
 <div class="div-body-main">
     <!-- Navbar exclusivo de Libranza -->
     {% include 'base/navbar_libranza.html' %}
@@ -287,5 +288,7 @@ ivaComisionInput.value = formatColombianNumber(ivaComision);
     });
 </script>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script src="{% static 'js/global_loader.js' %}"></script>
 </body>
 </html>

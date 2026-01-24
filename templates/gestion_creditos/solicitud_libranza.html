@@ -41,6 +41,7 @@ MODIFICAR:
 </head>
 
 <body class="body-index">
+{% include 'base/loader_global.html' %}
 <div class="div-body-main">
     {% include 'base/navbar_libranza.html' %}
 
@@ -84,9 +85,11 @@ MODIFICAR:
             </div>
             <!-- Contenido del formulario -->
             <div class="form-main">
-                {# NUEVA URL - Libranza #}
-                <form id="formularioLibranza" method="POST" enctype="multipart/form-data" action="{% url 'libranza:solicitar' %}">
-                    {% csrf_token %}
+                <div class="form-main-grid">
+                    <div class="form-steps-column">
+                        {# NUEVA URL - Libranza #}
+                <form id="formularioLibranza" method="POST" enctype="multipart/form-data" action="{% url 'libranza:solicitar' %}" data-loader="ajax" data-loader-text="Enviando solicitud...">
+                            {% csrf_token %}
 
                     <!-- Paso 1: Información del Crédito -->
                     <div class="form-step active" id="step-1">
@@ -204,7 +207,43 @@ MODIFICAR:
                             <button type="submit" class="form-button submit">Enviar Solicitud</button>
                         </div>
                     </div>
-                </form>
+                        </form>
+                    </div>
+
+                    <aside class="credito-resumen-panel">
+                        <div class="credito-resumen">
+                            <h3 class="credito-resumen-title">Transparencia del crédito</h3>
+                            <div class="credito-resumen-row">
+                                <span>Monto solicitado:</span>
+                                <span id="resumen-monto">-</span>
+                            </div>
+                            <div class="credito-resumen-row">
+                                <span>Comisión (10%):</span>
+                                <span id="resumen-comision">-</span>
+                            </div>
+                            <div class="credito-resumen-row">
+                                <span>IVA sobre comisión (19%):</span>
+                                <span id="resumen-iva">-</span>
+                            </div>
+                            <div class="credito-resumen-row">
+                                <span>Intereses (2% EM):</span>
+                                <span id="resumen-intereses">-</span>
+                            </div>
+                            <div class="credito-resumen-row muted">
+                                <span>Afianzadora (4% + IVA) - Próximamente:</span>
+                                <span id="resumen-afianzadora">-</span>
+                            </div>
+                            <div class="credito-resumen-row total">
+                                <span>Total a pagar:</span>
+                                <span id="resumen-total">-</span>
+                            </div>
+                            <div class="credito-resumen-row cuota">
+                                <span>Cuota mensual:</span>
+                                <span id="resumen-cuota">-</span>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
             </div>
         </div>
     </main>
@@ -379,6 +418,13 @@ MODIFICAR:
         const valorCreditoInput = document.getElementById('valor_credito');
         const ingresosMensualesInput = document.getElementById('ingresos_mensuales');
         const plazoSelect = document.getElementById('plazo');
+        const resumenMonto = document.getElementById('resumen-monto');
+        const resumenComision = document.getElementById('resumen-comision');
+        const resumenIva = document.getElementById('resumen-iva');
+        const resumenIntereses = document.getElementById('resumen-intereses');
+        const resumenAfianzadora = document.getElementById('resumen-afianzadora');
+        const resumenTotal = document.getElementById('resumen-total');
+        const resumenCuota = document.getElementById('resumen-cuota');
         let lockedMonto = null;
         let lockedPlazo = null;
 
@@ -389,6 +435,93 @@ MODIFICAR:
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 0
             }).format(value);
+        }
+
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('es-CO', {
+                style: 'currency',
+                currency: 'COP',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(value);
+        }
+
+        function calcularCuotaAnualidad(monto, tasaMensual, meses) {
+            if (tasaMensual === 0) {
+                return monto / meses;
+            }
+            const factor = Math.pow(1 + tasaMensual, meses);
+            return monto * (tasaMensual * factor) / (factor - 1);
+        }
+
+        function limpiarResumen() {
+            if (!resumenMonto) {
+                return;
+            }
+            resumenMonto.textContent = '-';
+            resumenComision.textContent = '-';
+            resumenIva.textContent = '-';
+            resumenIntereses.textContent = '-';
+            resumenAfianzadora.textContent = '-';
+            resumenTotal.textContent = '-';
+            resumenCuota.textContent = '-';
+        }
+
+        function obtenerMontoActual() {
+            if (lockedMonto !== null) {
+                return lockedMonto;
+            }
+            if (!valorCreditoInput) {
+                return null;
+            }
+            const value = valorCreditoInput.value.replace(/\D/g, '');
+            if (!value) {
+                return null;
+            }
+            return parseInt(value, 10);
+        }
+
+        function obtenerPlazoActual() {
+            if (lockedPlazo !== null) {
+                return lockedPlazo;
+            }
+            if (!plazoSelect || !plazoSelect.value) {
+                return null;
+            }
+            return parseInt(plazoSelect.value, 10);
+        }
+
+        function actualizarResumenCredito() {
+            if (!resumenMonto) {
+                return;
+            }
+            const montoSolicitado = obtenerMontoActual();
+            const meses = obtenerPlazoActual();
+
+            if (!montoSolicitado || !meses) {
+                limpiarResumen();
+                return;
+            }
+
+            const comision = montoSolicitado * 0.10;
+            const ivaComision = comision * 0.19;
+            const afianzadora = montoSolicitado * 0.04;
+            const ivaAfianzadora = afianzadora * 0.19;
+            const totalAfianzadora = afianzadora + ivaAfianzadora;
+
+            const capitalFinanciado = montoSolicitado + comision + ivaComision;
+            const tasaMensual = 0.02;
+            const cuotaMensual = calcularCuotaAnualidad(capitalFinanciado, tasaMensual, meses);
+            const totalAPagar = cuotaMensual * meses;
+            const totalIntereses = totalAPagar - capitalFinanciado;
+
+            resumenMonto.textContent = formatCurrency(montoSolicitado);
+            resumenComision.textContent = formatCurrency(comision);
+            resumenIva.textContent = formatCurrency(ivaComision);
+            resumenIntereses.textContent = formatCurrency(totalIntereses);
+            resumenAfianzadora.textContent = formatCurrency(totalAfianzadora);
+            resumenTotal.textContent = formatCurrency(totalAPagar);
+            resumenCuota.textContent = formatCurrency(cuotaMensual);
         }
 
         function aplicarDatosSimulador() {
@@ -430,6 +563,8 @@ MODIFICAR:
                     plazoLockedInput.value = String(plazoValue);
                 }
             }
+
+            actualizarResumenCredito();
         }
 
         if (valorCreditoInput) {
@@ -451,6 +586,7 @@ MODIFICAR:
                 } else {
                     e.target.value = '';
                 }
+                actualizarResumenCredito();
             });
         }
 
@@ -464,6 +600,10 @@ MODIFICAR:
                     e.target.value = '';
                 }
             });
+        }
+
+        if (plazoSelect) {
+            plazoSelect.addEventListener('change', actualizarResumenCredito);
         }
 
         aplicarDatosSimulador();
@@ -566,6 +706,9 @@ MODIFICAR:
             const submitButton = formulario.querySelector('button[type="submit"]');
             submitButton.disabled = true;
             submitButton.textContent = 'Enviando...';
+            if (window.AprobadoLoader) {
+                window.AprobadoLoader.show('Enviando solicitud...');
+            }
 
             limpiarTodosLosErrores();
 
@@ -648,6 +791,9 @@ MODIFICAR:
                 if (ingresosMensualesInput && originalIngresosValue) {
                     ingresosMensualesInput.value = originalIngresosValue;
                 }
+                if (window.AprobadoLoader) {
+                    window.AprobadoLoader.hide();
+                }
             });
         }
 
@@ -673,3 +819,9 @@ MODIFICAR:
         });
     });
 </script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script src="{% static 'js/global_loader.js' %}"></script>
+
+</body>
+</html>

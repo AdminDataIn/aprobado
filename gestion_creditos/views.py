@@ -21,7 +21,7 @@ import io
 from django.db import transaction, IntegrityError
 from django.contrib import messages
 from django.core.cache import cache
-from django.db.models import Q, Count, Sum, Case, When, DecimalField, F, Subquery, Value, CharField, Avg
+from django.db.models import Q, Count, Sum, Max, Case, When, DecimalField, F, Subquery, Value, CharField, Avg
 from django.db.models.functions import Coalesce, TruncMonth, Concat
 from django.utils import timezone
 from django.core.paginator import Paginator
@@ -737,8 +737,8 @@ def agregar_pago_manual_view(request, credito_id):
 
 @staff_member_required
 def descargar_documentos_view(request, credito_id):
-    credito = get_object_or_404(Credito, id=credito_id)
-    buffer = io.BytesIO()
+    credito = get_object_or_404(Credito, id=credito_id) #! Obtener el crédito
+    buffer = io.BytesIO() #! Crear un buffer en memoria para el ZIP
 
     with zipfile.ZipFile(buffer, 'w') as zip_file:
         detalle = credito.detalle
@@ -1042,6 +1042,208 @@ def descargar_csv_cuotas_pendientes_view(request):
         monto = int(valor.to_integral_value(rounding=ROUND_CEILING))
 
         writer.writerow([cedula, monto])
+
+    return response
+
+
+@login_required
+@pagador_required
+def descargar_reporte_pagador_view(request):
+    """
+    Genera y descarga un reporte completo de los creditos de libranza de la empresa.
+    """
+    import csv
+    from django.http import HttpResponse
+
+    empresa = request.empresa
+    search_query = request.GET.get('search', '').strip()
+    estado_filter = request.GET.get('estado', '').strip()
+    sort_by = request.GET.get('sort_by', 'detalle_libranza__cedula')
+
+    creditos = Credito.objects.filter(
+        linea=Credito.LineaCredito.LIBRANZA,
+        detalle_libranza__empresa=empresa
+    ).select_related('detalle_libranza', 'usuario', 'pagare')
+
+    if search_query:
+        creditos = creditos.filter(
+            Q(detalle_libranza__nombres__icontains=search_query) |
+            Q(detalle_libranza__apellidos__icontains=search_query) |
+            Q(detalle_libranza__cedula__icontains=search_query)
+        )
+
+    if estado_filter:
+        creditos = creditos.filter(estado=estado_filter)
+
+    valid_sort_fields = [
+        'detalle_libranza__nombres', '-detalle_libranza__nombres',
+        'detalle_libranza__cedula', '-detalle_libranza__cedula',
+        'monto_aprobado', '-monto_aprobado',
+        'saldo_pendiente', '-saldo_pendiente',
+        'estado', '-estado'
+    ]
+    if sort_by in valid_sort_fields:
+        creditos = creditos.order_by(sort_by)
+
+    creditos = creditos.annotate(
+        total_pagado=Coalesce(
+            Sum(
+                'historial_pagos__monto',
+                filter=Q(historial_pagos__estado=HistorialPago.EstadoPago.EXITOSO)
+            ),
+            Value(Decimal(0))
+        ),
+        ultimo_pago=Max(
+            'historial_pagos__fecha_pago',
+            filter=Q(historial_pagos__estado=HistorialPago.EstadoPago.EXITOSO)
+        )
+    )
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = (
+        f'attachment; filename="reporte_pagador_{empresa.nombre}_{timezone.now().strftime("%Y%m%d")}.csv"'
+    )
+    response.write('\ufeff')
+
+    writer = csv.writer(response)
+    headers = [
+        'Empresa',
+        'Numero credito',
+        'Estado',
+        'Linea',
+        'Fecha solicitud',
+        'Fecha actualizacion',
+        'Fecha desembolso',
+        'Monto solicitado',
+        'Plazo solicitado',
+        'Monto aprobado',
+        'Plazo aprobado',
+        'Tasa interes mensual',
+        'Comision',
+        'IVA comision',
+        'Total a pagar',
+        'Saldo pendiente',
+        'Capital pendiente',
+        'Valor cuota',
+        'Fecha proximo pago',
+        'Total pagado',
+        'Fecha ultimo pago',
+        'Documento enviado',
+        'Usuario',
+        'Email usuario',
+        'Nombre completo',
+        'Nombres',
+        'Apellidos',
+        'Cedula',
+        'Correo',
+        'Telefono',
+        'Direccion',
+        'Ingresos mensuales',
+        'Cedula frontal',
+        'Cedula trasera',
+        'Certificado laboral',
+        'Desprendible nomina',
+        'Certificado bancario',
+        'Pagare numero',
+        'Pagare estado',
+        'Pagare estado codigo',
+        'Pagare fecha envio',
+        'Pagare fecha firma',
+        'Pagare URL firma',
+        'Pagare PDF',
+        'Pagare PDF firmado',
+        'Pagare PDF firmado URL ZapSign',
+        'Pagare hash',
+        'ZapSign status',
+        'ZapSign token',
+    ]
+    writer.writerow(headers)
+
+    def _fmt_dt(value):
+        if not value:
+            return ''
+        try:
+            return value.strftime('%Y-%m-%d %H:%M:%S')
+        except AttributeError:
+            return str(value)
+
+    def _fmt_decimal(value):
+        return f'{value}' if value is not None else ''
+
+    def _file_url(file_field):
+        if not file_field:
+            return ''
+        try:
+            return request.build_absolute_uri(file_field.url)
+        except (ValueError, AttributeError):
+            return file_field.name
+
+    for credito in creditos:
+        detalle = credito.detalle_libranza
+        usuario = credito.usuario
+        pagare = None
+        try:
+            pagare = credito.pagare
+        except Pagare.DoesNotExist:
+            pagare = None
+
+        signed_pdf = ''
+        if pagare:
+            signed_pdf = _file_url(pagare.archivo_pdf_firmado)
+            if not signed_pdf:
+                signed_pdf = pagare.zapsign_signed_file_url or ''
+
+        writer.writerow([
+            empresa.nombre,
+            credito.numero_credito,
+            credito.get_estado_display(),
+            credito.get_linea_display(),
+            _fmt_dt(credito.fecha_solicitud),
+            _fmt_dt(credito.fecha_actualizacion),
+            _fmt_dt(credito.fecha_desembolso),
+            _fmt_decimal(credito.monto_solicitado),
+            credito.plazo_solicitado or '',
+            _fmt_decimal(credito.monto_aprobado),
+            credito.plazo or '',
+            _fmt_decimal(credito.tasa_interes),
+            _fmt_decimal(credito.comision),
+            _fmt_decimal(credito.iva_comision),
+            _fmt_decimal(credito.total_a_pagar),
+            _fmt_decimal(credito.saldo_pendiente),
+            _fmt_decimal(credito.capital_pendiente),
+            _fmt_decimal(credito.valor_cuota),
+            _fmt_dt(credito.fecha_proximo_pago),
+            _fmt_decimal(getattr(credito, 'total_pagado', None)),
+            _fmt_dt(getattr(credito, 'ultimo_pago', None)),
+            'Si' if credito.documento_enviado else 'No',
+            usuario.username if usuario else '',
+            usuario.email if usuario else '',
+            detalle.nombre_completo if detalle else '',
+            detalle.nombres if detalle else '',
+            detalle.apellidos if detalle else '',
+            detalle.cedula if detalle else '',
+            detalle.correo_electronico if detalle else '',
+            detalle.telefono if detalle else '',
+            detalle.direccion if detalle else '',
+            _fmt_decimal(getattr(detalle, 'ingresos_mensuales', None)) if detalle else '',
+            _file_url(detalle.cedula_frontal) if detalle else '',
+            _file_url(detalle.cedula_trasera) if detalle else '',
+            _file_url(detalle.certificado_laboral) if detalle else '',
+            _file_url(detalle.desprendible_nomina) if detalle else '',
+            _file_url(detalle.certificado_bancario) if detalle else '',
+            pagare.numero_pagare if pagare else '',
+            pagare.get_estado_display() if pagare else '',
+            pagare.estado if pagare else '',
+            _fmt_dt(pagare.fecha_envio) if pagare else '',
+            _fmt_dt(pagare.fecha_firma) if pagare else '',
+            pagare.zapsign_sign_url if pagare else '',
+            _file_url(pagare.archivo_pdf) if pagare else '',
+            signed_pdf,
+            pagare.zapsign_signed_file_url if pagare else '',
+            pagare.hash_pdf if pagare else '',
+            pagare.zapsign_status if pagare else '',
+            pagare.zapsign_doc_token if pagare else '',
+        ])
 
     return response
 

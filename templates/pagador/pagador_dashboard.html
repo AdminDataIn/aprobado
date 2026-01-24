@@ -13,6 +13,7 @@
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
 </head>
 <body class="theme-dashboard">
+{% include 'base/loader_global.html' %}
     <header class="page-header">
         <div class="container-fluid" style="max-width: 1400px;">
             <div class="d-flex align-items-center justify-content-between">
@@ -27,7 +28,7 @@
                         </div>
                         <div class="user-avatar">{{ request.user.username|slice:":1"|upper }}</div>
                     </div>
-                    <form method="post" action="{% url 'account_logout' %}">
+                    <form method="post" action="{% url 'libranza:logout' %}">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-outline">
                             <i class="bi bi-box-arrow-right"></i>
@@ -141,9 +142,15 @@
                     <i class="bi bi-card-list me-2"></i>Créditos Activos
                     <span class="badge bg-primary ms-2">{{ creditos.paginator.count }}</span>
                 </h3>
-                <button class="btn btn-sm btn-outline-primary" onclick="location.reload()">
-                    <i class="bi bi-arrow-clockwise"></i>
-                </button>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'pagador:descargar_reporte' %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-success" data-download="true">
+                        <i class="bi bi-file-earmark-spreadsheet"></i>
+                        Descargar reporte
+                    </a>
+                    <button class="btn btn-sm btn-outline-primary" onclick="location.reload()">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
             </div>
             <div class="table-responsive">
                 <table class="table table-hover">
@@ -278,7 +285,8 @@
                                 <button type="submit" name="action" value="reject" class="btn btn-outline-danger">
                                     <i class="bi bi-x-circle me-1"></i> Rechazar
                                 </button>
-                                <button type="submit" name="action" value="approve" class="btn btn-success">
+                                <button type="submit" name="action" value="approve" class="btn btn-success"
+                                        data-loader-type="check" data-loader-text="Aprobando solicitud...">
                                     <i class="bi bi-check-circle me-1"></i> Aprobar
                                 </button>
                             </div>
@@ -391,5 +399,7 @@
             toastList.forEach(toast => toast.show());
         });
     </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script src="{% static 'js/global_loader.js' %}"></script>
 </body>
 </html>

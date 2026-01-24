@@ -49,6 +49,7 @@
     </style>
 </head>
 <body class="theme-details">
+{% include 'base/loader_global.html' %}
     <!-- Header -->
     <header class="page-header">
         <div class="container-fluid" style="max-width: 1400px;">
@@ -470,6 +471,7 @@
                             </div>
                             <div class="d-grid gap-2 mt-3">
                                 <button type="submit" name="action" value="approve" class="btn btn-success"
+                                        data-loader-type="check" data-loader-text="Aprobando crédito..."
                                         {% if credito.linea == 'LIBRANZA' and not pagador_aprobado %}disabled{% endif %}>
                                     <i class="bi bi-check-lg me-2"></i>
                                     Aprobar
@@ -503,7 +505,8 @@
                                 <label for="id_comprobante_pago" class="form-label">Comprobante de Desembolso</label>
                                 <input type="file" name="comprobante_pago" id="id_comprobante_pago" class="form-control" required>
                             </div>
-                            <button type="submit" class="btn btn-primary" style="width: 100%;">
+                            <button type="submit" class="btn btn-primary" style="width: 100%;"
+                                    data-loader-type="check" data-loader-text="Activando crédito...">
                                 <i class="bi bi-send-check me-2"></i>
                                 Activar Crédito
                             </button>
@@ -742,5 +745,7 @@
             }
         });
     </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script src="{% static 'js/global_loader.js' %}"></script>
 </body>
 </html>
