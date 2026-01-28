@@ -135,3 +135,4 @@ test_pagare.py
 test_zapsign_integration.py
 ZapSign.md
 generar_pagare_manual.py
+aprobado_web/settings.py

@@ -9,7 +9,6 @@ CARACTERÍSTICAS:
 - Monto: $500.000 - $2.000.000
 - Plazo: 1 - 6 meses
 - Comisión: 10% + IVA (19%)
-- Afianzadora: 4% + IVA (próximamente)
 - Tasa de interés: 2% EM (Efectiva Mensual)
 
 MODIFICAR:
@@ -108,13 +107,6 @@ MODIFICAR:
                                         <input type="text" id="totalIntereses" name="totalIntereses" value="33.582,00"
                                                class="simulador-result-input" readonly>
                                     </div>
-                                    <!-- Afianzadora (próximamente - estructura lista) -->
-                                    <!-- MODIFICAR: Descomentar cuando se active la afianzadora -->
-                                    <div class="simulador-result-row" style="opacity: 0.5;">
-                                        <label for="afianzadora" class="simulador-result-label">Afianzadora (4% + IVA) - Próximamente:</label>
-                                        <input type="text" id="afianzadora" name="afianzadora" value="47.600,00"
-                                               class="simulador-result-input" readonly>
-                                    </div>
                                     <div class="simulador-result-row" style="border-top: 2px solid #06b6d4; padding-top: 10px; margin-top: 10px;">
                                         <label for="totalPagar" class="simulador-result-label" style="font-weight: 700;">Total a pagar:</label>
                                         <input type="text" id="totalPagar" name="totalPagar" value="1.152.582,00"
@@ -146,7 +138,6 @@ MODIFICAR:
         const comisionInput = document.getElementById("comision");
         const ivaComisionInput = document.getElementById("ivaComision");
         const totalInteresesInput = document.getElementById("totalIntereses");
-        const afianzadoraInput = document.getElementById("afianzadora");
         const totalPagarInput = document.getElementById("totalPagar");
         const cuotaMensualInput = document.getElementById("cuotaMensual");
         const aplicarAhora = document.getElementById("simulador-aplicar-ahora");
@@ -167,7 +158,6 @@ MODIFICAR:
 
         /**
          * Actualiza todos los cálculos del simulador
-         * MODIFICAR: Porcentajes de comisión, IVA, afianzadora
          */
         function actualizarCalculosLibranza() {
             const montoSolicitado = parseFloat(slider1.value);
@@ -176,9 +166,6 @@ MODIFICAR:
             // MODIFICAR: Porcentajes aquí
             const comision = montoSolicitado * 0.10;           // 10% de comisión
             const ivaComision = comision * 0.19;                // 19% de IVA sobre comisión
-            const afianzadora = montoSolicitado * 0.04;         // 4% de afianzadora (próximamente)
-            const ivaAfianzadora = afianzadora * 0.19;          // 19% de IVA sobre afianzadora
-            const totalAfianzadora = afianzadora + ivaAfianzadora;
 
             // Capital financiado = monto + comisión + IVA (esto es lo que se financia en cuotas)
             const capitalFinanciado = montoSolicitado + comision + ivaComision;
@@ -200,7 +187,6 @@ MODIFICAR:
             comisionInput.value = formatColombianNumber(comision);
 ivaComisionInput.value = formatColombianNumber(ivaComision);
             totalInteresesInput.value = formatColombianNumber(totalIntereses);
-            afianzadoraInput.value = formatColombianNumber(totalAfianzadora);
             totalPagarInput.value = formatColombianNumber(totalAPagar);
             cuotaMensualInput.value = formatColombianNumber(cuotaMensual);
 

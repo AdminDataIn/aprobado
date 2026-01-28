@@ -1,7 +1,9 @@
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, FileResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
 import uuid
 import json
+import os
+import mimetypes
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required
@@ -30,6 +32,10 @@ from django.contrib.admin.views.decorators import staff_member_required
 from .decorators import pagador_required
 from django.contrib.auth.models import User
 from django.db.models import DurationField, ExpressionWrapper, Value
+from django.views.decorators.clickjacking import xframe_options_exempt
+from django.utils._os import safe_join
+from django.core.exceptions import SuspiciousFileOperation
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
@@ -765,6 +771,170 @@ def descargar_documentos_view(request, credito_id):
     buffer.seek(0)
     response = HttpResponse(buffer, content_type='application/zip')
     response['Content-Disposition'] = f'attachment; filename="documentos_credito_{credito.id}.zip"'
+    return response
+
+
+@staff_member_required
+def documentacion_credito_view(request, credito_id):
+    credito = get_object_or_404(
+        Credito.objects.select_related('detalle_libranza', 'detalle_emprendimiento', 'usuario'),
+        id=credito_id
+    )
+
+    documentos = []
+
+    def infer_kind(url_value, filename=None):
+        candidates = []
+        if filename:
+            candidates.append(filename)
+        if url_value:
+            candidates.append(url_value)
+        for value in candidates:
+            clean = value.split('?', 1)[0].lower()
+            if clean.endswith('.pdf'):
+                return 'pdf'
+            if clean.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+                return 'image'
+        if url_value and url_value.startswith('http'):
+            return 'link'
+        return 'file'
+
+    def build_url(file_field):
+        if not file_field or not getattr(file_field, 'name', None):
+            return ''
+        try:
+            return request.build_absolute_uri(file_field.url)
+        except Exception:
+            return file_field.name
+
+    def build_preview_url(file_field):
+        if not file_field or not getattr(file_field, 'name', None):
+            return ''
+        preview_path = reverse('gestion:documento_preview')
+        return request.build_absolute_uri(f"{preview_path}?path={quote(file_field.name)}")
+
+    def add_doc(title, file_field=None, url=None, source='', status='', created_at=None, signed_at=None, description=''):
+        doc_url = ''
+        filename = None
+        if file_field:
+            filename = getattr(file_field, 'name', None)
+            doc_url = build_preview_url(file_field) or build_url(file_field)
+        if not doc_url and url:
+            doc_url = url
+        if not doc_url:
+            return
+        if not created_at and not signed_at:
+            created_at = credito.fecha_solicitud
+        documentos.append({
+            'title': title,
+            'url': doc_url,
+            'kind': infer_kind(doc_url, filename=filename),
+            'source': source,
+            'status': status,
+            'created_at': created_at,
+            'signed_at': signed_at,
+            'description': description,
+        })
+
+    # Documentos de solicitud
+    if credito.linea == Credito.LineaCredito.LIBRANZA and credito.detalle_libranza:
+        detalle = credito.detalle_libranza
+        add_doc('Cédula (frontal)', file_field=detalle.cedula_frontal, source='Solicitud')
+        add_doc('Cédula (trasera)', file_field=detalle.cedula_trasera, source='Solicitud')
+        add_doc('Certificado laboral', file_field=detalle.certificado_laboral, source='Solicitud')
+        add_doc('Desprendible de nómina', file_field=detalle.desprendible_nomina, source='Solicitud')
+        add_doc('Certificado bancario', file_field=detalle.certificado_bancario, source='Solicitud')
+    elif credito.linea == Credito.LineaCredito.EMPRENDIMIENTO and credito.detalle_emprendimiento:
+        detalle = credito.detalle_emprendimiento
+        add_doc('Fotos del negocio (PDF)', file_field=detalle.foto_negocio, source='Solicitud')
+        for imagen in detalle.imagenes_negocio.all():
+            add_doc(
+                f"Imagen negocio ({imagen.get_tipo_imagen_display()})",
+                file_field=imagen.imagen,
+                source='Imágenes',
+                created_at=imagen.fecha_subida,
+                description=imagen.descripcion or ''
+            )
+
+    # Pagaré y firma
+    pagare = None
+    try:
+        pagare = credito.pagare
+    except Pagare.DoesNotExist:
+        pagare = None
+
+    if pagare:
+        add_doc(
+            'Pagaré generado',
+            file_field=pagare.archivo_pdf,
+            source='ZapSign',
+            status=pagare.get_estado_display(),
+            created_at=pagare.fecha_creacion
+        )
+        signed_url = build_url(pagare.archivo_pdf_firmado) or (pagare.zapsign_signed_file_url or '')
+        add_doc(
+            'Pagaré firmado',
+            url=signed_url,
+            source='ZapSign',
+            status=pagare.get_estado_display(),
+            created_at=pagare.fecha_firma,
+            signed_at=pagare.fecha_firma
+        )
+        if pagare.zapsign_sign_url:
+            add_doc(
+                'Enlace de firma (ZapSign)',
+                url=pagare.zapsign_sign_url,
+                source='ZapSign',
+                status=pagare.get_estado_display(),
+                created_at=pagare.fecha_envio
+            )
+
+    # Comprobantes de desembolso u otros archivos en historial de estado
+    estados_con_comprobante = HistorialEstado.objects.filter(
+        credito=credito,
+        comprobante_pago__isnull=False
+    ).order_by('-fecha')
+    for estado in estados_con_comprobante:
+        add_doc(
+            'Comprobante de desembolso',
+            file_field=estado.comprobante_pago,
+            source='Desembolso',
+            status=estado.get_estado_nuevo_display(),
+            created_at=estado.fecha,
+            description=estado.motivo or ''
+        )
+
+    def sort_key(doc):
+        return doc.get('created_at') or doc.get('signed_at') or credito.fecha_solicitud
+
+    documentos = sorted(documentos, key=sort_key, reverse=True)
+
+    context = {
+        'credito': credito,
+        'documentos': documentos,
+        'total_documentos': len(documentos),
+    }
+    return render(request, 'gestion_creditos/admin_documentos_credito.html', context)
+
+
+@staff_member_required
+@xframe_options_exempt
+def documento_preview_view(request):
+    path = (request.GET.get('path') or '').strip()
+    if not path:
+        raise Http404("Documento no encontrado.")
+
+    try:
+        full_path = safe_join(settings.MEDIA_ROOT, path)
+    except SuspiciousFileOperation:
+        raise Http404("Documento no encontrado.")
+
+    if not os.path.exists(full_path):
+        raise Http404("Documento no encontrado.")
+
+    content_type, _ = mimetypes.guess_type(full_path)
+    response = FileResponse(open(full_path, 'rb'), content_type=content_type or 'application/octet-stream')
+    response['Content-Disposition'] = f'inline; filename="{os.path.basename(full_path)}"'
     return response
 
 

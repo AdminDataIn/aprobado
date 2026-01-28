@@ -19,7 +19,7 @@
     <!-- Fintech Base Styles -->
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
 </head>
-<body class="theme-applications">
+<body class="theme-gestion theme-applications">
 {% include 'base/loader_global.html' %}
     <!-- Header -->
     <header class="page-header">
@@ -55,7 +55,7 @@
                     <ol class="breadcrumb">
                         {# NUEVA URL - Gestión #}
                         <li class="breadcrumb-item"><a href="{% url 'gestion:dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
-                        <li class="breadcrumb-item active" aria-current="page">Solicitudes</li>
+                        <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-journal-text me-1"></i>Solicitudes</li>
                     </ol>
                 </nav>
             </div>

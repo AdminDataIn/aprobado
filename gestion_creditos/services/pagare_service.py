@@ -168,7 +168,7 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
     else:
         valor_cuota = Decimal(str(valor_cuota)).quantize(Decimal('0.01'))
 
-    hoy = timezone.now().date()
+    hoy = timezone.localdate()
     fecha_expedicion = _fecha_en_espanol(hoy)
     fecha_primer_pago = credito.fecha_proximo_pago or (hoy + timedelta(days=30))
     fecha_vencimiento = _calcular_fecha_vencimiento(fecha_primer_pago, credito.plazo or 0)

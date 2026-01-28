@@ -229,11 +229,7 @@ MODIFICAR:
                                 <span>Intereses (2% EM):</span>
                                 <span id="resumen-intereses">-</span>
                             </div>
-                            <div class="credito-resumen-row muted">
-                                <span>Afianzadora (4% + IVA) - Próximamente:</span>
-                                <span id="resumen-afianzadora">-</span>
-                            </div>
-                            <div class="credito-resumen-row total">
+                                                        <div class="credito-resumen-row total">
                                 <span>Total a pagar:</span>
                                 <span id="resumen-total">-</span>
                             </div>
@@ -422,7 +418,6 @@ MODIFICAR:
         const resumenComision = document.getElementById('resumen-comision');
         const resumenIva = document.getElementById('resumen-iva');
         const resumenIntereses = document.getElementById('resumen-intereses');
-        const resumenAfianzadora = document.getElementById('resumen-afianzadora');
         const resumenTotal = document.getElementById('resumen-total');
         const resumenCuota = document.getElementById('resumen-cuota');
         let lockedMonto = null;
@@ -462,7 +457,6 @@ MODIFICAR:
             resumenComision.textContent = '-';
             resumenIva.textContent = '-';
             resumenIntereses.textContent = '-';
-            resumenAfianzadora.textContent = '-';
             resumenTotal.textContent = '-';
             resumenCuota.textContent = '-';
         }
@@ -505,9 +499,6 @@ MODIFICAR:
 
             const comision = montoSolicitado * 0.10;
             const ivaComision = comision * 0.19;
-            const afianzadora = montoSolicitado * 0.04;
-            const ivaAfianzadora = afianzadora * 0.19;
-            const totalAfianzadora = afianzadora + ivaAfianzadora;
 
             const capitalFinanciado = montoSolicitado + comision + ivaComision;
             const tasaMensual = 0.02;
@@ -519,7 +510,6 @@ MODIFICAR:
             resumenComision.textContent = formatCurrency(comision);
             resumenIva.textContent = formatCurrency(ivaComision);
             resumenIntereses.textContent = formatCurrency(totalIntereses);
-            resumenAfianzadora.textContent = formatCurrency(totalAfianzadora);
             resumenTotal.textContent = formatCurrency(totalAPagar);
             resumenCuota.textContent = formatCurrency(cuotaMensual);
         }

@@ -27,6 +27,8 @@ urlpatterns = [
     path('credito/<int:credito_id>/desembolsar/', views.confirmar_desembolso_view, name='credito_desembolsar'),
     path('credito/<int:credito_id>/agregar-pago/', views.agregar_pago_manual_view, name='credito_agregar_pago'),
     path('credito/<int:credito_id>/documentos/', views.descargar_documentos_view, name='credito_documentos'),
+    path('credito/<int:credito_id>/documentacion/', views.documentacion_credito_view, name='credito_documentacion'),
+    path('documento/preview/', views.documento_preview_view, name='documento_preview'),
 
     # Desarrollo (simulación)
 ]

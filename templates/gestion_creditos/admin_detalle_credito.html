@@ -48,7 +48,7 @@
         }
     </style>
 </head>
-<body class="theme-details">
+<body class="theme-gestion theme-details">
 {% include 'base/loader_global.html' %}
     <!-- Header -->
     <header class="page-header">
@@ -91,7 +91,7 @@
                         {# NUEVA URL - Gestión #}
                         <li class="breadcrumb-item"><a href="{% url 'gestion:solicitudes' %}"><i class="bi bi-journal-text"></i> Solicitudes</a></li>
                         {% endif %}
-                        <li class="breadcrumb-item active" aria-current="page">Detalle del Crédito #{{ credito.id }}</li>
+                        <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-file-earmark-text me-1"></i>Detalle del Crédito #{{ credito.id }}</li>
                     </ol>
                 </nav>
             </div>
@@ -555,7 +555,11 @@
                         </h2>
                     </div>
                     <div class="card-content">
-                        <a href="{% url 'gestion:credito_documentos' credito.id %}" class="btn btn-outline" style="width: 100%; margin-bottom: 0.75rem;">
+                        <a href="{% url 'gestion:credito_documentacion' credito.id %}" class="btn btn-outline" style="width: 100%; margin-bottom: 0.75rem;">
+                            <i class="bi bi-folder2-open me-2"></i>
+                            Ver Documentación
+                        </a>
+                        <a href="{% url 'gestion:credito_documentos' credito.id %}" class="btn btn-outline" style="width: 100%; margin-bottom: 0.75rem;" data-download="true">
                             <i class="bi bi-download me-2"></i>
                             Descargar Documentos
                         </a>
@@ -655,6 +659,10 @@
             const montoInput = document.getElementById('id_monto_aprobado');
             const plazoInput = document.getElementById('id_plazo_aprobado');
             const processForm = document.getElementById('process-form');
+
+            if (!montoInput || !plazoInput || !ajustarCheckbox) {
+                return;
+            }
 
             // Formateador estricto para mostrar siempre 2 decimales (para el estado final)
             const finalFormatter = new Intl.NumberFormat('es-CO', {

@@ -61,6 +61,13 @@ body {
     line-height: 1.6;
 }
 
+body.theme-gestion {
+    --text-secondary: #475569;
+    --text-muted: #6b7280;
+    --bg-tertiary: #f1f5f9;
+}
+
+
 /* ===== LAYOUT CONTAINERS ===== */
 .container {
     max-width: 1400px;

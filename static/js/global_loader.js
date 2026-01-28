@@ -40,8 +40,15 @@
     }
 
     let skipNextUnload = false;
+    let showTimer = null;
+    let hideTimer = null;
+    let activeSince = 0;
+    let pendingText = 'Cargando...';
+    let pendingType = 'loading';
+    const SHOW_DELAY_MS = 150;
+    const MIN_VISIBLE_MS = 350;
 
-    function showLoader(text, type = 'loading') {
+    function performShow(text, type) {
         const path = getAnimationPath(type);
         const loop = type !== 'check';
         loadAnimation(path, loop);
@@ -49,9 +56,62 @@
             loaderText.textContent = text;
         }
         globalLoader.classList.add('active');
+        activeSince = Date.now();
+    }
+
+    function showLoader(text, type = 'loading', options = {}) {
+        const immediate = options && options.immediate === true;
+        pendingText = text || pendingText;
+        pendingType = type || pendingType;
+
+        if (hideTimer) {
+            clearTimeout(hideTimer);
+            hideTimer = null;
+        }
+
+        if (immediate) {
+            if (showTimer) {
+                clearTimeout(showTimer);
+                showTimer = null;
+            }
+            performShow(pendingText, pendingType);
+            return;
+        }
+
+        if (globalLoader.classList.contains('active')) {
+            performShow(pendingText, pendingType);
+            return;
+        }
+
+        if (showTimer) {
+            return;
+        }
+
+        showTimer = setTimeout(function () {
+            showTimer = null;
+            performShow(pendingText, pendingType);
+        }, SHOW_DELAY_MS);
     }
 
     function hideLoader() {
+        if (showTimer) {
+            clearTimeout(showTimer);
+            showTimer = null;
+        }
+        if (!globalLoader.classList.contains('active')) {
+            return;
+        }
+        const elapsed = Date.now() - activeSince;
+        if (elapsed < MIN_VISIBLE_MS) {
+            if (hideTimer) {
+                clearTimeout(hideTimer);
+            }
+            hideTimer = setTimeout(function () {
+                hideTimer = null;
+                globalLoader.classList.remove('active');
+            }, MIN_VISIBLE_MS - elapsed);
+            return;
+        }
         globalLoader.classList.remove('active');
     }
 
@@ -65,11 +125,25 @@
             skipNextUnload = false;
             return;
         }
-        showLoader('Cargando...');
+        showLoader('Cargando...', 'loading', { immediate: true });
     });
 
     window.addEventListener('load', function () {
         hideLoader();
+    });
+
+    window.addEventListener('pageshow', function (event) {
+        if (event && event.persisted) {
+            if (showTimer) {
+                clearTimeout(showTimer);
+                showTimer = null;
+            }
+            if (hideTimer) {
+                clearTimeout(hideTimer);
+                hideTimer = null;
+            }
+            globalLoader.classList.remove('active');
+        }
     });
 
     document.addEventListener('click', function (event) {

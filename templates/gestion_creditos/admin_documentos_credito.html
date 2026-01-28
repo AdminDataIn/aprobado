@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentación del Crédito - Aprobado</title>
+    {% load static %}
+    {% load humanize %}
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Fintech Base Styles -->
+    <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+    <style>
+        .page-hero {
+            background: linear-gradient(120deg, #e0f2fe 0%, #eef4ff 45%, #ffffff 100%);
+            border: 1px solid #dbeafe;
+            border-radius: 18px;
+            padding: 1.5rem 2rem;
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+        }
+        .page-hero h1 {
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .page-hero .hero-meta {
+            color: #475569;
+            font-size: 1rem;
+        }
+        .page-hero .hero-subtitle {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .doc-layout {
+            display: grid;
+            grid-template-columns: minmax(260px, 340px) 1fr;
+            gap: 1.5rem;
+        }
+        .doc-list {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        .doc-item {
+            border-left: 3px solid transparent;
+        }
+        .doc-item .doc-badge {
+            font-size: 0.7rem;
+            border-radius: 999px;
+            padding: 0.25rem 0.5rem;
+            border: 1px solid transparent;
+        }
+        .doc-preview {
+            min-height: 520px;
+        }
+        .doc-preview iframe {
+            width: 100%;
+            height: 520px;
+            border: 1px solid #e6e9ef;
+            border-radius: 12px;
+        }
+        .doc-preview img {
+            max-height: 520px;
+            width: 100%;
+            object-fit: contain;
+            border-radius: 12px;
+            border: 1px solid #e6e9ef;
+            background: #fff;
+        }
+        .doc-item.active {
+            background: #eef4ff;
+            border-color: #93c5fd;
+            color: #0f172a;
+        }
+        .doc-item.active .text-muted {
+            color: #475569 !important;
+        }
+        .doc-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        .doc-meta .meta-item {
+            padding: 0.6rem 0.75rem;
+            background: #f8fafc;
+            border-radius: 10px;
+            border: 1px solid #e5e7eb;
+        }
+        .doc-meta .meta-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #6b7280;
+        }
+        .doc-meta .meta-value {
+            font-weight: 600;
+            color: #111827;
+        }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.75rem;
+            padding: 0.35rem 0.6rem;
+            border-radius: 999px;
+            border: 1px solid transparent;
+        }
+        .status-secondary {
+            color: #475569;
+            background: #f1f5f9;
+            border-color: #e2e8f0;
+        }
+        .status-success {
+            color: #0f766e;
+            background: #ecfdf3;
+            border-color: #bbf7d0;
+        }
+        .status-warning {
+            color: #92400e;
+            background: #fff7ed;
+            border-color: #fed7aa;
+        }
+        .status-danger {
+            color: #b91c1c;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+        .status-info {
+            color: #1d4ed8;
+            background: #eff6ff;
+            border-color: #bfdbfe;
+        }
+        @media (max-width: 991px) {
+            .doc-layout {
+                grid-template-columns: 1fr;
+            }
+            .doc-list {
+                max-height: none;
+            }
+        }
+    </style>
+</head>
+<body class="theme-details theme-gestion">
+{% include 'base/loader_global.html' %}
+    <header class="page-header">
+        <div class="container-fluid" style="max-width: 1400px;">
+            <div class="d-flex align-items-center justify-content-between">
+                <a href="{% url 'gestion:dashboard' %}" class="logo">
+                    <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;" />
+                </a>
+                <div class="d-flex align-items-center gap-3">
+                    <button class="btn btn-sm btn-outline-primary position-relative">
+                        <i class="bi bi-bell"></i>
+                        <div class="notification-badge"></div>
+                    </button>
+                    <div class="user-info">
+                        <div class="user-avatar">AU</div>
+                        <div class="user-details d-none d-md-block">
+                            <h6>Admin User</h6>
+                            <small>Administrador</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container-fluid py-4" style="max-width: 1400px;">
+        <div class="page-hero mb-4">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                <div>
+                    <h1 class="page-title mb-2">Documentación del Crédito</h1>
+                    <div class="hero-subtitle mb-1">Resumen</div>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <div class="hero-meta">
+                            Crédito <strong>{{ credito.numero_credito }}</strong> · {{ credito.nombre_cliente }} · {{ credito.get_estado_display }}
+                        </div>
+                        <span class="status-pill {% if credito.estado == 'ACTIVO' %}status-success{% elif credito.estado == 'EN_MORA' %}status-warning{% elif credito.estado == 'RECHAZADO' %}status-danger{% else %}status-info{% endif %}">
+                            <i class="bi bi-circle-fill" style="font-size: 0.45rem;"></i>
+                            {{ credito.get_estado_display }} · {{ credito.fecha_solicitud|date:"d/m/Y H:i" }}
+                        </span>
+                    </div>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb mb-0">
+                            <li class="breadcrumb-item"><a href="{% url 'gestion:dashboard' %}"><i class="bi bi-house-door me-1"></i>Dashboard</a></li>
+                            <li class="breadcrumb-item"><a href="{% url 'gestion:creditos_activos' %}"><i class="bi bi-credit-card-2-front me-1"></i>Créditos</a></li>
+                            <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-folder2-open me-1"></i>Documentación</li>
+                        </ol>
+                    </nav>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'gestion:credito_detalle' credito.id %}" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-left me-2"></i>Volver al Detalle
+                    </a>
+                    <a href="{% url 'gestion:credito_documentos' credito.id %}" class="btn btn-outline-success" data-download="true">
+                        <i class="bi bi-download me-2"></i>Descargar ZIP
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="doc-layout">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="bi bi-files me-2"></i>Documentos disponibles</h2>
+                </div>
+                <div class="card-content">
+                    {% if documentos %}
+                        <div class="list-group doc-list">
+                            {% for doc in documentos %}
+                            <button type="button"
+                                    class="list-group-item list-group-item-action doc-item {% if forloop.first %}active{% endif %}"
+                                    data-url="{{ doc.url }}"
+                                    data-kind="{{ doc.kind }}"
+                                    data-title="{{ doc.title }}"
+                                    data-source="{{ doc.source }}"
+                                    data-status="{{ doc.status }}"
+                                    data-date="{{ doc.created_at|date:'d/m/Y H:i' }}"
+                                    data-signed="{{ doc.signed_at|date:'d/m/Y H:i' }}"
+                                    data-description="{{ doc.description|default:''|escapejs }}">
+                                <div class="d-flex justify-content-between align-items-start gap-2">
+                                    <div>
+                                        <div class="fw-semibold">{{ doc.title }}</div>
+                                        <small class="text-muted">{{ doc.source }} · {{ doc.status|default:"Sin estado" }}</small>
+                                        <div class="small text-muted mt-1">
+                                            {% if doc.created_at %}
+                                                {{ doc.created_at|date:"d/m/Y H:i" }}
+                                            {% elif doc.signed_at %}
+                                                {{ doc.signed_at|date:"d/m/Y H:i" }}
+                                            {% else %}
+                                                Sin fecha
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="text-muted">
+                                        {% if doc.kind == 'pdf' %}
+                                            <i class="bi bi-file-earmark-pdf"></i>
+                                        {% elif doc.kind == 'image' %}
+                                            <i class="bi bi-image"></i>
+                                        {% elif doc.kind == 'link' %}
+                                            <i class="bi bi-link-45deg"></i>
+                                        {% else %}
+                                            <i class="bi bi-file-earmark"></i>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </button>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state p-4 text-center">
+                            <i class="bi bi-folder-x" style="font-size: 2rem;"></i>
+                            <p class="mt-2">No hay documentos asociados a este crédito.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card doc-preview">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="bi bi-eye me-2"></i>Vista previa</h2>
+                </div>
+                <div class="card-content">
+                    <div class="doc-meta">
+                        <div class="meta-item">
+                            <div class="meta-label">Documento</div>
+                            <div class="meta-value" id="docTitle">-</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">Fuente</div>
+                            <div class="meta-value" id="docSource">-</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">Estado</div>
+                            <div class="meta-value"><span id="docStatus" class="status-pill status-secondary">-</span></div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">Fecha</div>
+                            <div class="meta-value" id="docDate">-</div>
+                        </div>
+                    </div>
+                    <div id="docDescription" class="text-muted mb-3"></div>
+                    <div id="docPreview" class="text-center text-muted">
+                        Selecciona un documento para visualizarlo.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+    <script src="{% static 'js/global_loader.js' %}"></script>
+    <script>
+        (function () {
+            const items = Array.from(document.querySelectorAll('.doc-item'));
+            const preview = document.getElementById('docPreview');
+            const titleEl = document.getElementById('docTitle');
+            const sourceEl = document.getElementById('docSource');
+            const statusEl = document.getElementById('docStatus');
+            const dateEl = document.getElementById('docDate');
+            const descEl = document.getElementById('docDescription');
+
+
+            function getStatusClass(status) {
+                const value = (status || '').toLowerCase();
+                if (value.includes('firmado') || value.includes('signed') || value.includes('aprobado') || value.includes('activo')) {
+                    return 'status-success';
+                }
+                if (value.includes('rechazado') || value.includes('refused') || value.includes('error')) {
+                    return 'status-danger';
+                }
+                if (value.includes('pendiente') || value.includes('enviado') || value.includes('sent')) {
+                    return 'status-warning';
+                }
+                if (value.includes('creado') || value.includes('created')) {
+                    return 'status-info';
+                }
+                return 'status-secondary';
+            }
+
+            function renderDoc(item) {
+                if (!item) {
+                    return;
+                }
+                items.forEach(btn => btn.classList.remove('active'));
+                items.forEach(btn => {
+                    const badge = btn.querySelector('.doc-badge');
+                    if (badge) {
+                        badge.className = 'doc-badge status-pill ' + getStatusClass(btn.dataset.status || '');
+                    }
+                });
+                item.classList.add('active');
+
+                const url = item.dataset.url || '';
+                const kind = item.dataset.kind || 'file';
+                const title = item.dataset.title || '-';
+                const source = item.dataset.source || '-';
+                const status = item.dataset.status || 'Sin estado';
+                const date = item.dataset.date || item.dataset.signed || 'Sin fecha';
+                const description = item.dataset.description || '';
+
+                titleEl.textContent = title;
+                sourceEl.textContent = source;
+                statusEl.textContent = status || 'Sin estado';
+                statusEl.className = 'status-pill ' + getStatusClass(status);
+                dateEl.textContent = date || 'Sin fecha';
+                descEl.textContent = description;
+
+                if (!url) {
+                    preview.innerHTML = '<div class="text-muted">Documento no disponible.</div>';
+                    return;
+                }
+
+                if (kind === 'pdf') {
+                    const isSameOrigin = url.startsWith(window.location.origin);
+                    if (isSameOrigin) {
+                        preview.innerHTML = '<iframe src="' + url + '" title="' + title + '"></iframe>';
+                    } else {
+                        preview.innerHTML = `
+                            <div class="empty-state">
+                                <i class="bi bi-file-earmark-pdf" style="font-size: 2rem;"></i>
+                                <p class="mt-2">El PDF es externo y no se puede previsualizar aquí.</p>
+                                <a href="${url}" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm mt-2">
+                                    Abrir PDF
+                                </a>
+                            </div>
+                        `;
+                    }
+                    return;
+                }
+
+                if (kind === 'image') {
+                    preview.innerHTML = '<img src="' + url + '" alt="' + title + '">';
+                    return;
+                }
+
+                preview.innerHTML = `
+                    <div class="empty-state">
+                        <i class="bi bi-file-earmark-text" style="font-size: 2rem;"></i>
+                        <p class="mt-2">Este documento no tiene vista previa disponible.</p>
+                        <a href="${url}" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm mt-2">
+                            Abrir documento
+                        </a>
+                    </div>
+                `;
+            }
+
+            items.forEach(item => {
+                item.addEventListener('click', function () {
+                    renderDoc(item);
+                });
+            });
+
+            if (items.length) {
+                renderDoc(items[0]);
+            }
+        })();
+    </script>
+</body>
+</html>
