@@ -173,7 +173,11 @@
                             <td>
                                 <div class="user-info">
                                     <div class="user-avatar">
-                                        {{ solicitud.nombre_solicitante|first|default:"S" }}
+                                        {% if solicitud.nombre_solicitante %}
+                                            {{ solicitud.nombre_solicitante|slice:":1"|upper }}
+                                        {% else %}
+                                            S
+                                        {% endif %}
                                     </div>
                                     <div class="user-details">
                                         <h6>{{ solicitud.nombre_solicitante }}</h6>
