@@ -1,0 +1,98 @@
+{% extends "emails/base_email.html" %}
+{% load static %}
+
+{% block title %}Nueva solicitud de libranza - Aprobado{% endblock %}
+
+{% block email_content %}
+<!-- Header -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 24px 32px;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                    <td align="left" valign="top">
+                        <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" style="height: 32px; width: auto;">
+                    </td>
+                    <td align="right" valign="top">
+                        <div style="width: 40px; height: 40px; background-color: #FEF3C7; border-radius: 8px; display: inline-block; text-align: center; line-height: 40px;">
+                            <span style="color: #D97706; font-size: 16px;">&#9679;</span>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+<!-- Badge -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 0 32px 16px 32px;">
+            <span style="display: inline-block; padding: 6px 12px; background-color: #FEF3C7; color: #D97706; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Solicitud por validar</span>
+        </td>
+    </tr>
+</table>
+
+<!-- Content -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 0 32px 32px 32px;">
+            <h1 style="font-size: 28px; font-weight: 700; color: #111827; margin: 0 0 8px 0; line-height: 1.2;">Nueva solicitud de libranza</h1>
+            <p style="font-size: 15px; color: #6B7280; margin: 0 0 24px 0; line-height: 1.5;">
+                Un colaborador de {{ empresa.nombre }} registró una solicitud de crédito. Por favor revisa y define si se aprueba o se rechaza.
+            </p>
+
+            <!-- Info Card -->
+            <div style="background-color: #F9FAFB; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                <p style="font-size: 12px; color: #6B7280; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.3px;">Solicitud {{ credito.numero_credito }}</p>
+                <p style="font-size: 32px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">${{ credito.monto_solicitado|floatformat:0|default:"0" }}</p>
+                <p style="font-size: 13px; color: #9CA3AF; margin: 0;">{{ credito.fecha_solicitud|date:"d/m/Y H:i" }}</p>
+
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-top: 16px;">
+                    <tr>
+                        <td style="padding: 12px 0; font-size: 14px; color: #6B7280;">Empleado</td>
+                        <td style="padding: 12px 0; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ detalle.nombre_completo }}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 12px 0; font-size: 14px; color: #6B7280;">Cédula</td>
+                        <td style="padding: 12px 0; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ detalle.cedula }}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 12px 0; font-size: 14px; color: #6B7280;">Plazo solicitado</td>
+                        <td style="padding: 12px 0; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ credito.plazo_solicitado }} meses</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- CTA Box -->
+            <div style="background-color: #2563EB; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;">
+                <h3 style="font-size: 16px; font-weight: 700; color: #ffffff; margin: 0 0 8px 0;">Revisar solicitud</h3>
+                <p style="font-size: 13px; color: rgba(255, 255, 255, 0.85); margin: 0 0 16px 0; line-height: 1.4;">
+                    Ingresa al dashboard de pagador para aprobar o rechazar.
+                </p>
+                <a href="{{ dashboard_url }}" style="display: inline-block; padding: 12px 32px; background-color: #ffffff; color: #111827; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600;">Ir al Dashboard</a>
+            </div>
+
+            <p style="font-size: 13px; color: #6B7280; margin: 0; text-align: center;">
+                Si no has iniciado sesión, entra por <a href="{{ login_url }}" style="color: #2563EB; text-decoration: none;">este enlace</a>.
+            </p>
+        </td>
+    </tr>
+</table>
+
+<!-- Footer -->
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 24px 32px; text-align: center; border-top: 1px solid #E5E7EB;">
+            <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" style="height: 24px; margin-bottom: 12px;">
+            <p style="font-size: 12px; color: #6B7280; margin: 0 0 4px 0;">APROBADO SOLUCIONES DIGITALES SAS - NIT 901949137-2</p>
+            <p style="font-size: 12px; color: #9CA3AF; margin: 0 0 16px 0;">Villavicencio, Meta</p>
+            <p style="font-size: 12px; color: #6B7280; margin: 0;">
+                <a href="https://aprobado.com.co/terminos" style="color: #6B7280; text-decoration: none; margin: 0 8px;">Terminos</a>
+                <a href="https://aprobado.com.co/privacidad" style="color: #6B7280; text-decoration: none; margin: 0 8px;">Privacidad</a>
+                <a href="https://aprobado.com.co/ayuda" style="color: #6B7280; text-decoration: none; margin: 0 8px;">Ayuda</a>
+            </p>
+        </td>
+    </tr>
+</table>
+{% endblock %}

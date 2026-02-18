@@ -1,0 +1,296 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if is_edit %}Editar{% else %}Nueva{% endif %} publicacion - {{ empresa.nombre }}</title>
+    <link rel="stylesheet" href="{% static 'css/marketplace_admin.css' %}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body class="mp-admin">
+    <header class="mp-admin-header">
+        <div class="mp-admin-brand">
+            <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado">
+            <div>
+                <strong>Panel Marketplace</strong>
+                <span>{{ empresa.nombre }}</span>
+            </div>
+        </div>
+        <a href="{% url 'marketplace:panel' %}" class="mp-admin-btn ghost">
+            <i class="bi bi-arrow-left"></i>Volver
+        </a>
+    </header>
+
+    <main class="mp-admin-container">
+        <div class="mp-admin-layout">
+            <section class="mp-admin-card">
+                <div class="mp-admin-card-header">
+                    <h2>{% if is_edit %}Editar{% else %}Nueva{% endif %} publicacion</h2>
+                    <p>Completa la informacion. Al guardar, la publicacion queda pendiente de aprobacion.</p>
+                </div>
+
+                <form method="post" enctype="multipart/form-data" class="mp-admin-form" id="itemForm">
+                    {% csrf_token %}
+                    <div class="mp-admin-grid">
+                        <div class="mp-admin-field">
+                            <label for="id_titulo">Titulo *</label>
+                            {{ form.titulo }}
+                            <small class="mp-field-hint">Maximo 80 caracteres</small>
+                        </div>
+                        <div class="mp-admin-field">
+                            <label for="id_tipo">Tipo *</label>
+                            {{ form.tipo }}
+                        </div>
+                        <div class="mp-admin-field full">
+                            <label for="id_descripcion">Descripcion *</label>
+                            {{ form.descripcion }}
+                            <small class="mp-field-hint">Describe brevemente tu oferta (max. 150 caracteres)</small>
+                        </div>
+                        <div class="mp-admin-field full">
+                            <label for="id_beneficio">Beneficio *</label>
+                            {{ form.beneficio }}
+                            <small class="mp-field-hint">Ej: "20% de descuento", "Envio gratis"</small>
+                        </div>
+                        <div class="mp-admin-field">
+                            <label for="id_precio">Precio (opcional)</label>
+                            {{ form.precio }}
+                            <small class="mp-field-hint">Ej: $159.000 o "Desde $90.000"</small>
+                        </div>
+                        <div class="mp-admin-field">
+                            <label for="id_whatsapp_contacto">WhatsApp (opcional)</label>
+                            {{ form.whatsapp_contacto }}
+                            <small class="mp-field-hint">Incluye codigo de pais: 573001234567</small>
+                        </div>
+                        <div class="mp-admin-field full">
+                            <label for="id_imagen">Imagen (opcional)</label>
+                            {{ form.imagen }}
+                            <small class="mp-field-hint">Tamano recomendado: 900x600px. Formato JPG, PNG o WEBP</small>
+                            {% if form.instance.imagen %}
+                            <div class="mp-current-image">
+                                <img src="{{ form.instance.imagen.url }}" alt="Imagen actual">
+                                <span>Imagen actual</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="mp-admin-field full">
+                            <label for="id_video">Video (opcional)</label>
+                            {{ form.video }}
+                            <small class="mp-field-hint">Formatos permitidos: MP4 o WEBM. Recomendado formato horizontal.</small>
+                            {% if form.instance.video %}
+                            <div class="mp-current-video">
+                                <video controls preload="metadata">
+                                    <source src="{{ form.instance.video.url }}" type="video/mp4">
+                                    Tu navegador no soporta video HTML5.
+                                </video>
+                                <span>Video actual</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if form.errors %}
+                    <div class="mp-alert error">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <div>
+                            <strong>Hay errores en el formulario</strong>
+                            {% for field, errors in form.errors.items %}
+                                {% for error in errors %}
+                                    <p>{{ error }}</p>
+                                {% endfor %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="mp-admin-actions">
+                        <button type="submit" class="mp-admin-btn primary">
+                            <i class="bi bi-save"></i>Guardar publicacion
+                        </button>
+                        <a href="{% url 'marketplace:panel' %}" class="mp-admin-btn ghost">Cancelar</a>
+                    </div>
+                </form>
+            </section>
+
+            <section class="mp-admin-card mp-preview-section">
+                <div class="mp-admin-card-header">
+                    <h2>Vista previa</h2>
+                    <p>Asi se vera tu publicacion en el marketplace</p>
+                </div>
+
+                <div class="mp-preview-container">
+                    <article class="mp-card" id="previewCard">
+                        <div class="mp-card-media" id="previewMedia">
+                            <span class="mp-card-tag" id="previewTag">Producto</span>
+                            <video id="previewVideo" class="mp-card-video" controls playsinline muted loop hidden></video>
+                        </div>
+                        <div class="mp-card-body">
+                            <h3 class="mp-card-title" id="previewTitle">Tu titulo aqui</h3>
+                            <p class="mp-card-desc" id="previewDesc">Tu descripcion aparecera aqui</p>
+                            <div class="mp-card-benefit" id="previewBenefit">Beneficio: Tu beneficio aqui</div>
+                            <div class="mp-card-meta">
+                                <span class="mp-price" id="previewPrice">Precio especial</span>
+                                <span id="previewCompany">{{ empresa.nombre }}</span>
+                            </div>
+                            <a class="mp-cta" href="#" onclick="return false;">
+                                <i class="bi bi-whatsapp"></i>Escribir por WhatsApp
+                            </a>
+                        </div>
+                    </article>
+
+                    <div class="mp-preview-hint">
+                        <i class="bi bi-info-circle"></i>
+                        <span>Completa el formulario para ver los cambios en tiempo real</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        const previewTitle = document.getElementById('previewTitle');
+        const previewDesc = document.getElementById('previewDesc');
+        const previewBenefit = document.getElementById('previewBenefit');
+        const previewPrice = document.getElementById('previewPrice');
+        const previewTag = document.getElementById('previewTag');
+        const previewMedia = document.getElementById('previewMedia');
+        const previewVideo = document.getElementById('previewVideo');
+        const defaultMediaBackground = getComputedStyle(previewMedia).backgroundImage;
+
+        function clearPreviewVideo() {
+            previewVideo.pause();
+            previewVideo.removeAttribute('src');
+            previewVideo.load();
+            previewVideo.hidden = true;
+            previewMedia.classList.remove('has-video');
+        }
+
+        function setImagePreview(imageUrl) {
+            clearPreviewVideo();
+            previewMedia.style.backgroundImage = imageUrl ? `url('${imageUrl}')` : defaultMediaBackground;
+        }
+
+        function setVideoPreview(videoUrl) {
+            if (!videoUrl) {
+                clearPreviewVideo();
+                return;
+            }
+            previewMedia.style.backgroundImage = 'none';
+            previewVideo.src = videoUrl;
+            previewVideo.hidden = false;
+            previewMedia.classList.add('has-video');
+            previewVideo.load();
+        }
+
+        const tituloInput = document.getElementById('id_titulo');
+        if (tituloInput) {
+            tituloInput.addEventListener('input', (e) => {
+                previewTitle.textContent = e.target.value || 'Tu titulo aqui';
+            });
+            if (tituloInput.value) {
+                previewTitle.textContent = tituloInput.value;
+            }
+        }
+
+        const descripcionInput = document.getElementById('id_descripcion');
+        if (descripcionInput) {
+            descripcionInput.addEventListener('input', (e) => {
+                previewDesc.textContent = e.target.value || 'Tu descripcion aparecera aqui';
+            });
+            if (descripcionInput.value) {
+                previewDesc.textContent = descripcionInput.value;
+            }
+        }
+
+        const beneficioInput = document.getElementById('id_beneficio');
+        if (beneficioInput) {
+            beneficioInput.addEventListener('input', (e) => {
+                previewBenefit.textContent = e.target.value ? `Beneficio: ${e.target.value}` : 'Beneficio: Tu beneficio aqui';
+            });
+            if (beneficioInput.value) {
+                previewBenefit.textContent = `Beneficio: ${beneficioInput.value}`;
+            }
+        }
+
+        const precioInput = document.getElementById('id_precio');
+        if (precioInput) {
+            precioInput.addEventListener('input', (e) => {
+                previewPrice.textContent = e.target.value || 'Precio especial';
+            });
+            if (precioInput.value) {
+                previewPrice.textContent = precioInput.value;
+            }
+        }
+
+        const tipoSelect = document.getElementById('id_tipo');
+        if (tipoSelect) {
+            tipoSelect.addEventListener('change', (e) => {
+                const tipoText = e.target.options[e.target.selectedIndex].text;
+                previewTag.textContent = tipoText || 'Producto';
+            });
+            if (tipoSelect.value) {
+                const tipoText = tipoSelect.options[tipoSelect.selectedIndex].text;
+                previewTag.textContent = tipoText;
+            }
+        }
+
+        const imagenInput = document.getElementById('id_imagen');
+        if (imagenInput) {
+            imagenInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => setImagePreview(event.target.result);
+                    reader.readAsDataURL(file);
+                } else {
+                    setImagePreview(null);
+                }
+            });
+        }
+
+        const videoInput = document.getElementById('id_video');
+        if (videoInput) {
+            videoInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const objectUrl = URL.createObjectURL(file);
+                    setVideoPreview(objectUrl);
+                } else {
+                    clearPreviewVideo();
+                }
+            });
+        }
+
+        const clearImageInput = document.querySelector('input[name="imagen-clear"]');
+        if (clearImageInput) {
+            clearImageInput.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    setImagePreview(null);
+                }
+            });
+        }
+
+        const clearVideoInput = document.querySelector('input[name="video-clear"]');
+        if (clearVideoInput) {
+            clearVideoInput.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    clearPreviewVideo();
+                    {% if form.instance.imagen %}
+                    setImagePreview('{{ form.instance.imagen.url|escapejs }}');
+                    {% else %}
+                    setImagePreview(null);
+                    {% endif %}
+                }
+            });
+        }
+
+        {% if form.instance.video %}
+        setVideoPreview('{{ form.instance.video.url|escapejs }}');
+        {% elif form.instance.imagen %}
+        setImagePreview('{{ form.instance.imagen.url|escapejs }}');
+        {% else %}
+        setImagePreview(null);
+        {% endif %}
+    </script>
+</body>
+</html>

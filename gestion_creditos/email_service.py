@@ -104,12 +104,25 @@ def enviar_notificacion_cambio_estado(credito, nuevo_estado, motivo=""):
         logger.warning(f"No hay configuración de email para el estado: {nuevo_estado}")
         return False
 
+    detalle = credito.detalle
+    cedula_solicitante = "No registrada"
+    if detalle:
+        cedula_solicitante = (
+            getattr(detalle, 'cedula', None)
+            or getattr(detalle, 'numero_cedula', None)
+            or "No registrada"
+        )
+
+    plazo_solicitado = credito.plazo_solicitado or credito.plazo or "-"
+
     context = {
         'credito': credito,
         'nombre_cliente': credito.nombre_cliente,
         'nuevo_estado': credito.get_estado_display(),
         'motivo': motivo,
         'numero_credito': credito.numero_credito,
+        'cedula_solicitante': cedula_solicitante,
+        'plazo_solicitado_email': plazo_solicitado,
     }
 
     # Renderizar contenido HTML
@@ -275,6 +288,29 @@ def enviar_email_simple(destinatario, asunto, mensaje):
     except Exception as e:
         logger.error(f"Error al enviar email simple a {destinatario}: {e}")
         return False
+
+
+def enviar_notificacion_solicitud_libranza_empresa(destinatario, empresa, credito, detalle, dashboard_url, login_url):
+    """
+    Envía un email al pagador/empresa cuando se registra una nueva solicitud de libranza.
+
+    Este correo se usa para solicitar la validación previa del pagador antes de la aprobación administrativa.
+    """
+    asunto = f"Nueva solicitud de libranza - {detalle.nombre_completo}"
+    context = {
+        'empresa': empresa,
+        'credito': credito,
+        'detalle': detalle,
+        'dashboard_url': dashboard_url,
+        'login_url': login_url,
+    }
+
+    return enviar_email_html(
+        destinatario=destinatario,
+        asunto=asunto,
+        template_html='emails/notificacion_solicitud_libranza_empresa.html',
+        context=context
+    )
 
 
 def generar_pdf_plan_pagos(credito):

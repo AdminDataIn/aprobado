@@ -10,10 +10,7 @@ Prefijos principales:
 - /pagador/         → Panel de pagadores de empresas (RR.HH.)
 - /billetera/       → Sistema de ahorro digital
 
-Legacy (backwards compatibility):
-- /usuarios/        → Redirige a nuevas rutas
-- /mi-credito/      → Redirige a nuevas rutas
-- /gestion-creditos/ → Redirige a nuevas rutas
+Rutas legacy eliminadas.
 """
 from django.contrib import admin
 from django.urls import path, include
@@ -64,19 +61,14 @@ urlpatterns = [
     path('pagador/', include('gestion_creditos.urls_pagador')),
 
     # ========================================
+    # MARKETPLACE (PÚBLICO)
+    # ========================================
+    path('marketplace/', include('gestion_creditos.urls_marketplace')),
+
+    # ========================================
     # BILLETERA DIGITAL
     # ========================================
     path('billetera/', include('gestion_creditos.urls_billetera')),
-
-    # ========================================
-    # LEGACY URLS (DEPRECADAS - ELIMINADAS)
-    # ========================================
-    # Las siguientes rutas legacy fueron eliminadas el 2025-12-23
-    # Si se detectan errores, se deben actualizar las referencias a las nuevas URLs
-    # path('usuarios/', include('usuarios.urls')),  # ELIMINADO - Usar /emprendimiento/ o /libranza/
-    # path('mi-credito/', include('usuariocreditos.urls')),  # ELIMINADO - Usar /emprendimiento/mi-credito/ o /libranza/mi-credito/
-    # path('gestion-creditos/', include('gestion_creditos.urls')),  # ELIMINADO - Usar /gestion/, /pagador/, o /billetera/
-    # path('configuraciones/', include('configuraciones.urls')),  # ELIMINADO - No se usa
 
     # ========================================
     # PÁGINA DE INICIO

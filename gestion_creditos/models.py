@@ -2,17 +2,121 @@ from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator, FileExtensionValidator
 from django.core.exceptions import ValidationError
+from django.utils.text import slugify
 import uuid
 
 #? Modelo movido de credito_libranza (la idea es crear las empresas directamente desde el admin)
 class Empresa(models.Model):
     nombre = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=120, unique=True, blank=True)
+    descripcion_marketplace = models.TextField(blank=True)
+    whatsapp_contacto = models.CharField(max_length=20, blank=True)
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base_slug = slugify(self.nombre)
+            slug = base_slug
+            counter = 2
+            while Empresa.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
 
     class Meta:
         ordering = ['nombre']
 
     def __str__(self):
         return self.nombre
+
+
+class MarketplaceItem(models.Model):
+    class TipoItem(models.TextChoices):
+        PRODUCTO = 'producto', 'Producto'
+        SERVICIO = 'servicio', 'Servicio'
+        PUBLICIDAD = 'publicidad', 'Publicidad'
+
+    class EstadoItem(models.TextChoices):
+        PENDIENTE = 'pendiente', 'Pendiente'
+        APROBADO = 'aprobado', 'Aprobado'
+        RECHAZADO = 'rechazado', 'Rechazado'
+        INACTIVO = 'inactivo', 'Inactivo'
+
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='marketplace_items')
+    titulo = models.CharField(max_length=120)
+    descripcion = models.TextField()
+    beneficio = models.CharField(max_length=180)
+    tipo = models.CharField(max_length=20, choices=TipoItem.choices)
+    precio = models.CharField(max_length=60, blank=True)
+    imagen = models.ImageField(
+        upload_to='marketplace/items/',
+        validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'webp'])],
+        blank=True,
+        null=True
+    )
+    video = models.FileField(
+        upload_to='marketplace/videos/',
+        validators=[FileExtensionValidator(['mp4', 'webm'])],
+        blank=True,
+        null=True
+    )
+    whatsapp_contacto = models.CharField(max_length=20, blank=True)
+    estado = models.CharField(max_length=20, choices=EstadoItem.choices, default=EstadoItem.PENDIENTE)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_publicacion = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-fecha_creacion']
+
+    def __str__(self):
+        return f"{self.titulo} ({self.empresa.nombre})"
+
+class MarketplaceItemHistorialEstado(models.Model):
+    class OrigenCambio(models.TextChoices):
+        EMPRESA = 'empresa', 'Empresa'
+        ADMIN = 'admin', 'Administrador'
+        SISTEMA = 'sistema', 'Sistema'
+
+    item = models.ForeignKey(
+        MarketplaceItem,
+        on_delete=models.CASCADE,
+        related_name='historial_estados'
+    )
+    estado_anterior = models.CharField(
+        max_length=20,
+        choices=MarketplaceItem.EstadoItem.choices,
+        blank=True
+    )
+    estado_nuevo = models.CharField(
+        max_length=20,
+        choices=MarketplaceItem.EstadoItem.choices
+    )
+    origen = models.CharField(
+        max_length=20,
+        choices=OrigenCambio.choices,
+        default=OrigenCambio.SISTEMA
+    )
+    comentario = models.CharField(max_length=255, blank=True)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='marketplace_cambios_estado'
+    )
+    fecha_cambio = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha_cambio']
+        verbose_name = 'Historial de estado marketplace'
+        verbose_name_plural = 'Historial de estados marketplace'
+        indexes = [
+            models.Index(fields=['item', '-fecha_cambio'], name='mk_hist_item_fecha_idx'),
+            models.Index(fields=['item', 'estado_nuevo'], name='mk_hist_item_estado_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.item.titulo}: {self.estado_anterior or '-'} -> {self.estado_nuevo}"
 
 #? ----- Modelo principal de crédito ----
 class Credito(models.Model):
@@ -759,14 +863,14 @@ class MovimientoAhorro(models.Model):
     Registro de todos los movimientos de una cuenta de ahorro.
     """
     class TipoMovimiento(models.TextChoices):
-        DEPOSITO_ONLINE = 'DEPOSITO_ONLINE', 'Depósito Online'
-        DEPOSITO_OFFLINE = 'DEPOSITO_OFFLINE', 'Consignación Offline'
+        DEPOSITO_ONLINE = 'DEPOSITO_ONLINE', 'Deposito Online'
+        DEPOSITO_OFFLINE = 'DEPOSITO_OFFLINE', 'Consignacion Offline'
         RETIRO = 'RETIRO', 'Retiro'
-        INTERES = 'INTERES', 'Interés Generado'
+        INTERES = 'INTERES', 'Interes Generado'
         AJUSTE_ADMIN = 'AJUSTE_ADMIN', 'Ajuste Administrativo'
     
     class EstadoMovimiento(models.TextChoices):
-        PENDIENTE = 'PENDIENTE', 'Pendiente Aprobación'
+        PENDIENTE = 'PENDIENTE', 'Pendiente Aprobacion'
         APROBADO = 'APROBADO', 'Aprobado'
         RECHAZADO = 'RECHAZADO', 'Rechazado'
         PROCESADO = 'PROCESADO', 'Procesado'
@@ -858,15 +962,15 @@ class Notificacion(models.Model):
     Muestra alertas en tiempo real sobre eventos importantes.
     """
     class TipoNotificacion(models.TextChoices):
-        CREDITO_APROBADO = 'CREDITO_APROBADO', 'Crédito Aprobado'
-        CREDITO_RECHAZADO = 'CREDITO_RECHAZADO', 'Crédito Rechazado'
+        CREDITO_APROBADO = 'CREDITO_APROBADO', 'Credito Aprobado'
+        CREDITO_RECHAZADO = 'CREDITO_RECHAZADO', 'Credito Rechazado'
         PAGO_RECIBIDO = 'PAGO_RECIBIDO', 'Pago Recibido'
         PAGO_PENDIENTE = 'PAGO_PENDIENTE', 'Pago Pendiente'
-        CONSIGNACION_APROBADA = 'CONSIGNACION_APROBADA', 'Consignación Aprobada'
-        CONSIGNACION_RECHAZADA = 'CONSIGNACION_RECHAZADA', 'Consignación Rechazada'
+        CONSIGNACION_APROBADA = 'CONSIGNACION_APROBADA', 'Consignacion Aprobada'
+        CONSIGNACION_RECHAZADA = 'CONSIGNACION_RECHAZADA', 'Consignacion Rechazada'
         DOCUMENTO_PENDIENTE = 'DOCUMENTO_PENDIENTE', 'Documento Pendiente'
-        MORA = 'MORA', 'Crédito en Mora'
-        SISTEMA = 'SISTEMA', 'Notificación del Sistema'
+        MORA = 'MORA', 'Credito en Mora'
+        SISTEMA = 'SISTEMA', 'Notificacion del Sistema'
 
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -1132,7 +1236,7 @@ class Pagare(models.Model):
         help_text="Si el cliente rechazó firmar"
     )
 
-    # 🔐 Evidencia Forense (trazabilidad legal)
+    # Evidencia Forense (trazabilidad legal)
     ip_firmante = models.GenericIPAddressField(
         null=True,
         blank=True,
@@ -1230,5 +1334,5 @@ class ZapSignWebhookLog(models.Model):
         ]
 
     def __str__(self):
-        status = "✅" if self.processed else "❌"
+        status = "OK" if self.processed else "ERROR"
         return f"{status} {self.event} - {self.doc_token} ({self.received_at})"

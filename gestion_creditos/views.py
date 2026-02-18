@@ -9,8 +9,8 @@ from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_http_methods
 from django.conf import settings
-from .models import Credito, CreditoLibranza, CreditoEmprendimiento, Empresa, HistorialPago, HistorialEstado, CuentaAhorro, MovimientoAhorro, Pagare, ZapSignWebhookLog, WompiIntent
-from .forms import CreditoLibranzaForm, CreditoEmprendimientoForm, AbonoManualAdminForm, ConsignacionOfflineForm
+from .models import Credito, CreditoLibranza, CreditoEmprendimiento, Empresa, HistorialPago, HistorialEstado, CuentaAhorro, MovimientoAhorro, Pagare, ZapSignWebhookLog, WompiIntent, MarketplaceItem, MarketplaceItemHistorialEstado
+from .forms import CreditoLibranzaForm, CreditoEmprendimientoForm, AbonoManualAdminForm, ConsignacionOfflineForm, MarketplaceItemForm
 from . import credit_services
 from datetime import datetime, timedelta
 from django.db.models.functions import ExtractMonth, ExtractYear
@@ -24,20 +24,148 @@ from django.db import transaction, IntegrityError
 from django.contrib import messages
 from django.core.cache import cache
 from django.db.models import Q, Count, Sum, Max, Case, When, DecimalField, F, Subquery, Value, CharField, Avg
-from django.db.models.functions import Coalesce, TruncMonth, Concat
+from django.db.models.functions import Coalesce, TruncMonth, Concat, Trim
 from django.utils import timezone
 from django.core.paginator import Paginator
 from usuarios.models import PerfilPagador
 from django.contrib.admin.views.decorators import staff_member_required
-from .decorators import pagador_required
+from .decorators import pagador_required, marketing_required
 from django.contrib.auth.models import User
 from django.db.models import DurationField, ExpressionWrapper, Value
 from django.views.decorators.clickjacking import xframe_options_exempt
 from django.utils._os import safe_join
-from django.core.exceptions import SuspiciousFileOperation
+from django.core.exceptions import SuspiciousFileOperation, ValidationError
 from urllib.parse import quote
+from django.core.files.base import ContentFile
+from .services.marketplace_service import registrar_historial_publicacion, cambiar_estado_publicacion
 
 logger = logging.getLogger(__name__)
+
+def marketplace_empresa_view(request, empresa_slug):
+    """
+    Vitrina pública por empresa aliada.
+    Solo muestra publicaciones aprobadas para una empresa específica.
+    """
+    empresa = get_object_or_404(Empresa, slug=empresa_slug)
+
+    items = MarketplaceItem.objects.filter(
+        empresa=empresa,
+        estado=MarketplaceItem.EstadoItem.APROBADO
+    ).order_by('-fecha_creacion')
+
+    context = {
+        'empresa': empresa,
+        'items': items,
+    }
+    return render(request, 'marketplace/index.html', context)
+
+
+@login_required(login_url='/marketplace/login/')
+@marketing_required
+def marketplace_panel_view(request):
+    items = (
+        MarketplaceItem.objects
+        .filter(empresa=request.empresa_marketing)
+        .prefetch_related('historial_estados__usuario')
+        .order_by('-fecha_creacion')
+    )
+    total_aprobados = items.filter(estado=MarketplaceItem.EstadoItem.APROBADO).count()
+    total_pendientes = items.filter(estado=MarketplaceItem.EstadoItem.PENDIENTE).count()
+    context = {
+        'empresa': request.empresa_marketing,
+        'items': items,
+        'total_aprobados': total_aprobados,
+        'total_pendientes': total_pendientes,
+    }
+    return render(request, 'marketplace/panel_list.html', context)
+
+
+@login_required(login_url='/marketplace/login/')
+@marketing_required
+def marketplace_item_create_view(request):
+    if request.method == 'POST':
+        form = MarketplaceItemForm(request.POST, request.FILES)
+        if form.is_valid():
+            item = form.save(commit=False)
+            item.empresa = request.empresa_marketing
+            # Al crear, siempre queda pendiente de aprobacion.
+            item.estado = MarketplaceItem.EstadoItem.PENDIENTE
+            item.save()
+            registrar_historial_publicacion(
+                item=item,
+                estado_anterior='',
+                estado_nuevo=item.estado,
+                usuario=request.user,
+                origen=MarketplaceItemHistorialEstado.OrigenCambio.EMPRESA,
+                comentario='Publicacion creada desde el panel de empresa.'
+            )
+            messages.success(request, 'Publicacion enviada a aprobacion.')
+            return redirect('marketplace:panel')
+    else:
+        form = MarketplaceItemForm()
+
+    return render(request, 'marketplace/panel_form.html', {
+        'form': form,
+        'empresa': request.empresa_marketing,
+        'is_edit': False,
+    })
+
+
+@login_required(login_url='/marketplace/login/')
+@marketing_required
+def marketplace_item_edit_view(request, item_id):
+    item = get_object_or_404(MarketplaceItem, id=item_id, empresa=request.empresa_marketing)
+
+    if request.method == 'POST':
+        form = MarketplaceItemForm(request.POST, request.FILES, instance=item)
+        if form.is_valid():
+            estado_anterior = item.estado
+            updated_item = form.save(commit=False)
+            updated_item.save()
+            if estado_anterior != MarketplaceItem.EstadoItem.PENDIENTE:
+                try:
+                    # Cualquier edicion de un item publicado/rechazado/inactivo vuelve a revision.
+                    cambiar_estado_publicacion(
+                        item=updated_item,
+                        estado_nuevo=MarketplaceItem.EstadoItem.PENDIENTE,
+                        usuario=request.user,
+                        origen=MarketplaceItemHistorialEstado.OrigenCambio.EMPRESA,
+                        comentario='Publicacion editada por la empresa y enviada a revision.'
+                    )
+                except ValidationError as exc:
+                    messages.error(request, str(exc))
+                    return redirect('marketplace:panel')
+            messages.success(request, 'Publicacion actualizada y enviada a revision.')
+            return redirect('marketplace:panel')
+    else:
+        form = MarketplaceItemForm(instance=item)
+
+    return render(request, 'marketplace/panel_form.html', {
+        'form': form,
+        'empresa': request.empresa_marketing,
+        'item': item,
+        'is_edit': True,
+    })
+
+
+@login_required(login_url='/marketplace/login/')
+@require_POST
+@marketing_required
+def marketplace_item_deactivate_view(request, item_id):
+    item = get_object_or_404(MarketplaceItem, id=item_id, empresa=request.empresa_marketing)
+    try:
+        cambiar_estado_publicacion(
+            item=item,
+            estado_nuevo=MarketplaceItem.EstadoItem.INACTIVO,
+            usuario=request.user,
+            origen=MarketplaceItemHistorialEstado.OrigenCambio.EMPRESA,
+            comentario='Publicacion desactivada desde el panel de empresa.'
+        )
+    except ValidationError as exc:
+        messages.error(request, str(exc))
+        return redirect('marketplace:panel')
+    messages.success(request, 'Publicacion desactivada.')
+    return redirect('marketplace:panel')
 
 #! La función _registrar_cambio_estado fue eliminada.
 #! La lógica ahora está centralizada en credit_services.gestionar_cambio_estado_credito.
@@ -72,33 +200,44 @@ def solicitud_credito_libranza_view(request):
                 logger.error(f"Error al enviar email de confirmación para crédito {credito_principal.id}: {e}")
 
             try:
-                from gestion_creditos.email_service import enviar_email_simple
+                from gestion_creditos.email_service import enviar_notificacion_solicitud_libranza_empresa
+                from gestion_creditos.models import Notificacion
+
                 pagadores = PerfilPagador.objects.filter(
                     empresa=credito_libranza_detalle.empresa,
                     es_pagador=True
                 ).select_related('usuario')
+
                 if pagadores:
-                    monto_formateado = f"{credito_principal.monto_solicitado:,.0f}"
+                    # Enlaces directos para que el pagador pueda revisar la solicitud rápidamente.
                     dashboard_url = request.build_absolute_uri(reverse('pagador:dashboard'))
                     login_url = request.build_absolute_uri(reverse('pagador:login'))
+
                     for perfil in pagadores:
                         if not perfil.usuario.email:
                             continue
-                        mensaje = (
-                            "Se registro una nueva solicitud de credito de libranza.\n\n"
-                            f"Empleado: {credito_libranza_detalle.nombre_completo}\n"
-                            f"Cedula: {credito_libranza_detalle.cedula}\n"
-                            f"Monto solicitado: ${monto_formateado}\n"
-                            f"Plazo solicitado: {credito_principal.plazo_solicitado} meses\n\n"
-                            "Ingresa para aprobar o rechazar:\n"
-                            f"{dashboard_url}\n\n"
-                            "Si no has iniciado sesion:\n"
-                            f"{login_url}\n"
+
+                        # Email pro de notificación para la empresa/pagador.
+                        enviar_notificacion_solicitud_libranza_empresa(
+                            destinatario=perfil.usuario.email,
+                            empresa=credito_libranza_detalle.empresa,
+                            credito=credito_principal,
+                            detalle=credito_libranza_detalle,
+                            dashboard_url=dashboard_url,
+                            login_url=login_url
                         )
-                        enviar_email_simple(
-                            perfil.usuario.email,
-                            "Nueva solicitud de credito de libranza",
-                            mensaje
+
+                        # Notificación interna para mostrar badge en dashboard del pagador.
+                        Notificacion.objects.create(
+                            usuario=perfil.usuario,
+                            tipo=Notificacion.TipoNotificacion.SISTEMA,
+                            titulo="Nueva solicitud de libranza",
+                            mensaje=(
+                                f"{credito_libranza_detalle.nombre_completo} "
+                                f"solicito ${credito_principal.monto_solicitado:,.0f} "
+                                f"a {credito_principal.plazo_solicitado} meses."
+                            ),
+                            url=reverse('pagador:dashboard')
                         )
             except Exception as e:
                 logger.error(f"Error al notificar a pagadores para credito {credito_principal.id}: {e}")
@@ -374,14 +513,32 @@ def admin_solicitudes_view(request):
         'usuario', 'detalle_libranza', 'detalle_emprendimiento'
     ).annotate(
         nombre_solicitante=Case(
-            When(linea='LIBRANZA', then=Concat('detalle_libranza__nombres', Value(' '), 'detalle_libranza__apellidos')),
-            When(linea='EMPRENDIMIENTO', then=F('detalle_emprendimiento__nombre')),
-            default=Concat('usuario__first_name', Value(' '), 'usuario__last_name'),
+            When(
+                linea='LIBRANZA',
+                then=Trim(
+                    Concat(
+                        Coalesce('detalle_libranza__nombres', Value('')),
+                        Value(' '),
+                        Coalesce('detalle_libranza__apellidos', Value(''))
+                    )
+                )
+            ),
+            When(
+                linea='EMPRENDIMIENTO',
+                then=Trim(Coalesce('detalle_emprendimiento__nombre', Value('')))
+            ),
+            default=Trim(
+                Concat(
+                    Coalesce('usuario__first_name', Value('')),
+                    Value(' '),
+                    Coalesce('usuario__last_name', Value(''))
+                )
+            ),
             output_field=CharField()
         ),
         documento_solicitante=Case(
-            When(linea='LIBRANZA', then=F('detalle_libranza__cedula')),
-            When(linea='EMPRENDIMIENTO', then=F('detalle_emprendimiento__numero_cedula')),
+            When(linea='LIBRANZA', then=Coalesce('detalle_libranza__cedula', Value(''))),
+            When(linea='EMPRENDIMIENTO', then=Coalesce('detalle_emprendimiento__numero_cedula', Value(''))),
             default=Value(''),
             output_field=CharField()
         )
@@ -996,10 +1153,16 @@ def pagador_dashboard_view(request):
     #? Obtener y limpiar errores de la sesión
     errores_pago_masivo = request.session.pop('errores_pago_masivo', None)
 
+    # Solicitudes pendientes de validación por parte del pagador.
+    solicitudes_pendientes = creditos_empresa.filter(
+        estado__in=[Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION]
+    )
+
     context = {
         'empresa': empresa,
         'creditos': creditos_empresa,
         'errores_pago_masivo': errores_pago_masivo,
+        'solicitudes_pendientes_count': solicitudes_pendientes.count(),
         'search_query': search_query,
         'estado_filter': estado_filter,
         'sort_by': sort_by,
@@ -1067,20 +1230,35 @@ def pagador_decidir_solicitud_view(request, credito_id):
 
     try:
         if action == 'approve':
+            ultima_decision_pagador = HistorialEstado.objects.filter(
+                credito=credito,
+                usuario_modificacion__perfil_pagador__isnull=False,
+                estado_nuevo__in=[Credito.EstadoCredito.APROBADO, Credito.EstadoCredito.RECHAZADO]
+            ).order_by('-fecha').first()
+            if ultima_decision_pagador and ultima_decision_pagador.estado_nuevo == Credito.EstadoCredito.APROBADO:
+                messages.info(request, "La aprobacion del pagador ya estaba registrada.")
+                return redirect('pagador:dashboard')
+
             if credito.monto_aprobado is None:
                 credito.monto_aprobado = credito.monto_solicitado
             if credito.plazo is None:
                 credito.plazo = credito.plazo_solicitado
             credito.save(update_fields=['monto_aprobado', 'plazo'])
 
-            motivo_final = motivo or "Aprobado por pagador."
-            credit_services.gestionar_cambio_estado_credito(
+            motivo_final = motivo or "Aprobado por pagador (pendiente validacion administrativa)."
+            # Registramos la decision del pagador sin avanzar el estado del credito.
+            # El estado oficial solo debe cambiar cuando apruebe el administrador.
+            HistorialEstado.objects.create(
                 credito=credito,
-                nuevo_estado=Credito.EstadoCredito.APROBADO,
+                estado_anterior=credito.estado,
+                estado_nuevo=Credito.EstadoCredito.APROBADO,
                 usuario_modificacion=request.user,
                 motivo=motivo_final
             )
-            messages.success(request, f"Credito {credito.numero_credito} aprobado.")
+            messages.success(
+                request,
+                f"Decision de pagador registrada para {credito.numero_credito}. Pendiente aprobacion administrativa."
+            )
         else:
             motivo_final = motivo or "Rechazado por pagador."
             credit_services.gestionar_cambio_estado_credito(
@@ -1269,14 +1447,18 @@ def descargar_reporte_pagador_view(request):
         )
     )
 
+    report_type = request.GET.get('tipo', 'completo').strip().lower()
+    if report_type not in ['completo', 'reducido']:
+        report_type = 'completo'
+
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = (
-        f'attachment; filename="reporte_pagador_{empresa.nombre}_{timezone.now().strftime("%Y%m%d")}.csv"'
+        f'attachment; filename="reporte_pagador_{report_type}_{empresa.nombre}_{timezone.now().strftime("%Y%m%d")}.csv"'
     )
     response.write('\ufeff')
 
     writer = csv.writer(response)
-    headers = [
+    headers_completo = [
         'Empresa',
         'Numero credito',
         'Estado',
@@ -1327,13 +1509,37 @@ def descargar_reporte_pagador_view(request):
         'ZapSign status',
         'ZapSign token',
     ]
+
+    headers_reducido = [
+        'Empresa',
+        'Numero credito',
+        'Estado',
+        'Linea',
+        'Fecha solicitud',
+        'Monto solicitado',
+        'Plazo solicitado',
+        'Monto aprobado',
+        'Plazo aprobado',
+        'Saldo pendiente',
+        'Valor cuota',
+        'Fecha proximo pago',
+        'Total pagado',
+        'Nombre completo',
+        'Cedula',
+        'Correo',
+        'Telefono',
+        'Pagare estado',
+        'Pagare fecha firma',
+    ]
+
+    headers = headers_reducido if report_type == 'reducido' else headers_completo
     writer.writerow(headers)
 
     def _fmt_dt(value):
         if not value:
             return ''
         try:
-            return value.strftime('%Y-%m-%d %H:%M:%S')
+            return value.strftime('%d/%m/%Y %H:%M')
         except AttributeError:
             return str(value)
 
@@ -1363,7 +1569,7 @@ def descargar_reporte_pagador_view(request):
             if not signed_pdf:
                 signed_pdf = pagare.zapsign_signed_file_url or ''
 
-        writer.writerow([
+        row_completo = [
             empresa.nombre,
             credito.numero_credito,
             credito.get_estado_display(),
@@ -1413,7 +1619,31 @@ def descargar_reporte_pagador_view(request):
             pagare.hash_pdf if pagare else '',
             pagare.zapsign_status if pagare else '',
             pagare.zapsign_doc_token if pagare else '',
-        ])
+        ]
+
+        row_reducido = [
+            empresa.nombre,
+            credito.numero_credito,
+            credito.get_estado_display(),
+            credito.get_linea_display(),
+            _fmt_dt(credito.fecha_solicitud),
+            _fmt_decimal(credito.monto_solicitado),
+            credito.plazo_solicitado or '',
+            _fmt_decimal(credito.monto_aprobado),
+            credito.plazo or '',
+            _fmt_decimal(credito.saldo_pendiente),
+            _fmt_decimal(credito.valor_cuota),
+            _fmt_dt(credito.fecha_proximo_pago),
+            _fmt_decimal(getattr(credito, 'total_pagado', None)),
+            detalle.nombre_completo if detalle else '',
+            detalle.cedula if detalle else '',
+            detalle.correo_electronico if detalle else '',
+            detalle.telefono if detalle else '',
+            pagare.get_estado_display() if pagare else '',
+            _fmt_dt(pagare.fecha_firma) if pagare else '',
+        ]
+
+        writer.writerow(row_reducido if report_type == 'reducido' else row_completo)
 
     return response
 
@@ -3010,6 +3240,17 @@ def zapsign_webhook_view(request):
                 pagare.evidencias = payload
                 pagare.save()
 
+                # Descargar y guardar el PDF firmado en nuestro servidor
+                try:
+                    if not pagare.archivo_pdf_firmado:
+                        from gestion_creditos.services.zapsign_client import descargar_pdf_firmado as zapsign_descargar_pdf_firmado
+                        signed_bytes = zapsign_descargar_pdf_firmado(pagare)
+                        if signed_bytes:
+                            filename = f"{pagare.numero_pagare}_firmado.pdf"
+                            pagare.archivo_pdf_firmado.save(filename, ContentFile(signed_bytes), save=True)
+                except Exception as e:
+                    logger.warning(f"No se pudo guardar el PDF firmado para pagaré {pagare.numero_pagare}: {e}")
+
                 credit_services.gestionar_cambio_estado_credito(
                     credito=credito,
                     nuevo_estado=Credito.EstadoCredito.FIRMADO,
@@ -3631,3 +3872,4 @@ def historial_reestructuraciones_view(request, credito_id):
     }
 
     return render(request, 'emprendimiento/historial_reestructuraciones.html', context)
+
