@@ -74,15 +74,37 @@ class ZapSignClient:
 
         auth_mode = getattr(settings, 'ZAPSIGN_AUTH_MODE', 'assinaturaTela')
         send_automatic_email = getattr(settings, 'ZAPSIGN_SEND_AUTOMATIC_EMAIL', True)
+
+        # Validacion de identidad por selfie en signers:
+        # - En sandbox queda activa por defecto para pruebas.
+        # - En produccion queda desactivada por defecto.
+        # - Se puede controlar con settings:
+        #   ZAPSIGN_ENABLE_SELFIE_VALIDATION (bool)
+        #   ZAPSIGN_SELFIE_VALIDATION_TYPE (str)
+        enable_selfie_validation = getattr(
+            settings,
+            'ZAPSIGN_ENABLE_SELFIE_VALIDATION',
+            self.environment == 'sandbox'
+        )
+        selfie_validation_type = getattr(
+            settings,
+            'ZAPSIGN_SELFIE_VALIDATION_TYPE',
+            'identity-verification'
+        )
+
+        signer_payload = {
+            "email": email_firmante,
+            "name": nombre_firmante,
+            "auth_mode": auth_mode,
+            "send_automatic_email": send_automatic_email
+        }
+        if enable_selfie_validation and selfie_validation_type:
+            signer_payload["selfie_validation_type"] = selfie_validation_type
+
         payload = {
             "name": nombre,
             "url_pdf": url_pdf,
-            "signers": [{
-                "email": email_firmante,
-                "name": nombre_firmante,
-                "auth_mode": auth_mode,
-                "send_automatic_email": send_automatic_email
-            }],
+            "signers": [signer_payload],
             "brand_name": brand_name,
             "lang": "es"
         }
@@ -205,6 +227,50 @@ class ZapSignClient:
             raise ZapSignAPIError(error_msg)
 
 
+def _limpiar_email(email: Optional[str]) -> str:
+    return (email or '').strip().lower()
+
+
+def _obtener_datos_firmante(credito, detalle, usuario):
+    """
+    Determina el firmante principal y correos de copia para notificaciones de firma.
+    Regla de negocio:
+    - Principal: correo ingresado en la solicitud (si existe), de lo contrario el del usuario.
+    - Copias: correo del usuario + correo social (Google) cuando sea distinto al principal.
+    """
+    if credito.linea == credito.LineaCredito.LIBRANZA:
+        nombre_firmante = detalle.nombre_completo or f"{usuario.first_name} {usuario.last_name}".strip() or usuario.username
+        correo_solicitud = _limpiar_email(getattr(detalle, 'correo_electronico', ''))
+    else:
+        nombre_firmante = detalle.nombre or f"{usuario.first_name} {usuario.last_name}".strip() or usuario.username
+        correo_solicitud = ''
+
+    email_usuario = _limpiar_email(getattr(usuario, 'email', ''))
+    email_firmante = correo_solicitud or email_usuario
+
+    correos_copia = set()
+    if email_usuario:
+        correos_copia.add(email_usuario)
+    if correo_solicitud:
+        correos_copia.add(correo_solicitud)
+
+    # Correo social (Google) como copia adicional si existe.
+    try:
+        from allauth.socialaccount.models import SocialAccount
+        for account in SocialAccount.objects.filter(user=usuario):
+            extra_data = account.extra_data or {}
+            email_social = _limpiar_email(extra_data.get('email'))
+            if email_social:
+                correos_copia.add(email_social)
+    except Exception:
+        pass
+
+    if email_firmante:
+        correos_copia.discard(email_firmante)
+
+    return nombre_firmante, email_firmante, sorted(correos_copia)
+
+
 def enviar_pagare_a_zapsign(pagare: Pagare, url_pdf_publica: str) -> Pagare:
     """
     Envía un pagaré a ZapSign para firma electrónica.
@@ -233,12 +299,7 @@ def enviar_pagare_a_zapsign(pagare: Pagare, url_pdf_publica: str) -> Pagare:
         raise ValueError("El credito no tiene detalle asociado")
 
     # Preparar datos del firmante
-    if credito.linea == credito.LineaCredito.LIBRANZA:
-        nombre_firmante = detalle.nombre_completo or f"{usuario.first_name} {usuario.last_name}".strip() or usuario.username
-        email_firmante = detalle.correo_electronico or usuario.email
-    else:
-        nombre_firmante = detalle.nombre or f"{usuario.first_name} {usuario.last_name}".strip() or usuario.username
-        email_firmante = usuario.email
+    nombre_firmante, email_firmante, emails_copia = _obtener_datos_firmante(credito, detalle, usuario)
 
     if not nombre_firmante:
         raise ValueError("No se puede determinar el nombre del firmante")
@@ -271,7 +332,8 @@ def enviar_pagare_a_zapsign(pagare: Pagare, url_pdf_publica: str) -> Pagare:
         pagare.save()
 
         enviar_email_local = getattr(settings, 'ZAPSIGN_SEND_LOCAL_EMAIL', False)
-        if enviar_email_local and sign_url:
+        enviar_copias_firma = getattr(settings, 'ZAPSIGN_SEND_COPY_EMAILS', True)
+        if sign_url and (enviar_email_local or enviar_copias_firma):
             try:
                 from gestion_creditos.email_service import enviar_email_simple
                 asunto = f"Firma de pagar? {pagare.numero_pagare}"
@@ -280,7 +342,14 @@ def enviar_pagare_a_zapsign(pagare: Pagare, url_pdf_publica: str) -> Pagare:
                     f"Ya puedes firmar tu pagar? desde este enlace:\n{sign_url}\n\n"
                     "Si no solicitaste este cr?dito, por favor ignora este mensaje."
                 )
-                enviar_email_simple(email_firmante, asunto, mensaje)
+                # Si ZapSign no envia correo automatico, enviamos al principal por canal local.
+                if enviar_email_local:
+                    enviar_email_simple(email_firmante, asunto, mensaje)
+
+                # Copias al correo de usuario y al correo social (Google), sin duplicados.
+                if enviar_copias_firma:
+                    for email_copia in emails_copia:
+                        enviar_email_simple(email_copia, asunto, mensaje)
             except Exception as e:
                 logger.error(f"Error al enviar email local de firma para pagar? {pagare.numero_pagare}: {e}")
 
