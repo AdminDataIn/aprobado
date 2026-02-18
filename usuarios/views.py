@@ -18,7 +18,7 @@ def index(request):
 @login_required
 def aplicar_formulario(request):
     # if not SocialAccount.objects.filter(user=request.user, provider='google').exists():
-        # return redirect('/accounts/google/login/?next=/usuarios/aplicar/')
+        # return redirect('/accounts/google/login/?next=/emprendimiento/solicitar/')
     return render(request, 'emprendimiento/aplicando.html')
 
 
@@ -82,6 +82,34 @@ class EmpresaLoginView(LoginView):
     def get_success_url(self):
         # Redirige al dashboard de pagador (nueva estructura)
         return reverse('pagador:dashboard')
+
+
+class MarketingLoginView(LoginView):
+    template_name = 'account/login_marketing.html'
+    redirect_authenticated_user = False
+
+    def get(self, request, *args, **kwargs):
+        # Si ya está autenticado y tiene perfil marketing activo, va directo al panel.
+        if request.user.is_authenticated:
+            if hasattr(request.user, 'perfil_marketing') and request.user.perfil_marketing.activo:
+                return redirect(reverse('marketplace:panel'))
+            messages.warning(request, 'Su cuenta actual no tiene acceso activo al panel marketplace.')
+            return redirect(reverse('home'))
+        return super().get(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        user = form.get_user()
+        if hasattr(user, 'perfil_marketing') and user.perfil_marketing.activo:
+            return super().form_valid(form)
+        logout(self.request)
+        messages.error(self.request, 'Este usuario no tiene permisos para ingresar al panel marketplace.')
+        return self.form_invalid(form)
+
+    def get_success_url(self):
+        next_url = self.request.GET.get('next')
+        if next_url:
+            return next_url
+        return reverse('marketplace:panel')
 
 
 # Vista para la Landing Page de Crédito de Libranza

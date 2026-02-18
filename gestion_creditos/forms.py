@@ -1,8 +1,9 @@
 from django import forms
-from .models import CreditoLibranza, Empresa, CreditoEmprendimiento, MovimientoAhorro
+from .models import CreditoLibranza, Empresa, CreditoEmprendimiento, MovimientoAhorro, MarketplaceItem
 from decimal import Decimal
 # Agregar al archivo forms.py existente
 from django.core.validators import FileExtensionValidator
+from django.conf import settings
 
 #? --------- FORMULARIO DE CREDITO DE LIBRANZA ------------
 class CreditoLibranzaForm(forms.ModelForm):
@@ -240,6 +241,80 @@ class ConsignacionOfflineForm(forms.ModelForm):
                 raise forms.ValidationError('Solo se permiten archivos PDF, JPG o PNG.')
         
         return comprobante
+
+
+class MarketplaceItemForm(forms.ModelForm):
+    class Meta:
+        model = MarketplaceItem
+        fields = ['titulo', 'descripcion', 'beneficio', 'tipo', 'precio', 'imagen', 'video', 'whatsapp_contacto']
+        widgets = {
+            'titulo': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Titulo del producto/servicio'}),
+            'descripcion': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+            'beneficio': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Beneficio principal'}),
+            'tipo': forms.Select(attrs={'class': 'form-select'}),
+            'precio': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: $120.000 o Consultivo'}),
+            'imagen': forms.ClearableFileInput(attrs={'class': 'form-control'}),
+            'video': forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.mp4,.webm,video/mp4,video/webm'}),
+            'whatsapp_contacto': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: 573001112233'}),
+        }
+
+    def clean_imagen(self):
+        imagen = self.cleaned_data.get('imagen')
+        if not imagen:
+            return imagen
+
+        max_size_bytes = int(getattr(settings, 'MARKETPLACE_MAX_IMAGE_BYTES', 5 * 1024 * 1024))
+        if imagen.size > max_size_bytes:
+            raise forms.ValidationError('La imagen no debe superar 5MB.')
+
+        allowed_types = {'image/jpeg', 'image/png', 'image/webp'}
+        content_type = getattr(imagen, 'content_type', None)
+        if content_type and content_type.lower() not in allowed_types:
+            raise forms.ValidationError('Formato de imagen no permitido. Usa JPG, PNG o WEBP.')
+
+        # Validacion real del archivo para evitar uploads con extension falsa.
+        try:
+            from PIL import Image
+            img = Image.open(imagen)
+            img.verify()
+            imagen.seek(0)
+        except Exception:
+            raise forms.ValidationError('El archivo de imagen esta corrupto o no es valido.')
+
+        # Limite razonable para proteger render y almacenamiento.
+        try:
+            from PIL import Image
+            img_check = Image.open(imagen)
+            width, height = img_check.size
+            imagen.seek(0)
+            if width > 5000 or height > 5000:
+                raise forms.ValidationError('La resolucion maxima permitida es 5000x5000 px.')
+        except forms.ValidationError:
+            raise
+        except Exception:
+            raise forms.ValidationError('No se pudo validar la resolucion de la imagen.')
+
+        return imagen
+
+    def clean_video(self):
+        video = self.cleaned_data.get('video')
+        if not video:
+            return video
+
+        max_size_bytes = int(getattr(settings, 'MARKETPLACE_MAX_VIDEO_BYTES', 20 * 1024 * 1024))
+        if video.size > max_size_bytes:
+            raise forms.ValidationError('El video no debe superar 20MB.')
+
+        allowed_types = {'video/mp4', 'video/webm'}
+        content_type = getattr(video, 'content_type', None)
+        if content_type and content_type.lower() not in allowed_types:
+            raise forms.ValidationError('Formato de video no permitido. Usa MP4 o WEBM.')
+
+        ext = video.name.split('.')[-1].lower() if '.' in video.name else ''
+        if ext not in {'mp4', 'webm'}:
+            raise forms.ValidationError('Extension de video no valida. Usa .mp4 o .webm.')
+
+        return video
 
 
 class AbonoManualAdminForm(forms.Form):

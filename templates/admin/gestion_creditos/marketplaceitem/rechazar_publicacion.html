@@ -1,0 +1,26 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div style="max-width: 720px;">
+    <h1>{{ title }}</h1>
+    <p style="margin: 8px 0 18px;">
+        Esta accion cambiara el estado a <strong>Rechazado</strong> y notificara a la empresa.
+    </p>
+    <form method="post">
+        {% csrf_token %}
+        <fieldset class="module aligned">
+            <div class="form-row">
+                {{ form.motivo.label_tag }}
+                <div style="margin-top: 8px;">{{ form.motivo }}</div>
+                {% if form.motivo.errors %}
+                <p class="errornote">{{ form.motivo.errors|join:", " }}</p>
+                {% endif %}
+            </div>
+        </fieldset>
+        <div style="margin-top: 16px; display: flex; gap: 10px;">
+            <button type="submit" class="default">Confirmar rechazo</button>
+            <a href="{% url 'admin:gestion_creditos_marketplaceitem_changelist' %}" class="button">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

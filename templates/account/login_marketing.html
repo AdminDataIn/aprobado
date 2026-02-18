@@ -1,0 +1,375 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso Marketplace - Aprobado</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --auth-ink: #0f172a;
+            --auth-muted: #64748b;
+            --auth-border: rgba(148, 163, 184, 0.25);
+            --auth-blue: #1d4ed8;
+            --auth-blue-soft: #e0e7ff;
+            --auth-bg: #f8fafc;
+            --auth-red: #dc2626;
+            --auth-red-soft: #fee2e2;
+        }
+        
+        * { 
+            box-sizing: border-box; 
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: radial-gradient(circle at top right, #eff6ff 0%, #f8fafc 40%, #f1f5f9 100%);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Orbs decorativos */
+        .auth-orb {
+            position: absolute;
+            border-radius: 999px;
+            filter: blur(0);
+            opacity: 0.45;
+            z-index: 0;
+        }
+
+        .auth-orb-1 {
+            width: 380px;
+            height: 380px;
+            background: radial-gradient(circle, rgba(14, 165, 233, 0.3), rgba(14, 165, 233, 0) 70%);
+            top: -100px;
+            right: -80px;
+        }
+
+        .auth-orb-2 {
+            width: 280px;
+            height: 280px;
+            background: radial-gradient(circle, rgba(147, 51, 234, 0.25), rgba(147, 51, 234, 0) 70%);
+            bottom: -60px;
+            left: -60px;
+        }
+        
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .login-card {
+            width: 100%;
+            max-width: 460px;
+            background: linear-gradient(140deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.9));
+            border: 1px solid var(--auth-border);
+            border-radius: 28px;
+            overflow: hidden;
+            box-shadow: 0 24px 60px -40px rgba(15, 23, 42, 0.45);
+            backdrop-filter: blur(20px);
+        }
+        
+        .card-header {
+            background: transparent;
+            border-bottom: 1px solid var(--auth-border);
+            text-align: center;
+            padding: 2.5rem 2rem 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .brand-link {
+            display: inline-flex;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+
+        .card-header img {
+            max-height: 40px;
+            margin: 0;
+            display: block;
+        }
+        
+        .card-header h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--auth-ink);
+            margin: 0 0 0.5rem;
+            letter-spacing: -0.02em;
+        }
+        
+        .card-header p {
+            font-size: 0.95rem;
+            color: var(--auth-muted);
+            margin: 0;
+        }
+
+        .card-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--auth-blue-soft);
+            color: var(--auth-blue);
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            margin-bottom: 1rem;
+        }
+        
+        .card-body {
+            padding: 2rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--auth-ink);
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+        
+        .form-control {
+            width: 100%;
+            border: 1px solid var(--auth-border);
+            border-radius: 14px;
+            padding: 0.875rem 1rem;
+            font-size: 0.9375rem;
+            font-family: inherit;
+            transition: all 0.2s ease;
+            background: rgba(255, 255, 255, 0.8);
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: var(--auth-blue);
+            box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+            background: #fff;
+        }
+        
+        .password-wrap {
+            position: relative;
+        }
+        
+        .password-wrap .form-control {
+            padding-right: 3rem;
+        }
+        
+        .toggle-password {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            border: none;
+            background: transparent;
+            color: var(--auth-muted);
+            padding: 0.5rem;
+            line-height: 1;
+            cursor: pointer;
+            transition: color 0.2s ease;
+            font-size: 1.1rem;
+        }
+        
+        .toggle-password:hover {
+            color: var(--auth-ink);
+        }
+        
+        .login-links {
+            margin-top: 1rem;
+            text-align: right;
+        }
+        
+        .login-links a {
+            font-size: 0.875rem;
+            color: var(--auth-blue);
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+        
+        .login-links a:hover {
+            color: #1e40af;
+            text-decoration: underline;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--auth-blue), #2563eb);
+            border: none;
+            border-radius: 14px;
+            padding: 0.875rem 1.5rem;
+            font-weight: 700;
+            font-size: 0.9375rem;
+            width: 100%;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 8px 20px -8px rgba(29, 78, 216, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 30px -10px rgba(29, 78, 216, 0.5);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+        
+        .alert-danger {
+            background: var(--auth-red-soft);
+            border: 1px solid rgba(220, 38, 38, 0.3);
+            border-radius: 14px;
+            color: var(--auth-red);
+            padding: 1rem 1.125rem;
+            font-size: 0.875rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: start;
+            gap: 0.75rem;
+        }
+
+        .alert-danger i {
+            font-size: 1.25rem;
+            flex-shrink: 0;
+            margin-top: 0.125rem;
+        }
+
+        .back-link {
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+
+        .back-link a {
+            color: var(--auth-muted);
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: color 0.2s ease;
+        }
+
+        .back-link a:hover {
+            color: var(--auth-ink);
+        }
+
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 1rem;
+            }
+
+            .card-header {
+                padding: 2rem 1.5rem 1.5rem;
+            }
+
+            .card-body {
+                padding: 1.5rem;
+            }
+
+            .card-header h3 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-orb auth-orb-1"></div>
+    <div class="auth-orb auth-orb-2"></div>
+
+    <div class="login-container">
+        <div class="login-card">
+            <div class="card-header">
+                <a href="/" class="brand-link"><img src="{% static 'images/logo-dark.png' %}" alt="Logo Aprobado"></a>
+                <span class="card-badge">
+                    <i class="bi bi-shield-check"></i>
+                    Acceso seguro
+                </span>
+                <h3>Panel Marketplace</h3>
+                <p>Ingresa con tu usuario y contraseña de empresa.</p>
+            </div>
+            <div class="card-body">
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert-danger">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <span>{{ message }}</span>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+                {% if form.errors and not messages %}
+                    <div class="alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <span>Usuario o contraseña inválidos. Por favor, intenta de nuevo.</span>
+                    </div>
+                {% endif %}
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="form-group">
+                        <label for="id_username" class="form-label">Usuario</label>
+                        <input type="text" name="username" class="form-control" id="id_username" placeholder="usuario@empresa" required autofocus>
+                    </div>
+                    <div class="form-group">
+                        <label for="id_password" class="form-label">Contraseña</label>
+                        <div class="password-wrap">
+                            <input type="password" name="password" class="form-control" id="id_password" placeholder="••••••••" required>
+                            <button type="button" class="toggle-password" id="togglePassword" aria-label="Mostrar u ocultar contraseña">
+                                <i class="bi bi-eye" id="togglePasswordIcon"></i>
+                            </button>
+                        </div>
+                        <div class="login-links">
+                            <a href="{% url 'marketplace:password_reset' %}">
+                                <i class="bi bi-question-circle"></i> ¿Olvidaste tu contraseña?
+                            </a>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary">
+                        <i class="bi bi-box-arrow-in-right"></i>
+                        Ingresar al panel
+                    </button>
+                </form>
+                <div class="back-link">
+                    <a href="/">
+                        <i class="bi bi-arrow-left"></i> Volver al marketplace
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        const toggleBtn = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('id_password');
+        const icon = document.getElementById('togglePasswordIcon');
+
+        if (toggleBtn && passwordInput && icon) {
+            toggleBtn.addEventListener('click', () => {
+                const isPassword = passwordInput.type === 'password';
+                passwordInput.type = isPassword ? 'text' : 'password';
+                icon.className = isPassword ? 'bi bi-eye-slash' : 'bi bi-eye';
+            });
+        }
+    </script>
+</body>
+</html>

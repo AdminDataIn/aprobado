@@ -12,6 +12,15 @@ class PerfilPagador(models.Model):
 
     def __str__(self):
         return f"Pagador: {self.usuario.username} de {self.empresa.nombre}"
+
+
+class PerfilEmpresaMarketing(models.Model):
+    usuario = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='perfil_marketing')
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    activo = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"Marketing: {self.usuario.username} de {self.empresa.nombre}"
     
 class PerfilUsuario(models.Model):
     """Perfil extendido para todos los usuarios"""

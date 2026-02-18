@@ -1,11 +1,30 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django import forms
+from django.urls import path, reverse
+from django.shortcuts import redirect, get_object_or_404
+from django.utils.html import format_html
+from django.template.response import TemplateResponse
+from django.core.exceptions import ValidationError
 from .models import (
     Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago, WompiIntent,
     CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, ImagenNegocio, Notificacion,
-    Pagare, ZapSignWebhookLog
+    Pagare, ZapSignWebhookLog, MarketplaceItem, MarketplaceItemHistorialEstado
 )
 from django.utils import timezone
 from datetime import timedelta
+from .services.marketplace_service import (
+    cambiar_estado_publicacion,
+    es_transicion_estado_valida,
+    registrar_historial_publicacion,
+    notificar_empresa_estado_publicacion,
+)
+
+# Hotfix de etiquetas con tildes para el index de admin.
+# Evita tocar masivamente cadenas en modelos por ahora.
+Credito._meta.verbose_name = 'Crédito'
+Credito._meta.verbose_name_plural = 'Créditos'
+Pagare._meta.verbose_name = 'Pagaré'
+Pagare._meta.verbose_name_plural = 'Pagarés'
 
 #? --------- INLINE PARA IMÁGENES DEL NEGOCIO ------------
 class ImagenNegocioInline(admin.TabularInline):
@@ -174,8 +193,178 @@ class CreditoEmprendimientoAdmin(admin.ModelAdmin):
 
 @admin.register(Empresa)
 class EmpresaAdmin(admin.ModelAdmin):
-    list_display = ('nombre',)
-    search_fields = ('nombre',)
+    list_display = ('nombre', 'slug', 'whatsapp_contacto')
+    search_fields = ('nombre', 'slug')
+
+
+class MarketplaceItemHistorialEstadoInline(admin.TabularInline):
+    model = MarketplaceItemHistorialEstado
+    extra = 0
+    can_delete = False
+    fields = ('fecha_cambio', 'estado_anterior', 'estado_nuevo', 'origen', 'usuario', 'comentario')
+    readonly_fields = ('fecha_cambio', 'estado_anterior', 'estado_nuevo', 'origen', 'usuario', 'comentario')
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+class RechazoMarketplaceForm(forms.Form):
+    motivo = forms.CharField(
+        label='Motivo del rechazo',
+        widget=forms.Textarea(attrs={'rows': 4, 'style': 'width:100%;'}),
+        required=True
+    )
+
+
+class MarketplaceItemAdminForm(forms.ModelForm):
+    class Meta:
+        model = MarketplaceItem
+        fields = '__all__'
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if self.instance and self.instance.pk:
+            estado_actual = MarketplaceItem.objects.get(pk=self.instance.pk).estado
+            estado_nuevo = cleaned_data.get('estado')
+            if estado_nuevo == MarketplaceItem.EstadoItem.RECHAZADO and estado_actual != MarketplaceItem.EstadoItem.RECHAZADO:
+                raise forms.ValidationError(
+                    'Para rechazar una publicacion usa el boton "Rechazar" de la lista (exige motivo).'
+                )
+            if estado_nuevo and not es_transicion_estado_valida(estado_actual, estado_nuevo):
+                raise forms.ValidationError(
+                    f'Transicion invalida: {estado_actual} -> {estado_nuevo}.'
+                )
+        return cleaned_data
+
+
+@admin.register(MarketplaceItem)
+class MarketplaceItemAdmin(admin.ModelAdmin):
+    form = MarketplaceItemAdminForm
+    list_display = ('titulo', 'empresa', 'tipo', 'estado', 'fecha_creacion', 'acciones_estado')
+    list_filter = ('tipo', 'estado', 'empresa')
+    search_fields = ('titulo', 'empresa__nombre')
+    readonly_fields = ('fecha_creacion', 'fecha_publicacion')
+    inlines = [MarketplaceItemHistorialEstadoInline]
+
+    def save_model(self, request, obj, form, change):
+        estado_anterior = None
+        if change and obj.pk:
+            estado_anterior = MarketplaceItem.objects.get(pk=obj.pk).estado
+
+        super().save_model(request, obj, form, change)
+
+        if not change:
+            registrar_historial_publicacion(
+                item=obj,
+                estado_anterior='',
+                estado_nuevo=obj.estado,
+                origen=MarketplaceItemHistorialEstado.OrigenCambio.ADMIN,
+                usuario=request.user,
+                comentario='Publicacion creada desde admin.'
+            )
+            return
+
+        if estado_anterior != obj.estado:
+            if obj.estado == MarketplaceItem.EstadoItem.APROBADO and not obj.fecha_publicacion:
+                obj.fecha_publicacion = timezone.now()
+                obj.save(update_fields=['fecha_publicacion'])
+
+            registrar_historial_publicacion(
+                item=obj,
+                estado_anterior=estado_anterior or '',
+                estado_nuevo=obj.estado,
+                origen=MarketplaceItemHistorialEstado.OrigenCambio.ADMIN,
+                usuario=request.user,
+                comentario='Cambio de estado realizado desde admin.'
+            )
+            notificar_empresa_estado_publicacion(
+                item=obj,
+                estado_nuevo=obj.estado,
+                comentario='Cambio de estado realizado desde admin.'
+            )
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                '<int:item_id>/aprobar/',
+                self.admin_site.admin_view(self.aprobar_publicacion),
+                name='gestion_creditos_marketplaceitem_aprobar'
+            ),
+            path(
+                '<int:item_id>/rechazar/',
+                self.admin_site.admin_view(self.rechazar_publicacion),
+                name='gestion_creditos_marketplaceitem_rechazar'
+            ),
+        ]
+        return custom_urls + urls
+
+    def acciones_estado(self, obj):
+        if obj.estado == MarketplaceItem.EstadoItem.PENDIENTE:
+            aprobar_url = reverse('admin:gestion_creditos_marketplaceitem_aprobar', args=[obj.pk])
+            rechazar_url = reverse('admin:gestion_creditos_marketplaceitem_rechazar', args=[obj.pk])
+            return format_html(
+                '<a class="button" href="{}">Aprobar</a>&nbsp;<a class="button" href="{}">Rechazar</a>',
+                aprobar_url,
+                rechazar_url
+            )
+        return '-'
+    acciones_estado.short_description = 'Aprobacion'
+
+    def aprobar_publicacion(self, request, item_id):
+        item = get_object_or_404(MarketplaceItem, pk=item_id)
+        try:
+            cambiar_estado_publicacion(
+                item=item,
+                estado_nuevo=MarketplaceItem.EstadoItem.APROBADO,
+                usuario=request.user,
+                origen=MarketplaceItemHistorialEstado.OrigenCambio.ADMIN,
+                comentario='Publicacion aprobada por administrador.'
+            )
+            self.message_user(request, f'Publicacion "{item.titulo}" aprobada.')
+        except ValidationError as exc:
+            self.message_user(request, str(exc), level=messages.ERROR)
+        return redirect(request.META.get('HTTP_REFERER', reverse('admin:gestion_creditos_marketplaceitem_changelist')))
+
+    def rechazar_publicacion(self, request, item_id):
+        item = get_object_or_404(MarketplaceItem, pk=item_id)
+        if request.method == 'POST':
+            form = RechazoMarketplaceForm(request.POST)
+            if form.is_valid():
+                motivo = form.cleaned_data['motivo']
+                try:
+                    cambiar_estado_publicacion(
+                        item=item,
+                        estado_nuevo=MarketplaceItem.EstadoItem.RECHAZADO,
+                        usuario=request.user,
+                        origen=MarketplaceItemHistorialEstado.OrigenCambio.ADMIN,
+                        comentario=motivo,
+                        require_comment=True
+                    )
+                    self.message_user(request, f'Publicacion "{item.titulo}" rechazada.')
+                    return redirect(reverse('admin:gestion_creditos_marketplaceitem_changelist'))
+                except ValidationError as exc:
+                    self.message_user(request, str(exc), level=messages.ERROR)
+            self.message_user(request, 'Debe ingresar un motivo para rechazar.', level=messages.ERROR)
+        else:
+            form = RechazoMarketplaceForm()
+
+        context = {
+            **self.admin_site.each_context(request),
+            'opts': self.model._meta,
+            'title': f"Rechazar publicacion: {item.titulo}",
+            'item': item,
+            'form': form,
+        }
+        return TemplateResponse(request, 'admin/gestion_creditos/marketplaceitem/rechazar_publicacion.html', context)
+
+
+@admin.register(MarketplaceItemHistorialEstado)
+class MarketplaceItemHistorialEstadoAdmin(admin.ModelAdmin):
+    list_display = ('item', 'estado_anterior', 'estado_nuevo', 'origen', 'usuario', 'fecha_cambio')
+    list_filter = ('origen', 'estado_nuevo', 'fecha_cambio')
+    search_fields = ('item__titulo', 'item__empresa__nombre', 'usuario__username', 'comentario')
+    readonly_fields = ('item', 'estado_anterior', 'estado_nuevo', 'origen', 'usuario', 'comentario', 'fecha_cambio')
 
 @admin.register(HistorialPago)
 class HistorialPagoAdmin(admin.ModelAdmin):
