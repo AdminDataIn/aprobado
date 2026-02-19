@@ -1,5 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
+from django.contrib import messages
 from django.http import HttpResponse
 from django.urls import reverse
 from gestion_creditos.models import Credito, HistorialPago, HistorialEstado, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, CuotaAmortizacion
@@ -13,6 +14,36 @@ import json
 import base64
 import io
 from pypdf import PdfReader, PdfWriter
+
+
+def _aprobacion_admin_registrada(credito):
+    """Retorna True si existe una aprobación explícita realizada por administrador."""
+    return HistorialEstado.objects.filter(
+        credito=credito,
+        usuario_modificacion__is_staff=True,
+        estado_nuevo=Credito.EstadoCredito.APROBADO
+    ).exists()
+
+
+def _puede_ver_info_financiera(credito):
+    """
+    Define cuándo un cliente puede ver plan de pagos/historial financiero.
+    Regla: no mostrar con solo aprobación del pagador.
+    """
+    estados_habilitados = {
+        Credito.EstadoCredito.PENDIENTE_FIRMA,
+        Credito.EstadoCredito.FIRMADO,
+        Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA,
+        Credito.EstadoCredito.ACTIVO,
+        Credito.EstadoCredito.EN_MORA,
+        Credito.EstadoCredito.PAGADO,
+    }
+    if credito.estado in estados_habilitados:
+        return True
+    if credito.estado == Credito.EstadoCredito.APROBADO:
+        return _aprobacion_admin_registrada(credito)
+    return False
+
 
 def get_logo_base64():
     logo_path = finders.find('images/logo-dark.png')
@@ -63,14 +94,7 @@ def dashboard_libranza_view(request, credito_id=None):
     plan_pagos = []
 
     # --- Cálculos para créditos activos o finalizados ---
-    if credito_actual.estado in [
-        Credito.EstadoCredito.ACTIVO,
-        Credito.EstadoCredito.PAGADO,
-        Credito.EstadoCredito.EN_MORA,
-        Credito.EstadoCredito.FIRMADO,
-        Credito.EstadoCredito.APROBADO,
-        Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA
-    ]:
+    if _puede_ver_info_financiera(credito_actual):
         historial_pagos = HistorialPago.objects.filter(
             credito=credito_actual,
             estado=HistorialPago.EstadoPago.EXITOSO
@@ -119,6 +143,7 @@ def dashboard_libranza_view(request, credito_id=None):
         'porcentaje_capital_pagado': porcentaje_capital_pagado,
         'capital_pagado_monto': capital_pagado_monto,
         'plan_pagos': plan_pagos,
+        'mostrar_info_financiera': _puede_ver_info_financiera(credito_actual),
         'es_libranza': True,  # ⭐ Flag para identificar dashboard de Libranza
     }
     return render(request, 'usuariocreditos/dashboard_libranza.html', context)
@@ -162,14 +187,7 @@ def dashboard_view(request, credito_id=None):
     plan_pagos = []
 
     # --- Cálculos para créditos activos o finalizados ---
-    if credito_actual.estado in [
-        Credito.EstadoCredito.ACTIVO, 
-        Credito.EstadoCredito.PAGADO, 
-        Credito.EstadoCredito.EN_MORA, 
-        Credito.EstadoCredito.FIRMADO,
-        Credito.EstadoCredito.APROBADO,
-        Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA
-    ]:
+    if _puede_ver_info_financiera(credito_actual):
         historial_pagos = HistorialPago.objects.filter(
             credito=credito_actual, 
             estado=HistorialPago.EstadoPago.EXITOSO
@@ -212,6 +230,7 @@ def dashboard_view(request, credito_id=None):
         'porcentaje_capital_pagado': porcentaje_capital_pagado,
         'capital_pagado_monto': capital_pagado_monto,
         'plan_pagos': plan_pagos,
+        'mostrar_info_financiera': _puede_ver_info_financiera(credito_actual),
         'es_empleado': False,  # Dashboard de emprendimiento nunca es empleado
         'es_libranza': False,  # Dashboard de emprendimiento nunca es libranza
     }
@@ -290,6 +309,11 @@ def descargar_extracto(request, credito_id):
     El PDF está protegido con la cédula del cliente como contraseña.
     """
     credito = get_object_or_404(Credito, id=credito_id, usuario=request.user)
+    if not _puede_ver_info_financiera(credito):
+        messages.warning(request, "Aun no puedes consultar el extracto de este credito.")
+        if credito.linea == Credito.LineaCredito.LIBRANZA:
+            return redirect('libranza:mi_credito_detalle', credito_id=credito.id)
+        return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
 
     detalle = credito.detalle
 
@@ -358,6 +382,11 @@ def descargar_plan_pagos_pdf(request, credito_id):
     El PDF está protegido con la cédula del cliente como contraseña.
     """
     credito = get_object_or_404(Credito, id=credito_id, usuario=request.user)
+    if not _puede_ver_info_financiera(credito):
+        messages.warning(request, "Aun no puedes consultar el plan de pagos de este credito.")
+        if credito.linea == Credito.LineaCredito.LIBRANZA:
+            return redirect('libranza:mi_credito_detalle', credito_id=credito.id)
+        return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
 
     detalle = credito.detalle
     plan_pagos = credito.tabla_amortizacion.all().order_by('numero_cuota')

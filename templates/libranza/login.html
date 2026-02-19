@@ -15,7 +15,7 @@
                 <h2 class="mb-3">Inicio de sesión con Google</h2>
                 <p>Debes iniciar sesión con tu cuenta de Google para acceder al formulario de crédito de Libranza</p>
 
-                <a href="{% provider_login_url 'google' %}?next=/gestion-creditos/solicitar/libranza/" class="btn-account">
+                <a href="{% provider_login_url 'google' process='login' next='/libranza/solicitar/' %}" class="btn-account">
                     <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
                          alt="Google" style="height: 20px;">
                     <span>Continuar con Google</span>

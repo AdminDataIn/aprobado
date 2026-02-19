@@ -49,8 +49,16 @@
 
                 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-top: 16px;">
                     <tr>
+                        <td style="padding: 12px 0; font-size: 14px; color: #6B7280;">Cedula</td>
+                        <td style="padding: 12px 0; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">
+                            {{ cedula_solicitante|default:"No registrada" }}
+                        </td>
+                    </tr>
+                    <tr>
                         <td style="padding: 12px 0; font-size: 14px; color: #6B7280;">Plazo solicitado</td>
-                        <td style="padding: 12px 0; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ credito.plazo }} meses</td>
+                        <td style="padding: 12px 0; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">
+                            {{ plazo_solicitado_email|default:"-" }} meses
+                        </td>
                     </tr>
                 </table>
             </div>

@@ -20,7 +20,7 @@ DOCUMENTOS REQUERIDOS:
 
 PROCESAMIENTO:
 - View: solicitud_credito_libranza_view (gestion_creditos/views.py)
-- URL: /gestion-creditos/solicitar/libranza/
+- URL: /libranza/solicitar/
 - Requiere autenticación con Google
 - Envía email de confirmación automático
 
@@ -31,10 +31,11 @@ MODIFICAR:
 {% endcomment %}
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     {% load static %}
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aprobado</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">

@@ -173,15 +173,44 @@
                             <td>
                                 <div class="user-info">
                                     <div class="user-avatar">
-                                        {% if solicitud.nombre_solicitante %}
-                                            {{ solicitud.nombre_solicitante|slice:":1"|upper }}
-                                        {% else %}
-                                            S
-                                        {% endif %}
+                                        {% with nombre=solicitud.nombre_solicitante|default_if_none:"" %}
+                                            {% if nombre and nombre != 'None' %}
+                                                {{ nombre|slice:":1"|upper }}
+                                            {% elif solicitud.usuario.get_full_name %}
+                                                {{ solicitud.usuario.get_full_name|slice:":1"|upper }}
+                                            {% elif solicitud.usuario.username %}
+                                                {{ solicitud.usuario.username|slice:":1"|upper }}
+                                            {% elif solicitud.usuario.email %}
+                                                {{ solicitud.usuario.email|slice:":1"|upper }}
+                                            {% else %}
+                                                S
+                                            {% endif %}
+                                        {% endwith %}
                                     </div>
                                     <div class="user-details">
-                                        <h6>{{ solicitud.nombre_solicitante }}</h6>
-                                        <small>C.C. {{ solicitud.documento_solicitante }}</small>
+                                        <h6>
+                                            {% with nombre=solicitud.nombre_solicitante|default_if_none:"" %}
+                                                {% if nombre and nombre != 'None' %}
+                                                    {{ nombre }}
+                                                {% elif solicitud.usuario.get_full_name %}
+                                                    {{ solicitud.usuario.get_full_name }}
+                                                {% elif solicitud.usuario.username %}
+                                                    {{ solicitud.usuario.username }}
+                                                {% else %}
+                                                    Solicitante
+                                                {% endif %}
+                                            {% endwith %}
+                                        </h6>
+                                        <small>
+                                            C.C.
+                                            {% with documento=solicitud.documento_solicitante|default_if_none:"" %}
+                                                {% if documento and documento != 'None' %}
+                                                    {{ documento }}
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            {% endwith %}
+                                        </small>
                                     </div>
                                 </div>
                             </td>

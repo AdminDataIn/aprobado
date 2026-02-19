@@ -43,6 +43,14 @@
         <div class="d-flex justify-content-between align-items-center mb-4 mx-4">
             <div>
                 <h1 class="page-title">Dashboard de Pagos: {{ empresa.nombre }}</h1>
+                {% if solicitudes_pendientes_count %}
+                <div class="d-flex align-items-center gap-2 mt-2">
+                    <span class="badge bg-warning text-dark">
+                        <i class="bi bi-bell-fill me-1"></i>{{ solicitudes_pendientes_count }} solicitudes por revisar
+                    </span>
+                    <a href="{% url 'pagador:dashboard' %}?estado=EN_REVISION" class="link-primary small">Ver pendientes</a>
+                </div>
+                {% endif %}
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
                         <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-house-door"></i> Dashboard</li>
@@ -142,11 +150,17 @@
                     <i class="bi bi-card-list me-2"></i>Créditos Activos
                     <span class="badge bg-primary ms-2">{{ creditos.paginator.count }}</span>
                 </h3>
-                <div class="d-flex gap-2">
-                    <a href="{% url 'pagador:descargar_reporte' %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-success" data-download="true">
-                        <i class="bi bi-file-earmark-spreadsheet"></i>
-                        Descargar reporte
-                    </a>
+                <div class="d-flex gap-2 align-items-center">
+                    <div class="btn-group">
+                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=reducido{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
+                            <i class="bi bi-file-earmark-spreadsheet"></i>
+                            Reporte reducido
+                        </a>
+                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=completo{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
+                            <i class="bi bi-file-earmark-text"></i>
+                            Reporte completo
+                        </a>
+                    </div>
                     <button class="btn btn-sm btn-outline-primary" onclick="location.reload()">
                         <i class="bi bi-arrow-clockwise"></i>
                     </button>

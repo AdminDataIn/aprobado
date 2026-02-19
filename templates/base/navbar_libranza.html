@@ -67,7 +67,7 @@ MODIFICAR:
         <div class="navbar-right">
             {# ✅ NUEVA URL - Solicitar Libranza #}
             <a href="{% url 'libranza:solicitar' %}" class="btn btn-apply">Solicitar ahora</a>
-            <button id="menu-toggle" class="menu-toggle" aria-label="Abrir menú">
+            <button id="menu-toggle" class="menu-toggle" aria-label="Abrir menú" aria-expanded="false">
                 &#9776;
             </button>
         </div>
@@ -106,40 +106,89 @@ MODIFICAR:
             <a href="{% url 'libranza:solicitar' %}" class="btn btn-apply-full">Solicitar ahora</a>
         </div>
     </div>
+    <div id="mobile-menu-backdrop" class="mobile-menu-backdrop" aria-hidden="true"></div>
 </header>
 
 <script>
-    // Script del navbar (mismo comportamiento que el navbar original)
-    document.addEventListener("DOMContentLoaded", function () {
-        const navbar = document.getElementById("main-navbar");
-        const mobileMenu = document.getElementById("mobile-menu");
-        const menuToggle = document.getElementById("menu-toggle");
-        const menuClose = document.getElementById("menu-close");
+    // Script del navbar (modo defensivo para evitar fallos en mobile)
+    (function () {
+        function initNavbarLibranza() {
+            const navbar = document.getElementById("main-navbar");
+            const mobileMenu = document.getElementById("mobile-menu");
+            const menuToggle = document.getElementById("menu-toggle");
+            const menuClose = document.getElementById("menu-close");
+            const menuBackdrop = document.getElementById("mobile-menu-backdrop");
 
-        // Efecto de scroll (navbar fijo al hacer scroll)
-        window.addEventListener("scroll", function () {
-            if (window.scrollY > 10) {
-                navbar.classList.add("scrolled");
-            } else {
-                navbar.classList.remove("scrolled");
+            if (!navbar) {
+                return;
             }
-        });
 
-        // Abrir menú móvil
-        menuToggle.addEventListener("click", function () {
-            mobileMenu.classList.add("open");
-        });
-
-        // Cerrar menú móvil
-        menuClose.addEventListener("click", function () {
-            mobileMenu.classList.remove("open");
-        });
-
-        // Cerrar menú al hacer clic en cualquier enlace
-        document.querySelectorAll(".mobile-nav-link").forEach((link) => {
-            link.addEventListener("click", function () {
-                mobileMenu.classList.remove("open");
+            window.addEventListener("scroll", function () {
+                if (window.scrollY > 10) {
+                    navbar.classList.add("scrolled");
+                } else {
+                    navbar.classList.remove("scrolled");
+                }
             });
-        });
-    });
+
+            if (!mobileMenu || !menuToggle) {
+                return;
+            }
+
+            function openMenu() {
+                mobileMenu.classList.add("open");
+                if (menuBackdrop) {
+                    menuBackdrop.classList.add("open");
+                }
+                menuToggle.setAttribute("aria-expanded", "true");
+                document.body.style.overflow = "hidden";
+            }
+
+            function closeMenu() {
+                mobileMenu.classList.remove("open");
+                if (menuBackdrop) {
+                    menuBackdrop.classList.remove("open");
+                }
+                menuToggle.setAttribute("aria-expanded", "false");
+                document.body.style.overflow = "";
+            }
+
+            function toggleMenu(event) {
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                if (mobileMenu.classList.contains("open")) {
+                    closeMenu();
+                } else {
+                    openMenu();
+                }
+            }
+
+            menuToggle.addEventListener("click", toggleMenu);
+
+            if (menuClose) {
+                menuClose.addEventListener("click", closeMenu);
+            }
+            if (menuBackdrop) {
+                menuBackdrop.addEventListener("click", closeMenu);
+            }
+
+            document.querySelectorAll(".mobile-nav-link").forEach((link) => {
+                link.addEventListener("click", closeMenu);
+            });
+
+            window.addEventListener("resize", function () {
+                if (window.innerWidth > 768) {
+                    closeMenu();
+                }
+            });
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", initNavbarLibranza);
+        } else {
+            initNavbarLibranza();
+        }
+    })();
 </script>

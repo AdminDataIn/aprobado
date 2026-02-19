@@ -1188,7 +1188,7 @@ body {
     width: 100%;
     background-color: #0a192f;
     transition: all 0.3s ease-in-out;
-    z-index: 999;
+    z-index: 1100;
 }
 
 .navbar.scrolled {
@@ -1296,22 +1296,43 @@ body {
 }
 
 .mobile-menu {
-    display: none;
+    display: flex;
     flex-direction: column;
     position: fixed;
     top: 0;
     right: 0;
     width: 280px;
-    height: 100%;
+    height: 100dvh;
     background-color: #0a192f;
     padding: 1rem;
-    z-index: 1000;
+    z-index: 1200;
     transform: translateX(100%);
-    transition: transform 0.3s ease-in-out;
+    transition: transform 0.3s ease-in-out, visibility 0.3s ease-in-out;
+    visibility: hidden;
+    pointer-events: none;
 }
 
 .mobile-menu.open {
     transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.mobile-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+    z-index: 1190;
+}
+
+.mobile-menu-backdrop.open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
 }
 
 .mobile-menu-header {
@@ -1369,8 +1390,27 @@ body {
         display: none;
     }
 
+    .navbar-right .btn-apply {
+        display: none;
+    }
+
     .menu-toggle {
         display: inline-block;
+    }
+
+    .mobile-menu {
+        display: flex !important;
+        width: min(86vw, 320px);
+    }
+}
+
+@media screen and (min-width: 769px) {
+    .mobile-menu {
+        display: none;
+    }
+
+    .mobile-menu-backdrop {
+        display: none;
     }
 }
 
@@ -2419,6 +2459,10 @@ body {
     gap: 1.5rem;
 }
 
+.form-main-grid > * {
+    min-width: 0;
+}
+
 @media (min-width: 1024px) {
     .form-main-grid {
         grid-template-columns: minmax(0, 1fr) 320px;
@@ -2574,6 +2618,106 @@ body {
 
 .form-button.submit:hover {
     background-color: #0891b2;
+}
+
+@media (max-width: 1023px) {
+    .form-container {
+        padding: 1rem 0;
+    }
+
+    .form-content {
+        border-radius: 0.75rem;
+        margin: 0 0.75rem;
+    }
+
+    .form-main-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .credito-resumen-panel {
+        position: static;
+        top: auto;
+    }
+
+    .credito-resumen {
+        margin-top: 0.5rem;
+    }
+}
+
+@media (max-width: 767px) {
+    .form-sidebar {
+        padding: 1rem;
+    }
+
+    .form-title h1 {
+        font-size: 1.9rem;
+        line-height: 1.15;
+    }
+
+    .step-list {
+        margin-top: 1.25rem;
+        gap: 1rem;
+    }
+
+    .step-connector {
+        height: 2.5rem;
+    }
+
+    .form-main {
+        padding: 1rem;
+    }
+
+    .form-main-grid {
+        gap: 1rem;
+    }
+
+    .step-title {
+        font-size: 1.05rem;
+        margin-bottom: 1rem;
+    }
+
+    .form-grid {
+        gap: 1rem;
+    }
+
+    .form-actions {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .form-actions > div:empty {
+        display: none;
+    }
+
+    .form-button {
+        width: 100%;
+        height: auto;
+        min-height: 2.75rem;
+        padding: 0.8rem 1rem;
+    }
+
+    .terms-container {
+        padding: 1rem;
+    }
+
+    .terms-text {
+        font-size: 0.82rem;
+        line-height: 1.45;
+    }
+
+    .credito-resumen-title {
+        font-size: 0.8rem;
+    }
+
+    .credito-resumen-row {
+        font-size: 0.84rem;
+        gap: 0.75rem;
+    }
+
+    .credito-resumen-row span:last-child {
+        text-align: right;
+        word-break: break-word;
+    }
 }
 
 /* Secciones de revisión */

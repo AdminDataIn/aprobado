@@ -33,6 +33,19 @@
             </button>
 
             <div class="collapse navbar-collapse" id="navbarNav">
+                <div class="credit-mobile-session d-lg-none">
+                    <div class="credit-mobile-user">
+                        <div class="user-avatar">{{ user.first_name|first|default:"U" }}{{ user.last_name|first|default:"" }}</div>
+                        <div>
+                            <span class="credit-mobile-user-name">{{ user.get_full_name|default:user.username }}</span>
+                            <small class="credit-mobile-user-email">{{ user.email }}</small>
+                        </div>
+                    </div>
+                    <form method="post" action="{% url 'emprendimiento:logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="credit-mobile-logout">Cerrar sesion</button>
+                    </form>
+                </div>
                 <ul class="navbar-nav mx-auto">
                     <li class="nav-item">
                         {# NUEVA URL - Emprendimiento #}
@@ -48,9 +61,9 @@
                     </li>
                 </ul>
 
-                <div class="d-flex align-items-center gap-3">
+                <div class="d-flex align-items-center gap-3 credit-nav-actions">
                     {% if count_notificaciones > 0 %}
-                    <div class="dropdown">
+                    <div class="dropdown credit-desktop-notifications d-none d-lg-block">
                         <div class="notification-badge" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-bell notification-icon"></i>
                             <span class="badge">{{ count_notificaciones }}</span>
@@ -79,7 +92,7 @@
                     </div>
                     {% endif %}
 
-                    <div class="dropdown">
+                    <div class="dropdown credit-desktop-user d-none d-lg-block">
                         <div class="user-info" data-bs-toggle="dropdown">
                             <div class="user-avatar">{{ user.first_name|first|default:"U" }}{{ user.last_name|first|default:"" }}</div>
                             <div class="user-details d-none d-md-block">
@@ -148,7 +161,7 @@
 
     <main class="container my-4">
         {% if creditos_usuario %}
-            {% if credito_actual.estado not in 'EN_REVISION' %}
+            {% if credito_actual.estado != 'EN_REVISION' %}
             <!-- Header Mejorado -->
             <div class="page-header-modern">
                 <div class="header-content">
@@ -199,7 +212,7 @@
             </div>
             {% endif %}
 
-            {% if credito_actual.estado in 'APROBADO,ACTIVO,PAGADO,EN_MORA,FIRMADO' %}
+            {% if mostrar_info_financiera %}
                 <!-- Contenido para créditos aprobados - DISEÑO MEJORADO -->
                 <div class="progress-card">
                     <div class="row align-items-center">
@@ -215,22 +228,22 @@
                                 </div>
                             </div>
                             <div class="row text-center g-3">
-                                <div class="col-4">
+                                <div class="col-12 col-md-4">
                                     <div class="stat-box">
                                         <small class="d-block">CAPITAL PAGADO</small>
-                                        <h5 class="mb-0 text-success">${{ capital_pagado_monto|intcomma }}</h5>
+                                        <h5 class="mb-0 text-success stat-value">${{ capital_pagado_monto|intcomma }}</h5>
                                     </div>
                                 </div>
-                                <div class="col-4">
+                                <div class="col-12 col-md-4">
                                     <div class="stat-box">
                                         <small class="d-block">CAPITAL PENDIENTE</small>
-                                        <h5 class="mb-0 text-warning">${{ credito_actual.capital_pendiente|intcomma }}</h5>
+                                        <h5 class="mb-0 text-warning stat-value">${{ credito_actual.capital_pendiente|intcomma }}</h5>
                                     </div>
                                 </div>
-                                <div class="col-4">
+                                <div class="col-12 col-md-4">
                                     <div class="stat-box">
                                         <small class="d-block">MONTO SOLICITADO</small>
-                                        <h5 class="mb-0 text-primary">${{ credito_actual.monto_aprobado|intcomma }}</h5>
+                                        <h5 class="mb-0 text-primary stat-value">${{ credito_actual.monto_aprobado|intcomma }}</h5>
                                     </div>
                                 </div>
                             </div>
@@ -362,15 +375,15 @@
                                 {% if historial_pagos %}
                                     {% for pago in historial_pagos %}
                                     <tr>
-                                        <td>
+                                        <td data-label="Fecha">
                                             <i class="bi bi-calendar3 me-2 text-muted"></i>
                                             {{ pago.fecha_pago|date:"d M, Y H:i" }}
                                         </td>
-                                        <td><code style="font-size: 0.8rem;">{{ pago.referencia_pago }}</code></td>
-                                        <td class="text-end">
+                                        <td data-label="Referencia"><code style="font-size: 0.8rem;">{{ pago.referencia_pago }}</code></td>
+                                        <td class="text-end" data-label="Monto">
                                             <strong class="text-success">${{ pago.monto|intcomma }}</strong>
                                         </td>
-                                        <td class="text-center">
+                                        <td class="text-center" data-label="Estado">
                                             <span class="badge {% if pago.estado == 'EXITOSO' %}bg-success{% else %}bg-danger{% endif %} rounded-pill">
                                                 {{ pago.get_estado_display }}
                                             </span>
@@ -378,7 +391,7 @@
                                     </tr>
                                     {% endfor %}
                                 {% else %}
-                                    <tr>
+                                    <tr class="no-payments">
                                         <td colspan="4" class="text-center py-4">
                                             <i class="bi bi-inbox text-muted" style="font-size: 2rem;"></i>
                                             <p class="mb-0 mt-2 text-muted">No tienes pagos realizados aún.</p>
@@ -881,3 +894,5 @@
     </script>
 </body>
 </html>
+
+

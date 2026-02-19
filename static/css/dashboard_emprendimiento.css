@@ -79,6 +79,15 @@ body {
     padding: 0.25rem 0.4rem;
 }
 
+.credit-nav-actions {
+    margin-left: auto;
+    min-width: 0;
+}
+
+.credit-mobile-session {
+    display: none;
+}
+
 .user-info {
     display: flex;
     align-items: center;
@@ -117,6 +126,10 @@ body {
     font-size: 0.75rem;
     color: #6c757d;
     display: block;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .user-dropdown {
     position: relative;
@@ -462,6 +475,10 @@ body {
     border-radius: 16px;
     background: linear-gradient(135deg, #FFFFFF 0%, #F9FAFB 100%);
     border: 2px solid var(--gris-medio);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .stat-box small {
@@ -477,6 +494,9 @@ body {
     font-weight: 800;
     margin-top: 0.75rem;
     letter-spacing: -0.5px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.2;
 }
 
 /* PROGRESO CIRCULAR */
@@ -780,6 +800,12 @@ body {
     margin: 0;
 }
 
+.table-header-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .badge.rounded-pill {
     padding: 0.5rem 1rem;
     font-weight: 600;
@@ -973,6 +999,118 @@ main {
 
 /* RESPONSIVE MEJORADO */
 @media (max-width: 992px) {
+    .navbar-professional {
+        padding: 0.75rem 0;
+    }
+
+    .navbar-professional .container {
+        padding-left: 0.9rem;
+        padding-right: 0.9rem;
+    }
+
+    .navbar-collapse {
+        padding-top: 0.75rem;
+        overflow-x: hidden;
+    }
+
+    .navbar-nav {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+
+    .navbar-nav .nav-link {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+    }
+
+    .credit-nav-actions {
+        width: 100%;
+        margin-left: 0;
+        display: flex !important;
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 0.75rem !important;
+    }
+
+    .credit-mobile-session {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        background: #eef6ff;
+        border: 1px solid rgba(74, 144, 226, 0.14);
+        border-radius: 16px;
+        padding: 0.6rem 0.65rem 0.9rem;
+    }
+
+    .credit-mobile-user {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+    }
+
+    .credit-mobile-user-name {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #0f172a;
+        line-height: 1.2;
+        max-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .credit-mobile-user-email {
+        display: block;
+        font-size: 0.74rem;
+        color: #64748b;
+        max-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .credit-mobile-logout {
+        border: 1px solid rgba(220, 38, 38, 0.25);
+        color: #dc2626;
+        background: #fff;
+        border-radius: 999px;
+        padding: 0.38rem 0.72rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        line-height: 1;
+        white-space: nowrap;
+    }
+
+    .credit-nav-actions .dropdown {
+        width: 100%;
+    }
+
+    .credit-nav-actions .dropdown-menu {
+        left: 0 !important;
+        right: auto !important;
+    }
+
+    .credit-desktop-user,
+    .credit-desktop-notifications {
+        display: none !important;
+    }
+
+    .user-info {
+        width: 100%;
+        justify-content: space-between;
+        padding: 0.6rem 0.75rem;
+    }
+
+    .user-menu {
+        width: min(92vw, 360px);
+        min-width: 0;
+        padding: 14px;
+    }
+
     .table-header-actions {
         flex-direction: column;
         align-items: flex-start;
@@ -1026,16 +1164,27 @@ main {
         font-size: 0.85rem;
     }
 
-    .navbar-professional {
-        padding: 0.75rem 0;
-    }
-
     .progress-card, .payment-card {
         padding: 1.5rem;
     }
 
     .stat-box h5 {
-        font-size: 1.2rem;
+        font-size: clamp(1rem, 4.4vw, 1.2rem);
+    }
+
+    .progress-card .row.text-center > [class*='col-'] {
+        display: flex;
+    }
+
+    .stat-box {
+        width: 100%;
+        padding: 1rem 0.75rem;
+        border-radius: 12px;
+    }
+
+    .stat-box small {
+        font-size: 0.64rem;
+        letter-spacing: 0.6px;
     }
 
     .info-card-item .value {
@@ -1063,6 +1212,72 @@ main {
     .user-menu {
         min-width: 280px;
         max-width: 90vw;
+    }
+
+    .table-header-actions .btn {
+        width: 100%;
+    }
+
+    .table-modern .table-responsive {
+        overflow-x: hidden;
+    }
+
+    .table-modern table,
+    .table-modern thead,
+    .table-modern tbody,
+    .table-modern tr,
+    .table-modern th,
+    .table-modern td {
+        display: block;
+        width: 100%;
+    }
+
+    .table-modern thead {
+        display: none;
+    }
+
+    .table-modern tbody tr {
+        border: 1px solid var(--gris-medio);
+        border-radius: 12px;
+        margin-bottom: 0.75rem;
+        padding: 0.8rem;
+        background: #fff;
+    }
+
+    .table-modern tbody td {
+        border: none !important;
+        padding: 0.35rem 0 !important;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.75rem;
+        font-size: 0.86rem;
+    }
+
+    .table-modern tbody td::before {
+        content: attr(data-label);
+        font-size: 0.66rem;
+        font-weight: 700;
+        color: var(--azul-colombia);
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        min-width: 88px;
+    }
+
+    .table-modern tbody td code {
+        word-break: break-all;
+        text-align: right;
+    }
+
+    .table-modern tbody tr.no-payments td,
+    .table-modern tbody td[colspan] {
+        display: block;
+        text-align: center !important;
+    }
+
+    .table-modern tbody tr.no-payments td::before,
+    .table-modern tbody td[colspan]::before {
+        content: none;
     }
 }
 

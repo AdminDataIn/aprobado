@@ -140,6 +140,7 @@
             display: flex;
             flex-direction: column;
             align-items: flex-start;
+            min-width: 0;
         }
 
         .user-name {
@@ -147,12 +148,20 @@
             font-weight: 600;
             color: #111827;
             line-height: 1.2;
+            max-width: 220px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .user-role {
             font-size: 0.75rem;
             color: #6c757d;
             display: block;
+            max-width: 220px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .user-dropdown {
@@ -166,6 +175,20 @@
             padding: 20px;
             border: 1px solid var(--gris-medio);
             margin-top: 0.5rem;
+        }
+
+        .wallet-dropdown-menu {
+            width: min(92vw, 400px);
+            min-width: 0;
+        }
+
+        .wallet-nav-actions {
+            margin-left: auto;
+            min-width: 0;
+        }
+
+        .wallet-mobile-session {
+            display: none;
         }
 
         .dropdown-menu.show {
@@ -254,6 +277,216 @@
         .toast.bg-info {
             background: linear-gradient(135deg, #17a2b8 0%, #6610f2 100%) !important;
         }
+
+        @media (max-width: 991.98px) {
+            .navbar-professional {
+                padding: 0.75rem 0;
+            }
+
+            .navbar-professional .container {
+                padding-left: 0.9rem;
+                padding-right: 0.9rem;
+            }
+
+            .navbar-collapse {
+                padding-top: 0.75rem;
+                overflow-x: hidden;
+            }
+
+            .navbar-nav {
+                width: 100%;
+                margin-bottom: 0.5rem;
+            }
+
+            .navbar-nav .nav-link {
+                padding-left: 0.75rem !important;
+                padding-right: 0.75rem !important;
+            }
+
+            .wallet-nav-actions {
+                width: 100%;
+                margin-left: 0;
+                display: flex !important;
+                flex-direction: column;
+                align-items: stretch !important;
+                gap: 0.75rem !important;
+            }
+
+            .wallet-mobile-session {
+                width: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 0.75rem;
+                padding: 0.6rem 0.15rem 0.9rem;
+            }
+
+            .wallet-mobile-user {
+                min-width: 0;
+                display: flex;
+                align-items: center;
+                gap: 0.55rem;
+            }
+
+            .wallet-mobile-user-name {
+                display: block;
+                font-size: 0.85rem;
+                font-weight: 600;
+                color: #0f172a;
+                line-height: 1.2;
+                max-width: 140px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .wallet-mobile-user-email {
+                display: block;
+                font-size: 0.74rem;
+                color: #64748b;
+                max-width: 140px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .wallet-mobile-logout {
+                border: 1px solid rgba(220, 38, 38, 0.25);
+                color: #dc2626;
+                background: #fff;
+                border-radius: 999px;
+                padding: 0.38rem 0.72rem;
+                font-size: 0.75rem;
+                font-weight: 600;
+                line-height: 1;
+                white-space: nowrap;
+            }
+
+            .wallet-nav-actions .dropdown {
+                width: 100%;
+            }
+
+            .wallet-nav-actions .dropdown-menu {
+                left: 0 !important;
+                right: auto !important;
+            }
+
+            .wallet-nav-actions .notification-badge {
+                display: inline-flex;
+                align-items: center;
+                justify-content: flex-start;
+                width: max-content;
+            }
+
+            .wallet-desktop-user {
+                display: none !important;
+            }
+
+            #desktopUserDropdown,
+            #desktopUserDropdown .user-info,
+            #desktopUserDropdown .dropdown-menu {
+                display: none !important;
+                visibility: hidden !important;
+                pointer-events: none !important;
+            }
+
+            .user-info {
+                width: 100%;
+                justify-content: space-between;
+                padding: 0.6rem 0.75rem;
+            }
+
+            .user-menu {
+                width: min(92vw, 360px);
+                min-width: 0;
+                padding: 14px;
+            }
+
+            .wallet-dropdown-menu {
+                width: min(92vw, 360px);
+            }
+
+            #toastContainer .toast {
+                min-width: min(92vw, 320px);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .savings-card {
+                padding: 20px 18px;
+                border-radius: 20px;
+            }
+
+            .savings-main-amount {
+                font-size: 2rem;
+            }
+
+            .savings-percent-mobile {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-width: 52px;
+                height: 32px;
+                border-radius: 999px;
+                font-size: 0.88rem;
+                font-weight: 700;
+                background: rgba(255, 255, 255, 0.18);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+            }
+
+            .action-buttons-row {
+                gap: 10px;
+                margin-top: 20px;
+            }
+
+            .action-btn {
+                width: 100%;
+                justify-content: center;
+                border-radius: 12px;
+                padding: 11px 14px;
+                font-size: 0.95rem;
+                line-height: 1.15;
+            }
+
+            #consignarOptions .action-btn {
+                width: 100%;
+            }
+
+            .content-card {
+                padding: 20px;
+                border-radius: 16px;
+            }
+
+            .movement-item {
+                padding: 12px;
+                gap: 10px;
+                margin-bottom: 10px;
+                border-radius: 12px;
+            }
+
+            .movement-icon {
+                width: 40px;
+                height: 40px;
+                border-radius: 10px;
+                font-size: 1rem;
+            }
+
+            .movement-description {
+                font-size: 0.96rem;
+            }
+
+            .movement-date {
+                font-size: 0.8rem;
+            }
+
+            .movement-details small {
+                font-size: 0.82rem;
+            }
+
+            .movement-amount {
+                font-size: 1.08rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -275,6 +508,19 @@
             </button>
 
             <div class="collapse navbar-collapse" id="navbarNav">
+                <div class="wallet-mobile-session d-lg-none">
+                    <div class="wallet-mobile-user">
+                        <div class="user-avatar">{{ user.first_name|first|default:"U" }}{{ user.last_name|first|default:"" }}</div>
+                        <div>
+                            <span class="wallet-mobile-user-name">{{ user.get_full_name|default:user.username }}</span>
+                            <small class="wallet-mobile-user-email">{{ user.email }}</small>
+                        </div>
+                    </div>
+                    <form method="post" action="{% if es_libranza %}{% url 'libranza:logout' %}{% else %}{% url 'emprendimiento:logout' %}{% endif %}">
+                        {% csrf_token %}
+                        <button type="submit" class="wallet-mobile-logout">Cerrar sesion</button>
+                    </form>
+                </div>
                 <ul class="navbar-nav mx-auto">
                     <li class="nav-item">
                         {% if es_libranza %}
@@ -294,15 +540,15 @@
                     </li>
                 </ul>
 
-                <div class="d-flex align-items-center gap-3">
+                <div class="d-flex align-items-center gap-3 wallet-nav-actions">
                     {% if count_notificaciones > 0 %}
-                    <div class="dropdown">
+                    <div id="desktopUserDropdown" class="dropdown wallet-desktop-user d-none d-lg-block">
                         <div class="notification-badge" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-bell notification-icon"></i>
                             <span class="badge">{{ count_notificaciones }}</span>
                         </div>
 
-                        <div class="dropdown-menu dropdown-menu-end p-0" style="min-width: 320px; max-width: 400px;">
+                        <div class="dropdown-menu dropdown-menu-end p-0 wallet-dropdown-menu">
                             <div class="p-3 border-bottom">
                                 <h6 class="mb-0 fw-bold">Notificaciones</h6>
                                 <small class="text-muted">Tienes {{ count_notificaciones }} notificación{{ count_notificaciones|pluralize:"es" }} nueva{{ count_notificaciones|pluralize }}</small>
@@ -325,7 +571,7 @@
                     </div>
                     {% endif %}
 
-                    <div class="dropdown">
+                    <div class="dropdown d-none d-lg-block">
                         <div class="user-info" data-bs-toggle="dropdown">
                             <div class="user-avatar">{{ user.first_name|first|default:"U" }}{{ user.last_name|first|default:"" }}</div>
                             <div class="user-details d-none d-md-block">
@@ -336,7 +582,7 @@
                         </div> 
 
                         <!-- Desplegable mejorado -->
-                        <div class="dropdown-menu dropdown-menu-end user-menu" aria-labelledby="userDropdown">
+                        <div class="dropdown-menu dropdown-menu-end user-menu wallet-dropdown-menu" aria-labelledby="userDropdown">
                             <div class="user-menu-header">
                                 <h6 class="mb-1 fw-bold">Mi Cuenta</h6>
                                 <small class="text-muted d-block">{{ user.email }}</small>
@@ -416,15 +662,18 @@
                     </div>
                     <div class="col-lg-6 mb-3">
                         <div class="savings-card animate-fade-in" style="--progress: {{ progreso_porcentaje }}">
-                            <h6 class="opacity-75 mb-2">Ahorros Acumulados</h6>
-                            <h2 class="mb-0 fw-bold">${{ saldo_disponible|floatformat:2|intcomma }}</h2>
+                            <div class="d-flex align-items-center justify-content-between gap-2">
+                                <h6 class="opacity-75 mb-2">Ahorros Acumulados</h6>
+                                <span class="savings-percent-mobile d-md-none">{{ progreso_porcentaje|floatformat:0 }}%</span>
+                            </div>
+                            <h2 class="mb-0 fw-bold savings-main-amount">${{ saldo_disponible|floatformat:2|intcomma }}</h2>
                             <small class="opacity-75">Meta: ${{ saldo_objetivo|floatformat:2|intcomma }}</small>
                             
                             <div class="savings-progress-bar">
                                 <div class="savings-progress-fill" style="width: {{ progreso_porcentaje }}%"></div>
                             </div>
 
-                            <div class="progress-circle-wrapper">
+                            <div class="progress-circle-wrapper d-none d-md-block">
                                 <div class="progress-circle">
                                     <div class="progress-text">{{ progreso_porcentaje|floatformat:0 }}%</div>
                                 </div>
@@ -567,7 +816,19 @@
                             </div>
                             <div class="movement-details">
                                 <p class="movement-description">
-                                    {{ movimiento.get_tipo_display }}
+                                    {% if movimiento.tipo == 'DEPOSITO_ONLINE' %}
+                                        Deposito Online
+                                    {% elif movimiento.tipo == 'DEPOSITO_OFFLINE' %}
+                                        Consignacion Offline
+                                    {% elif movimiento.tipo == 'RETIRO' %}
+                                        Retiro
+                                    {% elif movimiento.tipo == 'INTERES' %}
+                                        Interes Generado
+                                    {% elif movimiento.tipo == 'AJUSTE_ADMIN' %}
+                                        Ajuste Administrativo
+                                    {% else %}
+                                        Movimiento
+                                    {% endif %}
                                     {% if movimiento.estado == 'PENDIENTE' %}
                                     <span class="badge bg-warning text-dark ms-2">Pendiente</span>
                                     {% elif movimiento.estado == 'RECHAZADO' %}
@@ -670,6 +931,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
+
         // Función para mostrar toasts dinámicos
         function showToast(message, type = 'success') {
             const toastContainer = document.getElementById('toastContainer');
@@ -916,3 +1178,5 @@
     </script>
 </body>
 </html>
+
+
