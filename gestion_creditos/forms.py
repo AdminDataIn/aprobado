@@ -131,6 +131,11 @@ class CreditoLibranzaForm(forms.ModelForm):
             raise forms.ValidationError('La cédula debe contener solo números.')
         if cedula and len(cedula) < 7:
             raise forms.ValidationError('La cédula debe tener al menos 7 dígitos.')
+        if cedula and CreditoLibranza.objects.filter(cedula=cedula).exists():
+            raise forms.ValidationError(
+                'Ya existe una solicitud registrada con esta cédula. '
+                'Si necesitas ayuda, contáctanos por WhatsApp.'
+            )
         return cedula
     
     def clean_telefono(self):

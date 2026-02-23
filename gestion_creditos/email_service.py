@@ -114,6 +114,11 @@ def enviar_notificacion_cambio_estado(credito, nuevo_estado, motivo=""):
         )
 
     plazo_solicitado = credito.plazo_solicitado or credito.plazo or "-"
+    if credito.linea == Credito.LineaCredito.LIBRANZA:
+        cta_url = 'https://aprobado.com.co/libranza/mi-credito/'
+    else:
+        cta_url = 'https://aprobado.com.co/emprendimiento/mi-credito/'
+    cta_label = 'Consultar Estado'
 
     context = {
         'credito': credito,
@@ -123,6 +128,8 @@ def enviar_notificacion_cambio_estado(credito, nuevo_estado, motivo=""):
         'numero_credito': credito.numero_credito,
         'cedula_solicitante': cedula_solicitante,
         'plazo_solicitado_email': plazo_solicitado,
+        'cta_url': cta_url,
+        'cta_label': cta_label,
     }
 
     # Renderizar contenido HTML

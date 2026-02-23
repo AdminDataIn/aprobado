@@ -401,8 +401,8 @@
 
             {% else %}
                 <!-- Contenido para solicitudes en revisión o rechazadas -->
-                <div class="empty-state">
-                    {% if credito_actual.estado == 'RECHAZADO' %}
+                {% if credito_actual.estado == 'RECHAZADO' %}
+                    <div class="empty-state">
                         <i class="bi bi-x-circle text-danger"></i>
                         <h3 class="mt-3">Tu solicitud fue {{ credito_actual.get_estado_display }}</h3>
                         <p class="text-muted mb-4">
@@ -414,20 +414,82 @@
                             <i class="bi bi-plus-circle me-2"></i>
                             Solicitar un nuevo crédito
                         </a>
-                    {% else %}
-                        <i class="bi bi-hourglass-split" style="color: var(--azul-cielo);"></i>
-                        <h3 class="mt-3">Tu solicitud está {{ credito_actual.get_estado_display }}</h3>
-                        <p class="text-muted mb-4">
-                            Recibimos tu solicitud para un crédito de {{ credito_actual.get_linea_display }} 
-                            el {{ credito_actual.fecha_solicitud|date:"d M, Y" }}.
-                            <br>Nuestro equipo te notificará pronto con una respuesta.
-                        </p>
-                        <div class="alert alert-info d-inline-block">
-                            <i class="bi bi-info-circle me-2"></i>
-                            Tiempo estimado de respuesta: 24 horas
+                    </div>
+                {% else %}
+                    <div class="review-state-layout">
+                        <div class="review-state-hero">
+                            <div class="review-state-icon">
+                                <i class="bi bi-hourglass-split"></i>
+                            </div>
+                            <div class="review-state-content">
+                                <span class="review-state-badge">
+                                    <i class="bi bi-shield-check me-1"></i>
+                                    Solicitud en revisión
+                                </span>
+                                <h3>Tu solicitud está en revisión</h3>
+                                <p>
+                                    Recibimos tu solicitud para un crédito de <strong>{{ credito_actual.get_linea_display }}</strong>
+                                    el <strong>{{ credito_actual.fecha_solicitud|date:"d \d\e F, Y" }}</strong>.
+                                    Nuestro equipo está validando la información para darte una respuesta.
+                                </p>
+                            </div>
+                            <div class="review-state-time">
+                                <small>Tiempo estimado</small>
+                                <strong>24 horas</strong>
+                                <span>Te notificaremos por correo</span>
+                            </div>
                         </div>
-                    {% endif %}
-                </div>
+
+                        <div class="row g-3 review-state-cards">
+                            <div class="col-lg-6">
+                                <div class="review-state-card">
+                                    <h5>
+                                        <i class="bi bi-file-earmark-text me-2"></i>
+                                        Detalle de solicitud
+                                    </h5>
+                                    <div class="review-state-row">
+                                        <span>Número</span>
+                                        <strong>{{ credito_actual.numero_credito }}</strong>
+                                    </div>
+                                    <div class="review-state-row">
+                                        <span>Monto solicitado</span>
+                                        <strong>${{ credito_actual.monto_solicitado|intcomma }}</strong>
+                                    </div>
+                                    <div class="review-state-row">
+                                        <span>Plazo solicitado</span>
+                                        <strong>{{ credito_actual.plazo_solicitado }} meses</strong>
+                                    </div>
+                                    <div class="review-state-row">
+                                        <span>Estado</span>
+                                        <strong>{{ credito_actual.get_estado_display }}</strong>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-6">
+                                <div class="review-state-card">
+                                    <h5>
+                                        <i class="bi bi-list-check me-2"></i>
+                                        Próximos pasos
+                                    </h5>
+                                    <ul class="review-state-steps">
+                                        <li class="done">
+                                            <i class="bi bi-check-circle-fill"></i>
+                                            <span>Solicitud recibida correctamente.</span>
+                                        </li>
+                                        <li class="active">
+                                            <i class="bi bi-hourglass-split"></i>
+                                            <span>Análisis y validación en proceso.</span>
+                                        </li>
+                                        <li>
+                                            <i class="bi bi-bell"></i>
+                                            <span>Notificación con decisión final.</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
             {% endif %}
 
         {% else %}

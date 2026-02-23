@@ -1,0 +1,221 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marketplace Aliados - Aprobado</title>
+    <link rel="stylesheet" href="{% static 'css/marketplace.css' %}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body class="marketplace">
+    <div class="mp-orb orb-1"></div>
+    <div class="mp-orb orb-2"></div>
+
+    <header class="mp-header mp-container">
+        <a href="/" class="mp-brand">
+            <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado">
+            Marketplace Aliados
+        </a>
+        <div class="mp-header-meta">
+            <span class="mp-company-pill">
+                <i class="bi bi-buildings"></i>
+                Empresas aliadas
+            </span>
+            <span class="mp-trust">
+                <i class="bi bi-shield-check"></i>
+                Respaldo Aprobado
+            </span>
+        </div>
+    </header>
+
+    <section class="mp-hero mp-container">
+        <div>
+            <span class="mp-hero-badge">
+                <i class="bi bi-stars"></i>
+                Beneficios para toda la comunidad
+            </span>
+            <h1>Explora productos, servicios y publicidad de <span class="mp-company-name">todas nuestras empresas aliadas</span></h1>
+            <p>
+                Un solo lugar para descubrir beneficios reales. Filtra por tipo, empresa y encuentra
+                publicaciones con contacto directo por WhatsApp.
+            </p>
+            <div class="mp-hero-actions">
+                <a href="#explorar" class="mp-btn primary">
+                    <i class="bi bi-grid-3x3-gap"></i>Ver publicaciones
+                </a>
+                <a href="#empresas" class="mp-btn ghost">
+                    <i class="bi bi-buildings"></i>Empresas aliadas
+                </a>
+            </div>
+        </div>
+        <div class="mp-hero-card">
+            <h3 style="margin:0; font-family:'Space Grotesk', sans-serif;">Impacto en comunidad</h3>
+            <p style="margin:8px 0 0; color: var(--mp-muted);">
+                Empresas aliadas conectando con nuevos clientes.
+            </p>
+            <div class="mp-stats">
+                <div class="mp-stat"><span>Empresas activas</span><strong>{{ total_empresas }}</strong></div>
+                <div class="mp-stat"><span>Beneficios publicados</span><strong>{{ total_items }}</strong></div>
+                <div class="mp-stat"><span>Canal principal</span><strong>WhatsApp</strong></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="mp-container mp-filters" id="explorar">
+        <div class="mp-filter-row">
+            <div class="mp-search">
+                <i class="bi bi-search"></i>
+                <input type="text" id="mpSearch" placeholder="Buscar producto, servicio o empresa">
+            </div>
+            <select id="mpCompanyFilter" class="mp-select" aria-label="Filtrar por empresa">
+                <option value="all">Todas las empresas</option>
+                {% for empresa in empresas_aliadas %}
+                <option value="{{ empresa.slug }}">{{ empresa.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="mp-chip-group" role="tablist">
+            <button class="mp-chip active" data-filter="all">Todos</button>
+            <button class="mp-chip" data-filter="producto">Productos</button>
+            <button class="mp-chip" data-filter="servicio">Servicios</button>
+            <button class="mp-chip" data-filter="publicidad">Publicidad</button>
+        </div>
+    </section>
+
+    <section class="mp-container mp-grid" id="beneficios">
+        {% if items %}
+            {% for item in items %}
+            <article
+                class="mp-card"
+                data-type="{{ item.tipo }}"
+                data-company="{{ item.empresa.slug }}"
+                data-company-name="{{ item.empresa.nombre }}"
+                data-title="{{ item.titulo }}"
+                data-description="{{ item.descripcion }}"
+                data-whatsapp="{{ item.whatsapp_contacto|default:item.empresa.whatsapp_contacto }}"
+            >
+                <div class="mp-card-media{% if item.video %} has-video{% endif %}" {% if item.imagen and not item.video %}style="background-image: url('{{ item.imagen.url }}');"{% elif not item.video %}style="background-image: url('https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80');"{% endif %}>
+                    <span class="mp-card-tag">{{ item.get_tipo_display }}</span>
+                    {% if item.video %}
+                    <video class="mp-card-video" controls playsinline preload="metadata" {% if item.imagen %}poster="{{ item.imagen.url }}"{% endif %}>
+                        <source src="{{ item.video.url }}" type="video/mp4">
+                        Tu navegador no soporta video HTML5.
+                    </video>
+                    {% endif %}
+                </div>
+                <div class="mp-card-body">
+                    <h3 class="mp-card-title">{{ item.titulo }}</h3>
+                    <p class="mp-card-desc">{{ item.descripcion|linebreaksbr }}</p>
+                    <div class="mp-card-benefit">Beneficio: {{ item.beneficio }}</div>
+                    <div class="mp-card-meta">
+                        <span class="mp-price">{{ item.precio|default:"Precio especial" }}</span>
+                        <a href="{% url 'marketplace:empresa' item.empresa.slug %}" class="mp-company-link">{{ item.empresa.nombre }}</a>
+                    </div>
+                    <a class="mp-cta" href="#" target="_blank" rel="noopener">
+                        <i class="bi bi-whatsapp"></i>Escribir por WhatsApp
+                    </a>
+                </div>
+            </article>
+            {% endfor %}
+        {% else %}
+            <article class="mp-empty-state">
+                <i class="bi bi-inboxes"></i>
+                <h3>Aún no hay publicaciones activas</h3>
+                <p>Muy pronto verás productos, servicios y publicidad de nuestras empresas aliadas.</p>
+            </article>
+        {% endif %}
+    </section>
+
+    <section class="mp-container mp-allies" id="empresas">
+        <div class="mp-allies-header">
+            <h2>Empresas aliadas</h2>
+            <p>Navega por empresa y explora su vitrina dedicada.</p>
+        </div>
+        <div class="mp-allies-grid">
+            {% for empresa in empresas_aliadas %}
+            <a href="{% url 'marketplace:empresa' empresa.slug %}" class="mp-ally-card">
+                <div>
+                    <h3>{{ empresa.nombre }}</h3>
+                    <p>{{ empresa.descripcion_marketplace|default:"Empresa aliada con beneficios vigentes."|truncatechars:120 }}</p>
+                </div>
+                <div class="mp-ally-meta">
+                    <span>{{ empresa.publicaciones_activas }} publicaciones</span>
+                    <span class="mp-ally-link">Ver empresa <i class="bi bi-arrow-right"></i></span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+
+    <footer class="mp-footer mp-container">
+        Marketplace general de aliados · Curado por Aprobado
+    </footer>
+
+    <script>
+        const chips = document.querySelectorAll('.mp-chip');
+        const cards = document.querySelectorAll('.mp-card');
+        const searchInput = document.getElementById('mpSearch');
+        const companyFilter = document.getElementById('mpCompanyFilter');
+
+        const applyFilters = () => {
+            const activeChip = document.querySelector('.mp-chip.active');
+            const typeFilter = activeChip ? activeChip.dataset.filter : 'all';
+            const companyValue = companyFilter ? companyFilter.value : 'all';
+            const searchValue = (searchInput?.value || '').trim().toLowerCase();
+
+            cards.forEach(card => {
+                const type = (card.dataset.type || '').toLowerCase();
+                const company = (card.dataset.company || '').toLowerCase();
+                const companyName = (card.dataset.companyName || '').toLowerCase();
+                const title = (card.dataset.title || '').toLowerCase();
+                const description = (card.dataset.description || '').toLowerCase();
+                const text = `${title} ${description} ${companyName}`;
+
+                const matchesType = typeFilter === 'all' || type === typeFilter;
+                const matchesCompany = companyValue === 'all' || company === companyValue;
+                const matchesSearch = !searchValue || text.includes(searchValue);
+
+                card.style.display = (matchesType && matchesCompany && matchesSearch) ? 'flex' : 'none';
+            });
+        };
+
+        chips.forEach(chip => {
+            chip.addEventListener('click', () => {
+                chips.forEach(c => c.classList.remove('active'));
+                chip.classList.add('active');
+                applyFilters();
+            });
+        });
+
+        if (searchInput) {
+            searchInput.addEventListener('input', applyFilters);
+        }
+
+        if (companyFilter) {
+            companyFilter.addEventListener('change', applyFilters);
+        }
+
+        cards.forEach(card => {
+            const title = card.dataset.title || card.querySelector('.mp-card-title')?.innerText || 'una publicacion';
+            const companyName = card.dataset.companyName || 'esta empresa';
+            const whatsapp = card.dataset.whatsapp || '';
+            const cta = card.querySelector('.mp-cta');
+            if (!cta) {
+                return;
+            }
+
+            if (!whatsapp) {
+                cta.classList.add('is-disabled');
+                cta.removeAttribute('href');
+                cta.innerHTML = '<i class="bi bi-slash-circle"></i>Sin WhatsApp configurado';
+                return;
+            }
+
+            const baseUrl = `https://wa.me/${whatsapp}`;
+            const message = `Hola, me interesa "${title}" publicado por ${companyName} en Aprobado.`;
+            cta.setAttribute('href', `${baseUrl}?text=${encodeURIComponent(message)}`);
+        });
+    </script>
+</body>
+</html>

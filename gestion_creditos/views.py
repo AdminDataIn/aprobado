@@ -41,6 +41,41 @@ from .services.marketplace_service import registrar_historial_publicacion, cambi
 
 logger = logging.getLogger(__name__)
 
+def marketplace_general_view(request):
+    """
+    Marketplace público general.
+    Muestra publicaciones aprobadas de todas las empresas aliadas.
+    """
+    items = (
+        MarketplaceItem.objects
+        .filter(estado=MarketplaceItem.EstadoItem.APROBADO)
+        .select_related('empresa')
+        .order_by('-fecha_publicacion', '-fecha_creacion')
+    )
+
+    empresas_aliadas = (
+        Empresa.objects
+        .filter(marketplace_items__estado=MarketplaceItem.EstadoItem.APROBADO)
+        .annotate(
+            publicaciones_activas=Count(
+                'marketplace_items',
+                filter=Q(marketplace_items__estado=MarketplaceItem.EstadoItem.APROBADO),
+                distinct=True
+            )
+        )
+        .order_by('-publicaciones_activas', 'nombre')
+        .distinct()
+    )
+
+    context = {
+        'items': items,
+        'empresas_aliadas': empresas_aliadas,
+        'total_items': items.count(),
+        'total_empresas': empresas_aliadas.count(),
+    }
+    return render(request, 'marketplace/general.html', context)
+
+
 def marketplace_empresa_view(request, empresa_slug):
     """
     Vitrina pública por empresa aliada.
@@ -177,16 +212,27 @@ def solicitud_credito_libranza_view(request):
     if request.method == 'POST':
         form = CreditoLibranzaForm(request.POST, request.FILES)
         if form.is_valid():
-            credito_principal = Credito.objects.create(
-                usuario=request.user, #! le PASAMOS EL USUARIO LOGUEADO (PENDIENTE CAMBIARLO POR EL NOMBRE DE LA PERSONA QUE REGISTRA LA SOLICITUD)
-                linea=Credito.LineaCredito.LIBRANZA, #! LE PASAMOS LINEA DE CREDITO
-                estado=Credito.EstadoCredito.EN_REVISION, #! PONEMOS EL ESTADO INICIAL DE LA SOLICITUD (EN REVISION)
-                monto_solicitado=form.cleaned_data['valor_credito'],
-                plazo_solicitado=form.cleaned_data['plazo']
-            )
-            credito_libranza_detalle = form.save(commit=False)
-            credito_libranza_detalle.credito = credito_principal
-            credito_libranza_detalle.save()
+            try:
+                with transaction.atomic():
+                    credito_principal = Credito.objects.create(
+                        usuario=request.user, #! le PASAMOS EL USUARIO LOGUEADO (PENDIENTE CAMBIARLO POR EL NOMBRE DE LA PERSONA QUE REGISTRA LA SOLICITUD)
+                        linea=Credito.LineaCredito.LIBRANZA, #! LE PASAMOS LINEA DE CREDITO
+                        estado=Credito.EstadoCredito.EN_REVISION, #! PONEMOS EL ESTADO INICIAL DE LA SOLICITUD (EN REVISION)
+                        monto_solicitado=form.cleaned_data['valor_credito'],
+                        plazo_solicitado=form.cleaned_data['plazo']
+                    )
+                    credito_libranza_detalle = form.save(commit=False)
+                    credito_libranza_detalle.credito = credito_principal
+                    credito_libranza_detalle.save()
+            except IntegrityError:
+                form.add_error(
+                    'cedula',
+                    'Ya existe una solicitud registrada con esta cédula. '
+                    'No es posible crear una nueva solicitud.'
+                )
+                if is_ajax:
+                    return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+                return render(request, 'gestion_creditos/solicitud_libranza.html', {'form': form})
 
             # Enviar email de confirmación de solicitud recibida
             try:
@@ -1143,6 +1189,7 @@ def pagador_dashboard_view(request):
     valid_sort_fields = [
         'detalle_libranza__nombres', '-detalle_libranza__nombres',
         'detalle_libranza__cedula', '-detalle_libranza__cedula',
+        'fecha_solicitud', '-fecha_solicitud',
         'monto_aprobado', '-monto_aprobado',
         'saldo_pendiente', '-saldo_pendiente',
         'estado', '-estado'
@@ -3872,4 +3919,3 @@ def historial_reestructuraciones_view(request, credito_id):
     }
 
     return render(request, 'emprendimiento/historial_reestructuraciones.html', context)
-

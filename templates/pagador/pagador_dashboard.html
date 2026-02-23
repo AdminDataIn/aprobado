@@ -127,6 +127,8 @@
                             <option value="-detalle_libranza__nombres" {% if sort_by == '-detalle_libranza__nombres' %}selected{% endif %}>Empleado (Z-A)</option>
                             <option value="detalle_libranza__cedula" {% if sort_by == 'detalle_libranza__cedula' %}selected{% endif %}>Cédula (Asc)</option>
                             <option value="-detalle_libranza__cedula" {% if sort_by == '-detalle_libranza__cedula' %}selected{% endif %}>Cédula (Desc)</option>
+                            <option value="-fecha_solicitud" {% if sort_by == '-fecha_solicitud' %}selected{% endif %}>Fecha solicitud (Más reciente)</option>
+                            <option value="fecha_solicitud" {% if sort_by == 'fecha_solicitud' %}selected{% endif %}>Fecha solicitud (Más antigua)</option>
                             <option value="estado" {% if sort_by == 'estado' %}selected{% endif %}>Estado (A-Z)</option>
                             <option value="-estado" {% if sort_by == '-estado' %}selected{% endif %}>Estado (Z-A)</option>
                         </select>
@@ -172,6 +174,7 @@
                         <tr>
                             <th>Empleado</th>
                             <th>Cédula</th>
+                            <th class="text-center">Fecha Solicitud</th>
                             <th class="text-end">Monto Original</th>
                             <th class="text-end">Saldo Pendiente</th>
                             <th class="text-end">Valor Cuota</th>
@@ -187,6 +190,9 @@
                                 <div class="user-name">{{ credito.detalle_libranza.nombre_completo }}</div>
                             </td>
                             <td>{{ credito.detalle_libranza.cedula }}</td>
+                            <td class="text-center date-display">
+                                {{ credito.fecha_solicitud|date:"d/m/Y H:i" }}
+                            </td>
                             <td class="text-end amount-display">
                                 {% if credito.estado == 'EN_REVISION' %}
                                     <span class="text-muted fst-italic">En revisión</span>
@@ -256,7 +262,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="8" class="empty-row">
+                            <td colspan="9" class="empty-row">
                                 <div class="empty-state">
                                     <i class="bi bi-table"></i>
                                     <p>No hay créditos para mostrar.</p>

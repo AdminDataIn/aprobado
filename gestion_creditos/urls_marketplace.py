@@ -7,6 +7,7 @@ from django.urls import reverse_lazy
 app_name = 'marketplace'
 
 urlpatterns = [
+    path('', views.marketplace_general_view, name='home'),
     path('login/', MarketingLoginView.as_view(), name='login'),
     path(
         'password-reset/',

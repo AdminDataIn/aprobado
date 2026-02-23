@@ -693,6 +693,40 @@ MODIFICAR:
             fieldsWithErrors.forEach(field => field.style.borderColor = '');
         }
 
+        function obtenerPasoPorCampo(campo) {
+            const contenedorPaso = campo ? campo.closest('.form-step') : null;
+            if (!contenedorPaso || !contenedorPaso.id) {
+                return 1;
+            }
+            const match = contenedorPaso.id.match(/^step-(\d+)$/);
+            return match ? parseInt(match[1], 10) : 1;
+        }
+
+        function irAlPasoConError(fieldName) {
+            const field = formulario.querySelector(`[name="${fieldName}"]`);
+            if (!field) {
+                return;
+            }
+
+            const targetStep = obtenerPasoPorCampo(field);
+            if (!Number.isInteger(targetStep)) {
+                return;
+            }
+
+            const currentStepElement = document.querySelector('.form-step.active');
+            const currentStep = currentStepElement
+                ? parseInt(currentStepElement.id.replace('step-', ''), 10)
+                : 1;
+
+            if (currentStep !== targetStep) {
+                document.querySelectorAll('.form-step').forEach(step => step.classList.remove('active'));
+                document.getElementById(`step-${targetStep}`).classList.add('active');
+                updateStepIndicators(currentStep, targetStep);
+            }
+
+            field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
         function enviarFormulario() {
             const submitButton = formulario.querySelector('button[type="submit"]');
             submitButton.disabled = true;
@@ -754,13 +788,27 @@ MODIFICAR:
                     updateStepIndicators(3, 1);
                 } else {
                     if (data.errors) {
-                        Object.keys(data.errors).forEach(fieldName => {
+                        const fieldsWithErrors = Object.keys(data.errors);
+                        fieldsWithErrors.forEach(fieldName => {
                             const field = formulario.querySelector(`[name="${fieldName}"]`);
                             const errorMessage = data.errors[fieldName][0];
                             if (field) {
                                 mostrarError(field, errorMessage);
                             }
                         });
+
+                        const firstErrorField = fieldsWithErrors[0];
+                        if (firstErrorField) {
+                            irAlPasoConError(firstErrorField);
+                        }
+
+                        const cedulaErrors = data.errors.cedula || [];
+                        if (cedulaErrors.length > 0) {
+                            const firstCedulaError = String(cedulaErrors[0]).toLowerCase();
+                            if (firstCedulaError.includes('ya existe')) {
+                                mostrarModal('Ya existe una solicitud registrada con esta cédula. Si necesitas apoyo, escríbenos por WhatsApp.');
+                            }
+                        }
                     } else {
                         alert('Error en la solicitud: ' + (data.error || 'Error desconocido'));
                     }
