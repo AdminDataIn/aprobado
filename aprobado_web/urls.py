@@ -19,6 +19,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from gestion_creditos import views as gestion_views
 from gestion_creditos.services.pagare_url import descargar_pagare_publico
+from .views import portal_entrypoint_view
 
 urlpatterns = [
     # ========================================
@@ -73,10 +74,7 @@ urlpatterns = [
     # ========================================
     # PÁGINA DE INICIO
     # ========================================
-    # Landing principal de emprendimiento
-    path('', TemplateView.as_view(
-        template_name='index.html'
-    ), name='home'),
+    path('', portal_entrypoint_view, name='home'),
 ]
 
 # Servir archivos media en desarrollo

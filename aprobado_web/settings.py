@@ -18,14 +18,34 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key')  # clave de respaldo
 # Si existe la variable RENDER, asumimos que estamos en producción
 DEBUG = 'RENDER' not in os.environ
 
-ALLOWED_HOSTS = [
-    'aprobado.com.co',
-    'www.aprobado.com.co',
-    '127.0.0.1',
-    'localhost',
-    '.onrender.com',
-    'aprobado-proj.onrender.com'
-]
+def _split_env_list(name, default=''):
+    value = os.environ.get(name, default)
+    return [item.strip() for item in value.split(',') if item.strip()]
+
+
+ALLOWED_HOSTS = _split_env_list(
+    'ALLOWED_HOSTS',
+    (
+        'aprobado.com.co,'
+        'www.aprobado.com.co,'
+        'emprender.aprobado.com.co,'
+        'market.aprobado.com.co,'
+        '127.0.0.1,localhost,'
+        '.onrender.com,aprobado-proj.onrender.com'
+    )
+)
+
+CSRF_TRUSTED_ORIGINS = _split_env_list(
+    'CSRF_TRUSTED_ORIGINS',
+    (
+        'https://aprobado.com.co,'
+        'https://www.aprobado.com.co,'
+        'https://emprender.aprobado.com.co,'
+        'https://market.aprobado.com.co'
+    )
+)
+
+USE_X_FORWARDED_HOST = True
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 MANUAL_PAYMENT_AUTH_KEY = os.environ.get('MANUAL_PAYMENT_AUTH_KEY', 'clave-secreta-para-desarrollo')
@@ -215,6 +235,12 @@ WOMPI_DUPLICATE_COOLDOWN_SECONDS = int(os.environ.get('WOMPI_DUPLICATE_COOLDOWN_
 WOMPI_DUPLICATE_WINDOW_MINUTES = int(os.environ.get('WOMPI_DUPLICATE_WINDOW_MINUTES', '10'))
 WOMPI_RATE_LIMIT_ATTEMPTS = int(os.environ.get('WOMPI_RATE_LIMIT_ATTEMPTS', '3'))
 WOMPI_RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get('WOMPI_RATE_LIMIT_WINDOW_SECONDS', '60'))
+
+# ========================
+# Seguridad
+# ========================
+# Permite previsualizar PDFs internos en iframes (mismo origen)
+X_FRAME_OPTIONS = 'SAMEORIGIN'
 
 # Cache (usar Redis si esta disponible)
 REDIS_URL = os.environ.get('REDIS_URL', '')
