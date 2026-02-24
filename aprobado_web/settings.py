@@ -22,14 +22,17 @@ def _split_env_list(name, default=''):
     value = os.environ.get(name, default)
     return [item.strip() for item in value.split(',') if item.strip()]
 
+PRIMARY_DOMAIN_HOST = os.environ.get('PRIMARY_DOMAIN_HOST', 'aprobado.com.co')
+EMPRENDER_SUBDOMAIN_HOST = os.environ.get('EMPRENDER_SUBDOMAIN_HOST', 'emprender.aprobado.com.co')
+MARKET_SUBDOMAIN_HOST = os.environ.get('MARKET_SUBDOMAIN_HOST', 'market.aprobado.com.co')
 
 ALLOWED_HOSTS = _split_env_list(
     'ALLOWED_HOSTS',
     (
-        'aprobado.com.co,'
-        'www.aprobado.com.co,'
-        'emprender.aprobado.com.co,'
-        'market.aprobado.com.co,'
+        f'{PRIMARY_DOMAIN_HOST},'
+        f'www.{PRIMARY_DOMAIN_HOST},'
+        f'{EMPRENDER_SUBDOMAIN_HOST},'
+        f'{MARKET_SUBDOMAIN_HOST},'
         '127.0.0.1,localhost,'
         '.onrender.com,aprobado-proj.onrender.com'
     )
@@ -106,6 +109,7 @@ if DEBUG:
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'aprobado_web.middleware.SubdomainRoutingMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -116,7 +120,7 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
-ROOT_URLCONF = 'aprobado_web.urls'
+ROOT_URLCONF = 'aprobado_web.urls_main'
 
 TEMPLATES = [
     {
