@@ -317,12 +317,27 @@ def descargar_extracto(request, credito_id):
 
     detalle = credito.detalle
 
-    historial_pagos = HistorialPago.objects.filter(credito=credito, estado=HistorialPago.EstadoPago.EXITOSO).order_by('fecha_pago')
+    historial_pagos = HistorialPago.objects.filter(
+        credito=credito,
+        estado=HistorialPago.EstadoPago.EXITOSO
+    ).order_by('fecha_pago')
     monto_total_pagado = historial_pagos.aggregate(total=Sum('monto'))['total'] or Decimal(0)
 
+    cuotas_qs = credito.tabla_amortizacion.all()
+    costo_total_credito = (
+        cuotas_qs.aggregate(total=Sum('valor_cuota'))['total']
+        if cuotas_qs.exists()
+        else credito.total_a_pagar
+    ) or Decimal('0.00')
+
+    saldo_pendiente_extracto = (costo_total_credito - monto_total_pagado) or Decimal('0.00')
+
+    if saldo_pendiente_extracto < 0:
+        saldo_pendiente_extracto = Decimal('0.00')
+
     progreso_credito = 0
-    if credito.total_a_pagar and credito.total_a_pagar > 0:
-        progreso_credito = round((monto_total_pagado / credito.total_a_pagar) * 100)
+    if costo_total_credito > 0:
+        progreso_credito = round((monto_total_pagado / costo_total_credito) * 100)
 
     context = {
         'credito': credito,
@@ -330,6 +345,8 @@ def descargar_extracto(request, credito_id):
         'detalle': detalle,
         'historial_pagos': historial_pagos,
         'monto_total_pagado': monto_total_pagado,
+        'saldo_pendiente_extracto': saldo_pendiente_extracto,
+        'costo_total_credito': costo_total_credito,
         'progreso_credito': progreso_credito,
         'fecha_generacion': timezone.now(),
         'logo_base64': get_logo_base64(),
@@ -391,13 +408,22 @@ def descargar_plan_pagos_pdf(request, credito_id):
     detalle = credito.detalle
     plan_pagos = credito.tabla_amortizacion.all().order_by('numero_cuota')
 
+    total_a_pagar_plan = credito.total_a_pagar
+    if total_a_pagar_plan is None:
+        total_a_pagar_plan = plan_pagos.aggregate(total=Sum('valor_cuota'))['total'] or Decimal('0.00')
+
     context = {
         'credito': credito,
         'usuario': request.user,
         'detalle': detalle,
         'plan_pagos': plan_pagos,
+        'total_a_pagar_plan': total_a_pagar_plan,
         'fecha_generacion': timezone.now(),
         'logo_base64': get_logo_base64(),
+        'es_libranza': credito.linea == Credito.LineaCredito.LIBRANZA,
+        'linea_credito': credito.get_linea_display(),
+        'telefono_contacto': '+57 313 247 7352',
+        'sede_ciudad': 'Villavicencio, Meta, Colombia',
     }
 
     # Obtener la cédula del cliente para encriptar el PDF

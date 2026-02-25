@@ -114,10 +114,13 @@ def enviar_notificacion_cambio_estado(credito, nuevo_estado, motivo=""):
         )
 
     plazo_solicitado = credito.plazo_solicitado or credito.plazo or "-"
+    primary_host = getattr(settings, 'PRIMARY_DOMAIN_HOST', 'aprobado.com.co')
+    emprender_host = getattr(settings, 'EMPRENDER_SUBDOMAIN_HOST', 'emprender.aprobado.com.co')
+
     if credito.linea == Credito.LineaCredito.LIBRANZA:
-        cta_url = 'https://aprobado.com.co/libranza/mi-credito/'
+        cta_url = f'https://{primary_host}/libranza/login/?next=/libranza/mi-credito/'
     else:
-        cta_url = 'https://aprobado.com.co/emprendimiento/mi-credito/'
+        cta_url = f'https://{emprender_host}/emprendimiento/login/?next=/emprendimiento/mi-credito/'
     cta_label = 'Consultar Estado'
 
     context = {
@@ -357,6 +360,10 @@ def generar_pdf_plan_pagos(credito):
             'plan_pagos': plan_pagos,
             'fecha_generacion': timezone.now(),
             'logo_base64': get_logo_base64(),
+            'es_libranza': credito.linea == Credito.LineaCredito.LIBRANZA,
+            'linea_credito': credito.get_linea_display(),
+            'telefono_contacto': '+57 313 247 7352',
+            'sede_ciudad': 'Villavicencio, Meta, Colombia',
         }
 
         template = get_template('usuariocreditos/plan_pagos_pdf.html')

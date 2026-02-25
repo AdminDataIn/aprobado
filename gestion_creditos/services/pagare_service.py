@@ -4,7 +4,6 @@ Incluye generacion de hash SHA-256 para trazabilidad legal.
 """
 
 import hashlib
-import locale
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -196,15 +195,11 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
     if intereses_totales < 0:
         intereses_totales = Decimal('0.00')
 
-    # Fecha actual en partes (en español)
-    dia_actual = hoy.day
+    # Fecha actual en partes (en español).
+    # Se pasan como string para evitar localización numérica ("2.026").
+    dia_actual = str(hoy.day)
     mes_actual = _mes_en_espanol(hoy)
-    anio_actual = hoy.year
-
-    # Fecha de vencimiento en partes (en español)
-    dia_vencimiento = fecha_vencimiento.day
-    mes_vencimiento = _mes_en_espanol(fecha_vencimiento)
-    anio_vencimiento = fecha_vencimiento.year
+    anio_actual = str(hoy.year)
 
     return {
         'numero_pagare': numero_pagare,
@@ -233,9 +228,11 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
         'plazo_cuotas_letras': plazo_cuotas_letras,
         'periodicidad': periodicidad,
         # Fechas en partes (en español)
-        'dia_pago': dia_vencimiento,
-        'mes_pago': mes_vencimiento,
-        'anio_pago': anio_vencimiento,
+        # Para el texto inicial del pagaré usamos fecha de suscripción.
+        # Esto alinea ambas páginas con la fecha real de firma del documento.
+        'dia_pago': dia_actual,
+        'mes_pago': mes_actual,
+        'anio_pago': anio_actual,
         'dia_firma': dia_actual,
         'mes_firma': mes_actual,
         'anio_firma': anio_actual,

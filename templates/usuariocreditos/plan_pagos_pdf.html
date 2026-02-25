@@ -4,301 +4,436 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Plan de Pagos - Aprobado</title>
+    <title>Plan de Pagos - {{ credito.numero_credito }}</title>
     <style>
         @page {
             size: A4;
-            margin: 0.8cm 1.2cm;
-            @bottom-center {
-                content: "Página " counter(page) " de " counter(pages);
-                font-size: 9pt;
-                color: #777;
-            }
+            margin: 0;
+        }
+
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
         body {
-            font-family: 'Arial', 'Helvetica', sans-serif;
-            color: #333;
-            font-size: 10pt;
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 9pt;
+            color: #1a1a1a;
             line-height: 1.5;
+            background: #ffffff;
         }
 
+        /* ========== HEADER MINIMALISTA ========== */
         .header {
-            border-bottom: 3px solid #003893;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
+            padding: 32px 48px 24px;
         }
 
-        .header-table {
-            width: 100%;
+        .header-flex {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
         }
 
-        .header-table td {
-            vertical-align: top;
-            border: none;
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
         .logo {
-            width: 180px;
+            width: 160px;
             height: auto;
         }
 
-        .company-details {
+        .company-info {
             text-align: right;
+            font-size: 8pt;
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .company-name {
+            font-weight: 600;
+            color: #1e40af;
+            margin-bottom: 2px;
             font-size: 9pt;
-            color: #555;
-            line-height: 1.4;
         }
 
-        .company-details strong {
-            font-size: 11pt;
-            color: #003893;
-            display: block;
-            margin-bottom: 5px;
+        .doc-info {
+            margin-top: 24px;
+            padding-top: 16px;
         }
 
-        .document-title {
-            text-align: center;
-            color: #003893;
+        .doc-title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+
+        .doc-title {
             font-size: 20pt;
-            font-weight: bold;
-            margin: 20px 0 25px 0;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            font-weight: 600;
+            color: #1a1a1a;
+            letter-spacing: -0.3px;
         }
 
-        .info-grid {
-            display: table;
-            width: 100%;
-            margin-bottom: 25px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-        }
-
-        .info-row {
-            display: table-row;
-        }
-
-        .info-cell {
-            display: table-cell;
-            padding: 10px 15px;
-            border-bottom: 1px solid #f0f0f0;
-            width: 50%;
-        }
-
-        .info-cell:first-child {
-            border-right: 1px solid #f0f0f0;
-        }
-
-        .info-label {
+        .doc-subtitle {
             font-size: 9pt;
-            color: #777;
-            margin-bottom: 3px;
+            color: #666;
+            margin-top: 4px;
         }
 
-        .info-value {
-            font-weight: bold;
-            color: #333;
+        .linea-tag {
+            display: inline-block;
+            background: #fef3c7;
+            color: #92400e;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 7.5pt;
+            font-weight: 600;
+            margin-left: 6px;
+        }
+
+        /* ========== RESUMEN LIMPIO ========== */
+        .container {
+            padding: 24px 48px;
+        }
+
+        .summary {
+            background: #fafafa;
+            border-radius: 8px;
+            padding: 20px 24px;
+            margin-bottom: 32px;
+        }
+
+        .summary-title {
+            font-size: 9pt;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .summary-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .summary-label {
+            font-size: 7.5pt;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .summary-value {
             font-size: 11pt;
+            font-weight: 600;
+            color: #1a1a1a;
         }
 
+        .summary-value-primary {
+            color: #1e40af;
+        }
+
+        /* ========== TABLA MINIMALISTA ========== */
         .section-title {
-            background: linear-gradient(135deg, #003893 0%, #0056b3 100%);
-            color: white;
-            padding: 10px 15px;
-            margin: 25px 0 12px 0;
-            font-size: 13pt;
-            font-weight: bold;
-            border-radius: 5px;
+            font-size: 10pt;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            padding-left: 12px;
+            border-bottom: 2px solid #fbbf24;
+            border-left: 4px solid #1e40af;
+            position: relative;
+        }
+
+        .table-wrapper {
+            margin-bottom: 24px;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 20px;
+            font-size: 8pt;
         }
 
         thead {
-            background-color: #003893;
-            color: white;
+            background: #fafafa;
+            border-bottom: 1px solid #e5e5e5;
         }
 
         th {
-            padding: 10px 8px;
+            text-align: left;
+            padding: 10px 12px;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            font-size: 7pt;
+        }
+
+        th:first-child {
+            width: 40px;
             text-align: center;
-            font-weight: bold;
-            font-size: 9pt;
+        }
+
+        th:last-child {
+            text-align: right;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #f5f5f5;
+        }
+
+        tbody tr:hover {
+            background: #fafafa;
         }
 
         td {
-            padding: 8px;
-            border-bottom: 1px solid #e0e0e0;
-            font-size: 9pt;
+            padding: 12px;
+            color: #1a1a1a;
+        }
+
+        td:first-child {
             text-align: center;
+            font-weight: 600;
+            color: #666;
         }
 
-        tbody tr:nth-child(even) {
-            background-color: #f9f9f9;
+        td:last-child {
+            text-align: right;
         }
 
-        .text-right { text-align: right; }
-        .text-left { text-align: left; }
-        .text-bold { font-weight: bold; }
+        .amount {
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
 
-        .status-badge {
+        .amount-primary {
+            color: #1e40af;
+        }
+
+        /* ========== BADGES MINIMALISTAS ========== */
+        .badge {
             display: inline-block;
-            padding: 4px 10px;
-            border-radius: 10px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 7pt;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        .badge-pagada {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-pendiente {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge-mora {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* ========== INDICADOR DE CUOTA ========== */
+        .cuota-num {
+            width: 24px;
+            height: 24px;
+            background: #f5f5f5;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             font-size: 8pt;
-            font-weight: bold;
-            text-transform: uppercase;
+            font-weight: 600;
         }
 
-        .status-pagada {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .status-pendiente {
-            background: #e2e3e5;
-            color: #383d41;
-        }
-
-        .status-en-mora {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .footer-note {
-            margin-top: 30px;
-            padding-top: 15px;
-            border-top: 1px solid #ddd;
-            font-size: 8pt;
-            color: #888;
+        /* ========== FOOTER MINIMALISTA ========== */
+        .footer {
+            margin-top: 32px;
+            padding-top: 20px;
+            padding-left: 12px;
+            border-top: 2px solid #fbbf24;
+            font-size: 7.5pt;
+            color: #999;
+            line-height: 1.8;
             text-align: center;
-            font-style: italic;
-            line-height: 1.6;
         }
 
-        .no-data {
+        .footer p {
+            margin-bottom: 8px;
+        }
+
+        .footer strong {
+            color: #666;
+        }
+
+        /* ========== EMPTY STATE ========== */
+        .empty {
             text-align: center;
-            padding: 30px;
+            padding: 40px;
             color: #999;
             font-style: italic;
         }
+
+        /* ========== SPACING UTILITIES ========== */
+        .mt-1 { margin-top: 8px; }
+        .mt-2 { margin-top: 16px; }
+        .mb-1 { margin-bottom: 8px; }
+        .mb-2 { margin-bottom: 16px; }
     </style>
 </head>
 <body>
-    <!-- Header -->
+    <!-- HEADER -->
     <div class="header">
-        <table class="header-table">
-            <tr>
-                <td style="width: 25%;">
-                    {% if logo_base64 %}
-                    <img src="{{ logo_base64 }}" class="logo" alt="Aprobado Logo">
-                    {% else %}
-                    <div style="font-size: 20pt; font-weight: bold; color: #003893;">APROBADO</div>
-                    {% endif %}
-                </td>
-                <td style="width: 75%;" class="company-details">
-                    <strong>Aprobado Fintech SAS</strong>
-                    NIT: 901.949.137-2<br>
-                    www.aprobado.com.co
-                </td>
-            </tr>
-        </table>
-    </div>
-
-    <!-- Document Title -->
-    <h1 class="document-title">Plan de Pagos</h1>
-
-    <!-- Customer & Credit Info -->
-    <div class="info-grid">
-        <div class="info-row">
-            <div class="info-cell">
-                <div class="info-label">Nombre del Cliente</div>
-                <div class="info-value">{{ credito.nombre_cliente }}</div>
+        <div class="header-flex">
+            <div class="logo-section">
+                {% if logo_base64 %}
+                <img src="{{ logo_base64 }}" class="logo" alt="Aprobado">
+                {% else %}
+                <div style="font-size: 16pt; font-weight: 700; color: #1e40af;">Aprobado</div>
+                {% endif %}
             </div>
-            <div class="info-cell">
-                <div class="info-label">Número de Crédito</div>
-                <div class="info-value">{{ credito.numero_credito }}</div>
+            
+            <div class="company-info">
+                <div class="company-name">Aprobado Fintech SAS</div>
+                <div>NIT 901.949.137-2</div>
+                <div>{{ sede_ciudad }}</div>
+                <div>{{ telefono_contacto }}</div>
             </div>
         </div>
-        <div class="info-row">
-            <div class="info-cell">
-                <div class="info-label">Monto Aprobado</div>
-                <div class="info-value">${{ credito.monto_aprobado|floatformat:2|intcomma }}</div>
-            </div>
-            <div class="info-cell">
-                <div class="info-label">Plazo</div>
-                <div class="info-value">{{ credito.plazo }} meses</div>
-            </div>
-        </div>
-        <div class="info-row">
-            <div class="info-cell">
-                <div class="info-label">Tasa de Interés Mensual</div>
-                <div class="info-value">{{ credito.tasa_interes }}%</div>
-            </div>
-            <div class="info-cell">
-                <div class="info-label">Valor de la Cuota</div>
-                <div class="info-value">${{ credito.valor_cuota|floatformat:2|intcomma }}</div>
+
+        <div class="doc-info">
+            <div class="doc-title-row">
+                <div>
+                    <h1 class="doc-title">Plan de Pagos</h1>
+                    <p class="doc-subtitle">
+                        Crédito {{ credito.numero_credito }}
+                        <span class="linea-tag">{{ linea_credito }}</span>
+                    </p>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Payment Plan Table -->
-    <div class="section-title">
-        <i style="margin-right: 8px;">🗓️</i> Detalle de Cuotas
-    </div>
+    <!-- CONTENIDO -->
+    <div class="container">
+        <!-- RESUMEN -->
+        <div class="summary">
+            <div class="summary-title">Resumen del crédito</div>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <div class="summary-label">Cliente</div>
+                    <div class="summary-value">{{ credito.nombre_cliente }}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">Monto aprobado</div>
+                    <div class="summary-value summary-value-primary">${{ credito.monto_aprobado|floatformat:0|intcomma }}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">Plazo</div>
+                    <div class="summary-value">{{ credito.plazo }} meses</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">Tasa mensual</div>
+                    <div class="summary-value">{{ credito.tasa_interes }}%</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">Cuota mensual</div>
+                    <div class="summary-value summary-value-primary">${{ credito.valor_cuota|floatformat:0|intcomma }}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">Total a pagar</div>
+                    <div class="summary-value">${{ total_a_pagar_plan|floatformat:0|intcomma }}</div>
+                </div>
+            </div>
+        </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th># Cuota</th>
-                <th>Fecha Vencimiento</th>
-                <th>Valor Cuota</th>
-                <th>Capital</th>
-                <th>Intereses</th>
-                <th>Saldo Capital</th>
-                <th>Estado</th>
-            </tr>
-        </thead>
-        <tbody>
+        <!-- TABLA DE CUOTAS -->
+        <div class="table-wrapper">
+            <div class="section-title">Detalle de cuotas</div>
+            
             {% if plan_pagos %}
-                {% for cuota in plan_pagos %}
-                <tr>
-                    <td>{{ cuota.numero_cuota }}</td>
-                    <td>{{ cuota.fecha_vencimiento|date:"d/m/Y" }}</td>
-                    <td class="text-bold">${{ cuota.valor_cuota|floatformat:2|intcomma }}</td>
-                    <td>${{ cuota.capital_a_pagar|floatformat:2|intcomma }}</td>
-                    <td>${{ cuota.interes_a_pagar|floatformat:2|intcomma }}</td>
-                    <td>${{ cuota.saldo_capital_pendiente|floatformat:2|intcomma }}</td>
-                    <td>
-                        {% if cuota.pagada %}
-                        <span class="status-badge status-pagada">Pagada</span>
-                        {% else %}
-                        <span class="status-badge status-pendiente">Pendiente</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Fecha vencimiento</th>
+                        <th>Cuota</th>
+                        <th>Capital</th>
+                        <th>Interés</th>
+                        <th>Saldo</th>
+                        <th style="text-align: center;">Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cuota in plan_pagos %}
+                    <tr>
+                        <td>
+                            <span class="cuota-num">{{ cuota.numero_cuota }}</span>
+                        </td>
+                        <td>{{ cuota.fecha_vencimiento|date:"d/m/Y" }}</td>
+                        <td class="amount amount-primary">${{ cuota.valor_cuota|floatformat:0|intcomma }}</td>
+                        <td class="amount">${{ cuota.capital_a_pagar|floatformat:0|intcomma }}</td>
+                        <td class="amount">${{ cuota.interes_a_pagar|floatformat:0|intcomma }}</td>
+                        <td class="amount">${{ cuota.saldo_capital_pendiente|floatformat:0|intcomma }}</td>
+                        <td style="text-align: center;">
+                            {% if cuota.pagada %}
+                            <span class="badge badge-pagada">Pagada</span>
+                            {% elif cuota.estado == 'EN_MORA' %}
+                            <span class="badge badge-mora">Mora</span>
+                            {% else %}
+                            <span class="badge badge-pendiente">Pendiente</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
             {% else %}
-                <tr>
-                    <td colspan="7" class="no-data">
-                        No se pudo generar el plan de pagos.
-                    </td>
-                </tr>
+            <div class="empty">
+                No se pudo generar el plan de pagos.
+            </div>
             {% endif %}
-        </tbody>
-    </table>
+        </div>
 
-    <!-- Footer -->
-    <div class="footer-note">
-        Este es un plan de pagos proyectado y puede estar sujeto a cambios si se realizan abonos a capital o por otras condiciones.<br>
-        Para cualquier aclaración, comunícate con nosotros a través de nuestros canales oficiales.<br>
-        <br>
-        <strong>Aprobado Fintech SAS</strong> - Impulsando el emprendimiento colombiano<br>
-        Generado el {{ fecha_generacion|date:"d/m/Y" }} a las {{ fecha_generacion|time:"H:i:s" }}
+        <!-- FOOTER -->
+        <div class="footer">
+            <p>
+                <strong>Nota:</strong> Este plan de pagos es proyectado y puede variar si se realizan 
+                abonos extraordinarios o pagos anticipados.
+            </p>
+            <p>
+                {% if es_libranza %}
+                Crédito de libranza administrado por Aprobado Fintech SAS.
+                {% else %}
+                Crédito de emprendimiento administrado por Aprobado Fintech SAS.
+                {% endif %}
+            </p>
+            <p>
+                Para consultas: <strong>{{ telefono_contacto }}</strong> · {{ sede_ciudad }}
+            </p>
+            <p style="margin-top: 12px; color: #bbb;">
+                Generado el {{ fecha_generacion|date:"d/m/Y" }} a las {{ fecha_generacion|time:"H:i" }}
+            </p>
+        </div>
     </div>
 </body>
 </html>
