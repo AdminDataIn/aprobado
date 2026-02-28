@@ -51,10 +51,12 @@
                         <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #6B7280;">Fecha de desembolso</td>
                         <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ credito.fecha_desembolso|date:"d \d\e F \d\e Y"|default:"Pendiente" }}</td>
                     </tr>
+                    {% if cuenta_destino_resumen %}
                     <tr>
                         <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #6B7280;">Cuenta destino</td>
-                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ credito.detalle.banco|default:"Bancolombia" }} ****{{ credito.detalle.numero_cuenta|slice:"-4:"|default:"0000" }}</td>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ cuenta_destino_resumen }}</td>
                     </tr>
+                    {% endif %}
                     <tr>
                         <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #6B7280;">Plazo</td>
                         <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ credito.plazo }} meses</td>

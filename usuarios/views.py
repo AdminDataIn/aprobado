@@ -6,6 +6,10 @@ from django.contrib import messages
 from django.contrib.auth import logout
 from django.views.generic import TemplateView
 from django.urls import reverse
+from decimal import Decimal
+
+from gestion_creditos.models import Credito
+from gestion_creditos.services.tasa_service import obtener_tasa_credito
 
 
 # Create your views here.
@@ -129,9 +133,12 @@ def libranza_landing(request):
     Returns:
         Renderiza 'libranza/libranza_landing.html'
     """
+    tasa_libranza = obtener_tasa_credito(Credito.LineaCredito.LIBRANZA)
+    tasa_libranza_decimal = tasa_libranza / Decimal('100')
     context = {
-        # Se puede agregar contexto adicional si es necesario en el futuro
-        # Por ejemplo: tasas, montos, convenios, etc.
+        'libranza_tasa_mensual': tasa_libranza,
+        'libranza_tasa_decimal': tasa_libranza_decimal,
+        'libranza_tasa_decimal_js': format(tasa_libranza_decimal, 'f'),
     }
     return render(request, 'libranza/libranza_landing.html', context)
 
@@ -153,9 +160,12 @@ def simulador_libranza(request):
     Returns:
         Renderiza 'libranza/simulacion_libranza.html'
     """
+    tasa_libranza = obtener_tasa_credito(Credito.LineaCredito.LIBRANZA)
+    tasa_libranza_decimal = tasa_libranza / Decimal('100')
     context = {
-        # Se puede agregar contexto adicional si es necesario
-        # Por ejemplo: tasas dinámicas, rangos personalizados, etc.
+        'libranza_tasa_mensual': tasa_libranza,
+        'libranza_tasa_decimal': tasa_libranza_decimal,
+        'libranza_tasa_decimal_js': format(tasa_libranza_decimal, 'f'),
     }
     return render(request, 'libranza/simulacion_libranza.html', context)
 

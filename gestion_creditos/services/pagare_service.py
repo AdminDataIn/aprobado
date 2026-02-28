@@ -15,6 +15,7 @@ from django.utils import timezone
 from weasyprint import HTML
 
 from gestion_creditos.models import Credito, Pagare
+from gestion_creditos.services.tasa_service import obtener_tasa_credito
 from .pagare_utils import numero_a_letras, numero_a_letras_simple, formatear_cop
 
 
@@ -242,12 +243,7 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
 def _obtener_tasa_interes(credito):
     if credito.tasa_interes is not None:
         return Decimal(str(credito.tasa_interes))
-
-    if credito.linea == Credito.LineaCredito.EMPRENDIMIENTO:
-        return Decimal('3.5')
-    if credito.linea == Credito.LineaCredito.LIBRANZA:
-        return Decimal('2.0')
-    return Decimal('0.00')
+    return obtener_tasa_credito(credito.linea)
 
 
 def _calcular_valor_cuota(capital_financiado, tasa_mensual, plazo_cuotas):

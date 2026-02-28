@@ -227,7 +227,7 @@ MODIFICAR:
                                 <span id="resumen-iva">-</span>
                             </div>
                             <div class="credito-resumen-row">
-                                <span>Intereses (2% EM):</span>
+                                <span>Intereses ({{ libranza_tasa_mensual|default:"1.9" }}% EM):</span>
                                 <span id="resumen-intereses">-</span>
                             </div>
                                                         <div class="credito-resumen-row total">
@@ -502,7 +502,7 @@ MODIFICAR:
             const ivaComision = comision * 0.19;
 
             const capitalFinanciado = montoSolicitado + comision + ivaComision;
-            const tasaMensual = 0.02;
+            const tasaMensual = parseFloat('{{ libranza_tasa_decimal_js|default:"0.019" }}');
             const cuotaMensual = calcularCuotaAnualidad(capitalFinanciado, tasaMensual, meses);
             const totalAPagar = cuotaMensual * meses;
             const totalIntereses = totalAPagar - capitalFinanciado;

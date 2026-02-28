@@ -9,12 +9,12 @@ CARACTERÍSTICAS:
 - Monto: $500.000 - $2.000.000
 - Plazo: 1 - 6 meses
 - Comisión: 10% + IVA (19%)
-- Tasa de interés: 2% EM (Efectiva Mensual)
+- Tasa de interés: {{ libranza_tasa_mensual|default:"1.9" }}% EM (Efectiva Mensual)
 
 MODIFICAR:
 - Rangos de monto: Líneas 58-60
 - Rangos de plazo: Líneas 75-77
-- Tasa de interés: Línea 182 (tasaMensual = 0.02)
+- Tasa de interés: Línea 182 (tasaMensual dinámico desde configuración)
 - Cálculos (comisión, IVA, etc.): Líneas 167-201
 {% endcomment %}
 
@@ -103,7 +103,7 @@ MODIFICAR:
                                                class="simulador-result-input" readonly>
                                     </div>
                                     <div class="simulador-result-row">
-                                        <label for="totalIntereses" class="simulador-result-label">Intereses (2% EM):</label>
+                                        <label for="totalIntereses" class="simulador-result-label">Intereses ({{ libranza_tasa_mensual|default:"1.9" }}% EM):</label>
                                         <input type="text" id="totalIntereses" name="totalIntereses" value="33.582,00"
                                                class="simulador-result-input" readonly>
                                     </div>
@@ -141,7 +141,10 @@ MODIFICAR:
         const totalPagarInput = document.getElementById("totalPagar");
         const cuotaMensualInput = document.getElementById("cuotaMensual");
         const aplicarAhora = document.getElementById("simulador-aplicar-ahora");
-        const aplicarBaseUrl = aplicarAhora ? aplicarAhora.getAttribute("href") : "";
+        const solicitudBaseUrl = "{% url 'libranza:solicitar' %}";
+        const enlacesSolicitud = Array.from(
+            document.querySelectorAll(`a[href="${solicitudBaseUrl}"]`)
+        );
 
         /**
          * Calcula la cuota usando la fórmula de anualidad (amortización francesa)
@@ -170,8 +173,8 @@ MODIFICAR:
             // Capital financiado = monto + comisión + IVA (esto es lo que se financia en cuotas)
             const capitalFinanciado = montoSolicitado + comision + ivaComision;
 
-            // MODIFICAR: Tasa de interés mensual (2% efectivo mensual para Libranza)
-            const tasaMensual = 0.02;  // 2% EM
+            // Tasa de interés mensual parametrizable para Libranza
+            const tasaMensual = parseFloat('{{ libranza_tasa_decimal_js|default:"0.019" }}');
 
             // Calcular cuota mensual sobre el capital financiado
             const cuotaMensual = calcularCuotaAnualidad(capitalFinanciado, tasaMensual, meses);
@@ -247,7 +250,7 @@ ivaComisionInput.value = formatColombianNumber(ivaComision);
         }
 
         function actualizarAplicarLink() {
-            if (!aplicarAhora || !aplicarBaseUrl) {
+            if (!aplicarAhora || !enlacesSolicitud.length) {
                 return;
             }
 
@@ -255,11 +258,16 @@ ivaComisionInput.value = formatColombianNumber(ivaComision);
             const plazo = parseInt(slider2.value, 10);
 
             if (Number.isNaN(monto) || Number.isNaN(plazo)) {
-                aplicarAhora.href = aplicarBaseUrl;
+                enlacesSolicitud.forEach((link) => {
+                    link.href = solicitudBaseUrl;
+                });
                 return;
             }
 
-            aplicarAhora.href = `${aplicarBaseUrl}?monto=${monto}&plazo=${plazo}`;
+            const targetUrl = `${solicitudBaseUrl}?monto=${monto}&plazo=${plazo}`;
+            enlacesSolicitud.forEach((link) => {
+                link.href = targetUrl;
+            });
         }
 
         // Event listeners para los sliders

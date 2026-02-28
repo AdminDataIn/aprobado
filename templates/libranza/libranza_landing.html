@@ -250,7 +250,7 @@ que requiere autenticación con Google (según especificaciones).
                         <!-- MODIFICAR: Comisión -->
                         <li><strong>Comisión:</strong> 10% + IVA (19%) sobre el monto</li>
                         <!-- MODIFICAR: Tasa de interés si aplica -->
-                        <li><strong>Tasa de interés:</strong> 2% Efectiva mensual (EM) - 26.82% EA</li>
+                        <li><strong>Tasa de interés:</strong> {{ libranza_tasa_mensual|default:"1.9" }}% efectiva mensual (EM)</li>
                     </ul>
                     <p class="libranza-note" style="margin-top: 1rem; background-color: #dbeafe; border-left: 4px solid #06b6d4;">
                         <strong>💡 Transparencia total:</strong> En nuestro simulador verás el desglose completo: monto, comisión, IVA, intereses totales, y cuota mensual. Sin sorpresas, sin letra pequeña.
@@ -351,7 +351,7 @@ que requiere autenticación con Google (según especificaciones).
                         <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
                             <li><strong>Comisión:</strong> 10% del monto solicitado (única vez)</li>
                             <li><strong>IVA sobre comisión:</strong> 19% de la comisión</li>
-                            <li><strong>Intereses:</strong> 2% efectivo mensual sobre el capital financiado</li>
+                            <li><strong>Intereses:</strong> {{ libranza_tasa_mensual|default:"1.9" }}% efectivo mensual sobre el capital financiado</li>
                         </ul>
                         <p style="margin-top: 0.75rem;"><strong>Ejemplo:</strong> Si solicitas $1.000.000 a 3 meses, pagarás aproximadamente $45.000 de intereses en total. Usa nuestro simulador para ver el desglose exacto de tu crédito.</p>
                     </div>

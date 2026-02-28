@@ -17,11 +17,101 @@ from django.core.mail import send_mail, EmailMultiAlternatives
 from django.template.loader import render_to_string, get_template
 from django.conf import settings
 from django.utils import timezone
+from django.urls import reverse
 from weasyprint import HTML
 from pypdf import PdfReader, PdfWriter
 from .models import Credito
 
 logger = logging.getLogger(__name__)
+
+
+def _obtener_resumen_cuenta_destino(detalle):
+    """
+    Arma un resumen legible de la cuenta destino solo si existen datos estructurados.
+    Evita mostrar banco o numeros ficticios en comunicaciones al cliente.
+    """
+    if not detalle:
+        return None
+
+    banco = getattr(detalle, 'banco', None)
+    numero_cuenta = getattr(detalle, 'numero_cuenta', None)
+
+    if banco and numero_cuenta:
+        ultimos = str(numero_cuenta)[-4:]
+        return f"{banco} ****{ultimos}"
+
+    return None
+
+
+def _obtener_destinatarios_internos():
+    return [
+        email for email in getattr(settings, 'CREDIT_INTERNAL_NOTIFICATION_EMAILS', [])
+        if email
+    ]
+
+
+def enviar_notificacion_interna_nueva_solicitud(credito):
+    """
+    Notifica al equipo interno cada vez que entra una nueva solicitud.
+    Usa destinatarios configurables desde settings/.env.
+    """
+    destinatarios = _obtener_destinatarios_internos()
+    if not destinatarios:
+        logger.warning("No hay destinatarios configurados en CREDIT_INTERNAL_NOTIFICATION_EMAILS.")
+        return False
+
+    detalle = credito.detalle
+    primary_host = getattr(settings, 'PRIMARY_DOMAIN_HOST', 'aprobado.com.co')
+    admin_url = f"https://{primary_host}{reverse('gestion:credito_detalle', kwargs={'credito_id': credito.id})}"
+
+    nombre_cliente = credito.nombre_cliente
+    cedula = (
+        getattr(detalle, 'cedula', None)
+        or getattr(detalle, 'numero_cedula', None)
+        or 'No registrada'
+    )
+    empresa = getattr(getattr(detalle, 'empresa', None), 'nombre', None) or 'No aplica'
+    email_cliente = getattr(detalle, 'correo_electronico', None) or getattr(credito.usuario, 'email', '')
+    telefono = getattr(detalle, 'telefono', None) or getattr(detalle, 'celular_wh', None) or 'No registrado'
+
+    context = {
+        'credito': credito,
+        'detalle': detalle,
+        'nombre_cliente': nombre_cliente,
+        'cedula': cedula,
+        'empresa': empresa,
+        'email_cliente': email_cliente,
+        'telefono': telefono,
+        'admin_url': admin_url,
+    }
+
+    try:
+        html_content = render_to_string('emails/notificacion_interna_nueva_solicitud.html', context)
+        email = EmailMultiAlternatives(
+            subject=f"Nueva solicitud de crédito - {credito.get_linea_display()} - {credito.numero_credito}",
+            body=(
+                f"Nueva solicitud registrada\n"
+                f"Crédito: {credito.numero_credito}\n"
+                f"Cliente: {nombre_cliente}\n"
+                f"Cédula: {cedula}\n"
+                f"Monto: ${credito.monto_solicitado:,.0f}\n"
+                f"Plazo: {credito.plazo_solicitado} meses\n"
+                f"Revisar: {admin_url}"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=destinatarios,
+        )
+        email.attach_alternative(html_content, "text/html")
+        email.send()
+        logger.info(
+            "Notificación interna enviada para crédito %s a %s",
+            credito.numero_credito,
+            ", ".join(destinatarios)
+        )
+        return True
+    except Exception as e:
+        logger.error("Error al enviar notificación interna para crédito %s: %s", credito.numero_credito, e)
+        return False
 
 
 def enviar_email_html(destinatario, asunto, template_html, context, template_text=None):
@@ -133,6 +223,7 @@ def enviar_notificacion_cambio_estado(credito, nuevo_estado, motivo=""):
         'plazo_solicitado_email': plazo_solicitado,
         'cta_url': cta_url,
         'cta_label': cta_label,
+        'cuenta_destino_resumen': _obtener_resumen_cuenta_destino(credito.detalle),
     }
 
     # Renderizar contenido HTML

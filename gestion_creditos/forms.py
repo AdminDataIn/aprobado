@@ -1,6 +1,7 @@
 from django import forms
 from .models import CreditoLibranza, Empresa, CreditoEmprendimiento, MovimientoAhorro, MarketplaceItem
 from decimal import Decimal
+import hashlib
 # Agregar al archivo forms.py existente
 from django.core.validators import FileExtensionValidator
 from django.conf import settings
@@ -144,6 +145,51 @@ class CreditoLibranzaForm(forms.ModelForm):
         if telefono_limpio and len(telefono_limpio) < 7:
             raise forms.ValidationError('Ingrese un número de teléfono válido.')
         return telefono
+
+    def clean(self):
+        cleaned_data = super().clean()
+        campos_archivo = [
+            'cedula_frontal',
+            'cedula_trasera',
+            'certificado_bancario',
+            'certificado_laboral',
+            'desprendible_nomina',
+        ]
+
+        hashes_vistos = {}
+        errores = {}
+
+        for campo in campos_archivo:
+            archivo = cleaned_data.get(campo)
+            if not archivo:
+                continue
+
+            archivo_hash = self._calcular_hash_archivo(archivo)
+            if archivo_hash in hashes_vistos:
+                campo_original = hashes_vistos[archivo_hash]
+                errores[campo] = (
+                    f'Este archivo es identico al cargado en "{self.fields[campo_original].label}". '
+                    'Sube documentos diferentes en cada campo.'
+                )
+                errores.setdefault(
+                    campo_original,
+                    f'Este archivo esta duplicado con "{self.fields[campo].label}".'
+                )
+            else:
+                hashes_vistos[archivo_hash] = campo
+
+        if errores:
+            raise forms.ValidationError(errores)
+
+        return cleaned_data
+
+    def _calcular_hash_archivo(self, archivo):
+        hasher = hashlib.sha256()
+        for chunk in archivo.chunks():
+            hasher.update(chunk)
+        if hasattr(archivo, 'seek'):
+            archivo.seek(0)
+        return hasher.hexdigest()
 
 
 #? --------- FORMULARIO DE CREDITO DE EMPRENDIMIENTO ------------

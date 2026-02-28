@@ -38,6 +38,7 @@ from django.core.exceptions import SuspiciousFileOperation, ValidationError
 from urllib.parse import quote
 from django.core.files.base import ContentFile
 from .services.marketplace_service import registrar_historial_publicacion, cambiar_estado_publicacion
+from .services.tasa_service import obtener_tasa_credito
 
 logger = logging.getLogger(__name__)
 
@@ -215,9 +216,9 @@ def solicitud_credito_libranza_view(request):
             try:
                 with transaction.atomic():
                     credito_principal = Credito.objects.create(
-                        usuario=request.user, #! le PASAMOS EL USUARIO LOGUEADO (PENDIENTE CAMBIARLO POR EL NOMBRE DE LA PERSONA QUE REGISTRA LA SOLICITUD)
-                        linea=Credito.LineaCredito.LIBRANZA, #! LE PASAMOS LINEA DE CREDITO
-                        estado=Credito.EstadoCredito.EN_REVISION, #! PONEMOS EL ESTADO INICIAL DE LA SOLICITUD (EN REVISION)
+                        usuario=request.user,
+                        linea=Credito.LineaCredito.LIBRANZA,
+                        estado=Credito.EstadoCredito.EN_REVISION,
                         monto_solicitado=form.cleaned_data['valor_credito'],
                         plazo_solicitado=form.cleaned_data['plazo']
                     )
@@ -227,23 +228,32 @@ def solicitud_credito_libranza_view(request):
             except IntegrityError:
                 form.add_error(
                     'cedula',
-                    'Ya existe una solicitud registrada con esta cédula. '
-                    'No es posible crear una nueva solicitud.'
+                    'Ya existe una solicitud registrada con esta cedula. No es posible crear una nueva solicitud.'
                 )
                 if is_ajax:
                     return JsonResponse({'success': False, 'errors': form.errors}, status=400)
-                return render(request, 'gestion_creditos/solicitud_libranza.html', {'form': form})
+                tasa_libranza = obtener_tasa_credito(Credito.LineaCredito.LIBRANZA)
+                tasa_libranza_decimal = tasa_libranza / Decimal('100')
+                return render(request, 'gestion_creditos/solicitud_libranza.html', {
+                    'form': form,
+                    'libranza_tasa_mensual': tasa_libranza,
+                    'libranza_tasa_decimal': tasa_libranza_decimal,
+                    'libranza_tasa_decimal_js': format(tasa_libranza_decimal, 'f'),
+                })
 
-            # Enviar email de confirmación de solicitud recibida
             try:
-                from gestion_creditos.email_service import enviar_notificacion_cambio_estado
+                from gestion_creditos.email_service import (
+                    enviar_notificacion_cambio_estado,
+                    enviar_notificacion_interna_nueva_solicitud,
+                )
                 enviar_notificacion_cambio_estado(
                     credito_principal,
                     Credito.EstadoCredito.EN_REVISION,
-                    "Solicitud de crédito recibida y en proceso de revisión"
+                    'Solicitud de credito recibida y en proceso de revision'
                 )
+                enviar_notificacion_interna_nueva_solicitud(credito_principal)
             except Exception as e:
-                logger.error(f"Error al enviar email de confirmación para crédito {credito_principal.id}: {e}")
+                logger.error(f"Error al enviar email de confirmacion para credito {credito_principal.id}: {e}")
 
             try:
                 from gestion_creditos.email_service import enviar_notificacion_solicitud_libranza_empresa
@@ -255,7 +265,6 @@ def solicitud_credito_libranza_view(request):
                 ).select_related('usuario')
 
                 if pagadores:
-                    # Enlaces directos para que el pagador pueda revisar la solicitud rápidamente.
                     dashboard_url = request.build_absolute_uri(reverse('pagador:dashboard'))
                     login_url = request.build_absolute_uri(reverse('pagador:login'))
 
@@ -263,7 +272,6 @@ def solicitud_credito_libranza_view(request):
                         if not perfil.usuario.email:
                             continue
 
-                        # Email pro de notificación para la empresa/pagador.
                         enviar_notificacion_solicitud_libranza_empresa(
                             destinatario=perfil.usuario.email,
                             empresa=credito_libranza_detalle.empresa,
@@ -273,11 +281,10 @@ def solicitud_credito_libranza_view(request):
                             login_url=login_url
                         )
 
-                        # Notificación interna para mostrar badge en dashboard del pagador.
                         Notificacion.objects.create(
                             usuario=perfil.usuario,
                             tipo=Notificacion.TipoNotificacion.SISTEMA,
-                            titulo="Nueva solicitud de libranza",
+                            titulo='Nueva solicitud de libranza',
                             mensaje=(
                                 f"{credito_libranza_detalle.nombre_completo} "
                                 f"solicito ${credito_principal.monto_solicitado:,.0f} "
@@ -290,13 +297,21 @@ def solicitud_credito_libranza_view(request):
 
             if is_ajax:
                 return JsonResponse({'success': True})
-            return redirect('usuariocreditos:dashboard_libranza')  # ⭐ Redirige al dashboard de LIBRANZA
+            return redirect('usuariocreditos:dashboard_libranza')
         else:
             if is_ajax:
                 return JsonResponse({'success': False, 'errors': form.errors}, status=400)
     else:
         form = CreditoLibranzaForm()
-    return render(request, 'gestion_creditos/solicitud_libranza.html', {'form': form})
+
+    tasa_libranza = obtener_tasa_credito(Credito.LineaCredito.LIBRANZA)
+    tasa_libranza_decimal = tasa_libranza / Decimal('100')
+    return render(request, 'gestion_creditos/solicitud_libranza.html', {
+        'form': form,
+        'libranza_tasa_mensual': tasa_libranza,
+        'libranza_tasa_decimal': tasa_libranza_decimal,
+        'libranza_tasa_decimal_js': format(tasa_libranza_decimal, 'f'),
+    })
 
 @login_required
 def solicitud_credito_emprendimiento_view(request):
@@ -454,12 +469,13 @@ def solicitud_credito_emprendimiento_view(request):
 
                 # Enviar email de confirmación
                 try:
-                    from .email_service import enviar_notificacion_cambio_estado
+                    from .email_service import enviar_notificacion_cambio_estado, enviar_notificacion_interna_nueva_solicitud
                     enviar_notificacion_cambio_estado(
                         credito_principal,
                         Credito.EstadoCredito.EN_REVISION,
                         "Solicitud de crédito recibida y en proceso de revisión"
                     )
+                    enviar_notificacion_interna_nueva_solicitud(credito_principal)
                 except Exception as e:
                     logger.error(f"Error al enviar email de confirmación: {e}")
 
@@ -508,12 +524,13 @@ def solicitud_credito_emprendimiento_view(request):
 
                     # Enviar email de confirmación
                     try:
-                        from .email_service import enviar_notificacion_cambio_estado
+                        from .email_service import enviar_notificacion_cambio_estado, enviar_notificacion_interna_nueva_solicitud
                         enviar_notificacion_cambio_estado(
                             credito_principal,
                             Credito.EstadoCredito.EN_REVISION,
                             "Solicitud de crédito recibida y en proceso de revisión"
                         )
+                        enviar_notificacion_interna_nueva_solicitud(credito_principal)
                     except Exception as e:
                         logger.error(f"Error al enviar email de confirmación: {e}")
 
@@ -858,6 +875,7 @@ def detalle_credito_view(request, credito_id):
         'pagador_decision': pagador_decision,
         'pagador_aprobado': pagador_aprobado,
         'pagador_rechazado': pagador_rechazado,
+        'libranza_tasa_mensual': obtener_tasa_credito(Credito.LineaCredito.LIBRANZA),
     }
     
     return render(request, 'gestion_creditos/admin_detalle_credito.html', context)

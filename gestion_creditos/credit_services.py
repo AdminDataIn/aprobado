@@ -7,6 +7,7 @@ from django.contrib.auth.models import User
 from openai import OpenAI
 from configuraciones.models import ConfiguracionPeso
 from .models import Credito, HistorialEstado, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, HistorialPago, CuotaAmortizacion
+from .services.tasa_service import obtener_tasa_credito
 from django.db.models import Sum, Count, Case, When, F, DecimalField, Q, Avg, Value, ExpressionWrapper, Value, ExpressionWrapper
 from django.db.models.functions import TruncMonth, Coalesce
 from django.utils import timezone
@@ -211,10 +212,7 @@ def actualizar_saldo_tras_pago(credito, monto_pagado):
     updated_fields = []
 
     if credito.tasa_interes is None:
-        if credito.linea == Credito.LineaCredito.EMPRENDIMIENTO:
-            credito.tasa_interes = Decimal('3.5')
-        else:
-            credito.tasa_interes = Decimal('2.0')
+        credito.tasa_interes = obtener_tasa_credito(credito.linea)
         updated_fields.append('tasa_interes')
 
     if credito.comision is None:
@@ -680,7 +678,7 @@ def activar_credito(credito):
 
     Tasas de interés por línea:
     - Emprendimiento: 3.5% efectiva mensual (51.11% EA, 42.00% NA)
-    - Libranza: 2.0% efectiva mensual (26.82% EA, 24.00% NA)
+    - Libranza: tasa mensual parametrizable (por defecto 1.9%)
 
     Args:
         credito: Instancia del modelo Credito a activar
@@ -702,12 +700,7 @@ def activar_credito(credito):
         tasa_interes = credito.tasa_interes
     else:
         # Asignar tasa según la línea
-        if credito.linea == Credito.LineaCredito.EMPRENDIMIENTO:
-            tasa_interes = Decimal('3.5')  # 3.5% efectiva mensual
-        elif credito.linea == Credito.LineaCredito.LIBRANZA:
-            tasa_interes = Decimal('2.0')  # 2.0% efectiva mensual
-        else:
-            tasa_interes = Decimal('2.0')  # Default
+        tasa_interes = obtener_tasa_credito(credito.linea)
 
     # ✅ Calcular componentes financieros
     comision = credito.comision or (credito.monto_aprobado * Decimal('0.10'))

@@ -308,7 +308,7 @@
                                 <div class="col-md-6">
                                     <small class="text-muted">
                                         <i class="bi bi-info-circle me-1"></i>
-                                        <strong>Interés:</strong> Porción de la cuota que cubre los intereses (2% EM)
+                                        <strong>Interés:</strong> Porción de la cuota que cubre los intereses ({{ credito.tasa_interes|default:libranza_tasa_mensual|default:"1.9" }}% EM)
                                     </small>
                                 </div>
                             </div>
