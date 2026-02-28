@@ -16,7 +16,7 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key')  # clave de respaldo para local
 
 # Si existe la variable RENDER, asumimos que estamos en producción
-DEBUG = 'RENDER' not in os.environ
+DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
 def _split_env_list(name, default=''):
     value = os.environ.get(name, default)
@@ -25,6 +25,19 @@ def _split_env_list(name, default=''):
 PRIMARY_DOMAIN_HOST = os.environ.get('PRIMARY_DOMAIN_HOST', 'aprobado.com.co')
 EMPRENDER_SUBDOMAIN_HOST = os.environ.get('EMPRENDER_SUBDOMAIN_HOST', 'emprender.aprobado.com.co')
 MARKET_SUBDOMAIN_HOST = os.environ.get('MARKET_SUBDOMAIN_HOST', 'market.aprobado.com.co')
+
+# Correos internos para alertas operativas del flujo de credito.
+# Formato esperado en .env:
+# CREDIT_INTERNAL_NOTIFICATION_EMAILS=correo1@dominio.com,correo2@dominio.com
+CREDIT_INTERNAL_NOTIFICATION_EMAILS = _split_env_list(
+    'CREDIT_INTERNAL_NOTIFICATION_EMAILS',
+    os.environ.get('EMAIL_HOST_USER', '')
+)
+
+# Tasas mensuales parametrizables por linea de credito.
+# Se usan en simuladores, pagare y activacion financiera.
+LIBRANZA_TASA_MENSUAL = os.environ.get('LIBRANZA_TASA_MENSUAL', '1.9')
+EMPRENDIMIENTO_TASA_MENSUAL = os.environ.get('EMPRENDIMIENTO_TASA_MENSUAL', '3.5')
 
 ALLOWED_HOSTS = _split_env_list(
     'ALLOWED_HOSTS',
@@ -147,8 +160,10 @@ WSGI_APPLICATION = 'aprobado_web.wsgi.application'
 # Bases de datos
 # ========================
 
-if DEBUG:
-    # En local usamos SQLite para no depender de Render
+USE_SQLITE = os.environ.get('USE_SQLITE', '').lower() == 'true'
+DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
+
+if USE_SQLITE or not DATABASE_URL:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -156,9 +171,8 @@ if DEBUG:
         }
     }
 else:
-    # En producción usamos la URL de Render
     DATABASES = {
-        'default': dj_database_url.config(default=os.environ.get('DATABASE_URL'))
+        'default': dj_database_url.config(default=DATABASE_URL)
     }
 
 # ========================
@@ -213,7 +227,7 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'medios.datain@gmail.com')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'noreply.aprobado@gmail.com')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')  # Contraseña de aplicación de Gmail
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', f'Aprobado <{EMAIL_HOST_USER}>')
 SERVER_EMAIL = EMAIL_HOST_USER
@@ -305,3 +319,4 @@ CELERY_ENABLE_UTC = False
 
 # Configuración de Celery Beat (tareas programadas)
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
