@@ -3,6 +3,23 @@
 import django.core.validators
 import django.db.models.deletion
 from django.db import migrations, models
+from django.utils.text import slugify
+
+
+def poblar_slugs_empresa(apps, schema_editor):
+    Empresa = apps.get_model('gestion_creditos', 'Empresa')
+
+    for empresa in Empresa.objects.all().order_by('id'):
+        base_slug = slugify(empresa.nombre or '') or f'empresa-{empresa.id}'
+        slug = base_slug
+        counter = 2
+
+        while Empresa.objects.filter(slug=slug).exclude(pk=empresa.pk).exists():
+            slug = f'{base_slug}-{counter}'
+            counter += 1
+
+        empresa.slug = slug
+        empresa.save(update_fields=['slug'])
 
 
 class Migration(migrations.Migration):
@@ -20,12 +37,18 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='empresa',
             name='slug',
-            field=models.SlugField(blank=True, max_length=120, unique=True),
+            field=models.SlugField(blank=True, max_length=120, null=True),
         ),
         migrations.AddField(
             model_name='empresa',
             name='whatsapp_contacto',
             field=models.CharField(blank=True, max_length=20),
+        ),
+        migrations.RunPython(poblar_slugs_empresa, migrations.RunPython.noop),
+        migrations.AlterField(
+            model_name='empresa',
+            name='slug',
+            field=models.SlugField(blank=True, max_length=120, unique=True),
         ),
         migrations.CreateModel(
             name='MarketplaceItem',
