@@ -146,6 +146,37 @@ class CreditoLibranzaForm(forms.ModelForm):
             raise forms.ValidationError('Ingrese un número de teléfono válido.')
         return telefono
 
+
+    def clean_cedula_frontal(self):
+        archivo = self.cleaned_data.get('cedula_frontal')
+        return self._validar_documento_imagen(
+            archivo,
+            'La cedula frontal debe cargarse unicamente como imagen valida (JPG, PNG o WEBP).'
+        )
+
+    def clean_cedula_trasera(self):
+        archivo = self.cleaned_data.get('cedula_trasera')
+        return self._validar_documento_imagen(
+            archivo,
+            'La cedula trasera debe cargarse unicamente como imagen valida (JPG, PNG o WEBP).'
+        )
+
+    def clean_certificado_bancario(self):
+        archivo = self.cleaned_data.get('certificado_bancario')
+        if not archivo:
+            return archivo
+
+        extension = archivo.name.split('.')[-1].lower() if '.' in archivo.name else ''
+        content_type = (getattr(archivo, 'content_type', '') or '').lower()
+
+        if extension != 'pdf':
+            raise forms.ValidationError('El certificado bancario debe cargarse unicamente en formato PDF.')
+
+        if content_type and content_type not in {'application/pdf', 'application/x-pdf'}:
+            raise forms.ValidationError('El certificado bancario debe ser un archivo PDF valido.')
+
+        return archivo
+
     def clean(self):
         cleaned_data = super().clean()
         campos_archivo = [
@@ -190,6 +221,24 @@ class CreditoLibranzaForm(forms.ModelForm):
         if hasattr(archivo, 'seek'):
             archivo.seek(0)
         return hasher.hexdigest()
+
+
+    def _validar_documento_imagen(self, archivo, mensaje_error):
+        if not archivo:
+            return archivo
+
+        extension = archivo.name.split('.')[-1].lower() if '.' in archivo.name else ''
+        content_type = (getattr(archivo, 'content_type', '') or '').lower()
+        extensiones_validas = {'jpg', 'jpeg', 'png', 'webp'}
+        mime_validos = {'image/jpeg', 'image/png', 'image/webp'}
+
+        if extension not in extensiones_validas:
+            raise forms.ValidationError(mensaje_error)
+
+        if content_type and content_type not in mime_validos:
+            raise forms.ValidationError(mensaje_error)
+
+        return archivo
 
 
 #? --------- FORMULARIO DE CREDITO DE EMPRENDIMIENTO ------------

@@ -39,6 +39,260 @@ MODIFICAR:
     <title>Aprobado</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+    <style>
+        .document-upload-card {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px;
+            border: 1px solid #d9e2ec;
+            border-radius: 16px;
+            background: #f8fbff;
+        }
+
+        .document-upload-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .document-action-button {
+            border: 0;
+            border-radius: 999px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .document-action-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+        }
+
+        .document-action-button.primary {
+            background: #0ea5c6;
+            color: #ffffff;
+        }
+
+        .document-action-button.secondary {
+            background: #e8f3fb;
+            color: #0f3557;
+            border: 1px solid #c9def0;
+        }
+
+        .document-upload-help {
+            margin: 0;
+            font-size: 13px;
+            color: #64748b;
+            line-height: 1.5;
+        }
+
+        .document-file-status {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: #eef8ff;
+            border: 1px solid #cfe8fb;
+            color: #0f3557;
+        }
+
+        .document-file-status.visible {
+            display: flex;
+        }
+
+        .document-file-status.has-file {
+            background: #effaf3;
+            border-color: #bfe6ca;
+            color: #18603c;
+        }
+
+        .document-file-status .status-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            background: rgba(14, 165, 198, 0.12);
+            color: #0ea5c6;
+            flex-shrink: 0;
+        }
+
+        .document-file-status.has-file .status-icon {
+            background: rgba(22, 163, 74, 0.14);
+            color: #16a34a;
+        }
+
+        .document-file-status .status-text {
+            min-width: 0;
+        }
+
+        .document-file-status .status-label {
+            display: block;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            opacity: 0.7;
+            margin-bottom: 2px;
+        }
+
+        .document-file-status .status-value {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .camera-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(15, 23, 42, 0.78);
+            backdrop-filter: blur(4px);
+        }
+
+        .camera-modal.visible {
+            display: flex;
+        }
+
+        .camera-modal-dialog {
+            width: min(100%, 720px);
+            border-radius: 24px;
+            background: #ffffff;
+            box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
+            overflow: hidden;
+        }
+
+        .camera-modal-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 24px 24px 16px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .camera-modal-header h3 {
+            margin: 0 0 6px;
+            font-size: 24px;
+            color: #0f172a;
+        }
+
+        .camera-modal-header p {
+            margin: 0;
+            color: #64748b;
+            line-height: 1.5;
+        }
+
+        .camera-close-button {
+            border: 0;
+            background: transparent;
+            font-size: 28px;
+            line-height: 1;
+            color: #64748b;
+            cursor: pointer;
+        }
+
+        .camera-modal-body {
+            padding: 20px 24px 24px;
+        }
+
+        .camera-preview-shell {
+            position: relative;
+            border-radius: 20px;
+            overflow: hidden;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 260px;
+        }
+
+        .camera-preview-shell video,
+        .camera-preview-shell canvas {
+            display: block;
+            width: 100%;
+            min-height: 260px;
+            max-height: 70vh;
+            object-fit: cover;
+        }
+
+        .camera-preview-overlay {
+            position: absolute;
+            inset: 0;
+            border: 18px solid rgba(15, 23, 42, 0.32);
+            pointer-events: none;
+        }
+
+        .camera-preview-guide {
+            position: absolute;
+            inset: 12%;
+            border: 2px dashed rgba(255, 255, 255, 0.9);
+            border-radius: 22px;
+            pointer-events: none;
+        }
+
+        .camera-modal-footer {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 18px;
+        }
+
+        .camera-footer-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .camera-status-message {
+            margin: 14px 0 0;
+            font-size: 14px;
+            color: #64748b;
+        }
+
+        @media (max-width: 768px) {
+            .document-upload-actions {
+                flex-direction: column;
+            }
+
+            .document-action-button {
+                width: 100%;
+            }
+
+            .camera-modal {
+                padding: 12px;
+            }
+
+            .camera-modal-header,
+            .camera-modal-body {
+                padding-left: 18px;
+                padding-right: 18px;
+            }
+
+            .camera-modal-header h3 {
+                font-size: 20px;
+            }
+
+            .camera-modal-footer,
+            .camera-footer-actions {
+                flex-direction: column;
+            }
+
+            .camera-footer-actions .document-action-button {
+                width: 100%;
+            }
+        }
+    </style>
 </head>
 
 <body class="body-index">
@@ -179,17 +433,53 @@ MODIFICAR:
                             </div>
                             <!-- Adjuntar la cédula por ambas caras -->
                             <div class="form-field">
-                                <label for="cedula_frontal" class="form-label required">Cédula (frontal):</label>
-                                <input type="file" id="cedula_frontal" name="cedula_frontal" class="form-input" accept="image/*,application/pdf" required>
+                                <label for="cedula_frontal" class="form-label required">Cedula (frontal):</label>
+                                <div class="document-upload-card">
+                                    <input type="file" id="cedula_frontal" name="cedula_frontal" class="form-input document-input" accept="image/*" required hidden>
+                                    <div class="document-upload-actions">
+                                        <button type="button" class="document-action-button primary open-camera-btn" data-target="cedula_frontal" data-label="Cedula frontal">Tomar foto</button>
+                                    </div>
+                                    <p class="document-upload-help">Este documento se captura unicamente en imagen para exigir la toma en vivo desde el dispositivo.</p>
+                                    <div class="document-file-status visible" id="cedula_frontal_status">
+                                        <span class="status-icon">i</span>
+                                        <div class="status-text">
+                                            <span class="status-label">Estado</span>
+                                            <span class="status-value">No se ha seleccionado archivo.</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="form-field">
-                                <label for="cedula_trasera" class="form-label required">Cédula (trasera):</label>
-                                <input type="file" id="cedula_trasera" name="cedula_trasera" class="form-input" accept="image/*,application/pdf" required>
+                                <label for="cedula_trasera" class="form-label required">Cedula (trasera):</label>
+                                <div class="document-upload-card">
+                                    <input type="file" id="cedula_trasera" name="cedula_trasera" class="form-input document-input" accept="image/*" required hidden>
+                                    <div class="document-upload-actions">
+                                        <button type="button" class="document-action-button primary open-camera-btn" data-target="cedula_trasera" data-label="Cedula trasera">Tomar foto</button>
+                                    </div>
+                                    <p class="document-upload-help">Este documento se captura unicamente en imagen para exigir la toma en vivo desde el dispositivo.</p>
+                                    <div class="document-file-status visible" id="cedula_trasera_status">
+                                        <span class="status-icon">i</span>
+                                        <div class="status-text">
+                                            <span class="status-label">Estado</span>
+                                            <span class="status-value">No se ha seleccionado archivo.</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <!-- Adjuntar el Certificado Bancario -->
+                            <!-- El certificado bancario se restringe a PDF para facilitar el OCR y evitar fotos borrosas. -->
                             <div class="form-field">
                                 <label for="certificado_bancario" class="form-label required">Certificado Bancario:</label>
-                                <input type="file" id="certificado_bancario" name="certificado_bancario" class="form-input" accept="image/*,application/pdf" required>
+                                <div class="document-upload-card">
+                                    <input type="file" id="certificado_bancario" name="certificado_bancario" class="form-input document-input" accept="application/pdf" required>
+                                    <p class="document-upload-help">Carga unicamente el certificado bancario en PDF. No se permite captura por camara en este campo.</p>
+                                    <div class="document-file-status visible" id="certificado_bancario_status">
+                                        <span class="status-icon">i</span>
+                                        <div class="status-text">
+                                            <span class="status-label">Estado</span>
+                                            <span class="status-value">No se ha seleccionado archivo.</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -259,6 +549,38 @@ MODIFICAR:
             </a>
         </div>
         <p id="mensajeModal"></p>
+    </div>
+</div>
+
+<!-- Modal reutilizable para capturar documentos desde camara sin tocar el backend. -->
+<div id="cameraCaptureModal" class="camera-modal" aria-hidden="true">
+    <div class="camera-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="cameraModalTitle">
+        <div class="camera-modal-header">
+            <div>
+                <h3 id="cameraModalTitle">Capturar documento</h3>
+                <p id="cameraModalDescription">Ajusta el documento dentro del recuadro y toma la foto cuando este nitida.</p>
+            </div>
+            <button type="button" class="camera-close-button" id="closeCameraModal" aria-label="Cerrar captura">&times;</button>
+        </div>
+        <div class="camera-modal-body">
+            <div class="camera-preview-shell">
+                <video id="cameraPreview" autoplay playsinline muted></video>
+                <canvas id="cameraCanvas" style="display:none;"></canvas>
+                <div class="camera-preview-overlay"></div>
+                <div class="camera-preview-guide"></div>
+            </div>
+            <div class="camera-modal-footer">
+                <div class="camera-footer-actions">
+                    <button type="button" class="document-action-button primary" id="capturePhotoButton">Capturar foto</button>
+                    <button type="button" class="document-action-button secondary" id="retakePhotoButton" style="display:none;">Tomar otra</button>
+                </div>
+                <div class="camera-footer-actions">
+                    <button type="button" class="document-action-button secondary" id="useCapturedPhotoButton" style="display:none;">Usar esta foto</button>
+                    <button type="button" class="document-action-button secondary" id="cancelCameraButton">Cancelar</button>
+                </div>
+            </div>
+            <p class="camera-status-message" id="cameraStatusMessage">La camara se abrir? con la lente trasera cuando el dispositivo lo permita.</p>
+        </div>
     </div>
 </div>
 
@@ -421,8 +743,31 @@ MODIFICAR:
         const resumenIntereses = document.getElementById('resumen-intereses');
         const resumenTotal = document.getElementById('resumen-total');
         const resumenCuota = document.getElementById('resumen-cuota');
+        // Referencias del flujo de camara: un modal reutilizable alimenta los tres inputs de documentos.
+        const cameraModal = document.getElementById('cameraCaptureModal');
+        const cameraPreview = document.getElementById('cameraPreview');
+        const cameraCanvas = document.getElementById('cameraCanvas');
+        const cameraStatusMessage = document.getElementById('cameraStatusMessage');
+        const cameraModalTitle = document.getElementById('cameraModalTitle');
+        const cameraModalDescription = document.getElementById('cameraModalDescription');
+        const capturePhotoButton = document.getElementById('capturePhotoButton');
+        const retakePhotoButton = document.getElementById('retakePhotoButton');
+        const useCapturedPhotoButton = document.getElementById('useCapturedPhotoButton');
+        const closeCameraModalButton = document.getElementById('closeCameraModal');
+        const cancelCameraButton = document.getElementById('cancelCameraButton');
         let lockedMonto = null;
         let lockedPlazo = null;
+        let activeCameraInput = null;
+        let activeCameraLabel = '';
+        let currentCameraStream = null;
+        let capturedCameraFile = null;
+
+        const hiddenCaptureInput = document.createElement('input');
+        hiddenCaptureInput.type = 'file';
+        hiddenCaptureInput.accept = 'image/*';
+        hiddenCaptureInput.capture = 'environment';
+        hiddenCaptureInput.style.display = 'none';
+        document.body.appendChild(hiddenCaptureInput);
 
         function formatCurrencyNoDecimals(value) {
             return new Intl.NumberFormat('es-CO', {
@@ -440,6 +785,118 @@ MODIFICAR:
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
             }).format(value);
+        }
+
+        // Refleja en pantalla si el input ya tiene archivo cargado o capturado.
+        function actualizarEstadoArchivo(input) {
+            if (!input) {
+                return;
+            }
+
+            const statusBox = document.getElementById(`${input.id}_status`);
+            if (!statusBox) {
+                return;
+            }
+
+            const statusValue = statusBox.querySelector('.status-value');
+            const statusIcon = statusBox.querySelector('.status-icon');
+            const hasFile = input.files && input.files.length > 0;
+
+            statusBox.classList.add('visible');
+            statusBox.classList.toggle('has-file', hasFile);
+
+            if (hasFile) {
+                statusValue.textContent = input.files[0].name;
+                statusIcon.textContent = 'OK';
+            } else {
+                statusValue.textContent = 'No se ha seleccionado archivo.';
+                statusIcon.textContent = 'i';
+            }
+        }
+
+        // Convierte la foto capturada en un File real y lo asigna al input original del formulario.
+        function asignarArchivoAInput(input, file) {
+            const transfer = new DataTransfer();
+            transfer.items.add(file);
+            input.files = transfer.files;
+            actualizarEstadoArchivo(input);
+        }
+
+        function detenerCamara() {
+            if (currentCameraStream) {
+                currentCameraStream.getTracks().forEach(track => track.stop());
+                currentCameraStream = null;
+            }
+        }
+
+        function resetCameraCaptureState() {
+            cameraCanvas.style.display = 'none';
+            cameraPreview.style.display = 'block';
+            capturePhotoButton.style.display = 'inline-flex';
+            retakePhotoButton.style.display = 'none';
+            useCapturedPhotoButton.style.display = 'none';
+            capturedCameraFile = null;
+        }
+
+        function cerrarModalCamara() {
+            detenerCamara();
+            resetCameraCaptureState();
+            cameraModal.classList.remove('visible');
+            cameraModal.setAttribute('aria-hidden', 'true');
+            activeCameraInput = null;
+            activeCameraLabel = '';
+            hiddenCaptureInput.value = '';
+        }
+
+        // Abre la camara para el input solicitado. Si el navegador falla, usa el capturador nativo del dispositivo.
+        async function abrirCamaraParaInput(inputId, inputLabel) {
+            const targetInput = document.getElementById(inputId);
+            if (!targetInput) {
+                return;
+            }
+
+            activeCameraInput = targetInput;
+            activeCameraLabel = inputLabel;
+            cameraModalTitle.textContent = `Capturar ${inputLabel.toLowerCase()}`;
+            cameraModalDescription.textContent = `Ajusta ${inputLabel.toLowerCase()} dentro del recuadro y toma la foto cuando se vea nitida.`;
+            cameraStatusMessage.textContent = 'Preparando camara...';
+            resetCameraCaptureState();
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                cameraStatusMessage.textContent = 'Este navegador no soporta la camara integrada. Se abrir? la camara nativa del dispositivo si est? disponible.';
+                hiddenCaptureInput.onchange = function() {
+                    if (hiddenCaptureInput.files && hiddenCaptureInput.files[0] && activeCameraInput) {
+                        asignarArchivoAInput(activeCameraInput, hiddenCaptureInput.files[0]);
+                    }
+                };
+                hiddenCaptureInput.click();
+                return;
+            }
+
+            try {
+                currentCameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 1600 },
+                        height: { ideal: 1200 }
+                    },
+                    audio: false
+                });
+
+                cameraPreview.srcObject = currentCameraStream;
+                cameraModal.classList.add('visible');
+                cameraModal.setAttribute('aria-hidden', 'false');
+                cameraStatusMessage.textContent = 'La camara est? lista. Mant?n el documento dentro del recuadro.';
+            } catch (error) {
+                console.error('No fue posible abrir la camara:', error);
+                cameraStatusMessage.textContent = 'No fue posible abrir la camara del navegador. Se intentar? usar la camara nativa del dispositivo.';
+                hiddenCaptureInput.onchange = function() {
+                    if (hiddenCaptureInput.files && hiddenCaptureInput.files[0] && activeCameraInput) {
+                        asignarArchivoAInput(activeCameraInput, hiddenCaptureInput.files[0]);
+                    }
+                };
+                hiddenCaptureInput.click();
+            }
         }
 
         function calcularCuotaAnualidad(monto, tasaMensual, meses) {
@@ -596,6 +1053,80 @@ MODIFICAR:
         if (plazoSelect) {
             plazoSelect.addEventListener('change', actualizarResumenCredito);
         }
+
+        document.querySelectorAll('.document-input').forEach(input => {
+            actualizarEstadoArchivo(input);
+            input.addEventListener('change', function() {
+                actualizarEstadoArchivo(input);
+            });
+        });
+
+        // Cada boton 'Tomar foto' apunta a un input file existente mediante data-target.
+        document.querySelectorAll('.open-camera-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                abrirCamaraParaInput(button.dataset.target, button.dataset.label || 'documento');
+            });
+        });
+
+        // Captura un frame del video, lo comprime a JPEG y lo prepara para ser enviado como archivo normal.
+        capturePhotoButton.addEventListener('click', function() {
+            if (!activeCameraInput) {
+                return;
+            }
+
+            const context = cameraCanvas.getContext('2d');
+            cameraCanvas.width = cameraPreview.videoWidth || 1600;
+            cameraCanvas.height = cameraPreview.videoHeight || 1200;
+            context.drawImage(cameraPreview, 0, 0, cameraCanvas.width, cameraCanvas.height);
+
+            cameraCanvas.toBlob(function(blob) {
+                if (!blob) {
+                    cameraStatusMessage.textContent = 'No fue posible capturar la imagen. Intentalo nuevamente.';
+                    return;
+                }
+
+                capturedCameraFile = new File(
+                    [blob],
+                    `${activeCameraInput.name}-${Date.now()}.jpg`,
+                    { type: 'image/jpeg' }
+                );
+
+                cameraPreview.style.display = 'none';
+                cameraCanvas.style.display = 'block';
+                capturePhotoButton.style.display = 'none';
+                retakePhotoButton.style.display = 'inline-flex';
+                useCapturedPhotoButton.style.display = 'inline-flex';
+                cameraStatusMessage.textContent = 'Foto capturada. Revisa si quedo legible antes de usarla.';
+            }, 'image/jpeg', 0.88);
+        });
+
+        retakePhotoButton.addEventListener('click', function() {
+            resetCameraCaptureState();
+            cameraStatusMessage.textContent = 'Ajusta nuevamente el documento y toma otra foto.';
+        });
+
+        useCapturedPhotoButton.addEventListener('click', function() {
+            if (!activeCameraInput || !capturedCameraFile) {
+                return;
+            }
+            asignarArchivoAInput(activeCameraInput, capturedCameraFile);
+            cerrarModalCamara();
+        });
+
+        closeCameraModalButton.addEventListener('click', cerrarModalCamara);
+        cancelCameraButton.addEventListener('click', cerrarModalCamara);
+
+        cameraModal.addEventListener('click', function(event) {
+            if (event.target === cameraModal) {
+                cerrarModalCamara();
+            }
+        });
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' && cameraModal.classList.contains('visible')) {
+                cerrarModalCamara();
+            }
+        });
 
         aplicarDatosSimulador();
 
