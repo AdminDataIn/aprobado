@@ -579,7 +579,7 @@ MODIFICAR:
                     <button type="button" class="document-action-button secondary" id="cancelCameraButton">Cancelar</button>
                 </div>
             </div>
-            <p class="camera-status-message" id="cameraStatusMessage">La camara se abrir? con la lente trasera cuando el dispositivo lo permita.</p>
+            <p class="camera-status-message" id="cameraStatusMessage">La cámara se abrirá con la lente trasera cuando el dispositivo lo permita.</p>
         </div>
     </div>
 </div>
@@ -863,7 +863,7 @@ MODIFICAR:
             resetCameraCaptureState();
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                cameraStatusMessage.textContent = 'Este navegador no soporta la camara integrada. Se abrir? la camara nativa del dispositivo si est? disponible.';
+                cameraStatusMessage.textContent = 'Este navegador no soporta la cámara integrada. Se abrirá la cámara nativa del dispositivo si está disponible.';
                 hiddenCaptureInput.onchange = function() {
                     if (hiddenCaptureInput.files && hiddenCaptureInput.files[0] && activeCameraInput) {
                         asignarArchivoAInput(activeCameraInput, hiddenCaptureInput.files[0]);
@@ -886,10 +886,10 @@ MODIFICAR:
                 cameraPreview.srcObject = currentCameraStream;
                 cameraModal.classList.add('visible');
                 cameraModal.setAttribute('aria-hidden', 'false');
-                cameraStatusMessage.textContent = 'La camara est? lista. Mant?n el documento dentro del recuadro.';
+                cameraStatusMessage.textContent = 'La cámara está lista. Mantén el documento dentro del recuadro.';
             } catch (error) {
                 console.error('No fue posible abrir la camara:', error);
-                cameraStatusMessage.textContent = 'No fue posible abrir la camara del navegador. Se intentar? usar la camara nativa del dispositivo.';
+                cameraStatusMessage.textContent = 'No fue posible abrir la cámara del navegador. Se intentará usar la cámara nativa del dispositivo.';
                 hiddenCaptureInput.onchange = function() {
                     if (hiddenCaptureInput.files && hiddenCaptureInput.files[0] && activeCameraInput) {
                         asignarArchivoAInput(activeCameraInput, hiddenCaptureInput.files[0]);
