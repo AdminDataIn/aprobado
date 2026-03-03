@@ -15,6 +15,9 @@ urlpatterns = [
     # AUTENTICACIÓN
     # ========================================
     path('login/', usuarios_views.EmpresaLoginView.as_view(), name='login'),
+    path('activar/<str:token>/', usuarios_views.pagador_activate_account_view, name='activar_cuenta'),
+    path('recuperar-acceso/', usuarios_views.pagador_password_reset_request_view, name='password_reset_request'),
+    path('recuperar-acceso/<str:token>/', usuarios_views.pagador_password_reset_confirm_view, name='reset_password_confirm'),
 
     # ========================================
     # DASHBOARD

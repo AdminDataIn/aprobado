@@ -93,6 +93,54 @@
         .form-control::placeholder {
             color: #9ca3af;
         }
+
+        .password-group {
+            position: relative;
+        }
+
+        .password-group .form-control {
+            padding-right: 3.25rem;
+        }
+
+        .password-toggle {
+            position: absolute;
+            top: 50%;
+            right: 0.85rem;
+            transform: translateY(-50%);
+            border: 0;
+            background: transparent;
+            color: #6b7280;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .password-toggle:hover {
+            color: #111827;
+        }
+
+        .password-toggle:focus-visible {
+            outline: 2px solid #2563eb;
+            outline-offset: 2px;
+            border-radius: 6px;
+        }
+
+        .login-links {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: -0.5rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .login-links a {
+            font-size: 0.875rem;
+            color: #2563eb;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .login-links a:hover {
+            text-decoration: underline;
+        }
         
         .btn-primary {
             background-color: #2563eb;
@@ -175,7 +223,15 @@
                     </div>
                     <div class="mb-4">
                         <label for="id_password" class="form-label">Contraseña</label>
-                        <input type="password" name="password" class="form-control" id="id_password" required>
+                        <div class="password-group">
+                            <input type="password" name="password" class="form-control" id="id_password" required>
+                            <button type="button" class="password-toggle" id="togglePassword" aria-label="Mostrar u ocultar contraseña">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="login-links">
+                        <a href="{% url 'pagador:password_reset_request' %}">Olvidé mi contraseña</a>
                     </div>
                     <div class="d-grid">
                         <button type="submit" class="btn btn-primary">Ingresar</button>
@@ -184,5 +240,20 @@
             </div>
         </div>
     </div>
+    <script>
+        (function () {
+            const passwordInput = document.getElementById('id_password');
+            const toggleButton = document.getElementById('togglePassword');
+            if (!passwordInput || !toggleButton) return;
+
+            toggleButton.addEventListener('click', function () {
+                const isPassword = passwordInput.type === 'password';
+                passwordInput.type = isPassword ? 'text' : 'password';
+                this.innerHTML = isPassword
+                    ? '<i class="bi bi-eye-slash"></i>'
+                    : '<i class="bi bi-eye"></i>';
+            });
+        })();
+    </script>
 </body>
 </html>

@@ -1,0 +1,12 @@
+Hola,
+
+Se habilito un acceso como pagador para la empresa {{ empresa.nombre }}.
+
+Usuario: {{ usuario.username }}
+Correo: {{ usuario.email }}
+Vigencia del enlace: {{ expiration_hours }} horas
+
+Activa tu acceso aqui:
+{{ activation_url }}
+
+Si no solicitaste este acceso o el enlace expira, contacta al administrador interno para solicitar un reenvio.

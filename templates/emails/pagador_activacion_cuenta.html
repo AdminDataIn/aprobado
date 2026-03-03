@@ -1,0 +1,45 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Activa tu acceso como pagador{% endblock %}
+
+{% block email_content %}
+<div class="email-header">
+    <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" class="logo">
+</div>
+
+<div class="status-badge badge-blue">Acceso pagador</div>
+
+<div class="email-content">
+    <h1 class="greeting">Activa tu cuenta</h1>
+    <p class="subtitle">
+        Se habilito un acceso para gestionar solicitudes y pagos de libranza de <strong>{{ empresa.nombre }}</strong>.
+    </p>
+
+    <div class="info-card">
+        <table class="info-table">
+            <tr>
+                <td class="label">Usuario</td>
+                <td class="value">{{ usuario.username }}</td>
+            </tr>
+            <tr>
+                <td class="label">Correo</td>
+                <td class="value">{{ usuario.email }}</td>
+            </tr>
+            <tr>
+                <td class="label">Vigencia del enlace</td>
+                <td class="value">{{ expiration_hours }} horas</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="cta-box blue">
+        <p class="cta-title">Define tu contrasena inicial</p>
+        <p class="cta-subtitle">El enlace es de un solo uso y expirara automaticamente.</p>
+        <a href="{{ activation_url }}" class="cta-button">Activar acceso</a>
+    </div>
+
+    <p class="subtitle" style="margin-top: 24px;">
+        Si no solicitaste este acceso o el enlace expira, contacta al administrador interno para solicitar un reenvio.
+    </p>
+</div>
+{% endblock %}

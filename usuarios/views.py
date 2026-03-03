@@ -7,9 +7,18 @@ from django.contrib.auth import logout
 from django.views.generic import TemplateView
 from django.urls import reverse
 from decimal import Decimal
+from django.utils import timezone
 
 from gestion_creditos.models import Credito
 from gestion_creditos.services.tasa_service import obtener_tasa_credito
+from .forms import PagadorActivationForm, PagadorPasswordResetRequestForm
+from .models import PagadorAccessToken
+from .pagador_activation_service import (
+    buscar_token_vigente,
+    marcar_token_como_usado,
+    obtener_perfil_pagador_por_identificador,
+    enviar_reset_password_pagador,
+)
 
 
 # Create your views here.
@@ -86,6 +95,122 @@ class EmpresaLoginView(LoginView):
     def get_success_url(self):
         # Redirige al dashboard de pagador (nueva estructura)
         return reverse('pagador:dashboard')
+
+
+def pagador_activate_account_view(request, token):
+    """
+    Permite que el pagador defina su contrasena inicial mediante un enlace
+    temporal. El login actual no cambia para usuarios ya activos.
+    """
+    access_token = buscar_token_vigente(token, tipo=PagadorAccessToken.TipoToken.ACTIVACION)
+    if not access_token:
+        return render(request, 'account/pagador_activate_account.html', {
+            'token_valido': False,
+            'expirado': True,
+            'form': None,
+        })
+
+    expirado = access_token.expires_at <= timezone.now() or access_token.used_at or access_token.invalidated_at
+    if expirado:
+        return render(request, 'account/pagador_activate_account.html', {
+            'token_valido': False,
+            'expirado': True,
+            'form': None,
+            'usuario_email': access_token.email_destino,
+        })
+
+    user = access_token.usuario
+    if request.method == 'POST':
+        form = PagadorActivationForm(user, request.POST)
+        if form.is_valid():
+            form.save()
+            user.is_active = True
+            user.save(update_fields=['is_active', 'password'])
+            marcar_token_como_usado(access_token)
+            messages.success(request, 'Tu acceso como pagador fue activado correctamente. Ya puedes iniciar sesion.')
+            return redirect('pagador:login')
+    else:
+        form = PagadorActivationForm(user)
+
+    return render(request, 'account/pagador_activate_account.html', {
+        'token_valido': True,
+        'expirado': False,
+        'form': form,
+        'usuario_email': access_token.email_destino,
+        'empresa': access_token.perfil_pagador.empresa,
+        'modo': 'activacion',
+    })
+
+
+def pagador_password_reset_request_view(request):
+    """
+    Solicita un enlace de restablecimiento sin exponer si la cuenta existe.
+    """
+    if request.method == 'POST':
+        form = PagadorPasswordResetRequestForm(request.POST)
+        if form.is_valid():
+            perfil_pagador = obtener_perfil_pagador_por_identificador(form.cleaned_data['identificador'])
+            if perfil_pagador:
+                try:
+                    enviar_reset_password_pagador(perfil_pagador)
+                except Exception:
+                    pass
+            messages.success(
+                request,
+                'Si encontramos una cuenta de pagador asociada, enviamos un enlace de restablecimiento al correo registrado.'
+            )
+            return redirect('pagador:password_reset_request')
+    else:
+        form = PagadorPasswordResetRequestForm()
+
+    return render(request, 'account/pagador_password_reset_request.html', {'form': form})
+
+
+def pagador_password_reset_confirm_view(request, token):
+    """
+    Permite redefinir la contrasena usando un token temporal de reset.
+    """
+    access_token = buscar_token_vigente(token, tipo=PagadorAccessToken.TipoToken.RESET_PASSWORD)
+    if not access_token:
+        return render(request, 'account/pagador_activate_account.html', {
+            'token_valido': False,
+            'expirado': True,
+            'form': None,
+            'modo': 'reset',
+        })
+
+    expirado = access_token.expires_at <= timezone.now() or access_token.used_at or access_token.invalidated_at
+    if expirado:
+        return render(request, 'account/pagador_activate_account.html', {
+            'token_valido': False,
+            'expirado': True,
+            'form': None,
+            'usuario_email': access_token.email_destino,
+            'modo': 'reset',
+        })
+
+    user = access_token.usuario
+    if request.method == 'POST':
+        form = PagadorActivationForm(user, request.POST)
+        if form.is_valid():
+            form.save()
+            if not user.is_active:
+                user.is_active = True
+                user.save(update_fields=['is_active', 'password'])
+            marcar_token_como_usado(access_token)
+            messages.success(request, 'Tu contrasena fue actualizada correctamente. Ya puedes iniciar sesion.')
+            return redirect('pagador:login')
+    else:
+        form = PagadorActivationForm(user)
+
+    return render(request, 'account/pagador_activate_account.html', {
+        'token_valido': True,
+        'expirado': False,
+        'form': form,
+        'usuario_email': access_token.email_destino,
+        'empresa': access_token.perfil_pagador.empresa,
+        'modo': 'reset',
+    })
 
 
 class MarketingLoginView(LoginView):
