@@ -2,9 +2,12 @@ from django import forms
 from .models import CreditoLibranza, Empresa, CreditoEmprendimiento, MovimientoAhorro, MarketplaceItem
 from decimal import Decimal
 import hashlib
+import os
 # Agregar al archivo forms.py existente
 from django.core.validators import FileExtensionValidator
 from django.conf import settings
+from django.utils import timezone
+from django.utils.text import slugify
 
 #? --------- FORMULARIO DE CREDITO DE LIBRANZA ------------
 class CreditoLibranzaForm(forms.ModelForm):
@@ -47,40 +50,41 @@ class CreditoLibranzaForm(forms.ModelForm):
         self.fields['empresa'].queryset = Empresa.objects.all()
         self.fields['empresa'].empty_label = "Seleccione una empresa"
 
-        self.fields['valor_credito'].error_messages = {
+        self.fields['valor_credito'].error_messages.update({
             'required': 'El valor del crédito es requerido.',
             'invalid': 'Ingrese un valor numérico válido.',
-        }
+        })
         
-        self.fields['nombres'].error_messages = {
+        self.fields['nombres'].error_messages.update({
             'required': 'Los nombres son requeridos.',
-        }
+        })
         
-        self.fields['apellidos'].error_messages = {
+        self.fields['apellidos'].error_messages.update({
             'required': 'Los apellidos son requeridos.',
-        }
+        })
         
-        self.fields['cedula'].error_messages = {
+        self.fields['cedula'].error_messages.update({
             'required': 'El número de cédula es requerido.',
-        }
+        })
         
-        self.fields['correo_electronico'].error_messages = {
+        self.fields['correo_electronico'].error_messages.update({
             'required': 'El correo electrónico es requerido.',
             'invalid': 'Ingrese un correo electrónico válido.',
-        }
+        })
 
-        self.fields['ingresos_mensuales'].error_messages = {
+        self.fields['ingresos_mensuales'].error_messages.update({
             'required': 'Los ingresos mensuales son requeridos.',
             'invalid': 'Ingrese un valor numérico válido.',
-        }
+        })
 
         archivos = ['cedula_frontal', 'cedula_trasera', 'certificado_bancario']
         
         for archivo in archivos:
             if archivo in self.fields:
-                self.fields[archivo].error_messages = {
+                self.fields[archivo].error_messages.update({
                     'required': f'El archivo {archivo.replace("_", " ")} es requerido.',
-                }
+                    'max_length': 'El nombre del archivo es demasiado largo. Se requiere un nombre mas corto.',
+                })
 
         for optional_field in ['certificado_laboral', 'desprendible_nomina']:
             if optional_field in self.fields:
@@ -149,6 +153,7 @@ class CreditoLibranzaForm(forms.ModelForm):
 
     def clean_cedula_frontal(self):
         archivo = self.cleaned_data.get('cedula_frontal')
+        archivo = self._normalizar_nombre_archivo(archivo, 'cedula-frontal')
         return self._validar_documento_imagen(
             archivo,
             'La cedula frontal debe cargarse unicamente como imagen valida (JPG, PNG o WEBP).'
@@ -156,6 +161,7 @@ class CreditoLibranzaForm(forms.ModelForm):
 
     def clean_cedula_trasera(self):
         archivo = self.cleaned_data.get('cedula_trasera')
+        archivo = self._normalizar_nombre_archivo(archivo, 'cedula-trasera')
         return self._validar_documento_imagen(
             archivo,
             'La cedula trasera debe cargarse unicamente como imagen valida (JPG, PNG o WEBP).'
@@ -165,6 +171,8 @@ class CreditoLibranzaForm(forms.ModelForm):
         archivo = self.cleaned_data.get('certificado_bancario')
         if not archivo:
             return archivo
+
+        archivo = self._normalizar_nombre_archivo(archivo, 'certificado-bancario')
 
         extension = archivo.name.split('.')[-1].lower() if '.' in archivo.name else ''
         content_type = (getattr(archivo, 'content_type', '') or '').lower()
@@ -222,6 +230,18 @@ class CreditoLibranzaForm(forms.ModelForm):
             archivo.seek(0)
         return hasher.hexdigest()
 
+
+    def _normalizar_nombre_archivo(self, archivo, prefijo):
+        if not archivo:
+            return archivo
+
+        _, extension = os.path.splitext(archivo.name or '')
+        extension = extension.lower() or ''
+        timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
+        base = slugify(os.path.splitext(os.path.basename(archivo.name or ''))[0])[:18]
+        base = base or prefijo
+        archivo.name = f'{prefijo}-{base}-{timestamp}{extension}'
+        return archivo
 
     def _validar_documento_imagen(self, archivo, mensaje_error):
         if not archivo:

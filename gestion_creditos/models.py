@@ -573,6 +573,19 @@ class CreditoLibranza(models.Model):
         upload_to='credito_libranza/certificados_bancarios/',
         verbose_name="Certificado bancario"
     )
+    certificado_bancario_metadata = models.JSONField(
+        default=dict,
+        blank=True
+    )
+    certificado_bancario_estado_extraccion = models.CharField(
+        max_length=20,
+        choices=[('pendiente', 'Pendiente'), ('completo', 'Completo'), ('error', 'Error')],
+        default='pendiente'
+    )
+    certificado_bancario_ultima_extraccion = models.DateTimeField(
+        null=True,
+        blank=True
+    )
 
     class Meta:
         verbose_name = 'Detalle de Libranza'
@@ -1336,3 +1349,4 @@ class ZapSignWebhookLog(models.Model):
     def __str__(self):
         status = "OK" if self.processed else "ERROR"
         return f"{status} {self.event} - {self.doc_token} ({self.received_at})"
+

@@ -39,6 +39,7 @@ from urllib.parse import quote
 from django.core.files.base import ContentFile
 from .services.marketplace_service import registrar_historial_publicacion, cambiar_estado_publicacion
 from .services.tasa_service import obtener_tasa_credito
+from .services.certificado_bancario_service import procesar_certificado_bancario
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +226,9 @@ def solicitud_credito_libranza_view(request):
                     credito_libranza_detalle = form.save(commit=False)
                     credito_libranza_detalle.credito = credito_principal
                     credito_libranza_detalle.save()
+                    # El parsing de certificado se ejecuta después del save para reutilizar
+                    # el FileField persistido y dejar trazabilidad para una futura fase OCR.
+                    procesar_certificado_bancario(credito_libranza_detalle)
             except IntegrityError:
                 form.add_error(
                     'cedula',
