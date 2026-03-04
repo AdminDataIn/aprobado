@@ -32,6 +32,8 @@ BANCOS_CONOCIDOS = {
     'banco agrario': 'Banco Agrario',
     'nequi': 'Nequi',
     'daviplata': 'Daviplata',
+    'cuentamiga': 'Banco Caja Social',
+    'vicepresidencia de banca masiva': 'Banco Caja Social',
 }
 
 PALABRAS_INVALIDAS_TITULAR = {
@@ -73,6 +75,13 @@ def _titulo_nombre(nombre):
     return ' '.join(parte.capitalize() for parte in partes)
 
 
+def _limpiar_nombre_candidato(nombre):
+    nombre = re.sub(r'[\r\n\t]+', ' ', nombre or '')
+    nombre = re.sub(r'[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]', ' ', nombre)
+    nombre = re.sub(r'\s+', ' ', nombre).strip()
+    return nombre
+
+
 def _es_nombre_valido(nombre):
     if not nombre:
         return False
@@ -84,6 +93,19 @@ def _es_nombre_valido(nombre):
     if any(_normalizar_busqueda(p) in PALABRAS_INVALIDAS_TITULAR for p in palabras):
         return False
     return True
+
+
+def _titular_luce_incompleto(nombre):
+    if not nombre:
+        return True
+    tokens = [t for t in re.split(r'\s+', nombre.strip()) if t]
+    if len(tokens) < 2:
+        return True
+    single_chars = sum(1 for token in tokens if len(token) == 1)
+    compact = ''.join(tokens)
+    # Si tiene muchos tokens de una sola letra o muy poca longitud total,
+    # suele venir truncado por la extraccion del PDF.
+    return single_chars >= 2 or len(compact) < 8
 
 
 def _normalizar_numero(numero):
@@ -232,6 +254,32 @@ def _parsear_bancolombia(texto_crudo, texto_compacto):
     }
 
 
+def _parsear_banco_caja_social(texto_crudo, texto_compacto):
+    titular = _buscar_patron(texto_crudo, [
+        r'Que el\(los\)cliente\(s\)\s*(.+?)\s+Identificado',
+        r'destino\s*a\s*(.+?)\s*,\s*realizada',
+        r'destino\s*a\s*(.+?)(?:,|\.)',
+    ])
+    numero = _buscar_patron(texto_crudo, [
+        r'Número:\s*([0-9][0-9\s]{5,25})',
+    ])
+    tipo = ''
+    texto_busqueda = _normalizar_busqueda(texto_compacto)
+    if 'cuenta ahorros' in texto_busqueda or 'cuenta de ahorros' in texto_busqueda or 'cuentamiga' in texto_busqueda:
+        tipo = 'Ahorros'
+
+    titular = _limpiar_nombre_candidato(titular).strip(' ,.;:-')
+    if not _es_nombre_valido(titular):
+        titular = ''
+
+    return {
+        'banco': 'Banco Caja Social',
+        'tipo_cuenta': tipo,
+        'numero_cuenta': _normalizar_numero(numero),
+        'titular': _titulo_nombre(titular) if titular else '',
+    }
+
+
 def _aplicar_parser_por_banco(banco, texto_crudo, texto_compacto):
     if banco == 'Bancolombia':
         return _parsear_bancolombia(texto_crudo, texto_compacto)
@@ -239,6 +287,8 @@ def _aplicar_parser_por_banco(banco, texto_crudo, texto_compacto):
         return _parsear_banco_bogota(texto_crudo, texto_compacto)
     if banco == 'Nequi':
         return _parsear_nequi(texto_crudo, texto_compacto)
+    if banco == 'Banco Caja Social':
+        return _parsear_banco_caja_social(texto_crudo, texto_compacto)
     return {}
 
 
@@ -313,6 +363,22 @@ def procesar_certificado_bancario(detalle_libranza, persistir=True):
                 texto_crudo=extraido['texto_crudo'],
                 texto_compacto=extraido['texto_compacto'],
             )
+            nombre_solicitud = (
+                getattr(detalle_libranza, 'nombre_completo', '')
+                or getattr(detalle_libranza, 'nombre', '')
+            )
+            nombre_solicitud = _limpiar_nombre_candidato(nombre_solicitud)
+            if nombre_solicitud and _es_nombre_valido(nombre_solicitud):
+                if not metadata.get('titular') or _titular_luce_incompleto(metadata.get('titular')):
+                    metadata['titular'] = _titulo_nombre(nombre_solicitud)
+                    if 'titular' in metadata.get('faltantes', []):
+                        metadata['faltantes'] = [f for f in metadata['faltantes'] if f != 'titular']
+                        metadata['campos_encontrados'] = metadata.get('campos_encontrados', 0) + 1
+                    if metadata.get('faltantes') == [] and metadata.get('estado') != ESTADO_COMPLETO:
+                        metadata['estado'] = ESTADO_COMPLETO
+                        metadata['mensaje'] = 'Procesamiento completado correctamente.'
+                    metadata['titular_fuente'] = 'fallback_solicitud'
+
             metadata.update({
                 'paginas': extraido['paginas'],
                 'archivo': getattr(archivo, 'name', ''),

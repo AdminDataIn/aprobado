@@ -67,6 +67,24 @@
             border-radius: 12px;
             border: 1px solid #e6e9ef;
             background: #fff;
+            transform-origin: center center;
+            transition: transform 0.15s ease;
+            cursor: zoom-in;
+        }
+        .image-preview-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .image-preview-toolbar .btn {
+            padding: 0.35rem 0.65rem;
+        }
+        .image-preview-hint {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-right: auto;
         }
         .doc-item.active {
             background: #eef4ff;
@@ -302,6 +320,28 @@
             const statusEl = document.getElementById('docStatus');
             const dateEl = document.getElementById('docDate');
             const descEl = document.getElementById('docDescription');
+            let currentImageZoom = 1;
+
+            function updateImageZoom() {
+                const image = preview.querySelector('img[data-zoomable="true"]');
+                if (!image) return;
+                image.style.transform = 'scale(' + currentImageZoom.toFixed(2) + ')';
+            }
+
+            function increaseImageZoom() {
+                currentImageZoom = Math.min(4, currentImageZoom + 0.25);
+                updateImageZoom();
+            }
+
+            function decreaseImageZoom() {
+                currentImageZoom = Math.max(1, currentImageZoom - 0.25);
+                updateImageZoom();
+            }
+
+            function resetImageZoom() {
+                currentImageZoom = 1;
+                updateImageZoom();
+            }
 
 
             function getStatusClass(status) {
@@ -341,6 +381,7 @@
                 const status = item.dataset.status || 'Sin estado';
                 const date = item.dataset.date || item.dataset.signed || 'Sin fecha';
                 const description = item.dataset.description || '';
+                currentImageZoom = 1;
 
                 titleEl.textContent = title;
                 sourceEl.textContent = source;
@@ -373,7 +414,44 @@
                 }
 
                 if (kind === 'image') {
-                    preview.innerHTML = '<img src="' + url + '" alt="' + title + '">';
+                    preview.innerHTML = `
+                        <div class="image-preview-toolbar">
+                            <div class="image-preview-hint">Usa los controles para acercar la imagen.</div>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="zoomOutBtn">
+                                <i class="bi bi-dash-lg"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="zoomResetBtn">100%</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="zoomInBtn">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+                        <img src="${url}" alt="${title}" data-zoomable="true">
+                    `;
+                    const zoomInBtn = document.getElementById('zoomInBtn');
+                    const zoomOutBtn = document.getElementById('zoomOutBtn');
+                    const zoomResetBtn = document.getElementById('zoomResetBtn');
+                    const image = preview.querySelector('img[data-zoomable="true"]');
+                    if (zoomInBtn) zoomInBtn.addEventListener('click', increaseImageZoom);
+                    if (zoomOutBtn) zoomOutBtn.addEventListener('click', decreaseImageZoom);
+                    if (zoomResetBtn) zoomResetBtn.addEventListener('click', resetImageZoom);
+                    if (image) {
+                        image.addEventListener('click', function () {
+                            if (currentImageZoom > 1) {
+                                resetImageZoom();
+                            } else {
+                                increaseImageZoom();
+                            }
+                        });
+                        image.addEventListener('wheel', function (event) {
+                            event.preventDefault();
+                            if (event.deltaY < 0) {
+                                increaseImageZoom();
+                            } else {
+                                decreaseImageZoom();
+                            }
+                        }, { passive: false });
+                    }
+                    updateImageZoom();
                     return;
                 }
 

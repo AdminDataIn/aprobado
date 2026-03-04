@@ -75,16 +75,15 @@ class ZapSignClient:
         auth_mode = getattr(settings, 'ZAPSIGN_AUTH_MODE', 'assinaturaTela')
         send_automatic_email = getattr(settings, 'ZAPSIGN_SEND_AUTOMATIC_EMAIL', True)
 
-        # Validacion de identidad por selfie en signers:
-        # - En sandbox queda activa por defecto para pruebas.
-        # - En produccion queda desactivada por defecto.
-        # - Se puede controlar con settings:
-        #   ZAPSIGN_ENABLE_SELFIE_VALIDATION (bool)
-        #   ZAPSIGN_SELFIE_VALIDATION_TYPE (str)
+        # Validacion obligatoria de identidad por selfie:
+        # - require_selfie_photo = true fuerza al firmante a tomarse la selfie.
+        # - selfie_validation_type = identity-verification aplica la validacion
+        #   de identidad soportada por ZapSign en el flujo del firmante.
+        # Se puede ajustar por settings, pero por defecto queda activa.
         enable_selfie_validation = getattr(
             settings,
             'ZAPSIGN_ENABLE_SELFIE_VALIDATION',
-            self.environment == 'sandbox'
+            True
         )
         selfie_validation_type = getattr(
             settings,
@@ -96,8 +95,11 @@ class ZapSignClient:
             "email": email_firmante,
             "name": nombre_firmante,
             "auth_mode": auth_mode,
-            "send_automatic_email": send_automatic_email
+            "send_automatic_email": send_automatic_email,
+            "send_automatic_whatsapp": False,
         }
+        if enable_selfie_validation:
+            signer_payload["require_selfie_photo"] = True
         if enable_selfie_validation and selfie_validation_type:
             signer_payload["selfie_validation_type"] = selfie_validation_type
 
