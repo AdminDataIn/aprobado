@@ -19,6 +19,26 @@ class ZapSignAPIError(Exception):
     pass
 
 
+def _to_bool(value, default=False):
+    """
+    Convierte valores de settings/.env a bool de forma robusta.
+    Acepta bools reales, strings ("true"/"false"), 1/0, etc.
+    """
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "t", "yes", "y", "si", "sí", "on"}:
+            return True
+        if normalized in {"0", "false", "f", "no", "n", "off"}:
+            return False
+    return default
+
+
 class ZapSignClient:
     """Cliente para interactuar con la API de ZapSign"""
 
@@ -72,18 +92,22 @@ class ZapSignClient:
         """
         endpoint = f"{self.base_url}/docs/"
 
-        auth_mode = getattr(settings, 'ZAPSIGN_AUTH_MODE', 'assinaturaTela')
-        send_automatic_email = getattr(settings, 'ZAPSIGN_SEND_AUTOMATIC_EMAIL', True)
+        # Importante: si la variable existe pero viene vacía/None,
+        # forzamos el modo seguro por defecto para evitar bloqueos en firma.
+        auth_mode = (getattr(settings, 'ZAPSIGN_AUTH_MODE', None) or 'assinaturaTela').strip()
+        send_automatic_email = _to_bool(
+            getattr(settings, 'ZAPSIGN_SEND_AUTOMATIC_EMAIL', True),
+            default=True
+        )
 
         # Validacion obligatoria de identidad por selfie:
         # - require_selfie_photo = true fuerza al firmante a tomarse la selfie.
         # - selfie_validation_type = identity-verification aplica la validacion
         #   de identidad soportada por ZapSign en el flujo del firmante.
         # Se puede ajustar por settings, pero por defecto queda activa.
-        enable_selfie_validation = getattr(
-            settings,
-            'ZAPSIGN_ENABLE_SELFIE_VALIDATION',
-            True
+        enable_selfie_validation = _to_bool(
+            getattr(settings, 'ZAPSIGN_ENABLE_SELFIE_VALIDATION', True),
+            default=True
         )
         selfie_validation_type = getattr(
             settings,
@@ -113,6 +137,12 @@ class ZapSignClient:
 
         try:
             logger.info(f"Enviando documento a ZapSign: {nombre}")
+            logger.info(
+                "ZapSign signer config -> auth_mode=%s, selfie_validation=%s, send_automatic_email=%s",
+                auth_mode,
+                enable_selfie_validation,
+                send_automatic_email
+            )
             logger.debug(f"Payload: {payload}")
 
             response = requests.post(
