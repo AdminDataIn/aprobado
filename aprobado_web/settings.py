@@ -284,6 +284,17 @@ ZAPSIGN_API_TOKEN = os.environ.get('ZAPSIGN_API_TOKEN', '')
 ZAPSIGN_WEBHOOK_SECRET = os.environ.get('ZAPSIGN_WEBHOOK_SECRET', '')
 ZAPSIGN_WEBHOOK_HEADER = os.environ.get('ZAPSIGN_WEBHOOK_HEADER', 'X-ZapSign-Secret')
 ZAPSIGN_ENVIRONMENT = os.environ.get('ZAPSIGN_ENVIRONMENT', 'sandbox')  # 'sandbox' o 'production'
+def env_bool(name, default=False):
+    value = os.environ.get(name, str(default))
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'on', 'si', 'sí')
+
+ZAPSIGN_AUTH_MODE = os.environ.get('ZAPSIGN_AUTH_MODE', 'assinaturaTela')
+ZAPSIGN_SEND_AUTOMATIC_EMAIL = env_bool('ZAPSIGN_SEND_AUTOMATIC_EMAIL', True)
+
+# Para desactivar funciones avanzadas
+ZAPSIGN_ENABLE_SELFIE_VALIDATION = env_bool('ZAPSIGN_ENABLE_SELFIE_VALIDATION', False)
+ZAPSIGN_SELFIE_VALIDATION_TYPE = os.environ.get('ZAPSIGN_SELFIE_VALIDATION_TYPE', 'identity-verification')
+
 
 # Configuración del dominio público para URLs de descarga de PDFs
 SITE_DOMAIN = os.environ.get('SITE_DOMAIN', 'localhost:8000')
