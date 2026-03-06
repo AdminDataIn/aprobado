@@ -298,3 +298,32 @@ class ZapSignWebhookViewTest(TestCase):
         self.assertEqual(pagare_refused.estado, Pagare.EstadoPagare.REFUSED)
         self.assertIsNotNone(pagare_refused.fecha_rechazo)
         self.assertEqual(credito_refused.estado, Credito.EstadoCredito.PENDIENTE_FIRMA)
+
+    def test_webhook_doc_signed_con_status_recusado_se_trata_como_rechazo(self):
+        payload = {
+            'event': 'doc_signed',
+            'token': 'token-123',
+            'status': 'recusado',
+            'rejected_reason': 'Prueba de rechazo',
+            'signers': [{'status': 'link-opened'}]
+        }
+        response = self._post(payload, secret=self.secret)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json().get('status'), 'refused_recorded')
+
+        self.pagare.refresh_from_db()
+        self.credito.refresh_from_db()
+
+        self.assertEqual(self.pagare.estado, Pagare.EstadoPagare.REFUSED)
+        self.assertIsNotNone(self.pagare.fecha_rechazo)
+        self.assertEqual(self.credito.estado, Credito.EstadoCredito.PENDIENTE_FIRMA)
+
+    def test_webhook_documento_no_encontrado_no_falla(self):
+        payload = {
+            'event': 'doc_signed',
+            'token': 'token-inexistente',
+            'status': 'signed'
+        }
+        response = self._post(payload, secret=self.secret)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json().get('status'), 'document_not_found_ignored')

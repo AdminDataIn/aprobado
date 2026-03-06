@@ -3240,6 +3240,38 @@ def zapsign_webhook_view(request):
     doc_token = payload.get('token') or payload.get('doc_token')
     event = payload.get('event') or payload.get('event_type') or ''
 
+    def _zapsign_action_from_payload(event_name, data):
+        """
+        Determina la acción real del webhook con base en status/evento y evidencia de firma.
+        Retorna: 'signed' | 'refused' | 'ignored'
+        """
+        event_lower = (event_name or '').strip().lower()
+        status_lower = (data.get('status') or '').strip().lower()
+
+        refused_statuses = {'refused', 'recusado', 'rejected', 'cancelled', 'canceled'}
+        signed_statuses = {'signed', 'assinado', 'completed', 'concluded', 'concluido'}
+        signed_signer_statuses = {'signed', 'assinado'}
+
+        if event_lower in {'doc_refused', 'doc_rejected'}:
+            return 'refused'
+
+        if status_lower in refused_statuses:
+            return 'refused'
+
+        if status_lower in signed_statuses:
+            return 'signed'
+
+        # Para doc_signed sin status confiable, exigir evidencia de firma en signers.
+        if event_lower == 'doc_signed':
+            signers = data.get('signers') or []
+            for signer in signers:
+                signer_status = (signer.get('status') or '').strip().lower()
+                if signer.get('signed_at') or signer_status in signed_signer_statuses:
+                    return 'signed'
+            return 'ignored'
+
+        return 'ignored'
+
     ip_address = request.META.get('REMOTE_ADDR') or '0.0.0.0'
     headers = {
         key: str(value)
@@ -3274,9 +3306,11 @@ def zapsign_webhook_view(request):
     webhook_log.save(update_fields=['signature_valid'])
 
 
+    action = _zapsign_action_from_payload(event, payload)
+
     try:
         with transaction.atomic():
-            if event == 'doc_signed':
+            if action == 'signed':
                 if not doc_token:
                     webhook_log.error_message = "Falta token del documento"
                     webhook_log.save(update_fields=['error_message'])
@@ -3331,7 +3365,7 @@ def zapsign_webhook_view(request):
                 webhook_log.save(update_fields=['processed'])
                 return JsonResponse({'status': 'ok'}, status=200)
 
-            if event == 'doc_refused':
+            if action == 'refused':
                 if not doc_token:
                     webhook_log.error_message = "Falta token del documento"
                     webhook_log.save(update_fields=['error_message'])
@@ -3348,14 +3382,21 @@ def zapsign_webhook_view(request):
                 webhook_log.save(update_fields=['processed'])
                 return JsonResponse({'status': 'refused_recorded'}, status=200)
 
+            if event == 'doc_signed':
+                webhook_log.error_message = "Evento doc_signed sin evidencia de firma valida"
+                webhook_log.processed = True
+                webhook_log.save(update_fields=['error_message', 'processed'])
+                return JsonResponse({'status': 'event_ignored'}, status=200)
+
             webhook_log.processed = True
             webhook_log.save(update_fields=['processed'])
             return JsonResponse({'status': 'event_ignored'}, status=200)
 
     except Pagare.DoesNotExist:
         webhook_log.error_message = f"Documento no encontrado: {doc_token}"
-        webhook_log.save(update_fields=['error_message'])
-        return JsonResponse({'error': 'Document not found'}, status=404)
+        webhook_log.processed = True
+        webhook_log.save(update_fields=['error_message', 'processed'])
+        return JsonResponse({'status': 'document_not_found_ignored'}, status=200)
     except Exception as e:
         webhook_log.error_message = str(e)
         webhook_log.save(update_fields=['error_message'])

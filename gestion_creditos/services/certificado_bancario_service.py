@@ -2,7 +2,9 @@ import logging
 import re
 import unicodedata
 from io import BytesIO
+from typing import Dict
 
+from django.conf import settings
 from django.utils import timezone
 from pypdf import PdfReader
 
@@ -129,6 +131,96 @@ def extraer_texto_pdf(archivo_pdf):
         'texto_crudo': texto_crudo,
         'texto_compacto': texto_compacto,
         'paginas': len(reader.pages),
+    }
+
+
+def extraer_texto_pdf_ocr(archivo_pdf) -> Dict[str, object]:
+    """
+    Fallback OCR para PDFs escaneados sin capa de texto.
+
+    Requiere herramientas open source:
+    - pdf2image
+    - pytesseract
+    - binario tesseract en el sistema
+    - poppler/pdftoppm (segun entorno)
+    """
+    ocr_habilitado = getattr(settings, 'BANK_CERT_OCR_ENABLED', True)
+    if not ocr_habilitado:
+        return {
+            'texto_crudo': '',
+            'texto_compacto': '',
+            'paginas': 0,
+            'ocr_aplicado': False,
+            'ocr_disponible': False,
+            'ocr_error': 'OCR deshabilitado por configuracion.',
+        }
+
+    try:
+        from pdf2image import convert_from_bytes
+        import pytesseract
+    except Exception as exc:
+        return {
+            'texto_crudo': '',
+            'texto_compacto': '',
+            'paginas': 0,
+            'ocr_aplicado': False,
+            'ocr_disponible': False,
+            'ocr_error': f'Dependencias OCR no disponibles: {exc}',
+        }
+
+    tesseract_cmd = getattr(settings, 'TESSERACT_CMD', '').strip()
+    if tesseract_cmd:
+        pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+
+    if hasattr(archivo_pdf, 'seek'):
+        archivo_pdf.seek(0)
+    contenido = archivo_pdf.read()
+    if hasattr(archivo_pdf, 'seek'):
+        archivo_pdf.seek(0)
+
+    dpi = int(getattr(settings, 'BANK_CERT_OCR_DPI', 300) or 300)
+    idioma = getattr(settings, 'BANK_CERT_OCR_LANG', 'spa')
+    max_paginas = int(getattr(settings, 'BANK_CERT_OCR_MAX_PAGES', 3) or 3)
+    poppler_path = getattr(settings, 'POPPLER_PATH', None)
+
+    try:
+        paginas_img = convert_from_bytes(
+            contenido,
+            dpi=dpi,
+            fmt='jpeg',
+            poppler_path=poppler_path,
+            first_page=1,
+            last_page=max_paginas,
+        )
+    except Exception as exc:
+        return {
+            'texto_crudo': '',
+            'texto_compacto': '',
+            'paginas': 0,
+            'ocr_aplicado': True,
+            'ocr_disponible': False,
+            'ocr_error': f'No fue posible rasterizar el PDF para OCR: {exc}',
+        }
+
+    textos = []
+    for imagen in paginas_img:
+        try:
+            texto = pytesseract.image_to_string(imagen, lang=idioma)
+            if texto:
+                textos.append(texto)
+        except Exception as exc:
+            logger.warning('Error OCR en pagina de certificado bancario: %s', exc)
+
+    texto_crudo = _normalizar_texto_crudo('\n'.join(textos))
+    texto_compacto = _compactar_texto(texto_crudo)
+
+    return {
+        'texto_crudo': texto_crudo,
+        'texto_compacto': texto_compacto,
+        'paginas': len(paginas_img),
+        'ocr_aplicado': True,
+        'ocr_disponible': True,
+        'ocr_error': '',
     }
 
 
@@ -359,6 +451,26 @@ def procesar_certificado_bancario(detalle_libranza, persistir=True):
             with archivo.open('rb') as pdf_file:
                 extraido = extraer_texto_pdf(pdf_file)
 
+            origen_texto = 'pdf_text'
+            ocr_debug = {
+                'ocr_aplicado': False,
+                'ocr_disponible': True,
+                'ocr_error': '',
+            }
+
+            # Fase 2: si el PDF viene escaneado (sin texto), intentar OCR.
+            if not extraido.get('texto_compacto'):
+                with archivo.open('rb') as pdf_file:
+                    extraido_ocr = extraer_texto_pdf_ocr(pdf_file)
+                ocr_debug = {
+                    'ocr_aplicado': extraido_ocr.get('ocr_aplicado', False),
+                    'ocr_disponible': extraido_ocr.get('ocr_disponible', False),
+                    'ocr_error': extraido_ocr.get('ocr_error', ''),
+                }
+                if extraido_ocr.get('texto_compacto'):
+                    extraido = extraido_ocr
+                    origen_texto = 'ocr'
+
             metadata = parsear_certificado_bancario(
                 texto_crudo=extraido['texto_crudo'],
                 texto_compacto=extraido['texto_compacto'],
@@ -382,7 +494,13 @@ def procesar_certificado_bancario(detalle_libranza, persistir=True):
             metadata.update({
                 'paginas': extraido['paginas'],
                 'archivo': getattr(archivo, 'name', ''),
+                'origen_texto': origen_texto,
+                **ocr_debug,
             })
+
+            if metadata['estado'] == ESTADO_ERROR and not metadata.get('texto_extraido'):
+                metadata['mensaje'] = 'No fue posible extraer texto del certificado. Sube un PDF digital o habilita OCR en el servidor.'
+                metadata['soporte'] = 'Si el PDF es escaneado, valida instalacion de Tesseract + Poppler para OCR fallback.'
         except Exception as exc:
             logger.exception(
                 'Error procesando certificado bancario para credito %s',
