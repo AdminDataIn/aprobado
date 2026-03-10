@@ -23,7 +23,7 @@ import io
 from django.db import transaction, IntegrityError
 from django.contrib import messages
 from django.core.cache import cache
-from django.db.models import Q, Count, Sum, Max, Case, When, DecimalField, F, Subquery, Value, CharField, Avg
+from django.db.models import Q, Count, Sum, Max, Case, When, DecimalField, F, Subquery, Value, CharField, Avg, OuterRef
 from django.db.models.functions import Coalesce, TruncMonth, Concat, Trim
 from django.utils import timezone
 from django.core.paginator import Paginator
@@ -742,20 +742,24 @@ def procesar_solicitud_view(request, credito_id):
         estado__in=[Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION, Credito.EstadoCredito.APROBADO]
     )
     action = request.POST.get('action')
+    pagador_decision = None
     pagador_aprobado = False
 
     if credito.linea == Credito.LineaCredito.LIBRANZA:
-        pagador_aprobado = HistorialEstado.objects.filter(
-            credito=credito,
-            usuario_modificacion__perfil_pagador__isnull=False,
-            estado_nuevo=Credito.EstadoCredito.APROBADO
-        ).exists()
+        pagador_decision = _obtener_decision_pagador(credito)
+        pagador_aprobado = (
+            pagador_decision is not None
+            and pagador_decision.estado_nuevo == Credito.EstadoCredito.APROBADO
+        )
     
     nuevo_estado = None
     if action == 'approve':
         nuevo_estado = Credito.EstadoCredito.APROBADO
         if credito.linea == Credito.LineaCredito.LIBRANZA and not pagador_aprobado:
-            messages.error(request, "El pagador aún no ha aprobado la solicitud.")
+            if pagador_decision and pagador_decision.estado_nuevo == Credito.EstadoCredito.RECHAZADO:
+                messages.error(request, "El pagador ya rechazó la solicitud. Revisa la observación antes de continuar.")
+            else:
+                messages.error(request, "El pagador aún no ha aprobado la solicitud.")
             return redirect('gestion:credito_detalle', credito_id=credito_id)
         try:
             # El frontend ya envía el número en formato "1400000.50".
@@ -1166,6 +1170,19 @@ def documento_preview_view(request):
 #! ==============================================================================
 #! VISTAS DEL DASHBOARD DEL PAGADOR
 #! ==============================================================================
+def _obtener_decision_pagador(credito):
+    """
+    Obtiene la última decisión registrada por un usuario pagador para un crédito.
+    La decisión del pagador se mantiene separada del estado oficial para que la
+    aprobación administrativa siga controlando el avance del flujo.
+    """
+    return HistorialEstado.objects.filter(
+        credito=credito,
+        usuario_modificacion__perfil_pagador__isnull=False,
+        estado_nuevo__in=[Credito.EstadoCredito.APROBADO, Credito.EstadoCredito.RECHAZADO]
+    ).order_by('-fecha').first()
+
+
 @login_required
 @pagador_required
 def pagador_dashboard_view(request):
@@ -1192,8 +1209,19 @@ def pagador_dashboard_view(request):
         detalle_libranza__empresa=empresa
     ).exclude(
         estado__in=[Credito.EstadoCredito.RECHAZADO, Credito.EstadoCredito.SOLICITUD]
-    ).select_related('detalle_libranza', 'usuario').annotate(
+    ).select_related('detalle_libranza', 'usuario')
+
+    decision_pagador_qs = HistorialEstado.objects.filter(
+        credito_id=OuterRef('pk'),
+        usuario_modificacion__perfil_pagador__isnull=False,
+        estado_nuevo__in=[Credito.EstadoCredito.APROBADO, Credito.EstadoCredito.RECHAZADO]
+    ).order_by('-fecha')
+
+    creditos_empresa = creditos_empresa.annotate(
         total_pagado=Coalesce(Subquery(total_pagado_subquery, output_field=DecimalField()), Value(Decimal(0)))
+    ).annotate(
+        pagador_decision_estado=Subquery(decision_pagador_qs.values('estado_nuevo')[:1]),
+        pagador_decision_motivo=Subquery(decision_pagador_qs.values('motivo')[:1]),
     )
 
     #? Aplicar filtros de búsqueda
@@ -1260,12 +1288,16 @@ def pagador_detalle_credito_view(request, credito_id):
     
     #? Usar el saldo pendiente del modelo que ya se actualiza correctamente
     saldo_pendiente = credito.saldo_pendiente
+    pagador_decision = _obtener_decision_pagador(credito)
 
     context = {
         'credito': credito,
         'historial_pagos': historial_pagos,
         'total_pagado': total_pagado,
         'saldo_pendiente': saldo_pendiente,
+        'pagador_decision': pagador_decision,
+        'pagador_aprobado': bool(pagador_decision and pagador_decision.estado_nuevo == Credito.EstadoCredito.APROBADO),
+        'pagador_rechazado': bool(pagador_decision and pagador_decision.estado_nuevo == Credito.EstadoCredito.RECHAZADO),
     }
     
     return render(request, 'pagador/pagador_detalle_credito.html', context)
@@ -1297,17 +1329,14 @@ def pagador_decidir_solicitud_view(request, credito_id):
         messages.error(request, "Accion no valida.")
         return redirect('pagador:dashboard')
 
+    decision_existente = _obtener_decision_pagador(credito)
+    if decision_existente:
+        estado_actual = "aprobada" if decision_existente.estado_nuevo == Credito.EstadoCredito.APROBADO else "rechazada"
+        messages.info(request, f"La decision del pagador ya fue registrada como {estado_actual}.")
+        return redirect('pagador:dashboard')
+
     try:
         if action == 'approve':
-            ultima_decision_pagador = HistorialEstado.objects.filter(
-                credito=credito,
-                usuario_modificacion__perfil_pagador__isnull=False,
-                estado_nuevo__in=[Credito.EstadoCredito.APROBADO, Credito.EstadoCredito.RECHAZADO]
-            ).order_by('-fecha').first()
-            if ultima_decision_pagador and ultima_decision_pagador.estado_nuevo == Credito.EstadoCredito.APROBADO:
-                messages.info(request, "La aprobacion del pagador ya estaba registrada.")
-                return redirect('pagador:dashboard')
-
             if credito.monto_aprobado is None:
                 credito.monto_aprobado = credito.monto_solicitado
             if credito.plazo is None:

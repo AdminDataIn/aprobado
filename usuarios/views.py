@@ -1,4 +1,7 @@
+from urllib.parse import urlencode
+
 from django.shortcuts import render, redirect
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth.views import LoginView, LogoutView
@@ -298,10 +301,24 @@ def simulador_libranza(request):
 # Vista para el login de Libranza
 class LoginLibranzaView(TemplateView):
     """
-    Vista que muestra la página de login específica para Libranza.
-    Usa el template libranza/base_libranza.html con navbar y footer de Libranza.
+    Redirige directamente al flujo de Google para evitar una pantalla intermedia
+    innecesaria en Libranza. Si el usuario ya esta autenticado, respeta el next
+    y en su defecto lo lleva a su modulo de credito.
     """
     template_name = 'libranza/login.html'
+
+    def get(self, request, *args, **kwargs):
+        next_url = request.GET.get('next') or reverse('libranza:mi_credito')
+
+        if request.user.is_authenticated:
+            return redirect(next_url)
+
+        query = urlencode({
+            'process': 'login',
+            'next': next_url,
+        })
+        google_login_url = getattr(settings, 'LOGIN_URL', '/accounts/google/login/')
+        return redirect(f"{google_login_url}?{query}")
 
 
 # Vista para el login de Emprendimiento

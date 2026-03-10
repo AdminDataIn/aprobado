@@ -169,7 +169,7 @@
                 </div>
             </div>
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover table-stack-mobile">
                     <thead>
                         <tr>
                             <th>Empleado</th>
@@ -186,14 +186,14 @@
                     <tbody>
                         {% for credito in creditos %}
                         <tr>
-                            <td>
+                            <td data-label="Empleado">
                                 <div class="user-name">{{ credito.detalle_libranza.nombre_completo }}</div>
                             </td>
-                            <td>{{ credito.detalle_libranza.cedula }}</td>
-                            <td class="text-center date-display">
+                            <td data-label="Cédula">{{ credito.detalle_libranza.cedula }}</td>
+                            <td class="text-center date-display" data-label="Fecha solicitud">
                                 {{ credito.fecha_solicitud|date:"d/m/Y H:i" }}
                             </td>
-                            <td class="text-end amount-display">
+                            <td class="text-end amount-display" data-label="Monto original">
                                 {% if credito.estado == 'EN_REVISION' %}
                                     <span class="text-muted fst-italic">En revisión</span>
                                 {% elif credito.monto_aprobado %}
@@ -202,7 +202,7 @@
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
-                            <td class="text-end amount-display">
+                            <td class="text-end amount-display" data-label="Saldo pendiente">
                                 {% if credito.estado == 'EN_REVISION' %}
                                     <span class="text-muted fst-italic">En revisión</span>
                                 {% elif credito.estado == 'PAGADO' %}
@@ -213,7 +213,7 @@
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
-                            <td class="text-end amount-display">
+                            <td class="text-end amount-display" data-label="Valor cuota">
                                 {% if credito.estado == 'EN_REVISION' %}
                                     <span class="text-muted fst-italic">En revisión</span>
                                 {% elif credito.estado == 'PAGADO' %}
@@ -224,7 +224,7 @@
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
-                            <td class="text-center date-display">
+                            <td class="text-center date-display" data-label="Próximo pago">
                                 {% if credito.estado == 'EN_REVISION' %}
                                     <span class="text-muted fst-italic">Pendiente</span>
                                 {% elif credito.estado == 'PAGADO' %}
@@ -235,27 +235,46 @@
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
-                            <td class="text-center">
-                                <span class="status-badge
-                                    {% if credito.estado == 'ACTIVO' %}status-active
-                                    {% elif credito.estado == 'EN_MORA' %}status-overdue
-                                    {% elif credito.estado == 'PAGADO' %}status-paid
-                                    {% else %}status-pending{% endif %}">
-                                    {{ credito.get_estado_display }}
-                                </span>
+                            <td class="text-center" data-label="Estado">
+                                {% if credito.pagador_decision_estado == 'APROBADO' %}
+                                    <span class="status-badge status-approved">Aprobado por pagador</span>
+                                {% elif credito.pagador_decision_estado == 'RECHAZADO' %}
+                                    <span class="status-badge status-rejected">Rechazado por pagador</span>
+                                {% else %}
+                                    <span class="status-badge
+                                        {% if credito.estado == 'ACTIVO' %}status-active
+                                        {% elif credito.estado == 'EN_MORA' %}status-overdue
+                                        {% elif credito.estado == 'PAGADO' %}status-paid
+                                        {% else %}status-pending{% endif %}">
+                                        {{ credito.get_estado_display }}
+                                    </span>
+                                {% endif %}
                             </td>
-                            <td>
+                            <td data-label="Acciones">
                                 <div class="d-flex flex-column align-items-start gap-2">
                                     <a href="{% url 'pagador:credito_detalle' credito.id %}" class="action-btn">
                                         <i class="bi bi-eye"></i> Ver Detalle
                                     </a>
                                     {% if credito.estado == 'EN_REVISION' %}
-                                    <button class="btn btn-sm btn-outline-success btn-decision"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#decisionModal-{{ credito.id }}">
-                                        <i class="bi bi-check2-circle"></i>
-                                        <span>Decidir</span>
-                                    </button>
+                                        {% if credito.pagador_decision_estado == 'APROBADO' %}
+                                        <div class="small text-success fw-semibold">
+                                            <i class="bi bi-check-circle-fill me-1"></i>Decisión registrada
+                                        </div>
+                                        {% elif credito.pagador_decision_estado == 'RECHAZADO' %}
+                                        <div class="small text-danger fw-semibold">
+                                            <i class="bi bi-x-circle-fill me-1"></i>Solicitud rechazada
+                                        </div>
+                                        {% else %}
+                                        <button class="btn btn-sm btn-outline-success btn-decision"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#decisionModal-{{ credito.id }}">
+                                            <i class="bi bi-check2-circle"></i>
+                                            <span>Decidir</span>
+                                        </button>
+                                        {% endif %}
+                                    {% endif %}
+                                    {% if credito.pagador_decision_motivo %}
+                                    <div class="small text-muted">Motivo: {{ credito.pagador_decision_motivo }}</div>
                                     {% endif %}
                                 </div>
                             </td>
@@ -276,7 +295,7 @@
         </div>
 
         {% for credito in creditos %}
-            {% if credito.estado == 'EN_REVISION' %}
+            {% if credito.estado == 'EN_REVISION' and not credito.pagador_decision_estado %}
             <div class="modal fade" id="decisionModal-{{ credito.id }}" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">

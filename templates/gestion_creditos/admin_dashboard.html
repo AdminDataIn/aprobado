@@ -215,7 +215,7 @@
                         <h3 class="table-title">Cartera por Línea de Crédito</h3>
                     </div>
                     <div class="table-responsive">
-                        <table class="table table-dashboard">
+                        <table class="table table-dashboard table-stack-mobile">
                             <thead>
                                 <tr>
                                     <th>Línea de Crédito</th>
@@ -226,9 +226,9 @@
                             <tbody>
                                 {% for item in creditos_por_linea %}
                                 <tr>
-                                    <td>{{ item.linea }}</td>
-                                    <td><strong>{{ item.count }}</strong></td>
-                                    <td class="text-end"><strong>${{ item.saldo_total|floatformat:2|intcomma }}</strong></td>
+                                    <td data-label="Línea de crédito">{{ item.linea }}</td>
+                                    <td data-label="Créditos activos"><strong>{{ item.count }}</strong></td>
+                                    <td class="text-end" data-label="Saldo total"><strong>${{ item.saldo_total|floatformat:2|intcomma }}</strong></td>
                                 </tr>
                                 {% empty %}
                                 <tr>
@@ -246,7 +246,7 @@
                         <h3 class="table-title">Créditos por estado</h3>
                     </div>
                     <div class="table-responsive">
-                        <table class="table table-dashboard">
+                        <table class="table table-dashboard table-stack-mobile">
                             <thead>
                                 <tr>
                                     <th>Estado</th>
@@ -257,7 +257,7 @@
                             <tbody>
                                 {% for item in creditos_por_estado %}
                                 <tr>
-                                    <td>
+                                    <td data-label="Estado">
                                         <span class="status-badge 
                                             {% if item.estado == 'ACTIVO' %}status-active
                                             {% elif item.estado == 'EN_MORA' %}status-overdue
@@ -266,8 +266,8 @@
                                             {{ item.estado }}
                                         </span>
                                     </td>
-                                    <td><strong>{{ item.count }}</strong></td>
-                                    <td>{{ item.porcentaje|floatformat:1 }}%</td>
+                                    <td data-label="Cantidad"><strong>{{ item.count }}</strong></td>
+                                    <td data-label="Porcentaje">{{ item.porcentaje|floatformat:1 }}%</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

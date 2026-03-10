@@ -156,7 +156,7 @@
             </div>
             
             <div class="table-responsive">
-                <table class="table">
+                <table class="table table-stack-mobile">
                     <thead>
                         <tr>
                             <th>Solicitante</th>
@@ -170,7 +170,7 @@
                     <tbody>
                         {% for solicitud in solicitudes %}
                         <tr>
-                            <td>
+                            <td data-label="Solicitante">
                                 <div class="user-info">
                                     <div class="user-avatar">
                                         {% with nombre=solicitud.nombre_solicitante|default_if_none:"" %}
@@ -214,13 +214,13 @@
                                     </div>
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Línea de crédito">
                                 <span class="line-badge">{{ solicitud.get_linea_display }}</span>
                             </td>
-                            <td>
+                            <td data-label="Monto solicitado">
                                 <strong class="text-primary">${{ solicitud.monto_solicitado|intcomma }}</strong>
                             </td>
-                            <td>
+                            <td data-label="Estado">
                                 <span class="status-badge 
                                     {% if solicitud.estado == 'EN_REVISION' %}status-review
                                     {% elif solicitud.estado == 'APROBADO' %}status-approved
@@ -229,8 +229,8 @@
                                     {{ solicitud.get_estado_display }}
                                 </span>
                             </td>
-                            <td>{{ solicitud.fecha_solicitud|date:"d/m/Y" }}</td>
-                            <td style="text-align: center;">
+                            <td data-label="Fecha">{{ solicitud.fecha_solicitud|date:"d/m/Y" }}</td>
+                            <td data-label="Acciones" style="text-align: center;">
                                 {# NUEVA URL - Gestión #}
                                 <a href="{% url 'gestion:credito_detalle' solicitud.id %}"
                                    class="btn btn-sm btn-outline-primary">

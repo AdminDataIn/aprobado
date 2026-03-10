@@ -141,7 +141,7 @@
             </div>
             
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover table-stack-mobile">
                     <thead>
                         <tr>
                             <th>Cliente</th>
@@ -156,7 +156,7 @@
                     <tbody>
                         {% for credito in creditos %}
                         <tr>
-                            <td>
+                            <td data-label="Cliente">
                                 <div class="user-info">
                                     <div class="user-avatar">
                                         {{ credito.usuario.first_name|first|default:"" }}{{ credito.usuario.last_name|first|default:"" }}
@@ -175,10 +175,10 @@
                                     </div>
                                 </div>
                             </td>
-                            <td><span class="line-badge">{{ credito.get_linea_display }}</span></td>
-                            <td><strong class="text-primary">${{ credito.monto_aprobado|floatformat:2|intcomma }}</strong></td>
-                            <td><strong class="text-dark">${{ credito.saldo_pendiente|floatformat:2|intcomma }}</strong></td>
-                            <td>
+                            <td data-label="Línea"><span class="line-badge">{{ credito.get_linea_display }}</span></td>
+                            <td data-label="Monto aprobado"><strong class="text-primary">${{ credito.monto_aprobado|floatformat:2|intcomma }}</strong></td>
+                            <td data-label="Saldo pendiente"><strong class="text-dark">${{ credito.saldo_pendiente|floatformat:2|intcomma }}</strong></td>
+                            <td data-label="Estado">
                                 <span class="status-badge 
                                     {% if credito.estado == 'ACTIVO' %}status-active
                                     {% elif credito.estado == 'EN_MORA' %}status-overdue
@@ -187,8 +187,8 @@
                                     {{ credito.get_estado_display }}
                                 </span>
                             </td>
-                            <td>{{ credito.fecha_solicitud|date:"d/m/Y" }}</td>
-                            <td style="text-align: center;">
+                            <td data-label="Fecha solicitud">{{ credito.fecha_solicitud|date:"d/m/Y" }}</td>
+                            <td data-label="Acciones" style="text-align: center;">
                                 <a href="{% url 'gestion:credito_detalle' credito.id %}?from=activos" class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-eye me-1"></i>Ver
                                 </a>

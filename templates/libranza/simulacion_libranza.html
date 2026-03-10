@@ -57,9 +57,9 @@ MODIFICAR:
                                     <div class="simulador-range-container">
                                         <div class="simulador-range-progress" id="simulador-progress-1"></div>
                                         <!-- MODIFICAR: Monto mínimo, máximo y paso -->
-                                        <input type="range" min="500000" max="2000000" step="50000" value="1000000"
+                                        <input type="range" min="500000" max="2000000" step="50000" value="2000000"
                                                class="simulador-range-input" id="simulador-range-1">
-                                        <div class="simulador-range-tooltip" id="simulador-tooltip-1">$ 1.000.000</div>
+                                        <div class="simulador-range-tooltip" id="simulador-tooltip-1">$ 2.000.000</div>
                                     </div>
                                     <div class="simulador-range-labels">
                                         <!-- MODIFICAR: Etiquetas de rango -->
@@ -74,9 +74,9 @@ MODIFICAR:
                                     <div class="simulador-range-container">
                                         <div class="simulador-range-progress" id="simulador-progress-2"></div>
                                         <!-- MODIFICAR: Plazo mínimo, máximo -->
-                                        <input type="range" min="1" max="6" step="1" value="3"
+                                        <input type="range" min="1" max="6" step="1" value="6"
                                                class="simulador-range-input" id="simulador-range-2">
-                                        <div class="simulador-range-tooltip" id="simulador-tooltip-2">3 meses</div>
+                                        <div class="simulador-range-tooltip" id="simulador-tooltip-2">6 meses</div>
                                     </div>
                                     <div class="simulador-range-labels">
                                         <!-- MODIFICAR: Etiquetas de plazo -->
@@ -89,32 +89,32 @@ MODIFICAR:
                                 <div class="simulador-results-container">
                                     <div class="simulador-result-row">
                                         <label for="total-pr" class="simulador-result-label">Monto solicitado:</label>
-                                        <input type="text" id="total-pr" name="total-pr" value="1.000.000,00"
+                                        <input type="text" id="total-pr" name="total-pr" value="$ 2.000.000,00"
                                                class="simulador-result-input" readonly>
                                     </div>
                                     <div class="simulador-result-row">
                                         <label for="comision" class="simulador-result-label">Comisión (10%):</label>
-                                        <input type="text" id="comision" name="comision" value="100.000,00"
+                                        <input type="text" id="comision" name="comision" value="$ 200.000,00"
                                                class="simulador-result-input" readonly>
                                     </div>
                                     <div class="simulador-result-row">
                                         <label for="ivaComision" class="simulador-result-label">IVA sobre comisión (19%):</label>
-                                        <input type="text" id="ivaComision" name="ivaComision" value="19.000,00"
+                                        <input type="text" id="ivaComision" name="ivaComision" value="$ 38.000,00"
                                                class="simulador-result-input" readonly>
                                     </div>
                                     <div class="simulador-result-row">
                                         <label for="totalIntereses" class="simulador-result-label">Intereses ({{ libranza_tasa_mensual|default:"1.9" }}% EM):</label>
-                                        <input type="text" id="totalIntereses" name="totalIntereses" value="33.582,00"
+                                        <input type="text" id="totalIntereses" name="totalIntereses" value="$ 151.160,81"
                                                class="simulador-result-input" readonly>
                                     </div>
                                     <div class="simulador-result-row" style="border-top: 2px solid #06b6d4; padding-top: 10px; margin-top: 10px;">
                                         <label for="totalPagar" class="simulador-result-label" style="font-weight: 700;">Total a pagar:</label>
-                                        <input type="text" id="totalPagar" name="totalPagar" value="1.152.582,00"
+                                        <input type="text" id="totalPagar" name="totalPagar" value="$ 2.389.160,81"
                                                class="simulador-result-input" style="font-weight: 700;" readonly>
                                     </div>
                                     <div class="simulador-result-row">
                                         <label for="cuotaMensual" class="simulador-result-label" style="font-weight: 700; color: #06b6d4;">Cuota mensual:</label>
-                                        <input type="text" id="cuotaMensual" name="cuotaMensual" value="384.194,00"
+                                        <input type="text" id="cuotaMensual" name="cuotaMensual" value="$ 398.193,47"
                                                class="simulador-result-input" style="font-weight: 700; color: #06b6d4;" readonly>
                                     </div>
                                 </div>

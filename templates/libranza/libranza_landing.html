@@ -70,8 +70,9 @@ COLORES PRINCIPALES (basados en styles.css):
 
 AUTENTICACIÓN:
 -------------
-Esta landing es pública, pero el botón "Aplicar ahora" redirige a la solicitud
-que requiere autenticación con Google (según especificaciones).
+Esta landing es pública y el flujo recomendado es:
+Landing -> Simulador -> Aplicación.
+El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
 {% endcomment %}
 
 <!DOCTYPE html>
@@ -82,6 +83,7 @@ que requiere autenticación con Google (según especificaciones).
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crédito de Libranza - Aprobado</title>
     <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
 </head>
 <body class="body-index">
@@ -102,12 +104,9 @@ que requiere autenticación con Google (según especificaciones).
                     <!-- MODIFICAR: Descripción del producto -->
                     <p>Financia tus proyectos personales con descuento automático de nómina. Proceso 100% digital, aprobación rápida y sin complicaciones.</p>
                     <div class="libranza-hero-buttons">
-                        <!-- MODIFICAR: URL o texto del botón principal -->
-                        {# NUEVA URL - Libranza #}
+                        {# Flujo correcto: landing -> simulador -> aplicar #}
                         <a href="{% url 'libranza:simulador' %}" class="libranza-btn-primary">Simula tu crédito</a>
-                        <!-- MODIFICAR: URL del botón secundario -->
-                        {# NUEVA URL - Libranza #}
-                        <a href="{% url 'libranza:solicitar' %}" class="libranza-btn-secondary">Aplicar ahora</a>
+                        <a href="{% url 'libranza:login' %}" class="libranza-btn-secondary">Iniciar sesión</a>
                     </div>
                 </div>
                 <!-- MODIFICAR: Imagen o gráfico hero -->
@@ -262,13 +261,11 @@ que requiere autenticación con Google (según especificaciones).
                     <h3>Documentos necesarios</h3>
                     <ul class="libranza-documents-list">
                         <!-- MODIFICAR: Lista de documentos -->
-                        <li>✓ Cédula de ciudadanía (ambos lados)</li>
-                        <li>✓ Certificado laboral vigente</li>
-                        <li>✓ Último desprendible de pago</li>
-                        <li>✓ Certificado bancario</li>
+                        <li>✓ Cédula de ciudadanía (frontal y reverso)</li>
+                        <li>✓ Certificado bancario en PDF</li>
                         <li>✓ Pertenecer a empresa con convenio de libranza</li>
                     </ul>
-                    <p class="libranza-note"><strong>Nota:</strong> Todos los documentos se pueden subir en formato digital (PDF o imagen).</p>
+                    <p class="libranza-note"><strong>Nota:</strong> La cédula se captura en vivo desde el dispositivo y el certificado bancario se carga en PDF para validación.</p>
                 </div>
             </div>
         </div>
@@ -386,8 +383,8 @@ que requiere autenticación con Google (según especificaciones).
                     <div class="libranza-cta-buttons">
                         <!-- MODIFICAR: Botones de acción -->
                         {# ✅ NUEVAS URLs - Libranza #}
-                        <a href="{% url 'libranza:solicitar' %}" class="libranza-btn-primary-large">Solicitar ahora</a>
-                        <a href="{% url 'libranza:simulador' %}" class="libranza-btn-secondary-large">Simular crédito</a>
+                        <a href="{% url 'libranza:simulador' %}" class="libranza-btn-primary-large">Simular crédito</a>
+                        <a href="{% url 'libranza:login' %}" class="libranza-btn-secondary-large">Iniciar sesión</a>
                     </div>
                     <!-- MODIFICAR: Información de contacto -->
                     <p class="libranza-contact-info">
@@ -547,6 +544,7 @@ que requiere autenticación con Google (según especificaciones).
         .libranza-features-grid {
             grid-template-columns: repeat(2, 1fr);
         }
+
     }
 
     @media (min-width: 1024px) {
@@ -865,6 +863,7 @@ que requiere autenticación con Google (según especificaciones).
     .libranza-whatsapp-link:hover {
         text-decoration: underline;
     }
+
 </style>
 
 <!-- ============================================

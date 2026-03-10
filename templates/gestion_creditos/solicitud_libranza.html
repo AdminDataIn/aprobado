@@ -425,7 +425,17 @@ MODIFICAR:
                         <div class="form-grid">
                             <div class="form-field">
                                 <label for="id_empresa" class="form-label required">Nombre de la empresa:</label>
-                                {{ form.empresa }}
+                                <div class="form-select-shell">
+                                    <span class="form-select-icon" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" fill="none">
+                                            <path d="M4 19.5V7.5L12 4l8 3.5v12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M9 19.5v-4h6v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M8 10h.01M12 10h.01M16 10h.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </span>
+                                    {{ form.empresa }}
+                                </div>
+                                <p class="form-helper-text">Selecciona la empresa con convenio vigente para asociar correctamente la solicitud.</p>
                             </div>
                             <div class="form-field">
                                 <label for="ingresos_mensuales" class="form-label required">Ingresos mensuales:</label>

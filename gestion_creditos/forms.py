@@ -49,6 +49,10 @@ class CreditoLibranzaForm(forms.ModelForm):
 
         self.fields['empresa'].queryset = Empresa.objects.all()
         self.fields['empresa'].empty_label = "Seleccione una empresa"
+        self.fields['empresa'].widget.attrs.update({
+            'class': 'form-select company-select',
+            'data-company-select': 'true',
+        })
 
         self.fields['valor_credito'].error_messages.update({
             'required': 'El valor del crédito es requerido.',

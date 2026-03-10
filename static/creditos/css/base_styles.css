@@ -629,6 +629,17 @@ body.theme-gestion {
     overflow-x: auto;
 }
 
+.table-stack-mobile td[data-label]::before {
+    content: attr(data-label);
+    display: none;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
 .table, .solicitudes-table {
     width: 100%;
     margin: 0;
@@ -1212,10 +1223,43 @@ body.theme-gestion {
     .page-header {
         padding: 1rem;
         margin-bottom: 1rem;
+        position: static;
     }
     
     .card-header, .card-content {
         padding: 1rem;
+    }
+
+    .page-header .container-fluid,
+    .container-fluid.py-4 > .d-flex.align-items-center.justify-content-between,
+    .container-fluid.py-4 > .d-flex.justify-content-between.align-items-center {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 1rem;
+    }
+
+    .page-header .user-info {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .table-header {
+        flex-wrap: wrap;
+    }
+
+    .table-header > div,
+    .table-header .btn-group {
+        width: 100%;
+    }
+
+    .table-header .btn-group {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .table-header .btn,
+    .table-header .action-btn {
+        width: 100%;
     }
 
     /* Responsive para modales */
@@ -1234,6 +1278,36 @@ body.theme-gestion {
     #infoCompletaModal .modal-body p strong {
         min-width: 120px;
         font-size: 0.9rem;
+    }
+
+    .table-stack-mobile thead {
+        display: none;
+    }
+
+    .table-stack-mobile tbody,
+    .table-stack-mobile tr,
+    .table-stack-mobile td {
+        display: block;
+        width: 100%;
+    }
+
+    .table-stack-mobile tbody tr {
+        padding: 1rem;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .table-stack-mobile tbody tr:last-child {
+        border-bottom: 0;
+    }
+
+    .table-stack-mobile tbody td {
+        border: 0;
+        padding: 0.4rem 0;
+        text-align: left !important;
+    }
+
+    .table-stack-mobile td[data-label]::before {
+        display: block;
     }
 }
 
