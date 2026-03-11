@@ -95,13 +95,13 @@
                 data-description="{{ item.descripcion }}"
                 data-whatsapp="{{ item.whatsapp_contacto|default:item.empresa.whatsapp_contacto }}"
             >
-                <div class="mp-card-media{% if item.video %} has-video{% endif %}" {% if item.imagen and not item.video %}style="background-image: url('{{ item.imagen.url }}');"{% elif not item.video %}style="background-image: url('https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80');"{% endif %}>
+                <div class="mp-card-media{% if item.video %} has-video{% endif %}" {% if item.imagen %}style="background-image: url('{{ item.imagen.url }}');"{% else %}style="background-image: url('https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80');"{% endif %}>
                     <span class="mp-card-tag">{{ item.get_tipo_display }}</span>
                     {% if item.video %}
-                    <video class="mp-card-video" controls playsinline preload="metadata" {% if item.imagen %}poster="{{ item.imagen.url }}"{% endif %}>
-                        <source src="{{ item.video.url }}" type="video/mp4">
-                        Tu navegador no soporta video HTML5.
-                    </video>
+                    <span class="mp-card-video-indicator">
+                        <i class="bi bi-play-circle-fill"></i>
+                        Video disponible
+                    </span>
                     {% endif %}
                 </div>
                 <div class="mp-card-body">
@@ -110,7 +110,16 @@
                     <div class="mp-card-benefit">Beneficio: {{ item.beneficio }}</div>
                     <div class="mp-card-meta">
                         <span class="mp-price">{{ item.precio|default:"Precio especial" }}</span>
-                        <a href="{% url 'marketplace:empresa' item.empresa.slug %}" class="mp-company-link">{{ item.empresa.nombre }}</a>
+                        <a href="{% url 'marketplace:empresa' item.empresa.slug %}" class="mp-company-link mp-company-link-brand">
+                            {% if item.empresa.logo_marketplace %}
+                            <span class="mp-company-mini-logo">
+                                <img src="{% static item.empresa.logo_marketplace %}" alt="{{ item.empresa.nombre }}">
+                            </span>
+                            {% else %}
+                            <span class="mp-company-mini-badge">{{ item.empresa.nombre|slice:":2"|upper }}</span>
+                            {% endif %}
+                            <span>{{ item.empresa.nombre }}</span>
+                        </a>
                     </div>
                     <a class="mp-cta" href="#" target="_blank" rel="noopener">
                         <i class="bi bi-whatsapp"></i>Escribir por WhatsApp
@@ -142,26 +151,40 @@
             <span class="mp-allies-strip-count">{{ total_empresas }} empresas activas</span>
         </div>
 
-        <div class="mp-allies-marquee">
+        <div class="mp-allies-marquee{% if total_empresas <= 3 %} is-static{% endif %}">
             <div class="mp-allies-marquee-track">
                 {% for empresa in empresas_aliadas %}
                 <a href="{% url 'marketplace:empresa' empresa.slug %}" class="mp-ally-logo-card" aria-label="Ver vitrina de {{ empresa.nombre }}">
-                    <span class="mp-ally-logo-badge">{{ empresa.nombre|slice:":2"|upper }}</span>
+                    <span class="mp-ally-logo-badge{% if empresa.logo_marketplace %} is-logo{% endif %}">
+                        {% if empresa.logo_marketplace %}
+                        <img src="{% static empresa.logo_marketplace %}" alt="{{ empresa.nombre }}">
+                        {% else %}
+                        {{ empresa.nombre|slice:":2"|upper }}
+                        {% endif %}
+                    </span>
                     <div class="mp-ally-logo-copy">
                         <strong>{{ empresa.nombre }}</strong>
                         <span>{{ empresa.publicaciones_activas }} publicaciones</span>
                     </div>
                 </a>
                 {% endfor %}
+                {% if total_empresas > 3 %}
                 {% for empresa in empresas_aliadas %}
                 <a href="{% url 'marketplace:empresa' empresa.slug %}" class="mp-ally-logo-card duplicated" aria-hidden="true" tabindex="-1">
-                    <span class="mp-ally-logo-badge">{{ empresa.nombre|slice:":2"|upper }}</span>
+                    <span class="mp-ally-logo-badge{% if empresa.logo_marketplace %} is-logo{% endif %}">
+                        {% if empresa.logo_marketplace %}
+                        <img src="{% static empresa.logo_marketplace %}" alt="{{ empresa.nombre }}">
+                        {% else %}
+                        {{ empresa.nombre|slice:":2"|upper }}
+                        {% endif %}
+                    </span>
                     <div class="mp-ally-logo-copy">
                         <strong>{{ empresa.nombre }}</strong>
                         <span>{{ empresa.publicaciones_activas }} publicaciones</span>
                     </div>
                 </a>
                 {% endfor %}
+                {% endif %}
             </div>
         </div>
     </section>

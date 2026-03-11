@@ -43,6 +43,17 @@ from .services.certificado_bancario_service import procesar_certificado_bancario
 
 logger = logging.getLogger(__name__)
 
+MARKETPLACE_COMPANY_LOGOS = {
+    'datain': 'images/Convenios/LogoDatain.png',
+}
+
+
+def _attach_marketplace_branding(empresa):
+    if not empresa:
+        return empresa
+    empresa.logo_marketplace = MARKETPLACE_COMPANY_LOGOS.get((empresa.slug or '').lower(), '')
+    return empresa
+
 def marketplace_general_view(request):
     """
     Marketplace público general.
@@ -69,6 +80,12 @@ def marketplace_general_view(request):
         .distinct()
     )
 
+    for item in items:
+        _attach_marketplace_branding(item.empresa)
+
+    for empresa in empresas_aliadas:
+        _attach_marketplace_branding(empresa)
+
     context = {
         'items': items,
         'empresas_aliadas': empresas_aliadas,
@@ -84,6 +101,7 @@ def marketplace_empresa_view(request, empresa_slug):
     Solo muestra publicaciones aprobadas para una empresa específica.
     """
     empresa = get_object_or_404(Empresa, slug=empresa_slug)
+    _attach_marketplace_branding(empresa)
 
     items = MarketplaceItem.objects.filter(
         empresa=empresa,

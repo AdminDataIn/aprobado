@@ -370,17 +370,36 @@ body.marketplace {
 }
 
 .mp-card-media.has-video {
-    background-image: none !important;
+    isolation: isolate;
 }
 
-.mp-card-video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    background: #0f172a;
-    position: relative;
+.mp-card-media.has-video::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.42));
     z-index: 1;
+}
+
+.mp-card-video-indicator {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.82);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    z-index: 2;
+    box-shadow: 0 10px 24px -18px rgba(15, 23, 42, 0.85);
+}
+
+.mp-card-video-indicator i {
+    font-size: 14px;
 }
 
 .mp-card-tag {
@@ -478,6 +497,43 @@ body.marketplace {
     color: var(--mp-blue-strong);
     text-decoration: none;
     font-weight: 700;
+}
+
+.mp-company-link-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mp-company-mini-logo,
+.mp-company-mini-badge {
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.mp-company-mini-logo {
+    background: #fff;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    padding: 3px;
+}
+
+.mp-company-mini-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.mp-company-mini-badge {
+    background: linear-gradient(135deg, var(--mp-blue-strong), var(--mp-cyan));
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
 }
 
 .mp-company-link:hover {
@@ -642,6 +698,18 @@ body.marketplace {
     animation-play-state: paused;
 }
 
+.mp-allies-marquee.is-static::before,
+.mp-allies-marquee.is-static::after {
+    display: none;
+}
+
+.mp-allies-marquee.is-static .mp-allies-marquee-track {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+    animation: none;
+}
+
 .mp-ally-logo-card {
     min-width: 240px;
     display: flex;
@@ -676,6 +744,18 @@ body.marketplace {
     font-weight: 800;
     flex-shrink: 0;
     letter-spacing: 0.04em;
+}
+
+.mp-ally-logo-badge.is-logo {
+    background: #ffffff;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    padding: 6px;
+}
+
+.mp-ally-logo-badge.is-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
 }
 
 .mp-ally-logo-copy {
@@ -746,5 +826,8 @@ body.marketplace {
     }
     .mp-ally-logo-card {
         min-width: 210px;
+    }
+    .mp-allies-marquee.is-static .mp-allies-marquee-track {
+        justify-content: flex-start;
     }
 }
