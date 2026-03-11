@@ -544,227 +544,167 @@ body.marketplace {
     font-size: 12px;
 }
 
-.mp-allies {
-    margin: 24px auto 0;
-}
-
-.mp-allies-header h2 {
-    margin: 0 0 6px;
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: clamp(24px, 3vw, 32px);
-}
-
-.mp-allies-header p {
-    margin: 0;
-    color: var(--mp-muted);
-}
-
-.mp-allies-grid {
-    margin-top: 18px;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 16px;
-}
-
-.mp-partner-spotlight {
+.mp-allies-strip-section {
     margin: 44px auto 12px;
 }
 
-.mp-partner-shell {
-    border-radius: 32px;
-    background: #0f172a;
-    color: #fff;
-    padding: 32px;
-    box-shadow: 0 30px 80px rgba(15, 23, 42, 0.18);
-    position: relative;
-    overflow: hidden;
+.mp-allies-strip-header {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
 }
 
-.mp-partner-shell::before,
-.mp-partner-shell::after {
-    content: "";
-    position: absolute;
-    border-radius: 999px;
-    filter: blur(12px);
-    opacity: 0.55;
-}
-
-.mp-partner-shell::before {
-    width: 220px;
-    height: 220px;
-    top: -80px;
-    right: -40px;
-    background: rgba(34, 211, 238, 0.22);
-}
-
-.mp-partner-shell::after {
-    width: 160px;
-    height: 160px;
-    bottom: -60px;
-    left: -30px;
-    background: rgba(59, 130, 246, 0.18);
-}
-
-.mp-partner-header,
-.mp-partner-grid,
-.mp-partner-highlight {
-    position: relative;
-    z-index: 1;
-}
-
-.mp-partner-eyebrow {
+.mp-allies-strip-eyebrow {
     display: inline-flex;
     align-items: center;
     gap: 8px;
     padding: 8px 14px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.08);
-    color: #67e8f9;
+    background: rgba(37, 99, 235, 0.08);
+    color: var(--mp-blue-strong);
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.03em;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
 }
 
-.mp-partner-header h2 {
+.mp-allies-strip-header h2 {
     margin: 0;
     font-family: 'Space Grotesk', sans-serif;
-    font-size: clamp(28px, 3.2vw, 44px);
-    line-height: 1.08;
-    max-width: 880px;
+    font-size: clamp(24px, 3vw, 34px);
+    line-height: 1.1;
 }
 
-.mp-partner-header p {
-    margin: 16px 0 0;
-    color: rgba(255, 255, 255, 0.75);
+.mp-allies-strip-header p {
+    margin: 10px 0 0;
+    color: var(--mp-muted);
     line-height: 1.7;
-    max-width: 760px;
-    font-size: 15px;
+    max-width: 720px;
 }
 
-.mp-partner-grid {
-    display: grid;
-    grid-template-columns: repeat(1, minmax(0, 1fr));
+.mp-allies-strip-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: #ffffff;
+    border: 1px solid var(--mp-border);
+    color: var(--mp-ink-soft);
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.mp-allies-marquee {
+    position: relative;
+    overflow: hidden;
+    border-radius: 28px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(248,250,252,0.92));
+    border: 1px solid var(--mp-border);
+    box-shadow: var(--mp-shadow-soft);
+    padding: 16px 0;
+}
+
+.mp-allies-marquee::before,
+.mp-allies-marquee::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 72px;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.mp-allies-marquee::before {
+    left: 0;
+    background: linear-gradient(90deg, #f8fafc 0%, rgba(248,250,252,0) 100%);
+}
+
+.mp-allies-marquee::after {
+    right: 0;
+    background: linear-gradient(270deg, #f8fafc 0%, rgba(248,250,252,0) 100%);
+}
+
+.mp-allies-marquee-track {
+    display: flex;
+    align-items: center;
     gap: 16px;
-    margin-top: 28px;
+    width: max-content;
+    padding: 0 16px;
+    animation: mp-allies-scroll 28s linear infinite;
 }
 
-.mp-partner-card {
-    padding: 22px;
-    border-radius: 22px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(12px);
+.mp-allies-marquee:hover .mp-allies-marquee-track {
+    animation-play-state: paused;
 }
 
-.mp-partner-card h3 {
-    font-size: 18px;
-    margin: 0 0 10px;
+.mp-ally-logo-card {
+    min-width: 240px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    border-radius: 20px;
+    background: #ffffff;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    text-decoration: none;
+    color: inherit;
+    box-shadow: 0 12px 28px -24px rgba(15, 23, 42, 0.35);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
-.mp-partner-card p {
-    color: rgba(255, 255, 255, 0.74);
-    line-height: 1.6;
-    margin: 0;
+.mp-ally-logo-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(37, 99, 235, 0.24);
+    box-shadow: 0 18px 32px -24px rgba(15, 23, 42, 0.38);
 }
 
-.mp-partner-icon {
-    width: 52px;
-    height: 52px;
+.mp-ally-logo-badge {
+    width: 48px;
+    height: 48px;
     border-radius: 16px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 16px;
-    font-size: 20px;
-    color: white;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    background: linear-gradient(135deg, var(--mp-blue-strong), var(--mp-cyan));
+    color: #fff;
+    font-size: 15px;
+    font-weight: 800;
+    flex-shrink: 0;
+    letter-spacing: 0.04em;
 }
 
-.mp-partner-card.accent-cyan .mp-partner-icon {
-    background: linear-gradient(135deg, #06b6d4, #22d3ee);
-}
-
-.mp-partner-card.accent-blue .mp-partner-icon {
-    background: linear-gradient(135deg, #2563eb, #60a5fa);
-}
-
-.mp-partner-card.accent-navy .mp-partner-icon {
-    background: linear-gradient(135deg, #1e3a8a, #0f172a);
-}
-
-.mp-partner-card.accent-violet .mp-partner-icon {
-    background: linear-gradient(135deg, #7c3aed, #a855f7);
-}
-
-.mp-partner-highlight {
-    margin-top: 22px;
+.mp-ally-logo-copy {
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    padding: 20px 22px;
-    border-radius: 22px;
-    background: linear-gradient(135deg, rgba(6, 182, 212, 0.14), rgba(255, 255, 255, 0.06));
-    border: 1px solid rgba(103, 232, 249, 0.18);
+    gap: 4px;
+    min-width: 0;
 }
 
-.mp-partner-highlight-label {
-    display: inline-block;
+.mp-ally-logo-copy strong {
+    font-size: 15px;
+    color: var(--mp-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mp-ally-logo-copy span {
     font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #67e8f9;
-    margin-bottom: 8px;
-}
-
-.mp-partner-highlight h3 {
-    margin: 0;
-    font-size: 22px;
-    line-height: 1.35;
-}
-
-.mp-ally-card {
-    border: 1px solid var(--mp-border);
-    border-radius: var(--mp-radius-md);
-    background: #ffffff;
-    text-decoration: none;
-    color: inherit;
-    padding: 18px;
-    display: grid;
-    gap: 14px;
-    box-shadow: var(--mp-shadow-soft);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.mp-ally-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 20px 40px -30px rgba(15, 23, 42, 0.35);
-}
-
-.mp-ally-card h3 {
-    margin: 0;
-    font-size: 18px;
-    font-family: 'Space Grotesk', sans-serif;
-}
-
-.mp-ally-card p {
-    margin: 8px 0 0;
     color: var(--mp-muted);
-    font-size: 13px;
-    line-height: 1.5;
 }
 
-.mp-ally-meta {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    color: var(--mp-muted);
-    font-size: 12px;
-}
-
-.mp-ally-link {
-    color: var(--mp-blue-strong);
-    font-weight: 700;
+@keyframes mp-allies-scroll {
+    from {
+        transform: translateX(0);
+    }
+    to {
+        transform: translateX(-50%);
+    }
 }
 
 @media (max-width: 1024px) {
@@ -774,13 +714,9 @@ body.marketplace {
     .mp-filter-row {
         grid-template-columns: 1fr;
     }
-    .mp-partner-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-    .mp-partner-highlight {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
+    .mp-allies-strip-header {
+        flex-direction: column;
+        align-items: flex-start;
     }
 }
 
@@ -804,22 +740,11 @@ body.marketplace {
     .mp-card {
         max-width: 100%;
     }
-    .mp-allies-grid {
-        grid-template-columns: 1fr;
+    .mp-allies-marquee::before,
+    .mp-allies-marquee::after {
+        width: 36px;
     }
-    .mp-partner-shell {
-        padding: 24px;
-        border-radius: 24px;
-    }
-    .mp-partner-grid {
-        grid-template-columns: 1fr;
-    }
-    .mp-partner-highlight {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    .mp-partner-highlight .mp-btn {
-        width: 100%;
-        justify-content: center;
+    .mp-ally-logo-card {
+        min-width: 210px;
     }
 }

@@ -121,78 +121,47 @@
         {% else %}
             <article class="mp-empty-state">
                 <i class="bi bi-inboxes"></i>
-                <h3>Aún no hay publicaciones activas</h3>
-                <p>Muy pronto verás productos, servicios y publicidad de nuestras empresas aliadas.</p>
+                <h3>Aun no hay publicaciones activas</h3>
+                <p>Muy pronto veras productos, servicios y publicidad de nuestras empresas aliadas.</p>
             </article>
         {% endif %}
     </section>
 
-    <section class="mp-container mp-allies" id="empresas">
-        <div class="mp-allies-header">
-            <h2>Empresas aliadas</h2>
-            <p>Navega por empresa y explora su vitrina dedicada.</p>
-        </div>
-        <div class="mp-allies-grid">
-            {% for empresa in empresas_aliadas %}
-            <a href="{% url 'marketplace:empresa' empresa.slug %}" class="mp-ally-card">
-                <div>
-                    <h3>{{ empresa.nombre }}</h3>
-                    <p>{{ empresa.descripcion_marketplace|default:"Empresa aliada con beneficios vigentes."|truncatechars:120 }}</p>
-                </div>
-                <div class="mp-ally-meta">
-                    <span>{{ empresa.publicaciones_activas }} publicaciones</span>
-                    <span class="mp-ally-link">Ver empresa <i class="bi bi-arrow-right"></i></span>
-                </div>
-            </a>
-            {% endfor %}
-        </div>
-    </section>
-
-    <section class="mp-container mp-partner-spotlight" id="partner-datain">
-        <div class="mp-partner-shell">
-            <div class="mp-partner-header">
-                <span class="mp-partner-eyebrow">
+    <section class="mp-container mp-allies-strip-section" id="empresas">
+        <div class="mp-allies-strip-header">
+            <div>
+                <span class="mp-allies-strip-eyebrow">
                     <i class="bi bi-stars"></i>
-                    Aliado tecnológico destacado
+                    Red de convenios
                 </span>
-                <h2>DataIn.pro impulsa automatización, datos e inteligencia aplicada</h2>
+                <h2>Empresas aliadas</h2>
                 <p>
-                    Una vitrina tipo marketplace para una empresa tecnológica seria: automatización,
-                    analítica, desarrollo y productos digitales enfocados en operación empresarial moderna.
+                    Una franja simple y deslizable para navegar por nuestros convenios activos sin darle mas peso a una marca que a otra.
                 </p>
             </div>
+            <span class="mp-allies-strip-count">{{ total_empresas }} empresas activas</span>
+        </div>
 
-            <div class="mp-partner-grid">
-                <article class="mp-partner-card accent-cyan">
-                    <div class="mp-partner-icon"><i class="bi bi-cpu"></i></div>
-                    <h3>Automatización inteligente</h3>
-                    <p>Flujos operativos, bots internos y procesos repetitivos convertidos en ejecución automatizada y medible.</p>
-                </article>
-                <article class="mp-partner-card accent-blue">
-                    <div class="mp-partner-icon"><i class="bi bi-bar-chart-line"></i></div>
-                    <h3>Analítica y data products</h3>
-                    <p>Dashboards, consolidación de fuentes y productos de datos que ayudan a decidir con velocidad y trazabilidad.</p>
-                </article>
-                <article class="mp-partner-card accent-navy">
-                    <div class="mp-partner-icon"><i class="bi bi-window-stack"></i></div>
-                    <h3>Software a la medida</h3>
-                    <p>Desarrollo web, integraciones y plataformas internas con experiencia SaaS, UI sólida y visión de escalabilidad.</p>
-                </article>
-                <article class="mp-partner-card accent-violet">
-                    <div class="mp-partner-icon"><i class="bi bi-diagram-3"></i></div>
-                    <h3>Servicios para empresas</h3>
-                    <p>Implementación tecnológica para equipos, áreas comerciales y procesos críticos con foco en resultados reales.</p>
-                </article>
-            </div>
-
-            <div class="mp-partner-highlight">
-                <div>
-                    <span class="mp-partner-highlight-label">Marketplace de servicios</span>
-                    <h3>Una sección pensada para posicionar la oferta de DataIn como empresa tecnológica avanzada</h3>
-                </div>
-                <a href="https://datain.pro/" target="_blank" rel="noopener" class="mp-btn primary">
-                    <i class="bi bi-arrow-up-right"></i>Explorar DataIn.pro
+        <div class="mp-allies-marquee">
+            <div class="mp-allies-marquee-track">
+                {% for empresa in empresas_aliadas %}
+                <a href="{% url 'marketplace:empresa' empresa.slug %}" class="mp-ally-logo-card" aria-label="Ver vitrina de {{ empresa.nombre }}">
+                    <span class="mp-ally-logo-badge">{{ empresa.nombre|slice:":2"|upper }}</span>
+                    <div class="mp-ally-logo-copy">
+                        <strong>{{ empresa.nombre }}</strong>
+                        <span>{{ empresa.publicaciones_activas }} publicaciones</span>
+                    </div>
                 </a>
+                {% endfor %}
+                {% for empresa in empresas_aliadas %}
+                <a href="{% url 'marketplace:empresa' empresa.slug %}" class="mp-ally-logo-card duplicated" aria-hidden="true" tabindex="-1">
+                    <span class="mp-ally-logo-badge">{{ empresa.nombre|slice:":2"|upper }}</span>
+                    <div class="mp-ally-logo-copy">
+                        <strong>{{ empresa.nombre }}</strong>
+                        <span>{{ empresa.publicaciones_activas }} publicaciones</span>
+                    </div>
+                </a>
+                {% endfor %}
             </div>
         </div>
     </section>
