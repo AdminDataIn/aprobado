@@ -388,7 +388,10 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                     </div>
                     <!-- MODIFICAR: Información de contacto -->
                     <p class="libranza-contact-info">
-                        ¿Tienes dudas? Contáctanos por WhatsApp: <a href="https://wa.me/573001234567" class="libranza-whatsapp-link">+57 313 247 7352</a>
+                        ¿Tienes dudas? Contáctanos por WhatsApp:
+                        <a href="{{ whatsapp_support_href }}" class="libranza-whatsapp-link" target="_blank" rel="noopener">
+                            {{ whatsapp_support_display }}
+                        </a>
                     </p>
                 </div>
             </div>
@@ -397,6 +400,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
 
     {% include 'base/footer_libranza.html' %}
 </div>
+{% include 'base/public_whatsapp_button.html' %}
 
 <!-- ============================================
      ESTILOS CSS INLINE
