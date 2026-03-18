@@ -126,12 +126,12 @@
                         <h3 class="card-title"><i class="bi bi-file-text me-2"></i>Resumen del Crédito</h3>
                     </div>
                     <div class="card-content">
-                        {% if credito.estado == 'EN_REVISION' %}
+                        {% if credito.estado == 'EN_REVISION' or credito.estado == 'PENDIENTE_FIRMA' or credito.estado == 'PENDIENTE_TRANSFERENCIA' %}
                         {% if pagador_aprobado %}
                         <div class="alert alert-success text-center">
                             <i class="bi bi-check-circle-fill me-2"></i>
                             <strong>Solicitud aprobada por el pagador</strong>
-                            <p class="mb-0 mt-2">La decisión ya quedó registrada. Ahora el crédito está pendiente de validación administrativa.</p>
+                            <p class="mb-0 mt-2">La decisión ya quedó registrada. Ahora el crédito fue enviado al flujo de firma del pagaré.</p>
                             {% if pagador_decision.motivo %}
                             <p class="mb-0 mt-2 small">Motivo: {{ pagador_decision.motivo }}</p>
                             {% endif %}

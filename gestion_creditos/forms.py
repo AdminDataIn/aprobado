@@ -8,6 +8,10 @@ from django.core.validators import FileExtensionValidator
 from django.conf import settings
 from django.utils import timezone
 from django.utils.text import slugify
+from gestion_creditos.services.libranza_rules import (
+    obtener_creditos_libranza_bloqueantes,
+    permitir_multiples_creditos_libranza_en_pruebas,
+)
 
 #? --------- FORMULARIO DE CREDITO DE LIBRANZA ------------
 class CreditoLibranzaForm(forms.ModelForm):
@@ -137,16 +141,19 @@ class CreditoLibranzaForm(forms.ModelForm):
     def clean_cedula(self):
         cedula = self.cleaned_data.get('cedula', '').strip()
         if cedula and not cedula.isdigit():
-            raise forms.ValidationError('La cédula debe contener solo números.')
+            raise forms.ValidationError('La cedula debe contener solo numeros.')
         if cedula and len(cedula) < 7:
-            raise forms.ValidationError('La cédula debe tener al menos 7 dígitos.')
-        if cedula and CreditoLibranza.objects.filter(cedula=cedula).exists():
-            raise forms.ValidationError(
-                'Ya existe una solicitud registrada con esta cédula. '
-                'Si necesitas ayuda, contáctanos por WhatsApp.'
-            )
+            raise forms.ValidationError('La cedula debe tener al menos 7 digitos.')
+        if cedula and not permitir_multiples_creditos_libranza_en_pruebas():
+            creditos_bloqueantes = obtener_creditos_libranza_bloqueantes(cedula)
+            if creditos_bloqueantes.exists():
+                credito_existente = creditos_bloqueantes.first().credito
+                raise forms.ValidationError(
+                    'Ya existe un credito de libranza vigente para esta cedula '
+                    f'({credito_existente.numero_credito} - {credito_existente.get_estado_display()}).'
+                )
         return cedula
-    
+
     def clean_telefono(self):
         telefono = self.cleaned_data.get('telefono', '').strip()
         telefono_limpio = ''.join(filter(str.isdigit, telefono))

@@ -448,7 +448,11 @@
                                 </div>
                             {% endif %}
                         {% endif %}
+                        {% if credito.linea == 'LIBRANZA' %}
+                        <p class="text-muted">Para libranza, el pagador dispara la aprobación y el envío a firma. Desde aquí solo aplica seguimiento o rechazo excepcional.</p>
+                        {% else %}
                         <p class="text-muted">Tome una decisión sobre esta solicitud de crédito. Puede aprobarla para continuar el flujo o rechazarla.</p>
+                        {% endif %}
                         <form id="process-form" method="post" action="{% url 'gestion:credito_aprobar' credito.id %}">
                             {% csrf_token %}
                             <div class="form-group mb-3">
@@ -472,7 +476,7 @@
                             <div class="d-grid gap-2 mt-3">
                                 <button type="submit" name="action" value="approve" class="btn btn-success"
                                         data-loader-type="check" data-loader-text="Aprobando crédito..."
-                                        {% if credito.linea == 'LIBRANZA' and not pagador_aprobado %}disabled{% endif %}>
+                                        {% if credito.linea == 'LIBRANZA' %}disabled{% endif %}>
                                     <i class="bi bi-check-lg me-2"></i>
                                     Aprobado
                                 </button>

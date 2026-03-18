@@ -40,6 +40,7 @@ from django.core.files.base import ContentFile
 from .services.marketplace_service import registrar_historial_publicacion, cambiar_estado_publicacion
 from .services.tasa_service import obtener_tasa_credito
 from .services.certificado_bancario_service import procesar_certificado_bancario
+from .services.libranza_rules import obtener_creditos_libranza_bloqueantes
 
 logger = logging.getLogger(__name__)
 
@@ -767,11 +768,18 @@ def procesar_solicitud_view(request, credito_id):
         pagador_decision = _obtener_decision_pagador(credito)
         pagador_aprobado = (
             pagador_decision is not None
-            and pagador_decision.estado_nuevo == Credito.EstadoCredito.APROBADO
+            and pagador_decision.estado_nuevo == Credito.EstadoCredito.APROBADO_PAGADOR
         )
     
     nuevo_estado = None
     if action == 'approve':
+        if credito.linea == Credito.LineaCredito.LIBRANZA:
+            messages.error(
+                request,
+                "Las solicitudes de libranza ya no se aprueban desde administracion. "
+                "Cuando el pagador aprueba, el sistema las envia directo a firma."
+            )
+            return redirect('gestion:credito_detalle', credito_id=credito_id)
         nuevo_estado = Credito.EstadoCredito.APROBADO
         if credito.linea == Credito.LineaCredito.LIBRANZA and not pagador_aprobado:
             if pagador_decision and pagador_decision.estado_nuevo == Credito.EstadoCredito.RECHAZADO:
@@ -863,17 +871,17 @@ def detalle_credito_view(request, credito_id):
         pagador_decision = HistorialEstado.objects.filter(
             credito=credito,
             usuario_modificacion__perfil_pagador__isnull=False,
-            estado_nuevo__in=[Credito.EstadoCredito.APROBADO, Credito.EstadoCredito.RECHAZADO]
+            estado_nuevo__in=[Credito.EstadoCredito.APROBADO_PAGADOR, Credito.EstadoCredito.RECHAZADO]
         ).order_by('-fecha').first()
         if pagador_decision:
-            pagador_aprobado = pagador_decision.estado_nuevo == Credito.EstadoCredito.APROBADO
+            pagador_aprobado = pagador_decision.estado_nuevo == Credito.EstadoCredito.APROBADO_PAGADOR
             pagador_rechazado = pagador_decision.estado_nuevo == Credito.EstadoCredito.RECHAZADO
 
     # Determinar si el crédito puede ser procesado (aprobado/rechazado)
     puede_procesar = credito.estado in [Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION]
-    if credito.linea == Credito.LineaCredito.LIBRANZA and pagador_aprobado and credito.estado == Credito.EstadoCredito.APROBADO:
-        puede_procesar = True
-    print("Monto solicitado: ",credito.monto_solicitado)
+    if credito.linea == Credito.LineaCredito.LIBRANZA:
+        puede_procesar = False
+
     context = {
         'credito': credito,
 
@@ -1191,13 +1199,11 @@ def documento_preview_view(request):
 def _obtener_decision_pagador(credito):
     """
     Obtiene la última decisión registrada por un usuario pagador para un crédito.
-    La decisión del pagador se mantiene separada del estado oficial para que la
-    aprobación administrativa siga controlando el avance del flujo.
     """
     return HistorialEstado.objects.filter(
         credito=credito,
         usuario_modificacion__perfil_pagador__isnull=False,
-        estado_nuevo__in=[Credito.EstadoCredito.APROBADO, Credito.EstadoCredito.RECHAZADO]
+        estado_nuevo__in=[Credito.EstadoCredito.APROBADO_PAGADOR, Credito.EstadoCredito.RECHAZADO]
     ).order_by('-fecha').first()
 
 
@@ -1232,7 +1238,7 @@ def pagador_dashboard_view(request):
     decision_pagador_qs = HistorialEstado.objects.filter(
         credito_id=OuterRef('pk'),
         usuario_modificacion__perfil_pagador__isnull=False,
-        estado_nuevo__in=[Credito.EstadoCredito.APROBADO, Credito.EstadoCredito.RECHAZADO]
+        estado_nuevo__in=[Credito.EstadoCredito.APROBADO_PAGADOR, Credito.EstadoCredito.RECHAZADO]
     ).order_by('-fecha')
 
     creditos_empresa = creditos_empresa.annotate(
@@ -1314,7 +1320,7 @@ def pagador_detalle_credito_view(request, credito_id):
         'total_pagado': total_pagado,
         'saldo_pendiente': saldo_pendiente,
         'pagador_decision': pagador_decision,
-        'pagador_aprobado': bool(pagador_decision and pagador_decision.estado_nuevo == Credito.EstadoCredito.APROBADO),
+        'pagador_aprobado': bool(pagador_decision and pagador_decision.estado_nuevo == Credito.EstadoCredito.APROBADO_PAGADOR),
         'pagador_rechazado': bool(pagador_decision and pagador_decision.estado_nuevo == Credito.EstadoCredito.RECHAZADO),
     }
     
@@ -1330,11 +1336,14 @@ def pagador_decidir_solicitud_view(request, credito_id):
     """
     empresa = request.empresa
     credito = get_object_or_404(
-        Credito,
+        Credito.objects.select_related('detalle_libranza'),
         id=credito_id,
         linea=Credito.LineaCredito.LIBRANZA,
-        estado__in=[Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION]
     )
+
+    if credito.estado not in [Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION]:
+        messages.info(request, "Esta solicitud ya no admite decisiones del pagador.")
+        return redirect('pagador:dashboard')
 
     if credito.detalle_libranza.empresa != empresa:
         messages.error(request, "No tiene permiso para gestionar este credito.")
@@ -1347,43 +1356,60 @@ def pagador_decidir_solicitud_view(request, credito_id):
         messages.error(request, "Accion no valida.")
         return redirect('pagador:dashboard')
 
-    decision_existente = _obtener_decision_pagador(credito)
-    if decision_existente:
-        estado_actual = "aprobada" if decision_existente.estado_nuevo == Credito.EstadoCredito.APROBADO else "rechazada"
-        messages.info(request, f"La decision del pagador ya fue registrada como {estado_actual}.")
-        return redirect('pagador:dashboard')
-
     try:
-        if action == 'approve':
-            if credito.monto_aprobado is None:
-                credito.monto_aprobado = credito.monto_solicitado
-            if credito.plazo is None:
-                credito.plazo = credito.plazo_solicitado
-            credito.save(update_fields=['monto_aprobado', 'plazo'])
+        with transaction.atomic():
+            credito = (
+                Credito.objects
+                .select_for_update()
+                .select_related('detalle_libranza')
+                .get(id=credito.id)
+            )
 
-            motivo_final = motivo or "Aprobado por pagador (pendiente validacion administrativa)."
-            # Registramos la decision del pagador sin avanzar el estado del credito.
-            # El estado oficial solo debe cambiar cuando apruebe el administrador.
-            HistorialEstado.objects.create(
-                credito=credito,
-                estado_anterior=credito.estado,
-                estado_nuevo=Credito.EstadoCredito.APROBADO,
-                usuario_modificacion=request.user,
-                motivo=motivo_final
-            )
-            messages.success(
-                request,
-                f"Decision de pagador registrada para {credito.numero_credito}. Pendiente aprobacion administrativa."
-            )
-        else:
-            motivo_final = motivo or "Rechazado por pagador."
-            credit_services.gestionar_cambio_estado_credito(
-                credito=credito,
-                nuevo_estado=Credito.EstadoCredito.RECHAZADO,
-                usuario_modificacion=request.user,
-                motivo=motivo_final
-            )
-            messages.warning(request, f"Credito {credito.numero_credito} rechazado.")
+            decision_existente = _obtener_decision_pagador(credito)
+            if decision_existente:
+                estado_actual = (
+                    "aprobada"
+                    if decision_existente.estado_nuevo == Credito.EstadoCredito.APROBADO_PAGADOR
+                    else "rechazada"
+                )
+                messages.info(request, f"La decision del pagador ya fue registrada como {estado_actual}.")
+                return redirect('pagador:dashboard')
+
+            if credito.estado not in [Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION]:
+                messages.info(request, "Esta solicitud ya cambio de estado y no admite una nueva decision.")
+                return redirect('pagador:dashboard')
+
+            if action == 'approve':
+                if credito.monto_aprobado is None:
+                    credito.monto_aprobado = credito.monto_solicitado
+                if credito.plazo is None:
+                    credito.plazo = credito.plazo_solicitado
+                credito.save(update_fields=['monto_aprobado', 'plazo'])
+
+                motivo_final = motivo or "Aprobado por pagador y enviado directamente a firma."
+                credit_services.gestionar_cambio_estado_credito(
+                    credito=credito,
+                    nuevo_estado=Credito.EstadoCredito.APROBADO_PAGADOR,
+                    usuario_modificacion=request.user,
+                    motivo=motivo_final
+                )
+                credit_services.preparar_documento_para_firma(
+                    credito=credito,
+                    usuario_modificacion=request.user
+                )
+                messages.success(
+                    request,
+                    f"Solicitud {credito.numero_credito} aprobada por pagador y enviada a firma."
+                )
+            else:
+                motivo_final = motivo or "Rechazado por pagador."
+                credit_services.gestionar_cambio_estado_credito(
+                    credito=credito,
+                    nuevo_estado=Credito.EstadoCredito.RECHAZADO,
+                    usuario_modificacion=request.user,
+                    motivo=motivo_final
+                )
+                messages.warning(request, f"Credito {credito.numero_credito} rechazado.")
     except Exception as e:
         messages.error(request, f"Ocurrio un error al procesar la solicitud: {e}")
         logger.error(f"Error al decidir solicitud {credito.id} por pagador: {e}", exc_info=True)
@@ -1460,70 +1486,7 @@ def pagador_procesar_pagos_view(request):
     return render(request, 'pagador/confirmacion_pago_masivo.html', context)
 
 
-@login_required
-@pagador_required
-def descargar_csv_cuotas_pendientes_view(request):
-    """
-    Genera y descarga un archivo CSV con todas las cuotas pendientes de los empleados.
-    Los montos se redondean hacia arriba para evitar centavos.
-    """
-    import csv
-    import math
-    from django.http import HttpResponse
-
-    empresa = request.empresa
-
-    # Obtener todos los créditos activos de la empresa (incluye activos y en mora)
-    creditos = Credito.objects.filter(
-        linea=Credito.LineaCredito.LIBRANZA,
-        detalle_libranza__empresa=empresa,
-        estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]
-    ).select_related('detalle_libranza').order_by('detalle_libranza__cedula')
-
-    # Crear la respuesta HTTP con el tipo de contenido CSV
-    response = HttpResponse(content_type='text/csv; charset=utf-8')
-    response['Content-Disposition'] = f'attachment; filename="cuotas_pendientes_{empresa.nombre}_{timezone.now().strftime("%Y%m%d")}.csv"'
-
-    # Agregar BOM y separador para que Excel respete la coma como delimitador
-    response.write('\ufeffsep=,\n')
-
-    writer = csv.writer(response)
-    writer.writerow(['cedula', 'monto_a_pagar'])
-
-    from decimal import Decimal, ROUND_CEILING
-    for credito in creditos:
-        cedula = str(credito.detalle_libranza.cedula)
-
-        cuota = credito.tabla_amortizacion.filter(pagada=False).order_by('numero_cuota').first()
-        if cuota:
-            valor = cuota.valor_cuota - (cuota.monto_pagado or Decimal('0.00'))
-        else:
-            valor = credito.valor_cuota or Decimal('0.00')
-
-        if valor < 0:
-            valor = Decimal('0.00')
-
-        monto = int(valor.to_integral_value(rounding=ROUND_CEILING))
-
-        writer.writerow([cedula, monto])
-
-    return response
-
-
-@login_required
-@pagador_required
-def descargar_reporte_pagador_view(request):
-    """
-    Genera y descarga un reporte completo de los creditos de libranza de la empresa.
-    """
-    import csv
-    from django.http import HttpResponse
-
-    empresa = request.empresa
-    search_query = request.GET.get('search', '').strip()
-    estado_filter = request.GET.get('estado', '').strip()
-    sort_by = request.GET.get('sort_by', 'detalle_libranza__cedula')
-
+def _build_pagador_creditos_queryset(empresa, search_query='', estado_filter='', sort_by='detalle_libranza__cedula'):
     creditos = Credito.objects.filter(
         linea=Credito.LineaCredito.LIBRANZA,
         detalle_libranza__empresa=empresa
@@ -1549,7 +1512,7 @@ def descargar_reporte_pagador_view(request):
     if sort_by in valid_sort_fields:
         creditos = creditos.order_by(sort_by)
 
-    creditos = creditos.annotate(
+    return creditos.annotate(
         total_pagado=Coalesce(
             Sum(
                 'historial_pagos__monto',
@@ -1563,94 +1526,8 @@ def descargar_reporte_pagador_view(request):
         )
     )
 
-    report_type = request.GET.get('tipo', 'completo').strip().lower()
-    if report_type not in ['completo', 'reducido']:
-        report_type = 'completo'
 
-    response = HttpResponse(content_type='text/csv; charset=utf-8')
-    response['Content-Disposition'] = (
-        f'attachment; filename="reporte_pagador_{report_type}_{empresa.nombre}_{timezone.now().strftime("%Y%m%d")}.csv"'
-    )
-    response.write('\ufeff')
-
-    writer = csv.writer(response)
-    headers_completo = [
-        'Empresa',
-        'Numero credito',
-        'Estado',
-        'Linea',
-        'Fecha solicitud',
-        'Fecha actualizacion',
-        'Fecha desembolso',
-        'Monto solicitado',
-        'Plazo solicitado',
-        'Monto aprobado',
-        'Plazo aprobado',
-        'Tasa interes mensual',
-        'Comision',
-        'IVA comision',
-        'Total a pagar',
-        'Saldo pendiente',
-        'Capital pendiente',
-        'Valor cuota',
-        'Fecha proximo pago',
-        'Total pagado',
-        'Fecha ultimo pago',
-        'Documento enviado',
-        'Usuario',
-        'Email usuario',
-        'Nombre completo',
-        'Nombres',
-        'Apellidos',
-        'Cedula',
-        'Correo',
-        'Telefono',
-        'Direccion',
-        'Ingresos mensuales',
-        'Cedula frontal',
-        'Cedula trasera',
-        'Certificado laboral',
-        'Desprendible nomina',
-        'Certificado bancario',
-        'Pagare numero',
-        'Pagare estado',
-        'Pagare estado codigo',
-        'Pagare fecha envio',
-        'Pagare fecha firma',
-        'Pagare URL firma',
-        'Pagare PDF',
-        'Pagare PDF firmado',
-        'Pagare PDF firmado URL ZapSign',
-        'Pagare hash',
-        'ZapSign status',
-        'ZapSign token',
-    ]
-
-    headers_reducido = [
-        'Empresa',
-        'Numero credito',
-        'Estado',
-        'Linea',
-        'Fecha solicitud',
-        'Monto solicitado',
-        'Plazo solicitado',
-        'Monto aprobado',
-        'Plazo aprobado',
-        'Saldo pendiente',
-        'Valor cuota',
-        'Fecha proximo pago',
-        'Total pagado',
-        'Nombre completo',
-        'Cedula',
-        'Correo',
-        'Telefono',
-        'Pagare estado',
-        'Pagare fecha firma',
-    ]
-
-    headers = headers_reducido if report_type == 'reducido' else headers_completo
-    writer.writerow(headers)
-
+def _pagador_report_rows(request, creditos, empresa, report_type):
     def _fmt_dt(value):
         if not value:
             return ''
@@ -1670,20 +1547,32 @@ def descargar_reporte_pagador_view(request):
         except (ValueError, AttributeError):
             return file_field.name
 
+    headers_completo = [
+        'Empresa', 'Numero credito', 'Estado', 'Linea', 'Fecha solicitud', 'Fecha actualizacion',
+        'Fecha desembolso', 'Monto solicitado', 'Plazo solicitado', 'Monto aprobado', 'Plazo aprobado',
+        'Tasa interes mensual', 'Comision', 'IVA comision', 'Total a pagar', 'Saldo pendiente',
+        'Capital pendiente', 'Valor cuota', 'Fecha proximo pago', 'Total pagado', 'Fecha ultimo pago',
+        'Documento enviado', 'Usuario', 'Email usuario', 'Nombre completo', 'Nombres', 'Apellidos',
+        'Cedula', 'Correo', 'Telefono', 'Direccion', 'Ingresos mensuales', 'Cedula frontal',
+        'Cedula trasera', 'Certificado laboral', 'Desprendible nomina', 'Certificado bancario',
+        'Pagare numero', 'Pagare estado', 'Pagare estado codigo', 'Pagare fecha envio',
+        'Pagare fecha firma',
+    ]
+    headers_reducido = [
+        'Empresa', 'Numero credito', 'Estado', 'Linea', 'Fecha solicitud', 'Monto solicitado',
+        'Plazo solicitado', 'Monto aprobado', 'Plazo aprobado', 'Saldo pendiente', 'Valor cuota',
+        'Fecha proximo pago', 'Total pagado', 'Nombre completo', 'Cedula', 'Correo',
+        'Telefono', 'Pagare estado', 'Pagare fecha firma',
+    ]
+
+    rows = []
     for credito in creditos:
         detalle = credito.detalle_libranza
         usuario = credito.usuario
-        pagare = None
         try:
             pagare = credito.pagare
         except Pagare.DoesNotExist:
             pagare = None
-
-        signed_pdf = ''
-        if pagare:
-            signed_pdf = _file_url(pagare.archivo_pdf_firmado)
-            if not signed_pdf:
-                signed_pdf = pagare.zapsign_signed_file_url or ''
 
         row_completo = [
             empresa.nombre,
@@ -1728,15 +1617,7 @@ def descargar_reporte_pagador_view(request):
             pagare.estado if pagare else '',
             _fmt_dt(pagare.fecha_envio) if pagare else '',
             _fmt_dt(pagare.fecha_firma) if pagare else '',
-            pagare.zapsign_sign_url if pagare else '',
-            _file_url(pagare.archivo_pdf) if pagare else '',
-            signed_pdf,
-            pagare.zapsign_signed_file_url if pagare else '',
-            pagare.hash_pdf if pagare else '',
-            pagare.zapsign_status if pagare else '',
-            pagare.zapsign_doc_token if pagare else '',
         ]
-
         row_reducido = [
             empresa.nombre,
             credito.numero_credito,
@@ -1758,9 +1639,119 @@ def descargar_reporte_pagador_view(request):
             pagare.get_estado_display() if pagare else '',
             _fmt_dt(pagare.fecha_firma) if pagare else '',
         ]
+        rows.append(row_reducido if report_type == 'reducido' else row_completo)
 
-        writer.writerow(row_reducido if report_type == 'reducido' else row_completo)
+    return (headers_reducido if report_type == 'reducido' else headers_completo), rows
 
+
+@login_required
+@pagador_required
+def descargar_csv_cuotas_pendientes_view(request):
+    """
+    Genera y descarga cuotas pendientes en CSV o XLSX.
+    """
+    import csv
+
+    empresa = request.empresa
+    formato = (request.GET.get('formato') or 'csv').strip().lower()
+    if formato not in {'csv', 'xlsx'}:
+        formato = 'csv'
+
+    creditos = Credito.objects.filter(
+        linea=Credito.LineaCredito.LIBRANZA,
+        detalle_libranza__empresa=empresa,
+        estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]
+    ).select_related('detalle_libranza').order_by('detalle_libranza__cedula')
+
+    from decimal import Decimal, ROUND_CEILING
+    rows = []
+    for credito in creditos:
+        cedula = str(credito.detalle_libranza.cedula)
+
+        cuota = credito.tabla_amortizacion.filter(pagada=False).order_by('numero_cuota').first()
+        if cuota:
+            valor = cuota.valor_cuota - (cuota.monto_pagado or Decimal('0.00'))
+        else:
+            valor = credito.valor_cuota or Decimal('0.00')
+
+        if valor < 0:
+            valor = Decimal('0.00')
+
+        monto = int(valor.to_integral_value(rounding=ROUND_CEILING))
+
+        rows.append([cedula, monto])
+
+    filename = f'cuotas_pendientes_{empresa.nombre}_{timezone.now().strftime("%Y%m%d")}'
+    if formato == 'xlsx':
+        from openpyxl import Workbook
+
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}.xlsx"'
+        workbook = Workbook(write_only=True)
+        sheet = workbook.create_sheet(title='Cuotas pendientes')
+        sheet.append(['cedula', 'monto_a_pagar'])
+        for row in rows:
+            sheet.append(row)
+        workbook.save(response)
+        return response
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="{filename}.csv"'
+    response.write('\ufeffsep=,\n')
+    writer = csv.writer(response)
+    writer.writerow(['cedula', 'monto_a_pagar'])
+    writer.writerows(rows)
+    return response
+
+
+@login_required
+@pagador_required
+def descargar_reporte_pagador_view(request):
+    """
+    Genera y descarga un reporte completo de los creditos de libranza de la empresa.
+    """
+    import csv
+
+    empresa = request.empresa
+    search_query = request.GET.get('search', '').strip()
+    estado_filter = request.GET.get('estado', '').strip()
+    sort_by = request.GET.get('sort_by', 'detalle_libranza__cedula')
+    formato = (request.GET.get('formato') or 'csv').strip().lower()
+    if formato not in {'csv', 'xlsx'}:
+        formato = 'csv'
+
+    creditos = _build_pagador_creditos_queryset(empresa, search_query, estado_filter, sort_by)
+
+    report_type = request.GET.get('tipo', 'completo').strip().lower()
+    if report_type not in ['completo', 'reducido']:
+        report_type = 'completo'
+
+    headers, rows = _pagador_report_rows(request, creditos, empresa, report_type)
+    filename = f'reporte_pagador_{report_type}_{empresa.nombre}_{timezone.now().strftime("%Y%m%d")}'
+
+    if formato == 'xlsx':
+        from openpyxl import Workbook
+
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}.xlsx"'
+        workbook = Workbook(write_only=True)
+        sheet = workbook.create_sheet(title='Reporte pagador')
+        sheet.append(headers)
+        for row in rows:
+            sheet.append(row)
+        workbook.save(response)
+        return response
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="{filename}.csv"'
+    response.write('\ufeff')
+    writer = csv.writer(response)
+    writer.writerow(headers)
+    writer.writerows(rows)
     return response
 
 

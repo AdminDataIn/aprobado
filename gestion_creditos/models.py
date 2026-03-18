@@ -124,9 +124,14 @@ class Credito(models.Model):
         EMPRENDIMIENTO = 'EMPRENDIMIENTO', 'Emprendimiento'
         LIBRANZA = 'LIBRANZA', 'Libranza'
 
+    class TipoReglaCredito(models.TextChoices):
+        NORMAL = 'NORMAL', 'Normal'
+        ESPECIAL = 'ESPECIAL', 'Especial'
+
     class EstadoCredito(models.TextChoices):
         SOLICITUD = 'SOLICITUD', 'Solicitud'
         EN_REVISION = 'EN_REVISION', 'En Revisión'
+        APROBADO_PAGADOR = 'APROBADO_PAGADOR', 'Aprobado por Pagador'
         APROBADO = 'APROBADO', 'Aprobado'
         RECHAZADO = 'RECHAZADO', 'Rechazado'
         PENDIENTE_FIRMA = 'PENDIENTE_FIRMA', 'Pendiente Firma'
@@ -224,6 +229,33 @@ class Credito(models.Model):
         help_text="Fecha en la que se realizó el desembolso"
     )
     
+    tipo_regla_credito = models.CharField(
+        max_length=20,
+        choices=TipoReglaCredito.choices,
+        default=TipoReglaCredito.NORMAL,
+        help_text="Permite modelar creditos especiales sin excepciones invisibles."
+    )
+    fecha_primera_cuota_forzada = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Fecha manual de primera cuota para creditos especiales."
+    )
+    plazo_forzado = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Plazo aplicado por regla especial, si difiere del aprobado."
+    )
+    tasa_forzada = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Tasa mensual aplicada por regla especial."
+    )
+    observacion_regla_especial = models.TextField(
+        blank=True,
+        help_text="Justificacion operativa de la regla especial."
+    )
     fecha_solicitud = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
 
@@ -529,7 +561,7 @@ class CreditoLibranza(models.Model):
     #? Información personal del solicitante
     nombres = models.CharField(max_length=100, verbose_name="Nombres")
     apellidos = models.CharField(max_length=100, verbose_name="Apellidos")
-    cedula = models.CharField(max_length=20, unique=True, verbose_name="Número de cédula")
+    cedula = models.CharField(max_length=20, verbose_name="Numero de cedula")
     direccion = models.CharField(max_length=255, verbose_name="Dirección de residencia")
     telefono = models.CharField(max_length=20, verbose_name="Teléfono de contacto")
     correo_electronico = models.EmailField(verbose_name="Correo electrónico")

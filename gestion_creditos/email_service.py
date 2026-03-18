@@ -187,6 +187,7 @@ def enviar_notificacion_cambio_estado(credito, nuevo_estado, motivo=""):
     config = configuraciones.get(nuevo_estado)
     if not config:
         if nuevo_estado in {
+            Credito.EstadoCredito.APROBADO_PAGADOR,
             Credito.EstadoCredito.APROBADO,
             Credito.EstadoCredito.PENDIENTE_FIRMA,
         }:

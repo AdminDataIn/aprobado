@@ -4,6 +4,7 @@ Incluye generacion de hash SHA-256 para trazabilidad legal.
 """
 
 import hashlib
+import json
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -15,6 +16,7 @@ from django.utils import timezone
 from weasyprint import HTML
 
 from gestion_creditos.models import Credito, Pagare
+from gestion_creditos.services.libranza_rules import obtener_fecha_primera_cuota_credito
 from gestion_creditos.services.tasa_service import obtener_tasa_credito
 from .pagare_utils import numero_a_letras, numero_a_letras_simple, formatear_cop
 
@@ -40,7 +42,7 @@ def _mes_en_espanol(fecha):
     return MESES_ESPANOL.get(fecha.month, '')
 
 
-def generar_pagare_pdf(credito, usuario_creador=None):
+def generar_pagare_pdf(credito, usuario_creador=None, forzar_regeneracion=False):
     """
     Genera el PDF del pagare para un credito aprobado.
 
@@ -62,6 +64,7 @@ def generar_pagare_pdf(credito, usuario_creador=None):
         raise ValueError("Solo se pueden generar pagares para creditos de EMPRENDIMIENTO o LIBRANZA")
 
     estados_permitidos = [
+        Credito.EstadoCredito.APROBADO_PAGADOR,
         Credito.EstadoCredito.APROBADO,
         Credito.EstadoCredito.PENDIENTE_FIRMA,
         Credito.EstadoCredito.FIRMADO,
@@ -79,14 +82,32 @@ def generar_pagare_pdf(credito, usuario_creador=None):
         raise ValueError("El credito no tiene detalle asociado")
 
     pagare_existente = getattr(credito, 'pagare', None)
-    if pagare_existente and _archivo_existe(pagare_existente.archivo_pdf.name):
-        return pagare_existente
-
     pagare = pagare_existente or _crear_pagare_base(credito, usuario_creador)
     pagare_nuevo = pagare_existente is None
 
     try:
         contexto = _preparar_contexto_pagare(credito, detalle, pagare.numero_pagare)
+        contexto_hash = _fingerprint_contexto_pagare(contexto)
+        hash_anterior = ((pagare.evidencias or {}).get('contexto_pagare_hash') if pagare else None)
+
+        if pagare_existente and pagare.estado in [Pagare.EstadoPagare.SENT, Pagare.EstadoPagare.SIGNED]:
+            if forzar_regeneracion and hash_anterior and hash_anterior != contexto_hash:
+                raise ValueError(
+                    f"El pagare {pagare.numero_pagare} ya fue enviado o firmado y requiere "
+                    "una remision controlada para regenerarse."
+                )
+            if _archivo_existe(pagare.archivo_pdf.name):
+                return pagare
+
+        if (
+            pagare_existente
+            and not forzar_regeneracion
+            and _archivo_existe(pagare.archivo_pdf.name)
+            and hash_anterior
+            and hash_anterior == contexto_hash
+        ):
+            return pagare
+
         html_string = render_to_string('pagares/pagare_v1.0.html', contexto)
 
         pdf_bytes = HTML(string=html_string).write_pdf()
@@ -104,7 +125,11 @@ def generar_pagare_pdf(credito, usuario_creador=None):
         pagare.archivo_pdf.name = ruta_relativa
         pagare.hash_pdf = hash_pdf
         pagare.version_plantilla = '1.0'
-        pagare.save(update_fields=['archivo_pdf', 'hash_pdf', 'version_plantilla'])
+        evidencias = dict(pagare.evidencias or {})
+        evidencias['contexto_pagare_hash'] = contexto_hash
+        evidencias['contexto_pagare_generado_en'] = timezone.now().isoformat()
+        pagare.evidencias = evidencias
+        pagare.save(update_fields=['archivo_pdf', 'hash_pdf', 'version_plantilla', 'evidencias'])
 
         return pagare
 
@@ -118,6 +143,11 @@ def _archivo_existe(ruta_relativa):
     if not ruta_relativa:
         return False
     return (Path(settings.MEDIA_ROOT) / ruta_relativa).exists()
+
+
+def _fingerprint_contexto_pagare(contexto):
+    payload = json.dumps(contexto, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha256(payload.encode('utf-8')).hexdigest()
 
 
 def _crear_pagare_base(credito, usuario_creador=None):
@@ -170,7 +200,7 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
 
     hoy = timezone.localdate()
     fecha_expedicion = _fecha_en_espanol(hoy)
-    fecha_primer_pago = credito.fecha_proximo_pago or (hoy + timedelta(days=30))
+    fecha_primer_pago = credito.fecha_proximo_pago or obtener_fecha_primera_cuota_credito(credito, hoy)
     fecha_vencimiento = _calcular_fecha_vencimiento(fecha_primer_pago, credito.plazo or 0)
 
     plazo_cuotas = credito.plazo or 0

@@ -154,13 +154,17 @@
                 </h3>
                 <div class="d-flex gap-2 align-items-center">
                     <div class="btn-group">
-                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=reducido{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
-                            <i class="bi bi-file-earmark-spreadsheet"></i>
-                            Reporte reducido
+                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=reducido&formato=csv{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
+                            <i class="bi bi-filetype-csv"></i>
+                            Reducido CSV
                         </a>
-                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=completo{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
+                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=reducido&formato=xlsx{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
+                            <i class="bi bi-file-earmark-spreadsheet"></i>
+                            Reducido Excel
+                        </a>
+                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=completo&formato=xlsx{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
                             <i class="bi bi-file-earmark-text"></i>
-                            Reporte completo
+                            Completo Excel
                         </a>
                     </div>
                     <button class="btn btn-sm btn-outline-primary" onclick="location.reload()">
@@ -236,7 +240,11 @@
                                 {% endif %}
                             </td>
                             <td class="text-center" data-label="Estado">
-                                {% if credito.pagador_decision_estado == 'APROBADO' %}
+                                {% if credito.estado == 'PENDIENTE_FIRMA' %}
+                                    <span class="status-badge status-approved">Pendiente de firma</span>
+                                {% elif credito.estado == 'PENDIENTE_TRANSFERENCIA' %}
+                                    <span class="status-badge status-pending">Pendiente de transferencia</span>
+                                {% elif credito.pagador_decision_estado == 'APROBADO_PAGADOR' %}
                                     <span class="status-badge status-approved">Aprobado por pagador</span>
                                 {% elif credito.pagador_decision_estado == 'RECHAZADO' %}
                                     <span class="status-badge status-rejected">Rechazado por pagador</span>
@@ -256,7 +264,7 @@
                                         <i class="bi bi-eye"></i> Ver Detalle
                                     </a>
                                     {% if credito.estado == 'EN_REVISION' %}
-                                        {% if credito.pagador_decision_estado == 'APROBADO' %}
+                                        {% if credito.pagador_decision_estado == 'APROBADO_PAGADOR' %}
                                         <div class="small text-success fw-semibold">
                                             <i class="bi bi-check-circle-fill me-1"></i>Decisión registrada
                                         </div>
@@ -272,6 +280,15 @@
                                             <span>Decidir</span>
                                         </button>
                                         {% endif %}
+                                    {% endif %}
+                                    {% if credito.estado == 'PENDIENTE_FIRMA' %}
+                                    <div class="small text-success fw-semibold">
+                                        <i class="bi bi-pen me-1"></i>Pagare enviado a firma
+                                    </div>
+                                    {% elif credito.estado == 'PENDIENTE_TRANSFERENCIA' %}
+                                    <div class="small text-primary fw-semibold">
+                                        <i class="bi bi-bank me-1"></i>Esperando desembolso
+                                    </div>
                                     {% endif %}
                                     {% if credito.pagador_decision_motivo %}
                                     <div class="small text-muted">Motivo: {{ credito.pagador_decision_motivo }}</div>
@@ -402,8 +419,13 @@
                             </button>
                         </div>
                         <div class="col-lg-auto">
-                            <a href="{% url 'pagador:descargar_csv_cuotas' %}" class="btn btn-success">
+                            <a href="{% url 'pagador:descargar_csv_cuotas' %}?formato=csv" class="btn btn-success">
                                 <i class="bi bi-file-earmark-spreadsheet me-1"></i> Descargar Cuotas Pendientes
+                            </a>
+                        </div>
+                        <div class="col-lg-auto">
+                            <a href="{% url 'pagador:descargar_csv_cuotas' %}?formato=xlsx" class="btn btn-outline-success">
+                                <i class="bi bi-file-earmark-excel me-1"></i> Cuotas Pendientes Excel
                             </a>
                         </div>
                         <div class="col-lg-auto">

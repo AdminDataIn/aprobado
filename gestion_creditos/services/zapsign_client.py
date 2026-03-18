@@ -364,8 +364,13 @@ def enviar_pagare_a_zapsign(pagare: Pagare, url_pdf_publica: str) -> Pagare:
         pagare.save()
 
         enviar_email_local = getattr(settings, 'ZAPSIGN_SEND_LOCAL_EMAIL', False)
-        enviar_copias_firma = getattr(settings, 'ZAPSIGN_SEND_COPY_EMAILS', True)
-        if sign_url and (enviar_email_local or enviar_copias_firma):
+        enviar_copias_firma = getattr(settings, 'ZAPSIGN_SEND_COPY_EMAILS', False)
+        send_automatic_email = _to_bool(
+            getattr(settings, 'ZAPSIGN_SEND_AUTOMATIC_EMAIL', True),
+            default=True
+        )
+        enviar_principal_por_email_local = bool(enviar_email_local and not send_automatic_email)
+        if sign_url and (enviar_principal_por_email_local or enviar_copias_firma):
             try:
                 from gestion_creditos.email_service import enviar_email_simple
                 asunto = f"Firma de pagar? {pagare.numero_pagare}"
@@ -374,11 +379,12 @@ def enviar_pagare_a_zapsign(pagare: Pagare, url_pdf_publica: str) -> Pagare:
                     f"Ya puedes firmar tu pagar? desde este enlace:\n{sign_url}\n\n"
                     "Si no solicitaste este cr?dito, por favor ignora este mensaje."
                 )
-                # Si ZapSign no envia correo automatico, enviamos al principal por canal local.
-                if enviar_email_local:
+                # El correo principal solo se envia por canal local cuando ZapSign automatico
+                # esta desactivado y el fallback local fue habilitado explicitamente.
+                if enviar_principal_por_email_local:
                     enviar_email_simple(email_firmante, asunto, mensaje)
 
-                # Copias al correo de usuario y al correo social (Google), sin duplicados.
+                # Copias opcionales al correo de usuario y/o correo social, sin duplicados.
                 if enviar_copias_firma:
                     for email_copia in emails_copia:
                         enviar_email_simple(email_copia, asunto, mensaje)

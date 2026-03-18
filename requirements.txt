@@ -19,6 +19,7 @@ idna==3.10
 jiter==0.10.0
 mysqlclient==2.2.7
 openai==1.82.1
+openpyxl==3.1.5
 packaging==25.0
 psycopg2-binary==2.9.10
 pycparser==2.22

@@ -21,14 +21,12 @@ BANCOS_CONOCIDOS = {
     'davivienda': 'Davivienda',
     'bbva': 'BBVA',
     'banco de bogota': 'Banco de Bogota',
-    'banco de bogot?': 'Banco de Bogota',
     'banco de occidente': 'Banco de Occidente',
     'banco popular': 'Banco Popular',
     'banco caja social': 'Banco Caja Social',
     'scotiabank colpatria': 'Scotiabank Colpatria',
     'colpatria': 'Scotiabank Colpatria',
     'itau': 'Itau',
-    'ita?': 'Itau',
     'av villas': 'AV Villas',
     'avvillas': 'AV Villas',
     'banco agrario': 'Banco Agrario',
@@ -40,17 +38,14 @@ BANCOS_CONOCIDOS = {
 
 PALABRAS_INVALIDAS_TITULAR = {
     'deposito',
-    'dep?sito',
     'bajo',
     'monto',
     'caracteristicas',
-    'caracter?sticas',
     'interesar',
     'equipo',
     'nequi',
     'banco',
     'bogota',
-    'bogot?',
 }
 
 
@@ -79,7 +74,7 @@ def _titulo_nombre(nombre):
 
 def _limpiar_nombre_candidato(nombre):
     nombre = re.sub(r'[\r\n\t]+', ' ', nombre or '')
-    nombre = re.sub(r'[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]', ' ', nombre)
+    nombre = re.sub(r'[^A-Za-z\s]', ' ', nombre)
     nombre = re.sub(r'\s+', ' ', nombre).strip()
     return nombre
 
@@ -87,7 +82,7 @@ def _limpiar_nombre_candidato(nombre):
 def _es_nombre_valido(nombre):
     if not nombre:
         return False
-    nombre_limpio = re.sub(r'[^A-Za-z????????????\s]', ' ', nombre)
+    nombre_limpio = re.sub(r'[^A-Za-z\s]', ' ', nombre)
     nombre_limpio = re.sub(r'\s+', ' ', nombre_limpio).strip()
     palabras = nombre_limpio.split()
     if len(palabras) < 2:
@@ -95,7 +90,6 @@ def _es_nombre_valido(nombre):
     if any(_normalizar_busqueda(p) in PALABRAS_INVALIDAS_TITULAR for p in palabras):
         return False
     return True
-
 
 def _titular_luce_incompleto(nombre):
     if not nombre:
@@ -245,13 +239,13 @@ def _buscar_patron(texto, patrones, flags=re.IGNORECASE | re.DOTALL):
 def _extraer_titular_generico(texto_crudo, texto_compacto):
     candidatos = [
         _buscar_patron(texto_crudo, [
-            r'informa\s+que\s+([A-Z??????\s]{8,80}?)\s*,\s*identificad',
-            r'informar\s+que\s+([A-Z??????\s]{8,80}?)\s+identificad',
-            r'certifica\s+que\s+([A-Z??????\s]{8,80}?)\s*,\s*identificad',
+            r'informa\s+que\s+([A-Z\s]{8,80}?)\s*,\s*identificad',
+            r'informar\s+que\s+([A-Z\s]{8,80}?)\s+identificad',
+            r'certifica\s+que\s+([A-Z\s]{8,80}?)\s*,\s*identificad',
         ]),
         _buscar_patron(texto_compacto, [
-            r'informa\s+que\s+([A-Z??????\s]{8,80}?)\s*,\s*identificad',
-            r'informar\s+que\s+([A-Z??????\s]{8,80}?)\s+identificad',
+            r'informa\s+que\s+([A-Z\s]{8,80}?)\s*,\s*identificad',
+            r'informar\s+que\s+([A-Z\s]{8,80}?)\s+identificad',
         ], flags=re.IGNORECASE),
     ]
 
@@ -264,7 +258,7 @@ def _extraer_titular_generico(texto_crudo, texto_compacto):
 
 def _extraer_tipo_cuenta_generico(texto_compacto):
     texto_busqueda = _normalizar_busqueda(texto_compacto)
-    if 'deposito de bajo monto' in texto_busqueda or 'dep?sito de bajo monto' in texto_busqueda:
+    if 'deposito de bajo monto' in texto_busqueda or 'deposito de bajo monto' in texto_busqueda:
         return 'Deposito de bajo monto'
     if 'cuentas de ahorros' in texto_busqueda or 'cuenta de ahorros' in texto_busqueda or 'ahorros' in texto_busqueda:
         return 'Ahorros'
@@ -277,13 +271,13 @@ def _extraer_numero_cuenta_generico(texto_crudo, texto_compacto):
     candidatos = [
         _buscar_patron(texto_crudo, [
             r'cuentas?\s+de\s+ahorros\s+no\.?\s*([0-9][0-9\-\s]{5,25})',
-            r'cuenta\s+(?:de\s+)?(?:ahorros|corriente)?\s*(?:no\.?|numero|n?mero|nro\.?)\s*([0-9][0-9\-\s]{5,25})',
+            r'cuenta\s+(?:de\s+)?(?:ahorros|corriente)?\s*(?:no\.?|numero|numero|nro\.?)\s*([0-9][0-9\-\s]{5,25})',
             r'numero\s+de\s+deposito\s*(?:nequi)?\s*([0-9][0-9\-\s]{5,25})',
             r'(\d{8,12})\s+ACTIVA',
         ]),
         _buscar_patron(texto_compacto, [
             r'cuentas?\s+de\s+ahorros\s+no\.?\s*([0-9][0-9\-\s]{5,25})',
-            r'cuenta\s+(?:de\s+)?(?:ahorros|corriente)?\s*(?:no\.?|numero|n?mero|nro\.?)\s*([0-9][0-9\-\s]{5,25})',
+            r'cuenta\s+(?:de\s+)?(?:ahorros|corriente)?\s*(?:no\.?|numero|numero|nro\.?)\s*([0-9][0-9\-\s]{5,25})',
             r'numero\s+de\s+deposito\s*(?:nequi)?\s*([0-9][0-9\-\s]{5,25})',
             r'(\d{8,12})\s+ACTIVA',
         ], flags=re.IGNORECASE),

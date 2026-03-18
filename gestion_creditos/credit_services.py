@@ -8,6 +8,12 @@ from openai import OpenAI
 from configuraciones.models import ConfiguracionPeso
 from .models import Credito, HistorialEstado, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, HistorialPago, CuotaAmortizacion
 from .services.tasa_service import obtener_tasa_credito
+from .services.libranza_rules import (
+    calcular_primera_fecha_pago_libranza,
+    obtener_fecha_primera_cuota_credito,
+    obtener_plazo_credito_aplicado,
+    obtener_tasa_credito_aplicada,
+)
 from django.db.models import Sum, Count, Case, When, F, DecimalField, Q, Avg, Value, ExpressionWrapper, Value, ExpressionWrapper
 from django.db.models.functions import TruncMonth, Coalesce
 from django.utils import timezone
@@ -87,7 +93,7 @@ def preparar_documento_para_firma(credito, usuario_modificacion):
             )
             return
 
-        pagare = generar_pagare_pdf(credito, usuario_modificacion)
+        pagare = generar_pagare_pdf(credito, usuario_modificacion, forzar_regeneracion=True)
         if pagare.estado == Pagare.EstadoPagare.CREATED:
             pagare_id = pagare.id
 
@@ -212,7 +218,7 @@ def actualizar_saldo_tras_pago(credito, monto_pagado):
     updated_fields = []
 
     if credito.tasa_interes is None:
-        credito.tasa_interes = obtener_tasa_credito(credito.linea)
+        credito.tasa_interes = obtener_tasa_credito_aplicada(credito, obtener_tasa_credito(credito.linea))
         updated_fields.append('tasa_interes')
 
     if credito.comision is None:
@@ -251,10 +257,7 @@ def actualizar_saldo_tras_pago(credito, monto_pagado):
 
     if credito.fecha_proximo_pago is None:
         hoy = timezone.now().date()
-        if hoy.day <= 15:
-            credito.fecha_proximo_pago = hoy + relativedelta(months=1)
-        else:
-            credito.fecha_proximo_pago = (hoy + relativedelta(months=2)).replace(day=1)
+        credito.fecha_proximo_pago = obtener_fecha_primera_cuota_credito(credito, hoy)
         updated_fields.append('fecha_proximo_pago')
 
     if updated_fields:
@@ -702,6 +705,9 @@ def activar_credito(credito):
         # Asignar tasa según la línea
         tasa_interes = obtener_tasa_credito(credito.linea)
 
+    plazo_aplicado = obtener_plazo_credito_aplicado(credito)
+    tasa_interes = obtener_tasa_credito_aplicada(credito, tasa_interes)
+
     # ✅ Calcular componentes financieros
     comision = credito.comision or (credito.monto_aprobado * Decimal('0.10'))
     iva_comision = credito.iva_comision or (comision * Decimal('0.19'))
@@ -713,17 +719,18 @@ def activar_credito(credito):
     tasa_mensual = tasa_interes / Decimal(100)
     if tasa_mensual > 0:
         # Fórmula de amortización francesa: C = P * [i(1+i)^n] / [(1+i)^n - 1]
-        factor = (tasa_mensual * (1 + tasa_mensual) ** credito.plazo) / (((1 + tasa_mensual) ** credito.plazo) - 1)
+        factor = (tasa_mensual * (1 + tasa_mensual) ** plazo_aplicado) / (((1 + tasa_mensual) ** plazo_aplicado) - 1)
         valor_cuota = capital_financiado * factor
     else:
         # Caso sin interés (división simple del capital financiado)
-        valor_cuota = capital_financiado / credito.plazo
+        valor_cuota = capital_financiado / plazo_aplicado
 
     # Total a pagar es la suma de todas las cuotas
-    total_a_pagar = valor_cuota * credito.plazo
+    total_a_pagar = valor_cuota * plazo_aplicado
 
     # ✅ Actualizar campos financieros en el crédito
     credito.tasa_interes = tasa_interes
+    credito.plazo = plazo_aplicado
     credito.comision = comision
     credito.iva_comision = iva_comision
     credito.total_a_pagar = total_a_pagar
@@ -737,12 +744,7 @@ def activar_credito(credito):
 
     # ✅ Calcular fecha de primer pago
     hoy = timezone.now().date()
-    if hoy.day <= 15:
-        # Si es antes del 15, el pago es el mismo día del próximo mes
-        credito.fecha_proximo_pago = hoy + relativedelta(months=1)
-    else:
-        # Si es después del 15, el pago es el 1ro del mes subsiguiente
-        credito.fecha_proximo_pago = (hoy + relativedelta(months=2)).replace(day=1)
+    credito.fecha_proximo_pago = obtener_fecha_primera_cuota_credito(credito, hoy)
 
     credito.fecha_desembolso = timezone.now()
     credito.save()
@@ -753,13 +755,13 @@ def activar_credito(credito):
     fecha_cuota = credito.fecha_proximo_pago
 
     cuotas = []
-    for i in range(1, credito.plazo + 1):
+    for i in range(1, plazo_aplicado + 1):
         # Calcular interés sobre el saldo restante
         interes_a_pagar = saldo_capital_restante * tasa_mensual
         capital_a_pagar = credito.valor_cuota - interes_a_pagar
 
         # Ajuste para la última cuota para evitar diferencias por redondeo
-        if i == credito.plazo:
+        if i == plazo_aplicado:
             capital_a_pagar = saldo_capital_restante
             interes_a_pagar = credito.valor_cuota - capital_a_pagar
             if interes_a_pagar < 0:

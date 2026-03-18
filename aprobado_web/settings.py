@@ -18,6 +18,10 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key')  # clave de respaldo
 # Si existe la variable RENDER, asumimos que estamos en producción
 DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
+def env_bool(name, default=False):
+    value = os.environ.get(name, str(default))
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'on', 'si', 'sí')
+
 def _split_env_list(name, default=''):
     value = os.environ.get(name, default)
     return [item.strip() for item in value.split(',') if item.strip()]
@@ -38,6 +42,18 @@ CREDIT_INTERNAL_NOTIFICATION_EMAILS = _split_env_list(
 # Se usan en simuladores, pagare y activacion financiera.
 LIBRANZA_TASA_MENSUAL = os.environ.get('LIBRANZA_TASA_MENSUAL', '1.9')
 EMPRENDIMIENTO_TASA_MENSUAL = os.environ.get('EMPRENDIMIENTO_TASA_MENSUAL', '3.5')
+ALLOW_MULTIPLE_LIBRANZA_ACTIVE_CREDITS_FOR_TESTING = env_bool(
+    'ALLOW_MULTIPLE_LIBRANZA_ACTIVE_CREDITS_FOR_TESTING',
+    False
+)
+WHATSAPP_SUPPORT_NUMBER = os.environ.get('WHATSAPP_SUPPORT_NUMBER', '573132477352')
+WHATSAPP_DEFAULT_MESSAGE = os.environ.get(
+    'WHATSAPP_DEFAULT_MESSAGE',
+    'Hola, necesito ayuda con Aprobado.'
+)
+WHATSAPP_FLOATING_ENABLED = env_bool('WHATSAPP_FLOATING_ENABLED', True)
+ZAPSIGN_SEND_LOCAL_EMAIL = env_bool('ZAPSIGN_SEND_LOCAL_EMAIL', False)
+ZAPSIGN_SEND_COPY_EMAILS = env_bool('ZAPSIGN_SEND_COPY_EMAILS', False)
 
 ALLOWED_HOSTS = _split_env_list(
     'ALLOWED_HOSTS',
@@ -115,6 +131,8 @@ SOCIALACCOUNT_PROVIDERS = {
 }
 
 ACCOUNT_ADAPTER = 'usuarios.adapter.AccountAdapter'
+SOCIALACCOUNT_ADAPTER = 'usuarios.adapter.CustomSocialAccountAdapter'
+ACCOUNT_UNIQUE_EMAIL = True
 
 if DEBUG:
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
@@ -149,6 +167,7 @@ TEMPLATES = [
                 'usuarios.context_processors.user_groups_processor',
                 'usuarios.context_processors.notificaciones_processor',
                 'usuarios.context_processors.producto_context_processor',
+                'usuarios.context_processors.public_whatsapp_processor',
             ],
         },
     },
@@ -284,10 +303,6 @@ ZAPSIGN_API_TOKEN = os.environ.get('ZAPSIGN_API_TOKEN', '')
 ZAPSIGN_WEBHOOK_SECRET = os.environ.get('ZAPSIGN_WEBHOOK_SECRET', '')
 ZAPSIGN_WEBHOOK_HEADER = os.environ.get('ZAPSIGN_WEBHOOK_HEADER', 'X-ZapSign-Secret')
 ZAPSIGN_ENVIRONMENT = os.environ.get('ZAPSIGN_ENVIRONMENT', 'sandbox')  # 'sandbox' o 'production'
-def env_bool(name, default=False):
-    value = os.environ.get(name, str(default))
-    return str(value).strip().lower() in ('1', 'true', 'yes', 'on', 'si', 'sí')
-
 ZAPSIGN_AUTH_MODE = os.environ.get('ZAPSIGN_AUTH_MODE', 'assinaturaTela')
 ZAPSIGN_SEND_AUTOMATIC_EMAIL = env_bool('ZAPSIGN_SEND_AUTOMATIC_EMAIL', True)
 
