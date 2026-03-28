@@ -60,6 +60,19 @@ def obtener_fecha_primera_cuota_credito(credito, fecha_aprobacion=None):
     )
 
 
+def reprogramar_cuotas_pendientes(credito, fecha_primera_cuota):
+    fecha_cursor = _to_date(fecha_primera_cuota)
+    cuotas_pendientes = list(credito.tabla_amortizacion.filter(pagada=False).order_by('numero_cuota'))
+    for cuota in cuotas_pendientes:
+        cuota.fecha_vencimiento = fecha_cursor
+        cuota.save(update_fields=['fecha_vencimiento'])
+        fecha_cursor += relativedelta(months=1)
+
+    credito.fecha_proximo_pago = fecha_primera_cuota
+    credito.save(update_fields=['fecha_proximo_pago'])
+    return cuotas_pendientes
+
+
 def _to_date(value):
     if isinstance(value, datetime):
         return value.date()
