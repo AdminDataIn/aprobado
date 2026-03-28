@@ -1081,6 +1081,9 @@ def marcar_creditos_en_mora():
         fecha_proximo_pago__lt=hoy
     ).distinct()
 
+    if not getattr(settings, 'LIBRANZA_AUTO_MARK_MORA_ENABLED', True):
+        creditos_vencidos = creditos_vencidos.exclude(linea=Credito.LineaCredito.LIBRANZA)
+
     creditos_actualizados = 0
     for credito in creditos_vencidos:
         try:

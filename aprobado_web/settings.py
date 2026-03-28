@@ -42,10 +42,16 @@ CREDIT_INTERNAL_NOTIFICATION_EMAILS = _split_env_list(
 # Se usan en simuladores, pagare y activacion financiera.
 LIBRANZA_TASA_MENSUAL = os.environ.get('LIBRANZA_TASA_MENSUAL', '1.9')
 EMPRENDIMIENTO_TASA_MENSUAL = os.environ.get('EMPRENDIMIENTO_TASA_MENSUAL', '3.5')
+ADELANTO_NOMINA_TASA_MENSUAL = os.environ.get('ADELANTO_NOMINA_TASA_MENSUAL', '1.9')
+ADELANTO_NOMINA_COMISION_PERCENT = os.environ.get('ADELANTO_NOMINA_COMISION_PERCENT', '10')
+ADELANTO_NOMINA_CAPACIDAD_PORCENTAJE = os.environ.get('ADELANTO_NOMINA_CAPACIDAD_PORCENTAJE', '25')
 ALLOW_MULTIPLE_LIBRANZA_ACTIVE_CREDITS_FOR_TESTING = env_bool(
     'ALLOW_MULTIPLE_LIBRANZA_ACTIVE_CREDITS_FOR_TESTING',
     False
 )
+LIBRANZA_AUTO_MARK_MORA_ENABLED = env_bool('LIBRANZA_AUTO_MARK_MORA_ENABLED', True)
+LIBRANZA_PAYMENT_REMINDERS_ENABLED = env_bool('LIBRANZA_PAYMENT_REMINDERS_ENABLED', True)
+LIBRANZA_MORA_ALERTS_ENABLED = env_bool('LIBRANZA_MORA_ALERTS_ENABLED', True)
 WHATSAPP_SUPPORT_NUMBER = os.environ.get('WHATSAPP_SUPPORT_NUMBER', '573132477352')
 WHATSAPP_DEFAULT_MESSAGE = os.environ.get(
     'WHATSAPP_DEFAULT_MESSAGE',
@@ -116,12 +122,13 @@ SITE_ID = 1
 # ========================================
 # Django Allauth - Autenticación
 # ========================================
-LOGIN_URL = '/accounts/google/login/'
-LOGIN_REDIRECT_URL = '/emprendimiento/solicitar/'  # NUEVA URL - Redirige a solicitud de emprendimiento
-ACCOUNT_EMAIL_REQUIRED = True
-ACCOUNT_USERNAME_REQUIRED = False
-ACCOUNT_LOGOUT_REDIRECT_URL = '/'  # NUEVA URL - Redirige a home (landing emprendimiento)
+LOGIN_URL = '/auth/login/'
+LOGIN_REDIRECT_URL = '/'
+ACCOUNT_LOGOUT_REDIRECT_URL = '/'
 SOCIALACCOUNT_AUTO_SIGNUP = True
+ACCOUNT_LOGIN_METHODS = {'email'}
+ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
+ACCOUNT_EMAIL_VERIFICATION = 'optional'
 
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
@@ -144,8 +151,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'usuarios.middleware.ProductoContextMiddleware',  # Detecta producto (libranza/emprendimiento) por URL - DEBE ir después de AuthenticationMiddleware
     'django.contrib.messages.middleware.MessageMiddleware',
+    'usuarios.middleware.ProductoContextMiddleware',  # Detecta producto con auth/messages ya disponibles
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',

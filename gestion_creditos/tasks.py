@@ -9,6 +9,7 @@ Este módulo contiene todas las tareas que se ejecutan de forma automática:
 """
 import logging
 from celery import shared_task
+from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
 from .models import Credito
@@ -20,6 +21,13 @@ from .email_service import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _debe_omitir_automatizacion_libranza(credito, setting_name):
+    return (
+        credito.linea == Credito.LineaCredito.LIBRANZA
+        and not getattr(settings, setting_name, True)
+    )
 
 
 @shared_task(name='gestion_creditos.tasks.marcar_creditos_en_mora_task')
@@ -87,6 +95,12 @@ def enviar_recordatorios_pago_task():
             ).select_related('usuario')
 
             for credito in creditos:
+                if _debe_omitir_automatizacion_libranza(credito, 'LIBRANZA_PAYMENT_REMINDERS_ENABLED'):
+                    logger.info(
+                        "Recordatorio omitido para crédito %s por configuración de Libranza.",
+                        credito.numero_credito,
+                    )
+                    continue
                 try:
                     exito = enviar_recordatorio_pago(credito, dias)
                     if exito:
@@ -140,6 +154,12 @@ def enviar_alertas_mora_task():
         ).select_related('usuario')
 
         for credito in creditos_mora:
+            if _debe_omitir_automatizacion_libranza(credito, 'LIBRANZA_MORA_ALERTS_ENABLED'):
+                logger.info(
+                    "Alerta de mora omitida para crédito %s por configuración de Libranza.",
+                    credito.numero_credito,
+                )
+                continue
             try:
                 dias_mora = credito.dias_en_mora
 
