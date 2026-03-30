@@ -7,6 +7,7 @@ from django.views.generic import TemplateView
 
 from gestion_creditos import views as gestion_views
 from gestion_creditos.services.pagare_url import descargar_pagare_publico
+from usuarios import views as usuarios_views
 
 
 common_urlpatterns = [
@@ -19,6 +20,7 @@ common_urlpatterns = [
     path("api/pagares/download/<str:token>/", descargar_pagare_publico, name="descargar_pagare_publico"),
 
     # Autenticacion
+    path("auth/login/", usuarios_views.login_dispatch_view, name="login_dispatch"),
     path("accounts/", include("allauth.urls")),
 
     # Legales

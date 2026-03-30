@@ -1,24 +1,51 @@
 {% extends "base_general.html" %}
 {% load socialaccount %}
 
-{% block title %}Iniciar Sesión{% endblock %}
+{% block title %}Acceso general - Aprobado{% endblock %}
 
 {% block content %}
-<div style="max-width: 500px; margin: 4rem auto; padding: 2rem; box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 8px; text-align: center; background: white;">
-    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-         alt="Google" style="height: 40px; margin-bottom: 1rem;">
-    <h2 style="color: #202124; margin-bottom: 0.5rem;">Inicio de sesión con Google</h2>
-    <p style="color: #5f6368; margin-bottom: 2rem;">
-        Debes iniciar sesión con tu cuenta de Google para continuar
-    </p>
+{% include "account/_auth_content_styles.html" %}
 
-    <a href="{% provider_login_url 'google' %}"
-       style="display: flex; align-items: center; justify-content: center;
-              background: #4285F4; color: white; text-decoration: none; border-radius: 4px;
-              padding: 12px 24px; font-size: 1rem; cursor: pointer; width: 100%;">
-        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-             alt="Google" style="height: 20px; margin-right: 12px;">
-        Continuar con Google
-    </a>
-</div>
+<main class="section-main">
+  <section class="hero-section-account">
+    <div class="container-account">
+      <div class="div-card-agent-account is-status-card">
+        <div class="mb-3">
+          <span class="badge rounded-pill border">Acceso general</span>
+        </div>
+        <h1>Accede a tu cuenta</h1>
+        <p class="auth-desc">Usa este acceso solo cuando vengas de un flujo interno de autenticacion. Para clientes, entra desde Libranza, Emprendimiento, Marketplace o Inversionista.</p>
+
+        <form method="post">
+          {% csrf_token %}
+          {% if form.non_field_errors %}
+          <div class="alert alert-danger py-2">{{ form.non_field_errors }}</div>
+          {% endif %}
+          <div class="auth-field">
+            <label class="form-label" for="{{ form.login.id_for_label }}">Correo</label>
+            {{ form.login }}
+          </div>
+          <div class="auth-field">
+            <label class="form-label" for="{{ form.password.id_for_label }}">Contrasena</label>
+            {{ form.password }}
+          </div>
+          {% if redirect_field_value %}
+          <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}">
+          {% endif %}
+          <div class="forgot-row">
+            <a href="/accounts/password/reset/">Recuperar acceso</a>
+          </div>
+          <button type="submit" class="btn-account">Continuar con correo</button>
+        </form>
+
+        <div class="auth-divider">o continua con</div>
+        <a href="{% provider_login_url 'google' %}" class="btn-social-account">Continuar con Google</a>
+
+        <div class="auth-footer-links is-centered">
+          <a href="{% url 'home' %}">&larr; Volver al inicio</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
 {% endblock %}

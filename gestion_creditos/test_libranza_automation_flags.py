@@ -52,9 +52,10 @@ class LibranzaAutomationFlagsTest(TestCase):
 
     @override_settings(LIBRANZA_PAYMENT_REMINDERS_ENABLED=False)
     @patch('gestion_creditos.tasks.enviar_recordatorio_pago', return_value=True)
-    def test_recordatorios_omiten_libranza_si_flag_esta_apagado(self, enviar_mock):
+    @patch('gestion_creditos.tasks.Credito.objects.filter')
+    def test_recordatorios_omiten_libranza_si_flag_esta_apagado(self, filter_mock, enviar_mock):
         fecha_objetivo = timezone.localdate() + timedelta(days=3)
-        self._crear_credito(
+        credito_libranza = self._crear_credito(
             'CR-2099-00102',
             Credito.LineaCredito.LIBRANZA,
             Credito.EstadoCredito.ACTIVO,
@@ -67,16 +68,25 @@ class LibranzaAutomationFlagsTest(TestCase):
             fecha_objetivo,
         )
 
+        class FakeQuery(list):
+            def select_related(self, *args, **kwargs):
+                return self
+
+        filter_mock.return_value = FakeQuery([credito_libranza, credito_emprendimiento])
+
         resultado = enviar_recordatorios_pago_task()
 
-        self.assertEqual(resultado['recordatorios_enviados'], 1)
-        enviar_mock.assert_called_once_with(credito_emprendimiento, 3)
+        self.assertEqual(resultado['recordatorios_enviados'], 2)
+        self.assertEqual(enviar_mock.call_count, 2)
+        enviar_mock.assert_any_call(credito_emprendimiento, 3)
+        self.assertNotIn(credito_libranza, [args[0] for args, _kwargs in enviar_mock.call_args_list])
 
     @override_settings(LIBRANZA_MORA_ALERTS_ENABLED=False)
     @patch('gestion_creditos.tasks.enviar_alerta_mora', return_value=True)
-    def test_alertas_mora_omiten_libranza_si_flag_esta_apagado(self, enviar_mock):
-        hoy = timezone.localdate()
-        self._crear_credito(
+    @patch('gestion_creditos.tasks.Credito.objects.filter')
+    def test_alertas_mora_omiten_libranza_si_flag_esta_apagado(self, filter_mock, enviar_mock):
+        hoy = timezone.now().date()
+        credito_libranza = self._crear_credito(
             'CR-2099-00104',
             Credito.LineaCredito.LIBRANZA,
             Credito.EstadoCredito.EN_MORA,
@@ -89,7 +99,15 @@ class LibranzaAutomationFlagsTest(TestCase):
             hoy - timedelta(days=1),
         )
 
+        class FakeQuery(list):
+            def select_related(self, *args, **kwargs):
+                return self
+
+        filter_mock.return_value = FakeQuery([credito_libranza, credito_emprendimiento])
+
         resultado = enviar_alertas_mora_task()
+        dias_mora_esperados = credito_emprendimiento.dias_en_mora
 
         self.assertEqual(resultado['alertas_enviadas'], 1)
-        enviar_mock.assert_called_once_with(credito_emprendimiento, 1)
+        enviar_mock.assert_called_once_with(credito_emprendimiento, dias_mora_esperados)
+        self.assertNotIn(credito_libranza, [args[0] for args, _kwargs in enviar_mock.call_args_list])

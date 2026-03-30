@@ -1,11 +1,13 @@
 """
-URLs de BILLETERA DIGITAL (Ahorro)
+URLs de BILLETERA DIGITAL (ahorro)
 Prefijo: /billetera/
 
-Sistema de ahorro separado del flujo de créditos
+Sistema de ahorro separado del flujo de créditos.
 """
 from django.urls import path
+
 from . import views
+
 
 app_name = 'billetera'
 
@@ -15,6 +17,7 @@ urlpatterns = [
     # ========================================
     path('', views.billetera_digital_view, name='dashboard'),
     path('consignar/', views.consignacion_offline_view, name='consignar'),
+    path('notificaciones/marcar-leidas/', views.marcar_notificaciones_leidas_view, name='marcar_notificaciones_leidas'),
 
     # ========================================
     # SECCIÓN GESTIÓN (ANALISTAS)

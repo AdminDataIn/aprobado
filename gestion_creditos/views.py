@@ -9,8 +9,33 @@ from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_http_methods
 from django.conf import settings
-from .models import Credito, CreditoLibranza, CreditoEmprendimiento, Empresa, HistorialPago, HistorialEstado, CuentaAhorro, MovimientoAhorro, Pagare, ZapSignWebhookLog, WompiIntent, MarketplaceItem, MarketplaceItemHistorialEstado
-from .forms import CreditoLibranzaForm, CreditoEmprendimientoForm, AbonoManualAdminForm, ConsignacionOfflineForm, MarketplaceItemForm
+from .models import (
+    Credito,
+    CreditoLibranza,
+    CreditoEmprendimiento,
+    CreditoAdelantoNomina,
+    Empresa,
+    HistorialPago,
+    HistorialEstado,
+    CuentaAhorro,
+    MovimientoAhorro,
+    Pagare,
+    ZapSignWebhookLog,
+    WompiIntent,
+    MarketplaceItem,
+    MarketplaceItemHistorialEstado,
+    Notificacion,
+    VinculoLaboralEmpresa,
+)
+from .forms import (
+    CreditoLibranzaForm,
+    CreditoEmprendimientoForm,
+    CreditoAdelantoNominaForm,
+    AbonoManualAdminForm,
+    ConsignacionOfflineForm,
+    EmployeeBulkUploadForm,
+    MarketplaceItemForm,
+)
 from . import credit_services
 from datetime import datetime, timedelta
 from django.db.models.functions import ExtractMonth, ExtractYear
@@ -27,9 +52,10 @@ from django.db.models import Q, Count, Sum, Max, Case, When, DecimalField, F, Su
 from django.db.models.functions import Coalesce, TruncMonth, Concat, Trim
 from django.utils import timezone
 from django.core.paginator import Paginator
-from usuarios.models import PerfilPagador
+from usuarios.models import PerfilPagador, ProductAccessProfile
+from usuarios.product_flow import ProductFlowConflict, assign_user_flow, get_flow_home_path, get_flow_label, get_user_flow
 from django.contrib.admin.views.decorators import staff_member_required
-from .decorators import pagador_required, marketing_required
+from .decorators import pagador_required, marketing_required, marketplace_admin_required
 from django.contrib.auth.models import User
 from django.db.models import DurationField, ExpressionWrapper, Value
 from django.views.decorators.clickjacking import xframe_options_exempt
@@ -38,9 +64,17 @@ from django.core.exceptions import SuspiciousFileOperation, ValidationError
 from urllib.parse import quote
 from django.core.files.base import ContentFile
 from .services.marketplace_service import registrar_historial_publicacion, cambiar_estado_publicacion
+from .services.adelanto_nomina_service import evaluar_elegibilidad_adelanto, obtener_vinculo_laboral_activo
+from .services.capacidad_descuento_service import calcular_capacidad_descuento, simular_adelanto_nomina
+from .services.empleados_service import (
+    plantilla_empleados_csv,
+    plantilla_empleados_xlsx,
+    procesar_carga_empleados,
+    reconciliar_usuarios_empleados_legacy,
+)
 from .services.tasa_service import obtener_tasa_credito
 from .services.certificado_bancario_service import procesar_certificado_bancario
-from .services.libranza_rules import obtener_creditos_libranza_bloqueantes
+from .services.libranza_rules import calcular_primera_fecha_pago_libranza, obtener_creditos_libranza_bloqueantes
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +87,37 @@ def _attach_marketplace_branding(empresa):
     if not empresa:
         return empresa
     empresa.logo_marketplace = MARKETPLACE_COMPANY_LOGOS.get((empresa.slug or '').lower(), '')
+    empresa.logo_marketplace_url = empresa.logo.url if getattr(empresa, 'logo', None) else ''
     return empresa
+
+
+def _marketplace_user_context(request):
+    user = getattr(request, 'user', None)
+    is_authenticated = bool(user and user.is_authenticated)
+    is_admin = bool(
+        is_authenticated
+        and hasattr(user, 'perfil_marketing')
+        and getattr(user.perfil_marketing, 'activo', False)
+    )
+    return {
+        'marketplace_is_authenticated': is_authenticated,
+        'marketplace_is_admin_user': is_admin,
+        'marketplace_display_name': (
+            user.first_name or user.get_full_name() or user.email
+            if is_authenticated else ''
+        ),
+    }
+
+
+def _rate_limit_simple(request, scope, limit=8, window=60):
+    ip = (request.META.get('HTTP_X_FORWARDED_FOR') or request.META.get('REMOTE_ADDR') or 'anon').split(',')[0].strip()
+    cache_key = f"rate-limit:{scope}:{ip}"
+    hits = cache.get(cache_key, 0)
+    if hits >= limit:
+        return False
+    cache.set(cache_key, hits + 1, window)
+    return True
+
 
 def marketplace_general_view(request):
     """
@@ -62,14 +126,20 @@ def marketplace_general_view(request):
     """
     items = (
         MarketplaceItem.objects
-        .filter(estado=MarketplaceItem.EstadoItem.APROBADO)
+        .filter(
+            estado=MarketplaceItem.EstadoItem.APROBADO,
+            empresa__tipo_empresa__in=[Empresa.TipoEmpresa.MARKETPLACE_EXTERNA, Empresa.TipoEmpresa.MIXTA],
+        )
         .select_related('empresa')
         .order_by('-fecha_publicacion', '-fecha_creacion')
     )
 
     empresas_aliadas = (
         Empresa.objects
-        .filter(marketplace_items__estado=MarketplaceItem.EstadoItem.APROBADO)
+        .filter(
+            tipo_empresa__in=[Empresa.TipoEmpresa.MARKETPLACE_EXTERNA, Empresa.TipoEmpresa.MIXTA],
+            marketplace_items__estado=MarketplaceItem.EstadoItem.APROBADO,
+        )
         .annotate(
             publicaciones_activas=Count(
                 'marketplace_items',
@@ -93,15 +163,20 @@ def marketplace_general_view(request):
         'total_items': items.count(),
         'total_empresas': empresas_aliadas.count(),
     }
+    context.update(_marketplace_user_context(request))
     return render(request, 'marketplace/general.html', context)
 
 
 def marketplace_empresa_view(request, empresa_slug):
     """
-    Vitrina pública por empresa aliada.
+    Vitrina p?blica por empresa aliada.
     Solo muestra publicaciones aprobadas para una empresa específica.
     """
-    empresa = get_object_or_404(Empresa, slug=empresa_slug)
+    empresa = get_object_or_404(
+        Empresa,
+        slug=empresa_slug,
+        tipo_empresa__in=[Empresa.TipoEmpresa.MARKETPLACE_EXTERNA, Empresa.TipoEmpresa.MIXTA],
+    )
     _attach_marketplace_branding(empresa)
 
     items = MarketplaceItem.objects.filter(
@@ -113,11 +188,12 @@ def marketplace_empresa_view(request, empresa_slug):
         'empresa': empresa,
         'items': items,
     }
+    context.update(_marketplace_user_context(request))
     return render(request, 'marketplace/index.html', context)
 
 
-@login_required(login_url='/marketplace/login/')
-@marketing_required
+@login_required(login_url='/marketplace/panel/login/')
+@marketplace_admin_required
 def marketplace_panel_view(request):
     items = (
         MarketplaceItem.objects
@@ -136,8 +212,8 @@ def marketplace_panel_view(request):
     return render(request, 'marketplace/panel_list.html', context)
 
 
-@login_required(login_url='/marketplace/login/')
-@marketing_required
+@login_required(login_url='/marketplace/panel/login/')
+@marketplace_admin_required
 def marketplace_item_create_view(request):
     if request.method == 'POST':
         form = MarketplaceItemForm(request.POST, request.FILES)
@@ -167,8 +243,8 @@ def marketplace_item_create_view(request):
     })
 
 
-@login_required(login_url='/marketplace/login/')
-@marketing_required
+@login_required(login_url='/marketplace/panel/login/')
+@marketplace_admin_required
 def marketplace_item_edit_view(request, item_id):
     item = get_object_or_404(MarketplaceItem, id=item_id, empresa=request.empresa_marketing)
 
@@ -204,9 +280,9 @@ def marketplace_item_edit_view(request, item_id):
     })
 
 
-@login_required(login_url='/marketplace/login/')
+@login_required(login_url='/marketplace/panel/login/')
 @require_POST
-@marketing_required
+@marketplace_admin_required
 def marketplace_item_deactivate_view(request, item_id):
     item = get_object_or_404(MarketplaceItem, id=item_id, empresa=request.empresa_marketing)
     try:
@@ -227,11 +303,30 @@ def marketplace_item_deactivate_view(request, item_id):
 #! La lógica ahora está centralizada en credit_services.gestionar_cambio_estado_credito.
 
 #? --------- VISTA DE CREDITO DE LIBRANZA ------------
-@login_required(login_url='/accounts/google/login/')
+@login_required(login_url='/libranza/login/')
 def solicitud_credito_libranza_view(request):
+    current_flow = get_user_flow(request.user)
+    if current_flow and current_flow != ProductAccessProfile.ProductFlow.LIBRANZA:
+        messages.error(
+            request,
+            f'Tu cuenta pertenece al flujo de {get_flow_label(current_flow)} y no puede solicitar Libranza.'
+        )
+        return redirect(get_flow_home_path(current_flow))
+
+    try:
+        assign_user_flow(request.user, ProductAccessProfile.ProductFlow.LIBRANZA)
+    except ProductFlowConflict as exc:
+        current_flow = exc.args[0] if exc.args else None
+        messages.error(
+            request,
+            f'Tu cuenta pertenece al flujo de {get_flow_label(current_flow)} y no puede solicitar Libranza.'
+        )
+        return redirect(get_flow_home_path(current_flow))
+
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    vinculo_laboral = obtener_vinculo_laboral_activo(request.user)
     if request.method == 'POST':
-        form = CreditoLibranzaForm(request.POST, request.FILES)
+        form = CreditoLibranzaForm(request.POST, request.FILES, vinculo_laboral=vinculo_laboral)
         if form.is_valid():
             try:
                 with transaction.atomic():
@@ -259,6 +354,7 @@ def solicitud_credito_libranza_view(request):
                 tasa_libranza_decimal = tasa_libranza / Decimal('100')
                 return render(request, 'gestion_creditos/solicitud_libranza.html', {
                     'form': form,
+                    'vinculo_laboral': vinculo_laboral,
                     'libranza_tasa_mensual': tasa_libranza,
                     'libranza_tasa_decimal': tasa_libranza_decimal,
                     'libranza_tasa_decimal_js': format(tasa_libranza_decimal, 'f'),
@@ -325,35 +421,326 @@ def solicitud_credito_libranza_view(request):
             if is_ajax:
                 return JsonResponse({'success': False, 'errors': form.errors}, status=400)
     else:
-        form = CreditoLibranzaForm()
+        form = CreditoLibranzaForm(vinculo_laboral=vinculo_laboral)
 
     tasa_libranza = obtener_tasa_credito(Credito.LineaCredito.LIBRANZA)
     tasa_libranza_decimal = tasa_libranza / Decimal('100')
     return render(request, 'gestion_creditos/solicitud_libranza.html', {
         'form': form,
+        'vinculo_laboral': vinculo_laboral,
         'libranza_tasa_mensual': tasa_libranza,
         'libranza_tasa_decimal': tasa_libranza_decimal,
         'libranza_tasa_decimal_js': format(tasa_libranza_decimal, 'f'),
     })
 
-@login_required
-def solicitud_credito_emprendimiento_view(request):
-    """
-    Vista para procesar solicitudes de crédito de emprendimiento.
-    Integra scoring de imágenes con IA y evaluación de motivación.
-    """
+
+@require_http_methods(["GET"])
+def buscar_empresas_convenio_view(request):
+    if not _rate_limit_simple(request, 'buscar-empresas-convenio', limit=20, window=60):
+        return JsonResponse({'results': [], 'error': 'Demasiadas consultas. Intenta de nuevo en un minuto.'}, status=429)
+
+    query = (request.GET.get('q') or '').strip()
+    if len(query) < 2:
+        return JsonResponse({'results': []})
+
+    empresas = (
+        Empresa.objects
+        .filter(convenio_activo=True)
+        .exclude(tipo_empresa=Empresa.TipoEmpresa.MARKETPLACE_EXTERNA)
+        .filter(
+            Q(nombre__icontains=query) |
+            Q(razon_social__icontains=query) |
+            Q(nit__icontains=query)
+        )
+        .order_by('nombre')[:8]
+    )
+
+    return JsonResponse({
+        'results': [
+            {
+                'id': empresa.id,
+                'nombre': empresa.nombre,
+                'razon_social': empresa.razon_social,
+                'nit': empresa.nit,
+            }
+            for empresa in empresas
+        ]
+    })
+
+
+@require_http_methods(["POST"])
+def simular_adelanto_nomina_view(request):
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        payload = request.POST
+
+    simulacion = simular_adelanto_nomina(
+        salario=payload.get('salario') or payload.get('salario_base') or '0',
+        auxilio_transporte=payload.get('auxilio_transporte') or '0',
+        descuentos=payload.get('descuentos') or '0',
+        tasa_mensual=getattr(settings, 'ADELANTO_NOMINA_TASA_MENSUAL', '1.9'),
+        porcentaje_comision=getattr(settings, 'ADELANTO_NOMINA_COMISION_PERCENT', '10'),
+    )
+    return JsonResponse(
+        {
+            key: f"{value:.2f}" if isinstance(value, Decimal) else value
+            for key, value in simulacion.items()
+        }
+    )
+
+
+@login_required(login_url='/pagador/login/')
+@pagador_required
+@require_http_methods(["GET"])
+def descargar_plantilla_empleados_view(request):
+    formato = (request.GET.get('formato') or 'xlsx').lower()
+    if formato == 'csv':
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename="plantilla_empleados_aprobado.csv"'
+        response.write('\ufeff')
+        response.write(plantilla_empleados_csv())
+        return response
+
+    response = HttpResponse(
+        plantilla_empleados_xlsx(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="plantilla_empleados_aprobado.xlsx"'
+    return response
+
+
+@login_required(login_url='/pagador/login/')
+@pagador_required
+@require_http_methods(["GET", "POST"])
+def pagador_carga_empleados_view(request):
+    resultados = None
     if request.method == 'POST':
-        # Validar autenticación para solicitudes AJAX
+        form = EmployeeBulkUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            resultados = procesar_carga_empleados(
+                form.cleaned_data['archivo'],
+                empresa=request.empresa,
+                actor=request.user,
+            )
+            creados = sum(1 for row in resultados if row['estado'] in {'creado', 'actualizado'})
+            errores = sum(1 for row in resultados if row['estado'] == 'error')
+            if errores:
+                messages.warning(request, f'La carga finalizo con {creados} filas procesadas y {errores} errores.')
+            else:
+                messages.success(request, f'Se procesaron {creados} empleados correctamente.')
+    else:
+        form = EmployeeBulkUploadForm()
+
+    return render(request, 'pagador/carga_empleados.html', {
+        'form': form,
+        'resultados': resultados,
+        'empresa': request.empresa,
+    })
+
+
+@login_required(login_url='/pagador/login/')
+@pagador_required
+@require_http_methods(["POST"])
+def pagador_reconciliar_empleados_view(request):
+    resultados = reconciliar_usuarios_empleados_legacy(empresa=request.empresa)
+    messages.success(request, f'Se revisaron {len(resultados)} vinculos legacy para {request.empresa.nombre}.')
+    return redirect('pagador:carga_empleados')
+
+
+@login_required(login_url='/libranza/login/')
+@require_http_methods(["GET", "POST"])
+def solicitud_adelanto_nomina_view(request):
+    current_flow = get_user_flow(request.user)
+    if current_flow and current_flow != ProductAccessProfile.ProductFlow.LIBRANZA:
+        messages.error(
+            request,
+            f'Tu cuenta pertenece al flujo de {get_flow_label(current_flow)} y no puede solicitar adelanto de nomina.'
+        )
+        return redirect(get_flow_home_path(current_flow))
+
+    try:
+        assign_user_flow(request.user, ProductAccessProfile.ProductFlow.LIBRANZA)
+    except ProductFlowConflict as exc:
+        current_flow = exc.args[0] if exc.args else None
+        messages.error(
+            request,
+            f'Tu cuenta pertenece al flujo de {get_flow_label(current_flow)} y no puede solicitar adelanto de nomina.'
+        )
+        return redirect(get_flow_home_path(current_flow))
+
+    eligibility = evaluar_elegibilidad_adelanto(request.user)
+    vinculo = eligibility['vinculo']
+    simulacion = eligibility.get('simulation') or simular_adelanto_nomina()
+    adelanto_actual = (
+        Credito.objects.filter(
+            usuario=request.user,
+            linea=Credito.LineaCredito.ADELANTO_NOMINA,
+        )
+        .select_related('detalle_adelanto_nomina__vinculo_laboral__empresa')
+        .order_by('-fecha_solicitud')
+        .first()
+    )
+
+    if request.method == 'POST':
+        if not eligibility['eligible']:
+            messages.error(request, eligibility['reason'])
+            return redirect('libranza:adelanto_nomina')
+
+        form = CreditoAdelantoNominaForm(request.POST, vinculo_laboral=vinculo)
+        if form.is_valid():
+            monto = form.cleaned_data['monto_solicitado']
+            observaciones = form.cleaned_data.get('observaciones', '')
+            simulation = simular_adelanto_nomina(
+                salario=vinculo.salario_base_mensual or Decimal('0.00'),
+                auxilio_transporte=vinculo.auxilio_transporte_mensual,
+                descuentos=vinculo.descuentos_fijos_mensuales,
+            )
+            simulation['monto_solicitado'] = monto
+            percentage_commission = Decimal(str(getattr(settings, 'ADELANTO_NOMINA_COMISION_PERCENT', '10')))
+            comision = (monto * percentage_commission / Decimal('100')).quantize(Decimal('0.01'))
+            iva_comision = (comision * Decimal('0.19')).quantize(Decimal('0.01'))
+            interes = (monto * obtener_tasa_credito(Credito.LineaCredito.ADELANTO_NOMINA) / Decimal('100')).quantize(Decimal('0.01'))
+            neto_a_recibir = max(Decimal('0.00'), monto - comision - iva_comision)
+            total_a_pagar = monto + comision + iva_comision + interes
+            with transaction.atomic():
+                credito = Credito.objects.create(
+                    usuario=request.user,
+                    linea=Credito.LineaCredito.ADELANTO_NOMINA,
+                    estado=Credito.EstadoCredito.EN_REVISION,
+                    monto_solicitado=monto,
+                    plazo_solicitado=1,
+                    monto_aprobado=monto,
+                    plazo=1,
+                    tasa_interes=obtener_tasa_credito(Credito.LineaCredito.ADELANTO_NOMINA),
+                    comision=comision,
+                    iva_comision=iva_comision,
+                    total_a_pagar=total_a_pagar,
+                    saldo_pendiente=total_a_pagar,
+                    capital_pendiente=monto,
+                    valor_cuota=total_a_pagar,
+                )
+                CreditoAdelantoNomina.objects.create(
+                    credito=credito,
+                    vinculo_laboral=vinculo,
+                    monto_solicitado=monto,
+                    monto_maximo_calculado=simulation['monto_bruto_adelanto'],
+                    salario_base_usado=vinculo.salario_base_mensual,
+                    dias_adelanto=5,
+                    motivo_bloqueo=observaciones[:255] if observaciones else '',
+                )
+                HistorialEstado.objects.create(
+                    credito=credito,
+                    estado_anterior='',
+                    estado_nuevo=Credito.EstadoCredito.EN_REVISION,
+                    motivo='Solicitud de adelanto de nomina creada por cliente.',
+                    usuario_modificacion=request.user,
+                )
+            messages.success(request, 'Tu solicitud de adelanto de nomina fue enviada al pagador para revision.')
+            return redirect('libranza:adelanto_nomina')
+    else:
+        form = CreditoAdelantoNominaForm(vinculo_laboral=vinculo, initial={
+            'monto_solicitado': simulacion['monto_bruto_adelanto'],
+        })
+
+    return render(request, 'gestion_creditos/solicitud_adelanto_nomina.html', {
+        'form': form,
+        'eligibility': eligibility,
+        'vinculo': vinculo,
+        'simulacion': simulacion,
+        'adelanto_actual': adelanto_actual,
+        'monto_maximo': simulacion['monto_bruto_adelanto'],
+    })
+
+
+def _build_admin_solicitudes_queryset(request, forced_linea=None):
+    estado_filter = request.GET.get('estado', '')
+    if estado_filter:
+        solicitudes_base = Credito.objects.all()
+    else:
+        solicitudes_base = Credito.objects.exclude(estado__in=['ACTIVO', 'PAGADO', 'EN_MORA'])
+
+    solicitudes_filtradas = credit_services.filtrar_creditos(request, solicitudes_base)
+    if forced_linea:
+        solicitudes_filtradas = solicitudes_filtradas.filter(linea=forced_linea)
+
+    return solicitudes_filtradas.select_related(
+        'usuario',
+        'detalle_libranza',
+        'detalle_emprendimiento',
+        'detalle_adelanto_nomina__vinculo_laboral__empresa',
+    ).annotate(
+        nombre_solicitante=Case(
+            When(
+                linea='LIBRANZA',
+                then=Trim(
+                    Concat(
+                        Coalesce('detalle_libranza__nombres', Value('')),
+                        Value(' '),
+                        Coalesce('detalle_libranza__apellidos', Value(''))
+                    )
+                )
+            ),
+            When(
+                linea='EMPRENDIMIENTO',
+                then=Trim(Coalesce('detalle_emprendimiento__nombre', Value('')))
+            ),
+            When(
+                linea='ADELANTO_NOMINA',
+                then=Trim(Coalesce('detalle_adelanto_nomina__vinculo_laboral__nombre_empleado', Value('')))
+            ),
+            default=Trim(
+                Concat(
+                    Coalesce('usuario__first_name', Value('')),
+                    Value(' '),
+                    Coalesce('usuario__last_name', Value(''))
+                )
+            ),
+            output_field=CharField()
+        ),
+        documento_solicitante=Case(
+            When(linea='LIBRANZA', then=Coalesce('detalle_libranza__cedula', Value(''))),
+            When(linea='EMPRENDIMIENTO', then=Coalesce('detalle_emprendimiento__numero_cedula', Value(''))),
+            When(linea='ADELANTO_NOMINA', then=Coalesce('detalle_adelanto_nomina__vinculo_laboral__documento_empleado', Value(''))),
+            default=Value(''),
+            output_field=CharField()
+        )
+    ).order_by('-fecha_solicitud')
+
+@login_required(login_url='/emprendimiento/login/')
+def solicitud_credito_emprendimiento_view(request):
+    current_flow = get_user_flow(request.user)
+    if current_flow and current_flow != ProductAccessProfile.ProductFlow.EMPRENDIMIENTO:
+        messages.error(
+            request,
+            f'Tu cuenta pertenece al flujo de {get_flow_label(current_flow)} y no puede solicitar Emprendimiento.'
+        )
+        return redirect(get_flow_home_path(current_flow))
+
+    try:
+        assign_user_flow(request.user, ProductAccessProfile.ProductFlow.EMPRENDIMIENTO)
+    except ProductFlowConflict as exc:
+        current_flow = exc.args[0] if exc.args else None
+        messages.error(
+            request,
+            f'Tu cuenta pertenece al flujo de {get_flow_label(current_flow)} y no puede solicitar Emprendimiento.'
+        )
+        return redirect(get_flow_home_path(current_flow))
+
+    # Vista para procesar solicitudes de crédito de emprendimiento.
+    # Integra scoring de imágenes con IA y evaluación de motivación.
+    if request.method == 'POST':
+        # Validar autenticaci?n para solicitudes AJAX
         if not request.user.is_authenticated:
             return JsonResponse({'success': False, 'error': 'Authentication required'}, status=403)
 
-        # Detectar si es solicitud AJAX o viene del formulario HTML con imágenes múltiples
+        # Detectar si es solicitud AJAX o viene del formulario HTML con imágenes m?ltiples
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
-        # Si viene del formulario con imágenes múltiples (del trabajo del compañero)
+        # Si viene del formulario con imágenes m?ltiples (del trabajo del compañero)
         if 'fotos_neg' in request.FILES:
             try:
-                # Capturar imágenes múltiples
+                # Capturar imágenes m?ltiples
                 imagenes_negocio = request.FILES.getlist('fotos_neg')
                 desc_fotos_neg = request.POST.get('desc_fotos_neg', '').strip()
 
@@ -380,7 +767,7 @@ def solicitud_credito_emprendimiento_view(request):
                         'error': 'Debe especificar el tipo de cada imagen'
                     }, status=400)
 
-                # Validar formato y tamaño de imágenes
+                # Validar formato y tama?o de imágenes
                 for imagen in imagenes_negocio:
                     if not imagen.content_type.startswith('image/'):
                         return JsonResponse({
@@ -390,10 +777,10 @@ def solicitud_credito_emprendimiento_view(request):
                     if imagen.size > 10 * 1024 * 1024:  # 10MB
                         return JsonResponse({
                             'success': False,
-                            'error': f'La imagen {imagen.name} excede el tamaño máximo de 10MB'
+                            'error': f'La imagen {imagen.name} excede el tama?o máximo de 10MB'
                         }, status=400)
 
-                # SCORING DE IMÁGENES CON IA
+                # SCORING DE IM?GENES CON IA
                 from .scoring_client import scoring_client
 
                 resultado_scoring = scoring_client.enviar_imagenes_para_scoring(
@@ -510,10 +897,10 @@ def solicitud_credito_emprendimiento_view(request):
                 })
 
             except Exception as e:
-                logger.error(f"Error en solicitud con imágenes múltiples: {e}")
+                logger.error(f"Error en solicitud con imágenes m?ltiples: {e}")
                 return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
-        # Si viene del formulario normal (sin imágenes múltiples)
+        # Si viene del formulario normal (sin imágenes m?ltiples)
         else:
             form = CreditoEmprendimientoForm(request.POST, request.FILES)
             if form.is_valid():
@@ -577,9 +964,9 @@ def admin_dashboard_view(request):
     """
     Muestra el dashboard principal administrativo.
 
-    Delega la recolección y procesamiento de todos los datos de contexto
+    Delega la recolecci?n y procesamiento de todos los datos de contexto
     a la función `get_admin_dashboard_context` en el módulo de servicios para
-    mantener la vista limpia y centrada en la renderización.
+    mantener la vista limpia y centrada en la renderizaci?n.
     """
     context = credit_services.get_admin_dashboard_context(request.user)
     return render(request, 'gestion_creditos/admin_dashboard.html', context)
@@ -588,61 +975,48 @@ def admin_dashboard_view(request):
 def admin_solicitudes_view(request):
     """Vista para gestionar solicitudes pendientes"""
 
-    estado_filter = request.GET.get('estado', '')
-    if estado_filter:
-        solicitudes_base = Credito.objects.all()
-    else:
-        solicitudes_base = Credito.objects.exclude(estado__in=['ACTIVO', 'PAGADO', 'EN_MORA'])
-    solicitudes_filtradas = credit_services.filtrar_creditos(request, solicitudes_base)
-    
-    solicitudes = solicitudes_filtradas.select_related(
-        'usuario', 'detalle_libranza', 'detalle_emprendimiento'
-    ).annotate(
-        nombre_solicitante=Case(
-            When(
-                linea='LIBRANZA',
-                then=Trim(
-                    Concat(
-                        Coalesce('detalle_libranza__nombres', Value('')),
-                        Value(' '),
-                        Coalesce('detalle_libranza__apellidos', Value(''))
-                    )
-                )
-            ),
-            When(
-                linea='EMPRENDIMIENTO',
-                then=Trim(Coalesce('detalle_emprendimiento__nombre', Value('')))
-            ),
-            default=Trim(
-                Concat(
-                    Coalesce('usuario__first_name', Value('')),
-                    Value(' '),
-                    Coalesce('usuario__last_name', Value(''))
-                )
-            ),
-            output_field=CharField()
-        ),
-        documento_solicitante=Case(
-            When(linea='LIBRANZA', then=Coalesce('detalle_libranza__cedula', Value(''))),
-            When(linea='EMPRENDIMIENTO', then=Coalesce('detalle_emprendimiento__numero_cedula', Value(''))),
-            default=Value(''),
-            output_field=CharField()
-        )
-    ).order_by('-fecha_solicitud')
-    
+    solicitudes = _build_admin_solicitudes_queryset(request)
     paginator = Paginator(solicitudes, 20)
     page_number = request.GET.get('page')
     solicitudes_page = paginator.get_page(page_number)
-    
+
     context = {
         'solicitudes': solicitudes_page,
-        'estado_filter': estado_filter,
+        'estado_filter': request.GET.get('estado', ''),
         'linea_filter': request.GET.get('linea', ''),
         'search': request.GET.get('search', ''),
         'estados_choices': Credito.EstadoCredito.choices,
         'lineas_choices': Credito.LineaCredito.choices,
+        'dashboard_title': 'Solicitudes de credito',
+        'dashboard_subtitle': 'Solicitudes pendientes de revision de todas las lineas.',
+        'solo_adelantos': False,
     }
-    
+
+    return render(request, 'gestion_creditos/admin_solicitudes.html', context)
+
+
+@staff_member_required
+def admin_adelantos_nomina_view(request):
+    solicitudes = _build_admin_solicitudes_queryset(
+        request,
+        forced_linea=Credito.LineaCredito.ADELANTO_NOMINA,
+    )
+    paginator = Paginator(solicitudes, 20)
+    page_number = request.GET.get('page')
+    solicitudes_page = paginator.get_page(page_number)
+
+    context = {
+        'solicitudes': solicitudes_page,
+        'estado_filter': request.GET.get('estado', ''),
+        'linea_filter': Credito.LineaCredito.ADELANTO_NOMINA,
+        'search': request.GET.get('search', ''),
+        'estados_choices': Credito.EstadoCredito.choices,
+        'lineas_choices': Credito.LineaCredito.choices,
+        'dashboard_title': 'Solicitudes de adelanto de nomina',
+        'dashboard_subtitle': 'Vista separada para evaluar adelantos sin mezclarlos con creditos tradicionales.',
+        'solo_adelantos': True,
+    }
+
     return render(request, 'gestion_creditos/admin_solicitudes.html', context)
 
 
@@ -783,7 +1157,7 @@ def procesar_solicitud_view(request, credito_id):
         nuevo_estado = Credito.EstadoCredito.APROBADO
         if credito.linea == Credito.LineaCredito.LIBRANZA and not pagador_aprobado:
             if pagador_decision and pagador_decision.estado_nuevo == Credito.EstadoCredito.RECHAZADO:
-                messages.error(request, "El pagador ya rechazó la solicitud. Revisa la observación antes de continuar.")
+                messages.error(request, "El pagador ya rechaz? la solicitud. Revisa la observación antes de continuar.")
             else:
                 messages.error(request, "El pagador aún no ha aprobado la solicitud.")
             return redirect('gestion:credito_detalle', credito_id=credito_id)
@@ -823,7 +1197,7 @@ def procesar_solicitud_view(request, credito_id):
             motivo=motivo
         )
 
-        # Segundo paso (solo si se aprueba): Iniciar la preparación para la firma
+        # Segundo paso (solo si se aprueba): Iniciar la preparaci?n para la firma
         if nuevo_estado == Credito.EstadoCredito.APROBADO:
             credit_services.preparar_documento_para_firma(
                 credito=credito,
@@ -850,13 +1224,13 @@ def detalle_credito_view(request, credito_id):
 
     monto_total_pagado = historial_pagos.aggregate(Sum('monto'))['monto__sum'] or 0
 
-    #! Unificar el acceso a los detalles del crédito (NO SE ESTÁ USANDO)
+    #! Unificar el acceso a los detalles del crédito (NO SE EST? USANDO)
     detalle_credito = credito.detalle
 
-    #! Los cálculos ahora se manejan en el modelo o en servicios,
+    #! Los c?lculos ahora se manejan en el modelo o en servicios,
     #! la vista solo se encarga de mostrar la información.
 
-    #? Nuevos cálculos para la vista de detalle
+    #? Nuevos c?lculos para la vista de detalle
     cuotas_pagadas = historial_pagos.count()
     cuotas_restantes = (credito.plazo - cuotas_pagadas) if credito.plazo else 0
 
@@ -885,7 +1259,7 @@ def detalle_credito_view(request, credito_id):
     context = {
         'credito': credito,
 
-        # ✅ Campos ahora vienen del modelo Credito
+        # âœ… Campos ahora vienen del modelo Credito
         'monto_solicitado': credito.monto_solicitado,
         'plazo_solicitado': credito.plazo_solicitado,
         'monto_aprobado': credito.monto_aprobado,
@@ -898,17 +1272,18 @@ def detalle_credito_view(request, credito_id):
         'comision': credito.comision,
         'iva_comision': credito.iva_comision,
 
-        # Campos que SÍ vienen del detalle
+        # Campos que Sí vienen del detalle
         'detalle': credito.detalle,  # Usa la property
         'historial_pagos': historial_pagos,
         'historial_estados': historial_estados,
         'puede_procesar': puede_procesar,
         'cuotas_pagadas': cuotas_pagadas,
         'cuotas_restantes': cuotas_restantes,
-        'tabla_amortizacion': tabla_amortizacion,  # ⭐ NUEVA: Tabla de amortización
+        'tabla_amortizacion': tabla_amortizacion,  #  NUEVA: Tabla de amortización
         'pagador_decision': pagador_decision,
         'pagador_aprobado': pagador_aprobado,
         'pagador_rechazado': pagador_rechazado,
+        'capacidad_descuento': _build_capacidad_descuento_context(credito),
         'libranza_tasa_mensual': obtener_tasa_credito(Credito.LineaCredito.LIBRANZA),
     }
     
@@ -944,7 +1319,7 @@ def confirmar_desembolso_view(request, credito_id):
             comprobante=comprobante,
             usuario_modificacion=request.user
         )
-        messages.success(request, f"¡Crédito {credito.numero_credito} activado exitosamente!")
+        messages.success(request, f"?Crédito {credito.numero_credito} activado exitosamente!")
     except Exception as e:
         messages.error(request, f"Ocurrió un error inesperado al activar el crédito: {e}")
         logger.error(f"Error al activar crédito {credito.id} vía confirmación de desembolso: {e}", exc_info=True)
@@ -1106,7 +1481,7 @@ def documentacion_credito_view(request, credito_id):
             add_doc(
                 f"Imagen negocio ({imagen.get_tipo_imagen_display()})",
                 file_field=imagen.imagen,
-                source='Imágenes',
+                source='Im?genes',
                 created_at=imagen.fecha_subida,
                 description=imagen.descripcion or ''
             )
@@ -1198,7 +1573,7 @@ def documento_preview_view(request):
 #! ==============================================================================
 def _obtener_decision_pagador(credito):
     """
-    Obtiene la última decisión registrada por un usuario pagador para un crédito.
+    Obtiene la última decisi?n registrada por un usuario pagador para un crédito.
     """
     return HistorialEstado.objects.filter(
         credito=credito,
@@ -1207,33 +1582,43 @@ def _obtener_decision_pagador(credito):
     ).order_by('-fecha').first()
 
 
-@login_required
-@pagador_required
-def pagador_dashboard_view(request):
-    """
-    Dashboard para el usuario pagador de una empresa.
-    Muestra todos los créditos de libranza de los empleados de su empresa, con filtros y ordenamiento.
-    """
-    empresa = request.empresa
+def _build_capacidad_descuento_context(credito):
+    if credito.linea == Credito.LineaCredito.ADELANTO_NOMINA and getattr(credito, 'detalle_adelanto_nomina', None):
+        vinculo = credito.detalle_adelanto_nomina.vinculo_laboral
+        return calcular_capacidad_descuento(
+            salario=vinculo.salario_base_mensual or Decimal('0.00'),
+            auxilio_transporte=vinculo.auxilio_transporte_mensual,
+            descuentos=vinculo.descuentos_fijos_mensuales,
+            monto_solicitado=credito.monto_solicitado or Decimal('0.00'),
+        )
+    return None
 
-    #? --- Filtros y Búsqueda ---
-    search_query = request.GET.get('search', '')
-    estado_filter = request.GET.get('estado', '')
-    sort_by = request.GET.get('sort_by', '-monto_aprobado') # Ordenar por monto de crédito descendente por defecto
 
-    #? Subconsulta para calcular el total pagado por crédito
+def _build_pagador_creditos_queryset(empresa, search_query='', estado_filter='', sort_by='-monto_aprobado', forced_linea=None):
     total_pagado_subquery = HistorialPago.objects.filter(
         credito_id=F('pk'),
         estado=HistorialPago.EstadoPago.EXITOSO
     ).values('credito_id').annotate(total=Sum('monto')).values('total')
 
-    #? Filtrar créditos base
     creditos_empresa = Credito.objects.filter(
-        linea=Credito.LineaCredito.LIBRANZA,
-        detalle_libranza__empresa=empresa
+        Q(
+            linea=Credito.LineaCredito.LIBRANZA,
+            detalle_libranza__empresa=empresa
+        ) |
+        Q(
+            linea=Credito.LineaCredito.ADELANTO_NOMINA,
+            detalle_adelanto_nomina__vinculo_laboral__empresa=empresa
+        )
     ).exclude(
         estado__in=[Credito.EstadoCredito.RECHAZADO, Credito.EstadoCredito.SOLICITUD]
-    ).select_related('detalle_libranza', 'usuario')
+    ).select_related(
+        'detalle_libranza',
+        'detalle_adelanto_nomina__vinculo_laboral__empresa',
+        'usuario',
+    )
+
+    if forced_linea:
+        creditos_empresa = creditos_empresa.filter(linea=forced_linea)
 
     decision_pagador_qs = HistorialEstado.objects.filter(
         credito_id=OuterRef('pk'),
@@ -1248,51 +1633,156 @@ def pagador_dashboard_view(request):
         pagador_decision_motivo=Subquery(decision_pagador_qs.values('motivo')[:1]),
     )
 
-    #? Aplicar filtros de búsqueda
+    creditos_empresa = creditos_empresa.annotate(
+        cliente_nombre_busqueda=Case(
+            When(
+                linea=Credito.LineaCredito.LIBRANZA,
+                then=Trim(
+                    Concat(
+                        Coalesce('detalle_libranza__nombres', Value('')),
+                        Value(' '),
+                        Coalesce('detalle_libranza__apellidos', Value(''))
+                    )
+                )
+            ),
+            When(
+                linea=Credito.LineaCredito.ADELANTO_NOMINA,
+                then=Coalesce('detalle_adelanto_nomina__vinculo_laboral__nombre_empleado', Value(''))
+            ),
+            default=Value(''),
+            output_field=CharField(),
+        ),
+        cliente_documento_busqueda=Case(
+            When(linea=Credito.LineaCredito.LIBRANZA, then=Coalesce('detalle_libranza__cedula', Value(''))),
+            When(linea=Credito.LineaCredito.ADELANTO_NOMINA, then=Coalesce('detalle_adelanto_nomina__vinculo_laboral__documento_empleado', Value(''))),
+            default=Value(''),
+            output_field=CharField(),
+        ),
+    )
+
     if search_query:
         creditos_empresa = creditos_empresa.filter(
-            Q(detalle_libranza__nombres__icontains=search_query) |
-            Q(detalle_libranza__apellidos__icontains=search_query) |
-            Q(detalle_libranza__cedula__icontains=search_query)
+            Q(cliente_nombre_busqueda__icontains=search_query) |
+            Q(cliente_documento_busqueda__icontains=search_query)
         )
 
     if estado_filter:
         creditos_empresa = creditos_empresa.filter(estado=estado_filter)
 
-    #? Aplicar ordenamiento
     valid_sort_fields = [
-        'detalle_libranza__nombres', '-detalle_libranza__nombres',
-        'detalle_libranza__cedula', '-detalle_libranza__cedula',
+        'cliente_nombre_busqueda', '-cliente_nombre_busqueda',
+        'cliente_documento_busqueda', '-cliente_documento_busqueda',
         'fecha_solicitud', '-fecha_solicitud',
         'monto_aprobado', '-monto_aprobado',
         'saldo_pendiente', '-saldo_pendiente',
         'estado', '-estado'
     ]
-    if sort_by in valid_sort_fields:
-        creditos_empresa = creditos_empresa.order_by(sort_by)
+    sort_map = {
+        'cliente_nombre': 'cliente_nombre_busqueda',
+        '-cliente_nombre': '-cliente_nombre_busqueda',
+        'cliente_documento': 'cliente_documento_busqueda',
+        '-cliente_documento': '-cliente_documento_busqueda',
+    }
+    sort_by_real = sort_map.get(sort_by, sort_by)
+    if sort_by_real in valid_sort_fields:
+        creditos_empresa = creditos_empresa.order_by(sort_by_real)
 
-    #? Obtener y limpiar errores de la sesión
+    return creditos_empresa
+
+
+@login_required(login_url='/pagador/login/')
+@pagador_required
+def pagador_dashboard_view(request):
+    """
+    Dashboard para el usuario pagador de una empresa.
+    Muestra todos los créditos de libranza de los empleados de su empresa, con filtros y ordenamiento.
+    """
+    empresa = request.empresa
+
+    #? --- Filtros y Búsqueda ---
+    search_query = request.GET.get('search', '')
+    estado_filter = request.GET.get('estado', '')
+    sort_by = request.GET.get('sort_by', '-monto_aprobado') # Ordenar por monto de crédito descendente por defecto
+
+    creditos_empresa = _build_pagador_creditos_queryset(
+        empresa=empresa,
+        search_query=search_query,
+        estado_filter=estado_filter,
+        sort_by=sort_by,
+    )
+    total_registros = creditos_empresa.count()
+    paginator = Paginator(creditos_empresa, 20)
+    creditos_page = paginator.get_page(request.GET.get('page'))
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
     errores_pago_masivo = request.session.pop('errores_pago_masivo', None)
 
-    # Solicitudes pendientes de validación por parte del pagador.
+    # Solicitudes pendientes de validaci?n por parte del pagador.
     solicitudes_pendientes = creditos_empresa.filter(
         estado__in=[Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION]
     )
 
     context = {
         'empresa': empresa,
-        'creditos': creditos_empresa,
+        'creditos': creditos_page,
         'errores_pago_masivo': errores_pago_masivo,
         'solicitudes_pendientes_count': solicitudes_pendientes.count(),
         'search_query': search_query,
         'estado_filter': estado_filter,
         'sort_by': sort_by,
         'estados_choices': [choice for choice in Credito.EstadoCredito.choices if choice[0] not in ['RECHAZADO', 'SOLICITUD']],
+        'dashboard_title': 'Panel del pagador',
+        'total_registros': total_registros,
+        'querystring_without_page': query_params.urlencode(),
+        'solo_adelantos': False,
     }
     
     return render(request, 'pagador/pagador_dashboard.html', context)
 
-@login_required
+
+@login_required(login_url='/pagador/login/')
+@pagador_required
+def pagador_adelantos_dashboard_view(request):
+    empresa = request.empresa
+    search_query = request.GET.get('search', '')
+    estado_filter = request.GET.get('estado', '')
+    sort_by = request.GET.get('sort_by', '-fecha_solicitud')
+
+    creditos_empresa = _build_pagador_creditos_queryset(
+        empresa=empresa,
+        search_query=search_query,
+        estado_filter=estado_filter,
+        sort_by=sort_by,
+        forced_linea=Credito.LineaCredito.ADELANTO_NOMINA,
+    )
+    total_registros = creditos_empresa.count()
+    paginator = Paginator(creditos_empresa, 20)
+    creditos_page = paginator.get_page(request.GET.get('page'))
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
+    errores_pago_masivo = request.session.pop('errores_pago_masivo', None)
+    solicitudes_pendientes = creditos_empresa.filter(
+        estado__in=[Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION]
+    )
+
+    context = {
+        'empresa': empresa,
+        'creditos': creditos_page,
+        'errores_pago_masivo': errores_pago_masivo,
+        'solicitudes_pendientes_count': solicitudes_pendientes.count(),
+        'search_query': search_query,
+        'estado_filter': estado_filter,
+        'sort_by': sort_by,
+        'estados_choices': [choice for choice in Credito.EstadoCredito.choices if choice[0] not in ['RECHAZADO', 'SOLICITUD']],
+        'dashboard_title': 'Adelantos de nómina',
+        'total_registros': total_registros,
+        'querystring_without_page': query_params.urlencode(),
+        'solo_adelantos': True,
+    }
+
+    return render(request, 'pagador/pagador_dashboard.html', context)
+
+@login_required(login_url='/pagador/login/')
 @pagador_required
 def pagador_detalle_credito_view(request, credito_id):
     """
@@ -1300,12 +1790,16 @@ def pagador_detalle_credito_view(request, credito_id):
     """
     empresa = request.empresa
 
-    credito = get_object_or_404(Credito, id=credito_id, linea=Credito.LineaCredito.LIBRANZA)
+    credito = get_object_or_404(
+        Credito.objects.select_related('detalle_libranza', 'detalle_adelanto_nomina__vinculo_laboral__empresa'),
+        id=credito_id,
+        linea__in=[Credito.LineaCredito.LIBRANZA, Credito.LineaCredito.ADELANTO_NOMINA],
+    )
 
     #? Verificar que el crédito pertenece a la empresa del pagador
-    if credito.detalle_libranza.empresa != empresa:
+    if credito.empresa_relacionada != empresa:
         messages.error(request, "No tiene permiso para ver este crédito.")
-        return redirect('gestion_creditos:pagador_dashboard')
+        return redirect('pagador:dashboard')
 
     historial_pagos = HistorialPago.objects.filter(credito=credito, estado=HistorialPago.EstadoPago.EXITOSO).order_by('-fecha_pago')
     total_pagado = historial_pagos.aggregate(total=Sum('monto'))['total'] or Decimal(0)
@@ -1313,6 +1807,7 @@ def pagador_detalle_credito_view(request, credito_id):
     #? Usar el saldo pendiente del modelo que ya se actualiza correctamente
     saldo_pendiente = credito.saldo_pendiente
     pagador_decision = _obtener_decision_pagador(credito)
+    capacidad_descuento = _build_capacidad_descuento_context(credito)
 
     context = {
         'credito': credito,
@@ -1322,12 +1817,14 @@ def pagador_detalle_credito_view(request, credito_id):
         'pagador_decision': pagador_decision,
         'pagador_aprobado': bool(pagador_decision and pagador_decision.estado_nuevo == Credito.EstadoCredito.APROBADO_PAGADOR),
         'pagador_rechazado': bool(pagador_decision and pagador_decision.estado_nuevo == Credito.EstadoCredito.RECHAZADO),
+        'empresa_credito': credito.empresa_relacionada,
+        'capacidad_descuento': capacidad_descuento,
     }
     
     return render(request, 'pagador/pagador_detalle_credito.html', context)
 
 
-@login_required
+@login_required(login_url='/pagador/login/')
 @require_POST
 @pagador_required
 def pagador_decidir_solicitud_view(request, credito_id):
@@ -1336,16 +1833,16 @@ def pagador_decidir_solicitud_view(request, credito_id):
     """
     empresa = request.empresa
     credito = get_object_or_404(
-        Credito.objects.select_related('detalle_libranza'),
+        Credito.objects.select_related('detalle_libranza', 'detalle_adelanto_nomina__vinculo_laboral__empresa'),
         id=credito_id,
-        linea=Credito.LineaCredito.LIBRANZA,
+        linea__in=[Credito.LineaCredito.LIBRANZA, Credito.LineaCredito.ADELANTO_NOMINA],
     )
 
     if credito.estado not in [Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION]:
         messages.info(request, "Esta solicitud ya no admite decisiones del pagador.")
         return redirect('pagador:dashboard')
 
-    if credito.detalle_libranza.empresa != empresa:
+    if credito.empresa_relacionada != empresa:
         messages.error(request, "No tiene permiso para gestionar este credito.")
         return redirect('pagador:dashboard')
 
@@ -1361,7 +1858,7 @@ def pagador_decidir_solicitud_view(request, credito_id):
             credito = (
                 Credito.objects
                 .select_for_update()
-                .select_related('detalle_libranza')
+                .select_related('detalle_libranza', 'detalle_adelanto_nomina__vinculo_laboral__empresa')
                 .get(id=credito.id)
             )
 
@@ -1416,7 +1913,7 @@ def pagador_decidir_solicitud_view(request, credito_id):
 
     return redirect('pagador:dashboard')
 
-@login_required
+@login_required(login_url='/pagador/login/')
 @require_POST
 @pagador_required
 def pagador_procesar_pagos_view(request):
@@ -1486,31 +1983,64 @@ def pagador_procesar_pagos_view(request):
     return render(request, 'pagador/confirmacion_pago_masivo.html', context)
 
 
-def _build_pagador_creditos_queryset(empresa, search_query='', estado_filter='', sort_by='detalle_libranza__cedula'):
+def _build_pagador_creditos_report_queryset_legacy(empresa, search_query='', estado_filter='', sort_by='cliente_documento'):
     creditos = Credito.objects.filter(
-        linea=Credito.LineaCredito.LIBRANZA,
-        detalle_libranza__empresa=empresa
-    ).select_related('detalle_libranza', 'usuario', 'pagare')
+        Q(linea=Credito.LineaCredito.LIBRANZA, detalle_libranza__empresa=empresa) |
+        Q(linea=Credito.LineaCredito.ADELANTO_NOMINA, detalle_adelanto_nomina__vinculo_laboral__empresa=empresa)
+    ).select_related('detalle_libranza', 'detalle_adelanto_nomina__vinculo_laboral__empresa', 'usuario', 'pagare')
+
+    creditos = creditos.annotate(
+        cliente_nombre_busqueda=Case(
+            When(
+                linea=Credito.LineaCredito.LIBRANZA,
+                then=Trim(
+                    Concat(
+                        Coalesce('detalle_libranza__nombres', Value('')),
+                        Value(' '),
+                        Coalesce('detalle_libranza__apellidos', Value(''))
+                    )
+                )
+            ),
+            When(
+                linea=Credito.LineaCredito.ADELANTO_NOMINA,
+                then=Coalesce('detalle_adelanto_nomina__vinculo_laboral__nombre_empleado', Value(''))
+            ),
+            default=Value(''),
+            output_field=CharField(),
+        ),
+        cliente_documento_busqueda=Case(
+            When(linea=Credito.LineaCredito.LIBRANZA, then=Coalesce('detalle_libranza__cedula', Value(''))),
+            When(linea=Credito.LineaCredito.ADELANTO_NOMINA, then=Coalesce('detalle_adelanto_nomina__vinculo_laboral__documento_empleado', Value(''))),
+            default=Value(''),
+            output_field=CharField(),
+        ),
+    )
 
     if search_query:
         creditos = creditos.filter(
-            Q(detalle_libranza__nombres__icontains=search_query) |
-            Q(detalle_libranza__apellidos__icontains=search_query) |
-            Q(detalle_libranza__cedula__icontains=search_query)
+            Q(cliente_nombre_busqueda__icontains=search_query) |
+            Q(cliente_documento_busqueda__icontains=search_query)
         )
 
     if estado_filter:
         creditos = creditos.filter(estado=estado_filter)
 
     valid_sort_fields = [
-        'detalle_libranza__nombres', '-detalle_libranza__nombres',
-        'detalle_libranza__cedula', '-detalle_libranza__cedula',
+        'cliente_nombre_busqueda', '-cliente_nombre_busqueda',
+        'cliente_documento_busqueda', '-cliente_documento_busqueda',
         'monto_aprobado', '-monto_aprobado',
         'saldo_pendiente', '-saldo_pendiente',
         'estado', '-estado'
     ]
-    if sort_by in valid_sort_fields:
-        creditos = creditos.order_by(sort_by)
+    sort_map = {
+        'cliente_nombre': 'cliente_nombre_busqueda',
+        '-cliente_nombre': '-cliente_nombre_busqueda',
+        'cliente_documento': 'cliente_documento_busqueda',
+        '-cliente_documento': '-cliente_documento_busqueda',
+    }
+    sort_by_real = sort_map.get(sort_by, sort_by)
+    if sort_by_real in valid_sort_fields:
+        creditos = creditos.order_by(sort_by_real)
 
     return creditos.annotate(
         total_pagado=Coalesce(
@@ -1567,12 +2097,42 @@ def _pagador_report_rows(request, creditos, empresa, report_type):
 
     rows = []
     for credito in creditos:
-        detalle = credito.detalle_libranza
+        detalle = credito.detalle
         usuario = credito.usuario
         try:
             pagare = credito.pagare
         except Pagare.DoesNotExist:
             pagare = None
+
+        if credito.linea == Credito.LineaCredito.LIBRANZA:
+            nombre_completo = detalle.nombre_completo if detalle else ''
+            nombres = detalle.nombres if detalle else ''
+            apellidos = detalle.apellidos if detalle else ''
+            cedula = detalle.cedula if detalle else ''
+            correo = detalle.correo_electronico if detalle else ''
+            telefono = detalle.telefono if detalle else ''
+            direccion = detalle.direccion if detalle else ''
+            ingresos = _fmt_decimal(getattr(detalle, 'ingresos_mensuales', None)) if detalle else ''
+            cedula_frontal = _file_url(detalle.cedula_frontal) if detalle else ''
+            cedula_trasera = _file_url(detalle.cedula_trasera) if detalle else ''
+            certificado_laboral = _file_url(detalle.certificado_laboral) if detalle else ''
+            desprendible_nomina = _file_url(detalle.desprendible_nomina) if detalle else ''
+            certificado_bancario = _file_url(detalle.certificado_bancario) if detalle else ''
+        else:
+            vinculo = detalle.vinculo_laboral if detalle else None
+            nombre_completo = vinculo.nombre_empleado if vinculo else ''
+            nombres = vinculo.nombre_empleado if vinculo else ''
+            apellidos = ''
+            cedula = vinculo.documento_empleado if vinculo else ''
+            correo = vinculo.correo_empleado if vinculo else ''
+            telefono = vinculo.telefono_empleado if vinculo else ''
+            direccion = ''
+            ingresos = _fmt_decimal(getattr(vinculo, 'salario_base_mensual', None)) if vinculo else ''
+            cedula_frontal = ''
+            cedula_trasera = ''
+            certificado_laboral = ''
+            desprendible_nomina = ''
+            certificado_bancario = ''
 
         row_completo = [
             empresa.nombre,
@@ -1599,19 +2159,19 @@ def _pagador_report_rows(request, creditos, empresa, report_type):
             'Si' if credito.documento_enviado else 'No',
             usuario.username if usuario else '',
             usuario.email if usuario else '',
-            detalle.nombre_completo if detalle else '',
-            detalle.nombres if detalle else '',
-            detalle.apellidos if detalle else '',
-            detalle.cedula if detalle else '',
-            detalle.correo_electronico if detalle else '',
-            detalle.telefono if detalle else '',
-            detalle.direccion if detalle else '',
-            _fmt_decimal(getattr(detalle, 'ingresos_mensuales', None)) if detalle else '',
-            _file_url(detalle.cedula_frontal) if detalle else '',
-            _file_url(detalle.cedula_trasera) if detalle else '',
-            _file_url(detalle.certificado_laboral) if detalle else '',
-            _file_url(detalle.desprendible_nomina) if detalle else '',
-            _file_url(detalle.certificado_bancario) if detalle else '',
+            nombre_completo,
+            nombres,
+            apellidos,
+            cedula,
+            correo,
+            telefono,
+            direccion,
+            ingresos,
+            cedula_frontal,
+            cedula_trasera,
+            certificado_laboral,
+            desprendible_nomina,
+            certificado_bancario,
             pagare.numero_pagare if pagare else '',
             pagare.get_estado_display() if pagare else '',
             pagare.estado if pagare else '',
@@ -1632,10 +2192,10 @@ def _pagador_report_rows(request, creditos, empresa, report_type):
             _fmt_decimal(credito.valor_cuota),
             _fmt_dt(credito.fecha_proximo_pago),
             _fmt_decimal(getattr(credito, 'total_pagado', None)),
-            detalle.nombre_completo if detalle else '',
-            detalle.cedula if detalle else '',
-            detalle.correo_electronico if detalle else '',
-            detalle.telefono if detalle else '',
+            nombre_completo,
+            cedula,
+            correo,
+            telefono,
             pagare.get_estado_display() if pagare else '',
             _fmt_dt(pagare.fecha_firma) if pagare else '',
         ]
@@ -1644,7 +2204,7 @@ def _pagador_report_rows(request, creditos, empresa, report_type):
     return (headers_reducido if report_type == 'reducido' else headers_completo), rows
 
 
-@login_required
+@login_required(login_url='/pagador/login/')
 @pagador_required
 def descargar_csv_cuotas_pendientes_view(request):
     """
@@ -1706,7 +2266,7 @@ def descargar_csv_cuotas_pendientes_view(request):
     return response
 
 
-@login_required
+@login_required(login_url='/pagador/login/')
 @pagador_required
 def descargar_reporte_pagador_view(request):
     """
@@ -1717,7 +2277,7 @@ def descargar_reporte_pagador_view(request):
     empresa = request.empresa
     search_query = request.GET.get('search', '').strip()
     estado_filter = request.GET.get('estado', '').strip()
-    sort_by = request.GET.get('sort_by', 'detalle_libranza__cedula')
+    sort_by = request.GET.get('sort_by', 'cliente_documento')
     formato = (request.GET.get('formato') or 'csv').strip().lower()
     if formato not in {'csv', 'xlsx'}:
         formato = 'csv'
@@ -1755,7 +2315,7 @@ def descargar_reporte_pagador_view(request):
     return response
 
 
-@login_required
+@login_required(login_url='/pagador/login/')
 @pagador_required
 def iniciar_pago_view(request, credito_id):
     """Inicia el flujo de pago para una cuota de un crédito de libranza."""
@@ -1764,12 +2324,12 @@ def iniciar_pago_view(request, credito_id):
     #? Asegurarse de que el pagador solo pueda pagar créditos de su empresa
     if credito.detalle_libranza.empresa != request.empresa:
         messages.error(request, "No tiene permisos para pagar este crédito.")
-        return redirect('gestion_creditos:pagador_dashboard')
+        return redirect('pagador:dashboard')
 
     valor_cuota = credito.valor_cuota
     if not valor_cuota or valor_cuota <= 0:
         messages.error(request, "El crédito no tiene un valor de cuota válido para pagar.")
-        return redirect('gestion_creditos:pagador_dashboard')
+        return redirect('pagador:dashboard')
 
     context = {
         'credito': credito,
@@ -1934,11 +2494,11 @@ def _get_credito_pagador_from_reference(request, reference):
         detalle_libranza__empresa=request.empresa
     ).select_related('detalle_libranza').first()
 
-@login_required
+@login_required(login_url='/pagador/login/')
 @pagador_required
 def iniciar_pago_wompi_view(request, credito_id):
     """
-    Muestra el formulario de selección de método de pago con WOMPI
+    Muestra el formulario de selección de m?todo de pago con WOMPI
     """
     from .services.wompi_client import WompiClient, WompiAPIException
 
@@ -1996,7 +2556,7 @@ def iniciar_pago_wompi_emprendimiento_view(request, credito_id):
     from .services.wompi_client import WompiClient, WompiAPIException
 
     if not settings.WOMPI_PUBLIC_KEY or not settings.WOMPI_PRIVATE_KEY:
-        messages.error(request, "Configuración WOMPI incompleta. Verifica las llaves en el entorno.")
+        messages.error(request, "Configuraci?n WOMPI incompleta. Verifica las llaves en el entorno.")
         return redirect('emprendimiento:mi_credito')
 
     credito = get_object_or_404(
@@ -2924,7 +3484,7 @@ def pago_wompi_callback_view(request):
         return redirect('pagador:dashboard')
 
 
-@login_required
+@login_required(login_url='/pagador/login/')
 @pagador_required
 def pagador_pago_resumen_wompi_view(request, transaction_id):
     """
@@ -2977,7 +3537,7 @@ def pagador_pago_resumen_wompi_view(request, transaction_id):
     return render(request, 'pagador/pago_wompi_confirmado.html', context)
 
 
-@login_required
+@login_required(login_url='/pagador/login/')
 @pagador_required
 def pagador_pago_comprobante_wompi_view(request, transaction_id):
     """
@@ -3039,11 +3599,11 @@ def pagador_pago_comprobante_wompi_view(request, transaction_id):
     return response
 
 
-@login_required
+@login_required(login_url='/pagador/login/')
 @pagador_required
 def iniciar_pago_masivo_wompi_view(request):
     """
-    Muestra el formulario de selección de método de pago con WOMPI para pagos masivos
+    Muestra el formulario de selección de m?todo de pago con WOMPI para pagos masivos
     """
     from .services.wompi_client import WompiClient, WompiAPIException
 
@@ -3143,7 +3703,7 @@ def wompi_webhook_view(request):
     Eventos que maneja:
     - transaction.updated: Cuando una transacción cambia de estado
 
-    IMPORTANTE: Este endpoint debe estar accesible públicamente sin autenticación
+    IMPORTANTE: Este endpoint debe estar accesible públicamente sin autenticaci?n
     para que WOMPI pueda enviar las notificaciones.
     """
     from .services.wompi_client import WompiClient
@@ -3156,7 +3716,7 @@ def wompi_webhook_view(request):
         payload = json.loads(request.body.decode('utf-8'))
 
         # Validar la firma del webhook (integridad del mensaje)
-        # Según documentación de Wompi:
+        # Según documentaci?n de Wompi:
         # checksum = SHA256(properties concatenadas en orden + timestamp + events_secret)
         signature_data = payload.get('signature', {})
         received_checksum = signature_data.get('checksum', '')
@@ -3197,7 +3757,7 @@ def wompi_webhook_view(request):
             reference = transaction_data.get('reference')
             amount_in_cents = transaction_data.get('amount_in_cents')
 
-            logger.info(f"Transacción {transaction_id} actualizada a estado: {status}, Referencia: {reference}")
+            logger.info(f"Transacci?n {transaction_id} actualizada a estado: {status}, Referencia: {reference}")
             mapped_status = _map_wompi_status_to_intent(status)
             intent_updated = 0
             if transaction_id:
@@ -3267,7 +3827,7 @@ def wompi_webhook_view(request):
 def zapsign_webhook_view(request):
     """
     Webhook de ZapSign para eventos de firma de pagarés.
-    Este endpoint debe estar accesible públicamente sin autenticación.
+    Este endpoint debe estar accesible públicamente sin autenticaci?n.
     """
     try:
         payload = json.loads(request.body.decode('utf-8'))
@@ -3280,7 +3840,7 @@ def zapsign_webhook_view(request):
 
     def _zapsign_action_from_payload(event_name, data):
         """
-        Determina la acción real del webhook con base en status/evento y evidencia de firma.
+        Determina la acci?n real del webhook con base en status/evento y evidencia de firma.
         Retorna: 'signed' | 'refused' | 'ignored'
         """
         event_lower = (event_name or '').strip().lower()
@@ -3335,9 +3895,9 @@ def zapsign_webhook_view(request):
             secret_received = secret_received[7:]
 
         if secret_received != secret_expected:
-            webhook_log.error_message = "Secret token inv?lido"
+            webhook_log.error_message = "Secret token inválido"
             webhook_log.save(update_fields=['error_message'])
-            logger.warning(f"Webhook ZapSign rechazado: secret inv?lido desde {ip_address}")
+            logger.warning(f"Webhook ZapSign rechazado: secret inválido desde {ip_address}")
             return JsonResponse({'error': 'Unauthorized'}, status=403)
 
     webhook_log.signature_valid = True
@@ -3390,7 +3950,7 @@ def zapsign_webhook_view(request):
                             filename = f"{pagare.numero_pagare}_firmado.pdf"
                             pagare.archivo_pdf_firmado.save(filename, ContentFile(signed_bytes), save=True)
                 except Exception as e:
-                    logger.warning(f"No se pudo guardar el PDF firmado para pagaré {pagare.numero_pagare}: {e}")
+                    logger.warning(f"No se pudo guardar el PDF firmado para pagar? {pagare.numero_pagare}: {e}")
 
                 credit_services.gestionar_cambio_estado_credito(
                     credito=credito,
@@ -3452,15 +4012,28 @@ def billetera_digital_view(request):
     Vista principal de la billetera digital del usuario.
     Muestra saldo, estadísticas, movimientos e impacto social.
     """
-    context = credit_services.get_billetera_context(request.user)
+    context = credit_services.get_billetera_context(request.user, request=request)
     return render(request, 'Billetera/billetera_digital.html', context)
+
+
+@login_required
+@require_POST
+def marcar_notificaciones_leidas_view(request):
+    Notificacion.objects.filter(
+        usuario=request.user,
+        leida=False,
+    ).update(
+        leida=True,
+        fecha_leida=timezone.now(),
+    )
+    return JsonResponse({'success': True})
 
 
 @login_required
 @require_POST
 def consignacion_offline_view(request):
     """
-    Procesa una consignación offline (con comprobante).
+    Procesa una consignaci?n offline (con comprobante).
     El movimiento queda en estado PENDIENTE hasta que el admin lo apruebe.
     """
     cuenta, created = CuentaAhorro.objects.get_or_create(
@@ -3483,15 +4056,15 @@ def consignacion_offline_view(request):
             movimiento.referencia = f"OFFLINE-{uuid.uuid4().hex[:12].upper()}"
             
             if not movimiento.descripcion:
-                movimiento.descripcion = 'Consignación offline pendiente de aprobación'
+                movimiento.descripcion = 'Consignaci?n offline pendiente de aprobaci?n'
             
             movimiento.save()
             
-            messages.success(request, '¡Comprobante enviado! Tu consignación será revisada pronto.')
+            messages.success(request, '¡Comprobante enviado! Tu consignaci?n será revisada pronto.')
             
             return JsonResponse({
                 'success': True,
-                'mensaje': 'Consignación enviada exitosamente',
+                'mensaje': 'Consignaci?n enviada exitosamente',
                 'referencia': movimiento.referencia
             })
     else:
@@ -3547,9 +4120,9 @@ def admin_billetera_dashboard_view(request):
 @require_POST
 def aprobar_consignacion_view(request, movimiento_id):
     """
-    Aprueba una consignación pendiente usando el servicio centralizado.
+    Aprueba una consignaci?n pendiente usando el servicio centralizado.
     """
-    nota_admin = request.POST.get('nota_admin', 'Consignación aprobada')
+    nota_admin = request.POST.get('nota_admin', 'Consignaci?n aprobada')
     try:
         movimiento = credit_services.gestionar_consignacion_billetera(
             movimiento_id=movimiento_id,
@@ -3559,14 +4132,14 @@ def aprobar_consignacion_view(request, movimiento_id):
         )
         messages.success(
             request, 
-            f'Consignación de ${movimiento.monto:,.0f} aprobada para {movimiento.cuenta.usuario.get_full_name()}'
+            f'Consignaci?n de ${movimiento.monto:,.0f} aprobada para {movimiento.cuenta.usuario.get_full_name()}'
         )
         return JsonResponse({
             'success': True,
             'nuevo_saldo': float(movimiento.cuenta.saldo_disponible)
         })
     except Exception as e:
-        logger.error(f"Error al aprobar consignación {movimiento_id}: {e}")
+        logger.error(f"Error al aprobar consignaci?n {movimiento_id}: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -3577,7 +4150,7 @@ def aprobar_consignacion_view(request, movimiento_id):
 @require_POST
 def rechazar_consignacion_view(request, movimiento_id):
     """
-    Rechaza una consignación pendiente usando el servicio centralizado.
+    Rechaza una consignaci?n pendiente usando el servicio centralizado.
     """
     motivo_rechazo = request.POST.get('motivo', 'Sin motivo especificado')
     try:
@@ -3589,11 +4162,11 @@ def rechazar_consignacion_view(request, movimiento_id):
         )
         messages.warning(
             request,
-            f'Consignación de {movimiento.cuenta.usuario.get_full_name()} rechazada.'
+            f'Consignaci?n de {movimiento.cuenta.usuario.get_full_name()} rechazada.'
         )
         return JsonResponse({'success': True})
     except Exception as e:
-        logger.error(f"Error al rechazar consignación {movimiento_id}: {e}")
+        logger.error(f"Error al rechazar consignaci?n {movimiento_id}: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -3655,7 +4228,7 @@ def calcular_pago_total_view(request, credito_id):
     try:
         credito = get_object_or_404(Credito, id=credito_id, usuario=request.user)
 
-        # Validar que el crédito esté activo
+        # Validar que el crédito está activo
         if credito.estado not in [Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]:
             return JsonResponse({
                 'success': False,
@@ -3721,7 +4294,7 @@ def analizar_abono_credito_view(request, credito_id):
 
         credito = get_object_or_404(Credito, id=credito_id, usuario=request.user)
 
-        # Validar que el crédito esté activo
+        # Validar que el crédito está activo
         if credito.estado not in [Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]:
             return JsonResponse({
                 'success': False,
@@ -3889,7 +4462,7 @@ def confirmar_abono_credito_view(request, credito_id):
             messages.error(request, 'Debe confirmar el abono antes de proceder.')
             return redirect('usuariocreditos:dashboard_emprendimiento')
 
-        # Validar que el crédito esté activo
+        # Validar que el crédito está activo
         if credito.estado not in [Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]:
             messages.error(request, 'El crédito debe estar activo para realizar abonos.')
             return redirect('usuariocreditos:dashboard_emprendimiento')

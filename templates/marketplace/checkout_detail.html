@@ -1,0 +1,117 @@
+{% load humanize static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ pedido.numero_pedido }} - Marketplace Aprobado</title>
+    <link rel="stylesheet" href="{% static 'css/marketplace.css' %}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body class="marketplace">
+    <div class="mp-orb orb-1"></div>
+    <div class="mp-orb orb-2"></div>
+
+    <form id="mp-logout-form" method="post" action="{% url 'marketplace:logout' %}" style="display:none;">
+        {% csrf_token %}
+    </form>
+
+    <header class="mp-header mp-container">
+        <a href="{% url 'marketplace:home' %}" class="mp-brand">
+            <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado">
+            Marketplace Aliados
+        </a>
+        <div class="mp-header-meta">
+            {% if es_admin_empresa %}
+            <a href="{% url 'marketplace:panel' %}" class="mp-btn ghost mp-btn-sm">Panel empresas</a>
+            {% else %}
+            <span class="mp-company-pill"><i class="bi bi-person-circle"></i>{{ marketplace_display_name }}</span>
+            <a href="{% url 'marketplace:orders' %}" class="mp-btn ghost mp-btn-sm">Mis pedidos</a>
+            {% endif %}
+            <a href="#" class="mp-btn primary mp-btn-sm" onclick="event.preventDefault();document.getElementById('mp-logout-form').submit();">Cerrar sesion</a>
+        </div>
+    </header>
+
+    <section class="mp-container mp-checkout-shell" style="margin-top:3rem;">
+        <section class="mp-checkout-panel">
+            <span class="mp-hero-badge"><i class="bi bi-check2-circle"></i>Pedido registrado</span>
+            <h1>{{ pedido.numero_pedido }}</h1>
+            <p class="mp-checkout-intro">El pedido quedo creado para <strong>{{ empresa.nombre }}</strong> con pago en estado <strong>{{ pago.get_estado_display }}</strong>.</p>
+
+            <div class="mp-checkout-grid">
+                <div class="mp-field full">
+                    <label>Item</label>
+                    <div class="mp-readonly-box">
+                        {% if pedido_producto and pedido_producto.imagen %}
+                        <img src="{{ pedido_producto.imagen.url }}" alt="{{ pedido_producto.titulo }}">
+                        {% endif %}
+                        <div>
+                            <strong>{% if pedido_producto %}{{ pedido_producto.titulo }}{% else %}Pedido marketplace{% endif %}</strong>
+                            <p>{% if pedido_producto %}{{ pedido_producto.descripcion|default:"" }}{% else %}Resumen del pedido registrado.{% endif %}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mp-checkout-grid">
+                <div class="mp-field">
+                    <label>Comprador</label>
+                    <div class="mp-readonly-box is-stack">
+                        <strong>{{ pedido.comprador_nombre }}</strong>
+                        <span>{{ pedido.comprador_email }}</span>
+                        <span>{{ pedido.comprador_telefono }}</span>
+                    </div>
+                </div>
+                <div class="mp-field">
+                    <label>Entrega</label>
+                    <div class="mp-readonly-box is-stack">
+                        <strong>{{ pedido.direccion_entrega.nombre_contacto }}</strong>
+                        <span>{{ pedido.direccion_entrega.direccion_linea_1 }}</span>
+                        {% if pedido.direccion_entrega.direccion_linea_2 %}<span>{{ pedido.direccion_entrega.direccion_linea_2 }}</span>{% endif %}
+                        <span>{{ pedido.direccion_entrega.ciudad }}{% if pedido.direccion_entrega.departamento %}, {{ pedido.direccion_entrega.departamento }}{% endif %}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mp-checkout-actions">
+                <a class="mp-btn primary" href="{% url 'marketplace:empresa' empresa.slug %}">
+                    <i class="bi bi-grid-3x3-gap"></i>Volver a la vitrina
+                </a>
+                <a class="mp-btn ghost" href="mailto:{{ empresa.correo_contacto|default:'info@aprobado.com.co' }}">
+                    <i class="bi bi-envelope"></i>Contactar soporte
+                </a>
+            </div>
+        </section>
+
+        <aside class="mp-checkout-summary">
+            <h3>Resumen financiero</h3>
+            <div class="mp-stats">
+                <div class="mp-stat"><span>Subtotal</span><strong>${{ pedido.subtotal|floatformat:0|intcomma }}</strong></div>
+                <div class="mp-stat"><span>Total comprador</span><strong>${{ pedido.total|floatformat:0|intcomma }}</strong></div>
+                {% if es_admin_empresa %}
+                <div class="mp-stat"><span>Comision marketplace</span><strong>${{ pedido.marketplace_fee_amount|floatformat:0|intcomma }}</strong></div>
+                <div class="mp-stat"><span>Neto empresa</span><strong>${{ liquidacion.valor_neto|floatformat:0|intcomma }}</strong></div>
+                {% endif %}
+            </div>
+
+            <div class="mp-checkout-note">
+                {% if es_admin_empresa and empresa.pagos_habilitados %}
+                La empresa ya esta marcada como habilitada para pagos. El siguiente paso es conectar la preferencia real de Mercado Pago sobre este pedido.
+                {% elif es_admin_empresa %}
+                El pedido ya esta modelado con pago y liquidacion. Falta habilitar pagos para la empresa o conectar la pasarela para completar el checkout automatico.
+                {% else %}
+                Ya registramos tu solicitud y el equipo correspondiente te contactara con el siguiente paso.
+                {% endif %}
+            </div>
+
+            {% if es_admin_empresa %}
+            <div class="mp-checkout-note muted">
+                Estás viendo este pedido como administrador de la empresa.
+            </div>
+            {% endif %}
+        </aside>
+    </section>
+
+    {% include 'base/public_whatsapp_button.html' %}
+</body>
+</html>

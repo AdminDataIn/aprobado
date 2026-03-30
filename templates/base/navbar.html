@@ -10,8 +10,8 @@
         <!-- Desktop Navigation -->
         <nav class="nav-links">
             {# NUEVAS URLs - Emprendimiento #}
-            <a href="{% url 'emprendimiento:landing' %}" class="nav-link">Inicio</a>
-            <a href="{% url 'emprendimiento:simulador' %}" class="nav-link">Simulador</a>
+            <a href="/emprendimiento/" class="nav-link">Inicio</a>
+            <a href="/emprendimiento/simulador/" class="nav-link">Simulador</a>
             <a href="#" class="nav-link">Productos</a>
             <a href="#" class="nav-link">Nosotros</a>
             <a href="#" class="nav-link">Alianzas</a>
@@ -25,10 +25,10 @@
                     <span class="name-us">{{ request.user.first_name|default:request.user.email }}</span>
                 </a>
                 <ul class="dropdown-menu">
-                    <form id="logout-form" method="post" action="{% url 'emprendimiento:logout' %}" style="display: none;">
+                    <form id="logout-form" method="post" action="/emprendimiento/logout/" style="display: none;">
                         {% csrf_token %}
                     </form>
-                    <li><a href="{% url 'emprendimiento:mi_credito' %}">
+                    <li><a href="/emprendimiento/mi-credito/">
                         Mis créditos
                     </a></li>
                     <li><a href="#" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
@@ -42,7 +42,7 @@
         <!-- Buttons & Mobile Menu Toggle -->
         <div class="navbar-right">
             {# ✅ NUEVA URL - Solicitar Emprendimiento #}
-            <a href="{% url 'emprendimiento:solicitar' %}" class="btn btn-apply">Aplicar ahora</a>
+            <a href="/emprendimiento/solicitar/" class="btn btn-apply">Aplicar ahora</a>
             <button id="menu-toggle" class="menu-toggle" aria-label="Abrir menú">
                 &#9776;
             </button>
@@ -57,17 +57,17 @@
         </div>
         <nav class="mobile-nav-links">
             {# ✅ NUEVAS URLs - Emprendimiento #}
-            <a href="{% url 'emprendimiento:landing' %}" class="mobile-nav-link">Inicio</a>
-            <a href="{% url 'emprendimiento:simulador' %}" class="mobile-nav-link">Simulador</a>
+            <a href="/emprendimiento/" class="mobile-nav-link">Inicio</a>
+            <a href="/emprendimiento/simulador/" class="mobile-nav-link">Simulador</a>
             <a href="#" class="mobile-nav-link">Productos</a>
             <a href="#" class="mobile-nav-link">Nosotros</a>
             <a href="#" class="mobile-nav-link">Alianzas</a>
             <a href="#" class="mobile-nav-link">Blog</a>
             {% if request.user.is_authenticated %}
-            <form id="logout-form-mobile" method="post" action="{% url 'emprendimiento:logout' %}" style="display: none;">
+            <form id="logout-form-mobile" method="post" action="/emprendimiento/logout/" style="display: none;">
                 {% csrf_token %}
             </form>
-            <a href="{% url 'emprendimiento:mi_credito' %}" class="mobile-nav-link">Mis créditos</a>
+            <a href="/emprendimiento/mi-credito/" class="mobile-nav-link">Mis créditos</a>
             <a href="#" class="mobile-nav-link"
                onclick="event.preventDefault(); document.getElementById('logout-form-mobile').submit();">
                 Cerrar sesión
@@ -76,7 +76,7 @@
         </nav>
         <div class="mobile-apply">
             {# ✅ NUEVA URL - Solicitar Emprendimiento #}
-            <a href="{% url 'emprendimiento:solicitar' %}" class="btn btn-apply-full">Aplicar ahora</a>
+            <a href="/emprendimiento/solicitar/" class="btn btn-apply-full">Aplicar ahora</a>
         </div>
     </div>
 </header>

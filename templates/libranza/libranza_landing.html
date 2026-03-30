@@ -1,4 +1,4 @@
-{% comment %}
+﻿{% comment %}
 =============================================================================
 LANDING PAGE DE CRÉDITO DE LIBRANZA
 =============================================================================
@@ -104,9 +104,12 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                     <!-- MODIFICAR: Descripción del producto -->
                     <p>Financia tus proyectos personales con descuento automático de nómina. Proceso 100% digital, aprobación rápida y sin complicaciones.</p>
                     <div class="libranza-hero-buttons">
-                        {# Flujo correcto: landing -> simulador -> aplicar #}
                         <a href="{% url 'libranza:simulador' %}" class="libranza-btn-primary">Simula tu crédito</a>
-                        <a href="{% url 'libranza:login' %}" class="libranza-btn-secondary">Iniciar sesión</a>
+                        {% if request.user.is_authenticated %}
+                        <a href="{% url 'libranza:adelanto_nomina' %}" class="libranza-btn-secondary">Solicitar adelanto de nómina</a>
+                        {% else %}
+                        <a href="#adelanto-nomina" class="libranza-btn-secondary">Simula tu adelanto de nómina</a>
+                        {% endif %}
                     </div>
                 </div>
                 <!-- MODIFICAR: Imagen o gráfico hero -->
@@ -129,37 +132,37 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                 <!-- MODIFICAR: Cada tarjeta representa un beneficio -->
                 <!-- Beneficio 1 -->
                 <div class="libranza-feature-card">
-                    <div class="libranza-feature-icon">💰</div>
+                    <div class="libranza-feature-icon"><i class="bi bi-cash-stack"></i></div>
                     <h3>Cuotas fijas y predecibles</h3>
                     <p>Descuento automático de tu nómina. Sin sorpresas, sin retrasos, sin estrés.</p>
                 </div>
                 <!-- Beneficio 2 -->
                 <div class="libranza-feature-card">
-                    <div class="libranza-feature-icon">⚡</div>
+                    <div class="libranza-feature-icon"><i class="bi bi-lightning-charge"></i></div>
                     <h3>Aprobación rápida</h3>
                     <p>Proceso 100% digital. Solicita en minutos y recibe respuesta en menos de 24 horas.</p>
                 </div>
                 <!-- Beneficio 3 -->
                 <div class="libranza-feature-card">
-                    <div class="libranza-feature-icon">📱</div>
+                    <div class="libranza-feature-icon"><i class="bi bi-phone"></i></div>
                     <h3>100% digital</h3>
                     <p>Todo el proceso desde tu celular o computadora. Sin filas, sin papeleo innecesario.</p>
                 </div>
                 <!-- Beneficio 4 -->
                 <div class="libranza-feature-card">
-                    <div class="libranza-feature-icon">🏦</div>
+                    <div class="libranza-feature-icon"><i class="bi bi-bank"></i></div>
                     <h3>Montos competitivos</h3>
                     <p>Desde $500.000 hasta $2.000.000. El monto que necesitas para tus proyectos.</p>
                 </div>
                 <!-- Beneficio 5 -->
                 <div class="libranza-feature-card">
-                    <div class="libranza-feature-icon">📅</div>
+                    <div class="libranza-feature-icon"><i class="bi bi-calendar3"></i></div>
                     <h3>Plazos flexibles</h3>
                     <p>Elige el plazo que mejor se ajuste a tu capacidad de pago, de 1 a 6 meses.</p>
                 </div>
                 <!-- Beneficio 6 -->
                 <div class="libranza-feature-card">
-                    <div class="libranza-feature-icon">🔒</div>
+                    <div class="libranza-feature-icon"><i class="bi bi-shield-lock"></i></div>
                     <h3>Seguro y confiable</h3>
                     <p>Plataforma segura y respaldo de una entidad seria comprometida con tu bienestar.</p>
                 </div>
@@ -182,6 +185,91 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
             <div class="libranza-simulator-cta">
                 {# ✅ NUEVA URL - Libranza #}
                 <a href="{% url 'libranza:simulador' %}" class="libranza-btn-primary-large">Ir al simulador completo</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="libranza-adelanto-section" id="adelanto-nomina">
+        <div class="libranza-container">
+            <div class="libranza-adelanto-grid">
+                <div class="libranza-adelanto-copy">
+                    <span class="libranza-eyebrow">Producto adicional de libranza</span>
+                    <h2 class="libranza-section-title" style="text-align:left;margin-bottom:1rem;">Haz la simulación de tu <span class="highlight-cyan">adelanto de nómina</span></h2>
+                    <p class="libranza-section-description" style="text-align:left;max-width:none;">
+                        Este producto está pensado para cubrir necesidades puntuales de caja. Calcula tu monto estimado usando salario,
+                        auxilio de transporte y descuentos fijos, y conoce de inmediato tu neto a recibir.
+                    </p>
+                    <div class="libranza-adelanto-benefits">
+                        <div class="libranza-adelanto-benefit">
+                            <strong>Simulación clara</strong>
+                            <span>Mostramos bruto, comisión, IVA, interés NM {{ adelanto_tasa_mensual }} y neto final.</span>
+                        </div>
+                        <div class="libranza-adelanto-benefit">
+                            <strong>Decisión controlada</strong>
+                            <span>La solicitud real solo se habilita si tu pagador te cargó con convenio activo y antigüedad mínima.</span>
+                        </div>
+                        <div class="libranza-adelanto-benefit">
+                            <strong>Flujo propio</strong>
+                            <span>No se mezcla con el crédito tradicional: tiene su propia revisión, firma y desembolso.</span>
+                        </div>
+                    </div>
+                    <div class="libranza-hero-buttons">
+                        {% if request.user.is_authenticated %}
+                        <a href="{% url 'libranza:adelanto_nomina' %}" class="libranza-btn-primary">Solicitar adelanto</a>
+                        {% else %}
+                        <a href="{% url 'libranza:login' %}?next={% url 'libranza:adelanto_nomina' %}" class="libranza-btn-primary">Iniciar sesión para solicitar</a>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="libranza-adelanto-simulator" id="adelanto-simulador">
+                    <div class="libranza-adelanto-card">
+                        <div class="libranza-adelanto-card-head">
+                            <span class="libranza-eyebrow">Simulador inmediato</span>
+                            <h3>Calcula tu adelanto estimado</h3>
+                        </div>
+                        <form id="adelantoSimulatorForm" class="libranza-adelanto-form" data-loader="ajax" novalidate>
+                            {% csrf_token %}
+                            <div class="libranza-adelanto-fields">
+                                <div class="libranza-adelanto-field">
+                                    <label for="adelanto-salario">Salario mensual</label>
+                                    <input type="text" id="adelanto-salario" inputmode="numeric" autocomplete="off" data-money-input placeholder="Ej. 2.400.000">
+                                </div>
+                                <div class="libranza-adelanto-field">
+                                    <label for="adelanto-auxilio">Auxilio de transporte</label>
+                                    <input type="text" id="adelanto-auxilio" inputmode="numeric" autocomplete="off" data-money-input placeholder="Ej. 162.000">
+                                </div>
+                                <div class="libranza-adelanto-field libranza-adelanto-field-wide">
+                                    <label for="adelanto-descuentos">Descuentos fijos</label>
+                                    <input type="text" id="adelanto-descuentos" inputmode="numeric" autocomplete="off" data-money-input placeholder="Ej. 300.000">
+                                </div>
+                            </div>
+                            <div class="libranza-adelanto-inline-note">Usa valores mensuales en pesos colombianos. Formateamos automáticamente los montos al escribir.</div>
+                            <button type="submit" class="libranza-btn-primary libranza-adelanto-submit" id="adelanto-submit-btn" style="width:100%;">
+                                <span>Simular adelanto</span>
+                            </button>
+                        </form>
+
+                        <div class="libranza-adelanto-results" id="adelantoSimulatorResults">
+                            <div class="libranza-adelanto-result-main">
+                                <span>Monto neto estimado a recibir</span>
+                                <strong id="adelanto-neto">$0</strong>
+                                <small id="adelanto-estado">Ingresa tus datos para calcular el resultado.</small>
+                            </div>
+                            <div class="libranza-adelanto-result-grid">
+                                <div><span>Monto bruto</span><strong id="adelanto-bruto">$0</strong></div>
+                                <div><span>Valor diario</span><strong id="adelanto-diario">$0</strong></div>
+                                <div><span>Comisión {{ adelanto_comision_percent }}%</span><strong id="adelanto-comision">$0</strong></div>
+                                <div><span>IVA comisión</span><strong id="adelanto-iva">$0</strong></div>
+                                <div><span>Interés NM {{ adelanto_tasa_mensual }}</span><strong id="adelanto-interes">$0</strong></div>
+                                <div><span>Descuento estimado nómina</span><strong id="adelanto-descuento">$0</strong></div>
+                            </div>
+                            <div class="libranza-adelanto-note">
+                                La simulación es informativa. Para solicitar, validamos convenio activo, antigüedad mínima y el vínculo laboral cargado por tu pagador.
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -384,7 +472,11 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                         <!-- MODIFICAR: Botones de acción -->
                         {# ✅ NUEVAS URLs - Libranza #}
                         <a href="{% url 'libranza:simulador' %}" class="libranza-btn-primary-large">Simular crédito</a>
-                        <a href="{% url 'libranza:login' %}" class="libranza-btn-secondary-large">Iniciar sesión</a>
+                        {% if request.user.is_authenticated %}
+                        <a href="{% url 'libranza:adelanto_nomina' %}" class="libranza-btn-secondary-large">Solicitar adelanto</a>
+                        {% else %}
+                        <a href="{% url 'libranza:login' %}?next={{ request.get_full_path|urlencode }}" class="libranza-btn-secondary-large">Iniciar sesión</a>
+                        {% endif %}
                     </div>
                     <!-- MODIFICAR: Información de contacto -->
                     <p class="libranza-contact-info">
@@ -573,6 +665,27 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
     .libranza-feature-icon {
         font-size: 3rem;
         margin-bottom: 1rem;
+        width: 72px;
+        height: 72px;
+        border-radius: 20px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #06b6d4;
+        background: linear-gradient(135deg, rgba(6, 182, 212, 0.12), rgba(34, 211, 238, 0.18));
+        box-shadow: inset 0 0 0 1px rgba(6, 182, 212, 0.18);
+    }
+
+    .libranza-feature-card:nth-child(2n) .libranza-feature-icon {
+        color: #2563eb;
+        background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(59, 130, 246, 0.18));
+        box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.18);
+    }
+
+    .libranza-feature-card:nth-child(3n) .libranza-feature-icon {
+        color: #0f766e;
+        background: linear-gradient(135deg, rgba(13, 148, 136, 0.12), rgba(20, 184, 166, 0.18));
+        box-shadow: inset 0 0 0 1px rgba(13, 148, 136, 0.18);
     }
 
     .libranza-feature-card h3 {
@@ -614,6 +727,188 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         background-color: #0891b2;
         transform: translateY(-2px);
         box-shadow: 0 8px 20px rgba(6, 182, 212, 0.3);
+    }
+
+    .libranza-adelanto-section {
+        padding: 4.5rem 1rem;
+        background: linear-gradient(180deg, #f8fcff 0%, #eef7ff 100%);
+    }
+
+    .libranza-adelanto-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+        gap: 2rem;
+        align-items: start;
+    }
+
+    .libranza-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.45rem 0.9rem;
+        border-radius: 999px;
+        background: rgba(6, 182, 212, 0.12);
+        color: #0c4a6e;
+        font-weight: 700;
+        font-size: 0.8rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .libranza-adelanto-benefits {
+        display: grid;
+        gap: 1rem;
+        margin: 1.5rem 0 2rem;
+    }
+
+    .libranza-adelanto-benefit {
+        background: white;
+        border: 1px solid #dbe7f3;
+        border-radius: 18px;
+        padding: 1rem 1.1rem;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+    }
+
+    .libranza-adelanto-benefit strong {
+        display: block;
+        color: #0a192f;
+        margin-bottom: 0.25rem;
+    }
+
+    .libranza-adelanto-benefit span {
+        color: #4b5563;
+        line-height: 1.5;
+    }
+
+    .libranza-adelanto-card {
+        background: #0f2035;
+        border-radius: 28px;
+        padding: 1.35rem;
+        box-shadow: 0 24px 50px rgba(15, 23, 42, 0.18);
+        color: #f8fbff;
+    }
+
+    .libranza-adelanto-card-head h3 {
+        margin: 0.7rem 0 0;
+        font-size: 1.45rem;
+        color: #ffffff;
+    }
+
+    .libranza-adelanto-form {
+        display: grid;
+        gap: 0.9rem;
+        margin-top: 1.2rem;
+    }
+
+    .libranza-adelanto-fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.85rem;
+    }
+
+    .libranza-adelanto-field label {
+        display: block;
+        font-size: 0.83rem;
+        font-weight: 600;
+        color: rgba(255,255,255,0.8);
+        margin-bottom: 0.4rem;
+    }
+
+    .libranza-adelanto-field input {
+        width: 100%;
+        border: 1px solid rgba(255,255,255,0.14);
+        background: rgba(255,255,255,0.05);
+        color: #ffffff;
+        border-radius: 14px;
+        padding: 0.85rem 0.95rem;
+        outline: none;
+    }
+
+    .libranza-adelanto-field-wide {
+        grid-column: 1 / -1;
+    }
+
+    .libranza-adelanto-inline-note {
+        color: rgba(255,255,255,0.68);
+        font-size: 0.82rem;
+        line-height: 1.45;
+    }
+
+    .libranza-adelanto-submit[disabled] {
+        opacity: 0.7;
+        cursor: wait;
+    }
+
+    .libranza-adelanto-field input::placeholder {
+        color: rgba(255,255,255,0.36);
+    }
+
+    .libranza-adelanto-results {
+        margin-top: 1.15rem;
+        display: grid;
+        gap: 0.85rem;
+    }
+
+    .libranza-adelanto-result-main {
+        background: linear-gradient(135deg, rgba(34,211,238,0.16), rgba(6,182,212,0.08));
+        border: 1px solid rgba(34,211,238,0.2);
+        border-radius: 20px;
+        padding: 1.1rem 1.2rem;
+    }
+
+    .libranza-adelanto-result-main span,
+    .libranza-adelanto-result-main small {
+        display: block;
+        color: rgba(255,255,255,0.75);
+    }
+
+    .libranza-adelanto-result-main strong {
+        display: block;
+        font-size: 1.75rem;
+        margin: 0.35rem 0;
+    }
+
+    .libranza-adelanto-result-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.7rem;
+    }
+
+    .libranza-adelanto-result-grid div {
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.09);
+        border-radius: 16px;
+        padding: 0.8rem 0.85rem;
+    }
+
+    .libranza-adelanto-result-grid span {
+        display: block;
+        color: rgba(255,255,255,0.68);
+        font-size: 0.82rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .libranza-adelanto-result-grid strong {
+        color: #ffffff;
+        font-size: 1rem;
+    }
+
+    .libranza-adelanto-note {
+        background: rgba(255,255,255,0.06);
+        border-radius: 16px;
+        padding: 0.9rem 1rem;
+        color: rgba(255,255,255,0.78);
+        line-height: 1.5;
+    }
+
+    @media (max-width: 960px) {
+        .libranza-adelanto-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .libranza-adelanto-fields,
+        .libranza-adelanto-result-grid {
+            grid-template-columns: 1fr;
+        }
     }
 
     /* PROCESS SECTION */
@@ -903,6 +1198,97 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                 }
             });
         });
+
+        const simulatorForm = document.getElementById('adelantoSimulatorForm');
+        if (simulatorForm) {
+            const moneyInputs = simulatorForm.querySelectorAll('[data-money-input]');
+            const submitButton = document.getElementById('adelanto-submit-btn');
+            const formatCurrency = (value) => {
+                const number = Number(value || 0);
+                return new Intl.NumberFormat('es-CO', {
+                    style: 'currency',
+                    currency: 'COP',
+                    maximumFractionDigits: 0,
+                }).format(number);
+            };
+
+            const formatThousands = (value) => {
+                const cleaned = String(value || '').replace(/\D/g, '');
+                if (!cleaned) return '';
+                return new Intl.NumberFormat('es-CO', {
+                    maximumFractionDigits: 0,
+                }).format(Number(cleaned));
+            };
+
+            const parseMoneyInput = (input) => String(input?.value || '').replace(/\D/g, '') || '0';
+
+            const setLoadingState = (isLoading) => {
+                if (!submitButton) return;
+                submitButton.disabled = isLoading;
+                submitButton.querySelector('span').textContent = isLoading ? 'Calculando...' : 'Simular adelanto';
+            };
+
+            moneyInputs.forEach((input) => {
+                input.addEventListener('input', () => {
+                    const digits = parseMoneyInput(input);
+                    input.value = digits === '0' ? '' : formatThousands(digits);
+                });
+                input.addEventListener('blur', () => {
+                    const digits = parseMoneyInput(input);
+                    input.value = digits === '0' ? '' : formatThousands(digits);
+                });
+            });
+
+            simulatorForm.addEventListener('submit', async function (event) {
+                event.preventDefault();
+                const salario = parseMoneyInput(document.getElementById('adelanto-salario'));
+                const auxilio = parseMoneyInput(document.getElementById('adelanto-auxilio'));
+                const descuentos = parseMoneyInput(document.getElementById('adelanto-descuentos'));
+
+                setLoadingState(true);
+                if (window.AprobadoLoader) {
+                    window.AprobadoLoader.show('Calculando adelanto...', 'loading', { immediate: true });
+                }
+
+                try {
+                    const response = await fetch("{% url 'libranza:simular_adelanto' %}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': simulatorForm.querySelector('[name=csrfmiddlewaretoken]').value,
+                        },
+                        body: JSON.stringify({
+                            salario,
+                            auxilio_transporte: auxilio,
+                            descuentos,
+                        }),
+                    });
+
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        throw new Error(data.error || 'No pudimos calcular la simulación en este momento.');
+                    }
+
+                    document.getElementById('adelanto-neto').textContent = formatCurrency(data.neto_a_recibir);
+                    document.getElementById('adelanto-bruto').textContent = formatCurrency(data.monto_bruto_adelanto);
+                    document.getElementById('adelanto-diario').textContent = formatCurrency(data.valor_diario_estimado);
+                    document.getElementById('adelanto-comision').textContent = formatCurrency(data.comision);
+                    document.getElementById('adelanto-iva').textContent = formatCurrency(data.iva_comision);
+                    document.getElementById('adelanto-interes').textContent = formatCurrency(data.interes);
+                    document.getElementById('adelanto-descuento').textContent = formatCurrency(data.descuento_nomina_estimado);
+                    document.getElementById('adelanto-estado').textContent = data.puede_solicitar
+                        ? 'Resultado estimado listo. Si cumples elegibilidad, puedes iniciar la solicitud.'
+                        : 'Con estos datos no se genera adelanto disponible. Revisa ingresos y descuentos.';
+                } catch (error) {
+                    document.getElementById('adelanto-estado').textContent = error.message || 'No pudimos calcular la simulación en este momento.';
+                } finally {
+                    setLoadingState(false);
+                    if (window.AprobadoLoader) {
+                        window.AprobadoLoader.hide();
+                    }
+                }
+            });
+        }
     });
 </script>
 

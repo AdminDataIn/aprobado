@@ -23,11 +23,11 @@
                     <div class="user-info">
                         <div class="user-details">
                             <h6 class="mb-0">{{ request.user.get_full_name|default:request.user.username }}</h6>
-                            <small>Pagador de {{ credito.detalle_libranza.empresa.nombre }}</small>
+                            <small>Pagador de {{ empresa_credito.nombre }}</small>
                         </div>
                         <div class="user-avatar">{{ request.user.username|slice:":1"|upper }}</div>
                     </div>
-                    <form method="post" action="{% url 'libranza:logout' %}">
+                    <form method="post" action="{% url 'pagador:logout' %}">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-outline">
                             <i class="bi bi-box-arrow-right"></i>
@@ -55,6 +55,11 @@
             </a>
         </div>
 
+        {% if credito.tipo_regla_credito == 'ESPECIAL' %}
+        <div class="alert alert-info mx-4 mb-4">
+            Este credito usa una regla especial. Revisa la fecha de primera cuota, el plazo aplicado y la trazabilidad operativa antes de aprobar cambios.
+        </div>
+        {% endif %}
         <div class="main-grid">
             <div class="table-container">
                 <div class="table-header">
@@ -118,6 +123,58 @@
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+                {% endif %}
+                {% if capacidad_descuento %}
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="bi bi-calculator me-2"></i>Capacidad de descuento</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="row g-3 text-center">
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Ingreso base usado</span>
+                                    <span class="info-value">${{ capacidad_descuento.ingreso_base|floatformat:0|intcomma }}</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Descuentos considerados</span>
+                                    <span class="info-value">${{ capacidad_descuento.descuentos_considerados|floatformat:0|intcomma }}</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Ingreso neto</span>
+                                    <span class="info-value">${{ capacidad_descuento.ingreso_neto|floatformat:0|intcomma }}</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Capacidad disponible</span>
+                                    <span class="info-value">${{ capacidad_descuento.capacidad_disponible|floatformat:0|intcomma }}</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Monto solicitado</span>
+                                    <span class="info-value">${{ capacidad_descuento.monto_solicitado|floatformat:0|intcomma }}</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="info-item">
+                                    <span class="info-label">Resultado preliminar</span>
+                                    <span class="info-value {% if capacidad_descuento.decision_preliminar == 'APLICA' %}text-success{% elif capacidad_descuento.decision_preliminar == 'NO_APLICA' %}text-danger{% endif %}">
+                                        {{ capacidad_descuento.decision_preliminar }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-muted mt-3 mb-0 small">
+                            Este calculo usa ingreso base, descuentos fijos y el porcentaje operativo del {{ capacidad_descuento.porcentaje_aplicado|floatformat:0 }}%.
+                        </p>
                     </div>
                 </div>
                 {% endif %}
@@ -389,6 +446,19 @@
                             <p><strong>Valor Solicitado:</strong> ${{ credito.monto_solicitado|intcomma }}</p>
                             <p><strong>Plazo:</strong> {{ credito.plazo_solicitado }} meses</p>
                         {% endwith %}
+                    {% elif credito.linea == 'ADELANTO_NOMINA' and credito.detalle_adelanto_nomina %}
+                        {% with detalle=credito.detalle_adelanto_nomina %}
+                            <h4>Detalles del Adelanto de N&oacute;mina</h4>
+                            <p><strong>Empleado:</strong> {{ detalle.vinculo_laboral.nombre_empleado }}</p>
+                            <p><strong>Documento:</strong> {{ detalle.vinculo_laboral.documento_empleado }}</p>
+                            <p><strong>Correo:</strong> {{ detalle.vinculo_laboral.correo_empleado }}</p>
+                            <p><strong>Tel&eacute;fono:</strong> {{ detalle.vinculo_laboral.telefono_empleado }}</p>
+                            <p><strong>Empresa:</strong> {{ detalle.vinculo_laboral.empresa.nombre }}</p>
+                            <p><strong>Salario base usado:</strong> ${{ detalle.salario_base_usado|intcomma }}</p>
+                            <p><strong>Monto m&aacute;ximo calculado:</strong> ${{ detalle.monto_maximo_calculado|intcomma }}</p>
+                            <p><strong>Monto solicitado:</strong> ${{ detalle.monto_solicitado|intcomma }}</p>
+                            <p><strong>D&iacute;as de adelanto:</strong> {{ detalle.dias_adelanto }}</p>
+                        {% endwith %}
                     {% elif credito.linea == 'EMPRENDIMIENTO' and credito.detalle_emprendimiento %}
                         {% with detalle=credito.detalle_emprendimiento %}
                             <h4>Detalles del Crédito de Emprendimiento</h4>
@@ -423,3 +493,4 @@
 <script src="{% static 'js/global_loader.js' %}"></script>
 </body>
 </html>
+

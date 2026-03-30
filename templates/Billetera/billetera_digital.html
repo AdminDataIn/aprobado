@@ -493,15 +493,9 @@
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-professional sticky-top">
         <div class="container">
-            {% if es_libranza %}
-            <a class="navbar-brand" href="{% url 'libranza:landing' %}">
-                <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Libranza" class="brand-logo">
-            </a>
-            {% else %}
-            <a class="navbar-brand" href="{% url 'emprendimiento:landing' %}">
+            <a class="navbar-brand" href="{{ billetera_home_url|default:'/' }}">
                 <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado" class="brand-logo">
             </a>
-            {% endif %}
 
             <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -516,22 +510,16 @@
                             <small class="wallet-mobile-user-email">{{ user.email }}</small>
                         </div>
                     </div>
-                    <form method="post" action="{% if es_libranza %}{% url 'libranza:logout' %}{% else %}{% url 'emprendimiento:logout' %}{% endif %}">
+                    <form method="post" action="{{ billetera_logout_url|default:'/' }}">
                         {% csrf_token %}
-                        <button type="submit" class="wallet-mobile-logout">Cerrar sesion</button>
+                        <button type="submit" class="wallet-mobile-logout">Cerrar sesión</button>
                     </form>
                 </div>
                 <ul class="navbar-nav mx-auto">
                     <li class="nav-item">
-                        {% if es_libranza %}
-                        <a class="nav-link" href="{% url 'libranza:mi_credito' %}">
-                            <i class="bi bi-speedometer2 me-1"></i> Mi Crédito
+                        <a class="nav-link" href="{{ billetera_dashboard_url|default:'/' }}">
+                            <i class="bi bi-speedometer2 me-1"></i> {{ billetera_dashboard_label|default:'Mi panel' }}
                         </a>
-                        {% else %}
-                        <a class="nav-link" href="{% url 'emprendimiento:mi_credito' %}">
-                            <i class="bi bi-speedometer2 me-1"></i> Mi Crédito
-                        </a>
-                        {% endif %}
                     </li>
                     <li class="nav-item">
                         <a class="nav-link active" href="{% url 'billetera:dashboard' %}">
@@ -542,7 +530,7 @@
 
                 <div class="d-flex align-items-center gap-3 wallet-nav-actions">
                     {% if count_notificaciones > 0 %}
-                    <div id="desktopUserDropdown" class="dropdown wallet-desktop-user d-none d-lg-block">
+                    <div id="desktopUserDropdown" class="dropdown wallet-desktop-user d-none d-lg-block" data-notifications-dropdown data-mark-read-url="{% url 'billetera:marcar_notificaciones_leidas' %}">
                         <div class="notification-badge" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-bell notification-icon"></i>
                             <span class="badge">{{ count_notificaciones }}</span>
@@ -614,9 +602,9 @@
 
                             <div class="user-menu-item logout-item">
                                 <i class="bi bi-box-arrow-right text-danger"></i>
-                                <form id="logout-form-billetera" method="post" action="{% if es_libranza %}{% url 'libranza:logout' %}{% else %}{% url 'emprendimiento:logout' %}{% endif %}" style="display: inline;">
+                                <form id="logout-form-billetera" method="post" action="{{ billetera_logout_url|default:'/' }}" style="display: inline;">
                                     {% csrf_token %}
-                                    <a href="#" onclick="event.preventDefault(); document.getElementById('logout-form-billetera').submit();" class="text-decoration-none text-danger fw-semibold">Cerrar Sesión</a>
+                                    <a href="#" onclick="event.preventDefault(); document.getElementById('logout-form-billetera').submit();" class="text-decoration-none text-danger fw-semibold">Cerrar sesión</a>
                                 </form>
                             </div>
                         </div>
@@ -978,6 +966,55 @@
                 const toast = new bootstrap.Toast(toastEl);
                 toast.show();
             });
+
+            const getCookie = (name) => {
+                const cookieValue = `; ${document.cookie}`;
+                const parts = cookieValue.split(`; ${name}=`);
+                return parts.length === 2 ? parts.pop().split(';').shift() : '';
+            };
+
+            const notificationsDropdown = document.querySelector('[data-notifications-dropdown]');
+            if (notificationsDropdown) {
+                let notificationsMarked = false;
+                notificationsDropdown.addEventListener('show.bs.dropdown', function () {
+                    if (notificationsMarked) {
+                        return;
+                    }
+
+                    const markReadUrl = notificationsDropdown.dataset.markReadUrl;
+                    if (!markReadUrl) {
+                        return;
+                    }
+
+                    fetch(markReadUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken'),
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({})
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('No se pudieron actualizar las notificaciones.');
+                        }
+                        return response.json();
+                    })
+                    .then(() => {
+                        notificationsMarked = true;
+                        const badge = notificationsDropdown.querySelector('.badge');
+                        if (badge) {
+                            badge.remove();
+                        }
+                        notificationsDropdown.querySelectorAll('.dropdown-item .bi-circle-fill').forEach(dot => {
+                            dot.classList.remove('text-primary');
+                            dot.classList.add('text-muted');
+                        });
+                    })
+                    .catch(error => console.error(error));
+                });
+            }
 
             // Datos del gráfico desde Django
             const chartData = {{ chart_data|safe }};

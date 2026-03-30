@@ -1,19 +1,32 @@
 {% extends "base_general.html" %}
 
+{% block title %}Cerrar sesion{% endblock %}
+
 {% block content %}
-<div style="max-width: 500px; margin: 4rem auto; padding: 2rem; box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 8px; text-align: center; background: white;">
-    <h2 style="color: #202124; margin-bottom: 1rem;">¿Seguro que desea cerrar sesión?</h2>
-    <p style="color: #5f6368; margin-bottom: 2rem;">Dejarás de tener acceso a tu cuenta y tus créditos.</p>
+{% include "account/_auth_content_styles.html" %}
 
-    <form method="post" action="{% if es_libranza %}{% url 'libranza:logout' %}{% else %}{% url 'emprendimiento:logout' %}{% endif %}">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger" style="padding: 12px 48px; font-size: 1rem; border-radius: 8px; border: none; background: #dc3545; color: white; cursor: pointer; width: 100%; margin-bottom: 1rem;">
-            Sí, cerrar sesión
-        </button>
-    </form>
+<main class="section-main">
+  <section class="hero-section-account">
+    <div class="container-account">
+      <div class="div-card-agent-account is-status-card">
+        <div class="auth-status-icon">&#21A9;</div>
+        <div class="mb-3">
+          <span class="badge rounded-pill border">Cerrar sesion</span>
+        </div>
 
-    <a href="javascript:history.back()" style="color: #4285F4; text-decoration: none; display: inline-block; padding: 12px 48px;">
-        Cancelar
-    </a>
-</div>
+        <h1>Quieres salir de tu cuenta?</h1>
+        <p class="auth-desc">Cierra la sesion actual para proteger tu acceso en este dispositivo.</p>
+
+        <form method="post">
+          {% csrf_token %}
+          <button type="submit" class="btn-account">Si, cerrar sesion</button>
+        </form>
+
+        <div class="auth-footer-links is-centered">
+          <a href="{% url 'home' %}">Cancelar</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
 {% endblock %}

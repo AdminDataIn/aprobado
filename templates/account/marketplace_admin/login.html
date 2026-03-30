@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel marketplace - Aprobado</title>
+  {% include "account/_auth_content_styles.html" %}
+  <style>body{margin:0;background:radial-gradient(circle at top,#122340 0%,#08101d 72%);}</style>
+</head>
+<body>
+  <main class="section-main">
+    <section class="hero-section-account">
+      <div class="container-account">
+        <div class="div-card-agent-account">
+          <div class="mb-3"><span class="badge rounded-pill border">Acceso marketplace admin</span></div>
+          <h1>Ingresa al panel marketplace</h1>
+          <p class="auth-desc">Accede con tu usuario y contrasena para gestionar las publicaciones y solicitudes de tu empresa.</p>
+          {% if messages %}{% for message in messages %}<div class="alert alert-danger">{{ message }}</div>{% endfor %}{% endif %}
+          {% if form.errors and not messages %}<div class="alert alert-danger">Usuario o contrasena invalidos. Intentalo de nuevo.</div>{% endif %}
+          <form method="post">
+            {% csrf_token %}
+            <div class="auth-field">
+              <label for="id_username" class="form-label">Usuario</label>
+              <input type="text" name="username" id="id_username" required autofocus>
+            </div>
+            <div class="auth-field">
+              <label for="id_password" class="form-label">Contrasena</label>
+              <input type="password" name="password" id="id_password" required>
+            </div>
+            <div class="forgot-row">
+              <a href="{% url 'marketplace:admin_password_reset' %}">Olvide mi contrasena</a>
+            </div>
+            <button type="submit" class="btn-account">Ingresar al panel</button>
+          </form>
+          <div class="auth-footer-links">
+            <a href="{{ back_url|default:'/' }}">&larr; Volver al marketplace</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

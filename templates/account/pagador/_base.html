@@ -1,0 +1,44 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Acceso Pagador{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+    {% include "account/_auth_content_styles.html" %}
+    <style>
+        body { margin: 0; background: radial-gradient(circle at top, #122340 0%, #08101d 72%); }
+    </style>
+</head>
+<body class="auth-body auth-flow-shell">
+{% include 'base/loader_global.html' %}
+<main class="section-main">
+    <section class="hero-section-account">
+        <div class="container-account">
+            <div class="div-card-agent-account {% block card_class %}{% endblock %}">
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    </section>
+</main>
+{% include 'base/public_whatsapp_button.html' %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script src="{% static 'js/global_loader.js' %}"></script>
+<script>
+document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const target = document.getElementById(button.dataset.passwordToggle);
+    if (!target) return;
+    target.type = target.type === 'password' ? 'text' : 'password';
+    const icon = button.querySelector('i');
+    if (icon) {
+      icon.className = target.type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
+    }
+  });
+});
+</script>
+</body>
+</html>

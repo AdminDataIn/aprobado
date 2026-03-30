@@ -1,0 +1,148 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pedido marketplace - Aprobado</title>
+    <link rel="stylesheet" href="{% static 'css/marketplace.css' %}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body class="marketplace">
+    <div class="mp-orb orb-1"></div>
+    <div class="mp-orb orb-2"></div>
+
+    <form id="mp-logout-form" method="post" action="{% url 'marketplace:logout' %}" style="display:none;">
+        {% csrf_token %}
+    </form>
+
+    <header class="mp-header mp-container">
+        <a href="{% url 'marketplace:empresa' empresa.slug %}" class="mp-brand">
+            <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado">
+            Checkout marketplace
+        </a>
+        <div class="mp-header-meta">
+            <span class="mp-company-pill"><i class="bi bi-person-circle"></i>{{ marketplace_display_name }}</span>
+            <a href="{% url 'marketplace:orders' %}" class="mp-btn ghost mp-btn-sm">Mis pedidos</a>
+            <a href="#" class="mp-btn primary mp-btn-sm" onclick="event.preventDefault();document.getElementById('mp-logout-form').submit();">Cerrar sesion</a>
+            <span class="mp-company-pill"><i class="bi bi-shop"></i>{{ empresa.nombre }}</span>
+        </div>
+    </header>
+
+    <section class="mp-container mp-checkout-shell">
+        <form method="post" class="mp-checkout-panel">
+            {% csrf_token %}
+            {{ form.checkout_token }}
+            {{ form.submitted_at }}
+            {{ form.website }}
+
+            <span class="mp-hero-badge"><i class="bi bi-receipt"></i>Pedido inicial</span>
+            <h1>Completa tu pedido</h1>
+            <p class="mp-checkout-intro">Pedimos datos minimos para dejar el checkout listo para Mercado Pago y registrar la compra sin mezclarla con otros flujos.</p>
+
+            {% if form.non_field_errors %}
+            <div class="mp-alert error">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <div class="mp-checkout-grid">
+                <div class="mp-field">
+                    <label for="{{ form.comprador_nombre.id_for_label }}">{{ form.comprador_nombre.label }}</label>
+                    {{ form.comprador_nombre }}
+                    {{ form.comprador_nombre.errors }}
+                </div>
+                <div class="mp-field">
+                    <label for="{{ form.comprador_email.id_for_label }}">{{ form.comprador_email.label }}</label>
+                    {{ form.comprador_email }}
+                    {{ form.comprador_email.errors }}
+                </div>
+                <div class="mp-field">
+                    <label for="{{ form.comprador_telefono.id_for_label }}">{{ form.comprador_telefono.label }}</label>
+                    {{ form.comprador_telefono }}
+                    {{ form.comprador_telefono.errors }}
+                </div>
+                <div class="mp-field">
+                    <label for="{{ form.cantidad.id_for_label }}">{{ form.cantidad.label }}</label>
+                    {{ form.cantidad }}
+                    {{ form.cantidad.errors }}
+                </div>
+                <div class="mp-field">
+                    <label for="{{ form.nombre_contacto.id_for_label }}">{{ form.nombre_contacto.label }}</label>
+                    {{ form.nombre_contacto }}
+                    {{ form.nombre_contacto.errors }}
+                </div>
+                <div class="mp-field">
+                    <label for="{{ form.telefono_contacto.id_for_label }}">{{ form.telefono_contacto.label }}</label>
+                    {{ form.telefono_contacto }}
+                    {{ form.telefono_contacto.errors }}
+                </div>
+                <div class="mp-field full">
+                    <label for="{{ form.direccion_linea_1.id_for_label }}">{{ form.direccion_linea_1.label }}</label>
+                    {{ form.direccion_linea_1 }}
+                    {{ form.direccion_linea_1.errors }}
+                </div>
+                <div class="mp-field full">
+                    <label for="{{ form.direccion_linea_2.id_for_label }}">{{ form.direccion_linea_2.label }}</label>
+                    {{ form.direccion_linea_2 }}
+                    {{ form.direccion_linea_2.errors }}
+                </div>
+                <div class="mp-field">
+                    <label for="{{ form.ciudad.id_for_label }}">{{ form.ciudad.label }}</label>
+                    {{ form.ciudad }}
+                    {{ form.ciudad.errors }}
+                </div>
+                <div class="mp-field">
+                    <label for="{{ form.departamento.id_for_label }}">{{ form.departamento.label }}</label>
+                    {{ form.departamento }}
+                    {{ form.departamento.errors }}
+                </div>
+                <div class="mp-field">
+                    <label for="{{ form.referencia.id_for_label }}">{{ form.referencia.label }}</label>
+                    {{ form.referencia }}
+                    {{ form.referencia.errors }}
+                </div>
+                <div class="mp-field full">
+                    <label for="{{ form.instrucciones.id_for_label }}">{{ form.instrucciones.label }}</label>
+                    {{ form.instrucciones }}
+                    {{ form.instrucciones.errors }}
+                </div>
+                <div class="mp-field full">
+                    <label for="{{ form.notas.id_for_label }}">{{ form.notas.label }}</label>
+                    {{ form.notas }}
+                    {{ form.notas.errors }}
+                </div>
+            </div>
+
+            <div class="mp-checkout-actions">
+                <button type="submit" class="mp-btn primary">
+                    <i class="bi bi-bag-check"></i>Registrar pedido
+                </button>
+                <a href="{% url 'marketplace:empresa' empresa.slug %}" class="mp-btn ghost">
+                    <i class="bi bi-arrow-left"></i>Volver a la vitrina
+                </a>
+            </div>
+        </form>
+
+        <aside class="mp-checkout-summary">
+            <div class="mp-product-visual{% if item.video %} has-video{% endif %}" {% if item.imagen %}style="background-image:url('{{ item.imagen.url }}');"{% else %}style="background-image:url('https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80');"{% endif %}>
+                <span class="mp-card-tag">{{ item.get_tipo_display }}</span>
+                {% if item.video %}
+                <span class="mp-card-video-indicator"><i class="bi bi-play-circle-fill"></i>Video disponible</span>
+                {% endif %}
+            </div>
+            <span class="mp-card-tag-soft">{{ empresa.nombre }}</span>
+            <h3>{{ item.titulo }}</h3>
+            <p>{{ item.descripcion }}</p>
+            <div class="mp-stats">
+                <div class="mp-stat"><span>Precio unitario</span><strong>${{ totals.precio_unitario }}</strong></div>
+                <div class="mp-stat"><span>Cantidad base</span><strong>{{ totals.cantidad }}</strong></div>
+                <div class="mp-stat"><span>Total estimado</span><strong>${{ totals.total }}</strong></div>
+            </div>
+            <div class="mp-checkout-note muted">
+                Tu pedido quedara asociado a tu cuenta de comprador y podras consultarlo despues desde "Mis pedidos".
+            </div>
+        </aside>
+    </section>
+
+    {% include 'base/public_whatsapp_button.html' %}
+</body>
+</html>

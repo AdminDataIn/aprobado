@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Activa tu acceso de inversionista</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f7fb;font-family:Arial,sans-serif;color:#0f172a;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:32px 16px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;border-radius:20px;overflow:hidden;">
+                    <tr>
+                        <td style="background:#0b2038;padding:28px 32px;color:#ffffff;">
+                            <h1 style="margin:0;font-size:28px;">Aprobado Inversionista</h1>
+                            <p style="margin:10px 0 0;font-size:16px;color:#cfe7ff;">Activa tu acceso y define tu contrasena inicial.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:32px;">
+                            <p style="margin:0 0 16px;">Hola {{ display_name }},</p>
+                            <p style="margin:0 0 16px;">Ya dejamos listo tu acceso como inversionista. Para ingresar por primera vez, establece tu contrasena desde el siguiente enlace seguro:</p>
+                            <p style="margin:24px 0;">
+                                <a href="{{ activation_url }}" style="display:inline-block;background:#17b4e6;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:700;">Activar mi cuenta</a>
+                            </p>
+                            <p style="margin:0 0 16px;">Si el boton no funciona, copia esta URL en tu navegador:</p>
+                            <p style="margin:0 0 16px;word-break:break-all;color:#2563eb;">{{ activation_url }}</p>
+                            <p style="margin:0;color:#64748b;font-size:14px;">Este enlace vence el {{ expires_at|date:"d/m/Y H:i" }}.</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

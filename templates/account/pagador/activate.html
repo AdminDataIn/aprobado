@@ -1,0 +1,81 @@
+{% extends "account/pagador/_base.html" %}
+
+{% block title %}{% if modo == 'reset' %}Restablecer acceso pagador{% else %}Activar acceso pagador{% endif %}{% endblock %}
+
+{% block content %}
+{% if token_valido %}
+    <div class="auth-status-icon">🔐</div>
+    <div class="mb-3">
+        <span class="badge rounded-pill border">{% if modo == 'reset' %}Restablecer acceso{% else %}Activar acceso{% endif %}</span>
+    </div>
+    <h1>{% if modo == 'reset' %}Restablece tu acceso{% else %}Activa tu acceso{% endif %}</h1>
+    <p class="auth-desc">
+        {% if modo == 'reset' %}
+        Define una nueva contrasena para volver a ingresar al panel de pagador.
+        {% else %}
+        Define tu contrasena inicial para activar el acceso de pagador.
+        {% endif %}
+    </p>
+
+    {% if empresa %}
+    <div class="auth-field">
+        <label class="form-label">Empresa</label>
+        <input type="text" value="{{ empresa.nombre }}" readonly>
+    </div>
+    {% endif %}
+    <div class="auth-field">
+        <label class="form-label">Correo asociado</label>
+        <input type="text" value="{{ usuario_email }}" readonly>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="auth-field">
+            <label class="form-label" for="{{ form.new_password1.id_for_label }}">Nueva contrasena</label>
+            <div class="auth-password-wrap">
+                {{ form.new_password1 }}
+                <button type="button" class="auth-password-toggle" data-password-toggle="{{ form.new_password1.id_for_label }}" aria-label="Mostrar u ocultar contrasena">
+                  <i class="bi bi-eye"></i>
+                </button>
+            </div>
+            {% if form.new_password1.errors %}{{ form.new_password1.errors }}{% endif %}
+        </div>
+        <div class="auth-field">
+            <label class="form-label" for="{{ form.new_password2.id_for_label }}">Confirmar contrasena</label>
+            <div class="auth-password-wrap">
+                {{ form.new_password2 }}
+                <button type="button" class="auth-password-toggle" data-password-toggle="{{ form.new_password2.id_for_label }}" aria-label="Mostrar u ocultar contrasena">
+                  <i class="bi bi-eye"></i>
+                </button>
+            </div>
+            {% if form.new_password2.errors %}{{ form.new_password2.errors }}{% endif %}
+        </div>
+        {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors|join:", " }}</div>
+        {% endif %}
+        <button type="submit" class="btn-account">{% if modo == 'reset' %}Actualizar contrasena{% else %}Activar cuenta{% endif %}</button>
+    </form>
+{% else %}
+    <div class="auth-status-icon">!</div>
+    <div class="mb-3">
+        <span class="badge rounded-pill border">Enlace no disponible</span>
+    </div>
+    <h1>El enlace ya no esta disponible</h1>
+    <p class="auth-desc">
+        {% if modo == 'reset' %}
+        Este enlace ya fue usado o expiro. Solicita un nuevo enlace de recuperacion.
+        {% else %}
+        Este enlace ya fue usado o expiro. Solicita un nuevo envio al equipo interno.
+        {% endif %}
+    </p>
+    {% if usuario_email %}
+    <div class="auth-field">
+        <label class="form-label">Correo asociado</label>
+        <input type="text" value="{{ usuario_email }}" readonly>
+    </div>
+    {% endif %}
+    <a href="{% if modo == 'reset' %}{% url 'pagador:password_reset_request' %}{% else %}{% url 'pagador:login' %}{% endif %}" class="btn-account">
+        {% if modo == 'reset' %}Solicitar nuevo enlace{% else %}Ir al login{% endif %}
+    </a>
+{% endif %}
+{% endblock %}

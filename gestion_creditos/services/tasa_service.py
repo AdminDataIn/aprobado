@@ -22,5 +22,7 @@ def obtener_tasa_credito(linea_credito):
     if linea_credito == Credito.LineaCredito.EMPRENDIMIENTO:
         return _to_decimal(getattr(settings, 'EMPRENDIMIENTO_TASA_MENSUAL', '3.5'), '3.5')
 
-    return Decimal('0.00')
+    if linea_credito == Credito.LineaCredito.ADELANTO_NOMINA:
+        return _to_decimal(getattr(settings, 'ADELANTO_NOMINA_TASA_MENSUAL', '1.9'), '1.9')
 
+    return Decimal('0.00')

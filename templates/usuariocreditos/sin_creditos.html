@@ -116,6 +116,43 @@
             {% endif %}
         </div>
 
+        {% if es_empleado and adelanto_eligibility %}
+        <div class="process-section mb-3">
+            <h2 class="section-title text-center mb-3">Productos disponibles para ti</h2>
+            <div class="row g-3">
+                <div class="col-lg-6">
+                    <div class="benefit-card h-100">
+                        <div class="benefit-icon">
+                            <i class="bi bi-wallet2"></i>
+                        </div>
+                        <h3 class="benefit-title">Credito de libranza</h3>
+                        <p class="benefit-text">Solicita un credito tradicional con descuento por nomina y seguimiento completo desde tu panel.</p>
+                        <a href="{% url 'libranza:solicitar' %}" class="btn btn-outline-primary mt-2">Solicitar credito</a>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="benefit-card h-100 {% if not adelanto_eligibility.eligible %}border border-warning{% endif %}">
+                        <div class="benefit-icon">
+                            <i class="bi bi-cash-coin"></i>
+                        </div>
+                        <h3 class="benefit-title">Adelanto de nomina</h3>
+                        {% if adelanto_eligibility.eligible %}
+                            <p class="benefit-text">
+                                Ya cumples condiciones para adelantar hasta
+                                <strong>${{ adelanto_eligibility.monto_maximo|floatformat:0 }}</strong>
+                                correspondientes a 5 dias de salario.
+                            </p>
+                            <a href="{% url 'libranza:adelanto_nomina' %}" class="btn btn-primary mt-2">Solicitar adelanto</a>
+                        {% else %}
+                            <p class="benefit-text">{{ adelanto_eligibility.reason }}</p>
+                            <a href="{% url 'libranza:adelanto_nomina' %}" class="btn btn-outline-secondary mt-2">Ver requisitos</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Process Steps -->
         <div class="process-section mb-3">
             <h2 class="section-title text-center mb-3">Proceso simple en 3 pasos</h2>

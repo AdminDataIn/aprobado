@@ -1,0 +1,64 @@
+{% load humanize static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mis pedidos - Marketplace Aprobado</title>
+    <link rel="stylesheet" href="{% static 'css/marketplace.css' %}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body class="marketplace">
+    <div class="mp-orb orb-1"></div>
+    <div class="mp-orb orb-2"></div>
+
+    <form id="mp-logout-form" method="post" action="{% url 'marketplace:logout' %}" style="display:none;">
+        {% csrf_token %}
+    </form>
+
+    <header class="mp-header mp-container">
+        <a href="{% url 'marketplace:home' %}" class="mp-brand">
+            <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado">
+            Marketplace Aliados
+        </a>
+        <div class="mp-header-meta">
+            <span class="mp-company-pill"><i class="bi bi-person-circle"></i>{{ marketplace_display_name }}</span>
+            <a href="{% url 'marketplace:home' %}" class="mp-btn ghost mp-btn-sm">Volver al marketplace</a>
+            <a href="#" class="mp-btn ghost mp-btn-sm" onclick="event.preventDefault();document.getElementById('mp-logout-form').submit();">Cerrar sesion</a>
+        </div>
+    </header>
+
+    <section class="mp-container" style="padding-bottom:3rem;">
+        <div class="mp-hero-badge"><i class="bi bi-bag-check"></i>Historial comprador</div>
+        <h1 style="font-family:'Space Grotesk',sans-serif;margin:1rem 0 0.5rem;">Mis pedidos</h1>
+        <p style="color:var(--mp-muted);max-width:720px;">Consulta tus solicitudes registradas en el marketplace y el estado actual del pago.</p>
+
+        <div class="mp-grid" style="margin-top:1.5rem;">
+            {% for pedido in pedidos %}
+            <article class="mp-card">
+                <div class="mp-card-body">
+                    <span class="mp-hero-badge">{{ pedido.get_estado_display }}</span>
+                    <h3 class="mp-card-title">{{ pedido.numero_pedido }}</h3>
+                    <p class="mp-card-desc">{{ pedido.empresa.nombre }}</p>
+                    <div class="mp-card-meta">
+                        <span class="mp-price">${{ pedido.total|floatformat:0|intcomma }}</span>
+                        <span>{{ pedido.created_at|date:"d/m/Y H:i" }}</span>
+                    </div>
+                    <a class="mp-btn ghost" href="{% url 'marketplace:checkout_detail' pedido.numero_pedido %}" style="width:100%;justify-content:center;">
+                        <i class="bi bi-receipt"></i>Ver detalle
+                    </a>
+                </div>
+            </article>
+            {% empty %}
+            <article class="mp-empty-state">
+                <i class="bi bi-bag-x"></i>
+                <h3>Aun no tienes pedidos registrados</h3>
+                <p>Cuando completes una compra en el marketplace, la veras reflejada aqui.</p>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+
+    {% include 'base/public_whatsapp_button.html' %}
+</body>
+</html>

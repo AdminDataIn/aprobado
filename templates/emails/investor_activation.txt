@@ -1,0 +1,8 @@
+Hola {{ display_name }},
+
+Ya dejamos listo tu acceso como inversionista en Aprobado.
+
+Activa tu cuenta y define tu contrasena aqui:
+{{ activation_url }}
+
+Este enlace vence el {{ expires_at|date:"d/m/Y H:i" }}.

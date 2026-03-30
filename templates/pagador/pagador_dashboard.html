@@ -1,4 +1,4 @@
-
+﻿
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -28,7 +28,7 @@
                         </div>
                         <div class="user-avatar">{{ request.user.username|slice:":1"|upper }}</div>
                     </div>
-                    <form method="post" action="{% url 'libranza:logout' %}">
+                    <form method="post" action="{% url 'pagador:logout' %}">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-outline">
                             <i class="bi bi-box-arrow-right"></i>
@@ -40,22 +40,100 @@
     </header>
 
     <div class="container-fluid py-4" style="max-width: 1400px;">
-        <div class="d-flex justify-content-between align-items-center mb-4 mx-4">
+        <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-3">
             <div>
-                <h1 class="page-title">Dashboard de Pagos: {{ empresa.nombre }}</h1>
-                {% if solicitudes_pendientes_count %}
-                <div class="d-flex align-items-center gap-2 mt-2">
-                    <span class="badge bg-warning text-dark">
-                        <i class="bi bi-bell-fill me-1"></i>{{ solicitudes_pendientes_count }} solicitudes por revisar
-                    </span>
-                    <a href="{% url 'pagador:dashboard' %}?estado=EN_REVISION" class="link-primary small">Ver pendientes</a>
-                </div>
-                {% endif %}
+                <h1 class="page-title">{{ dashboard_title|default:"Dashboard de Pagos" }}</h1>
+                <p class="text-muted mb-2">Supervisa solicitudes, créditos activos y herramientas operativas de la empresa actual.</p>
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
                         <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-house-door"></i> Dashboard</li>
                     </ol>
                 </nav>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                    <a href="{% url 'pagador:dashboard' %}" class="btn btn-sm {% if not solo_adelantos %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        Créditos y solicitudes
+                    </a>
+                    <a href="{% url 'pagador:adelantos_dashboard' %}" class="btn btn-sm {% if solo_adelantos %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        Adelantos de nómina
+                    </a>
+                    <a href="{% url 'pagador:carga_empleados' %}" class="btn btn-sm btn-outline-primary">
+                        Gestión de empleados
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-6 col-xl-3">
+                <div class="card h-100">
+                    <div class="card-content">
+                        <div class="text-muted small mb-1">Registros visibles</div>
+                        <div class="display-6 fw-bold text-dark lh-1">{{ total_registros|default:0|intcomma }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-xl-3">
+                <div class="card h-100">
+                    <div class="card-content">
+                        <div class="text-muted small mb-1">Pendientes por revisar</div>
+                        <div class="display-6 fw-bold text-dark lh-1">{{ solicitudes_pendientes_count|default:0 }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-xl-3">
+                <div class="card h-100">
+                    <div class="card-content">
+                        <div class="text-muted small mb-1">Vista actual</div>
+                        <div class="h5 mb-0">{% if solo_adelantos %}Adelantos{% else %}Créditos y solicitudes{% endif %}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-xl-3">
+                <div class="card h-100">
+                    <div class="card-content">
+                        <div class="text-muted small mb-1">Filtro de estado</div>
+                        <div class="h5 mb-0">{{ estado_filter|default:"Todos los estados" }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-lg-7">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0"><i class="bi bi-people me-2"></i>Carga de empleados</h3>
+                    </div>
+                    <div class="card-content">
+                        <p class="text-muted mb-3">La elegibilidad de libranza y adelanto de nómina depende de esta base estructurada.</p>
+                        <div class="d-grid gap-2">
+                            <div class="small text-muted"><strong>Paso 1:</strong> descarga la plantilla oficial en Excel.</div>
+                            <div class="small text-muted"><strong>Paso 2:</strong> diligencia salario, descuentos, fecha de alta y estado de vínculo.</div>
+                            <div class="small text-muted"><strong>Paso 3:</strong> carga el archivo y revisa qué filas quedaron creadas, actualizadas o con error.</div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 mt-3">
+                            <a href="{% url 'pagador:carga_empleados' %}" class="btn btn-primary btn-sm">Abrir carga de empleados</a>
+                            <a href="{% url 'pagador:descargar_plantilla_empleados' %}" class="btn btn-outline-secondary btn-sm">Descargar plantilla Excel</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0"><i class="bi bi-arrow-left-right me-2"></i>Herramientas legacy</h3>
+                    </div>
+                    <div class="card-content">
+                        <p class="text-muted mb-2">La reconciliación legacy no carga archivos nuevos. Revisa usuarios antiguos y trata de empatar su documento, correo y empresa con la base laboral ya cargada.</p>
+                        <div class="small text-muted mb-3">
+                            Úsala solo después de subir la plantilla oficial de empleados. Resuelve cuentas heredadas sin duplicar registros ni volver a importar el archivo.
+                        </div>
+                        <form method="post" action="{% url 'pagador:reconciliar_empleados' %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-secondary btn-sm">Reconciliar usuarios legacy</button>
+                        </form>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -123,12 +201,12 @@
                             <option value="monto_aprobado" {% if sort_by == 'monto_aprobado' %}selected{% endif %}>Monto Original (Menor a Mayor)</option>
                             <option value="-saldo_pendiente" {% if sort_by == '-saldo_pendiente' %}selected{% endif %}>Saldo Pendiente (Mayor a Menor)</option>
                             <option value="saldo_pendiente" {% if sort_by == 'saldo_pendiente' %}selected{% endif %}>Saldo Pendiente (Menor a Mayor)</option>
-                            <option value="detalle_libranza__nombres" {% if sort_by == 'detalle_libranza__nombres' %}selected{% endif %}>Empleado (A-Z)</option>
-                            <option value="-detalle_libranza__nombres" {% if sort_by == '-detalle_libranza__nombres' %}selected{% endif %}>Empleado (Z-A)</option>
-                            <option value="detalle_libranza__cedula" {% if sort_by == 'detalle_libranza__cedula' %}selected{% endif %}>Cédula (Asc)</option>
-                            <option value="-detalle_libranza__cedula" {% if sort_by == '-detalle_libranza__cedula' %}selected{% endif %}>Cédula (Desc)</option>
-                            <option value="-fecha_solicitud" {% if sort_by == '-fecha_solicitud' %}selected{% endif %}>Fecha solicitud (Más reciente)</option>
-                            <option value="fecha_solicitud" {% if sort_by == 'fecha_solicitud' %}selected{% endif %}>Fecha solicitud (Más antigua)</option>
+                                <option value="cliente_nombre" {% if sort_by == 'cliente_nombre' %}selected{% endif %}>Empleado (A-Z)</option>
+                                <option value="-cliente_nombre" {% if sort_by == '-cliente_nombre' %}selected{% endif %}>Empleado (Z-A)</option>
+                                <option value="cliente_documento" {% if sort_by == 'cliente_documento' %}selected{% endif %}>Cédula (Asc)</option>
+                                <option value="-cliente_documento" {% if sort_by == '-cliente_documento' %}selected{% endif %}>Cédula (Desc)</option>
+                            <option value="-fecha_solicitud" {% if sort_by == '-fecha_solicitud' %}selected{% endif %}>Fecha de solicitud (Más reciente)</option>
+                            <option value="fecha_solicitud" {% if sort_by == 'fecha_solicitud' %}selected{% endif %}>Fecha de solicitud (Más antigua)</option>
                             <option value="estado" {% if sort_by == 'estado' %}selected{% endif %}>Estado (A-Z)</option>
                             <option value="-estado" {% if sort_by == '-estado' %}selected{% endif %}>Estado (Z-A)</option>
                         </select>
@@ -138,7 +216,7 @@
                             <button type="submit" class="btn btn-primary filter-btn">
                                 <i class="bi bi-funnel me-1"></i>Filtrar
                             </button>
-                            <a href="{% url 'pagador:dashboard' %}" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
+                            <a href="{% if solo_adelantos %}{% url 'pagador:adelantos_dashboard' %}{% else %}{% url 'pagador:dashboard' %}{% endif %}" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
                         </div>
                     </div>
                 </div>
@@ -149,22 +227,22 @@
         <div class="table-container mt-4">
             <div class="table-header">
                 <h3 class="table-title">
-                    <i class="bi bi-card-list me-2"></i>Créditos Activos
-                    <span class="badge bg-primary ms-2">{{ creditos.paginator.count }}</span>
+                    <i class="bi bi-card-list me-2"></i>{% if solo_adelantos %}Adelantos de nómina{% else %}Créditos y solicitudes{% endif %}
+                    <span class="badge bg-primary ms-2">{{ total_registros|default:0|intcomma }}</span>
                 </h3>
                 <div class="d-flex gap-2 align-items-center">
                     <div class="btn-group">
-                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=reducido&formato=csv{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
+                        <a href="{% url 'pagador:descargar_reporte' %}tipo=reducido&formato=csv{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
                             <i class="bi bi-filetype-csv"></i>
-                            Reducido CSV
+                            Descargar reporte CSV
                         </a>
-                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=reducido&formato=xlsx{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
+                        <a href="{% url 'pagador:descargar_reporte' %}tipo=reducido&formato=xlsx{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
                             <i class="bi bi-file-earmark-spreadsheet"></i>
-                            Reducido Excel
+                            Descargar reporte Excel
                         </a>
-                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=completo&formato=xlsx{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
+                        <a href="{% url 'pagador:descargar_reporte' %}tipo=completo&formato=xlsx{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
                             <i class="bi bi-file-earmark-text"></i>
-                            Completo Excel
+                            Descargar reporte completo
                         </a>
                     </div>
                     <button class="btn btn-sm btn-outline-primary" onclick="location.reload()">
@@ -177,12 +255,11 @@
                     <thead>
                         <tr>
                             <th>Empleado</th>
-                            <th>Cédula</th>
-                            <th class="text-center">Fecha Solicitud</th>
-                            <th class="text-end">Monto Original</th>
-                            <th class="text-end">Saldo Pendiente</th>
-                            <th class="text-end">Valor Cuota</th>
-                            <th class="text-center">Próximo Pago</th>
+                            <th class="text-center">Fecha de solicitud</th>
+                            <th class="text-end">Monto</th>
+                            <th class="text-end">Saldo pendiente</th>
+                            <th class="text-end">Valor cuota</th>
+                            <th class="text-center">Próximo pago</th>
                             <th class="text-center">Estado</th>
                             <th>Acciones</th>
                         </tr>
@@ -191,15 +268,18 @@
                         {% for credito in creditos %}
                         <tr>
                             <td data-label="Empleado">
-                                <div class="user-name">{{ credito.detalle_libranza.nombre_completo }}</div>
+                                <div class="user-name">{{ credito.nombre_cliente }}</div>
+                                <div class="small text-muted mt-1">Cédula: {{ credito.cliente_documento }}</div>
+                                {% if credito.tipo_regla_credito == 'ESPECIAL' %}
+                                <div class="small mt-1"><span class="badge bg-dark-subtle text-dark border">Crédito especial</span></div>
+                                {% endif %}
                             </td>
-                            <td data-label="Cédula">{{ credito.detalle_libranza.cedula }}</td>
-                            <td class="text-center date-display" data-label="Fecha solicitud">
+                            <td class="text-center date-display" data-label="Fecha de solicitud">
                                 {{ credito.fecha_solicitud|date:"d/m/Y H:i" }}
                             </td>
-                            <td class="text-end amount-display" data-label="Monto original">
+                            <td class="text-end amount-display" data-label="Monto">
                                 {% if credito.estado == 'EN_REVISION' %}
-                                    <span class="text-muted fst-italic">En revisión</span>
+                                    ${{ credito.monto_solicitado|default:0|floatformat:0|intcomma }}
                                 {% elif credito.monto_aprobado %}
                                     ${{ credito.monto_aprobado|intcomma }}
                                 {% else %}
@@ -283,7 +363,7 @@
                                     {% endif %}
                                     {% if credito.estado == 'PENDIENTE_FIRMA' %}
                                     <div class="small text-success fw-semibold">
-                                        <i class="bi bi-pen me-1"></i>Pagare enviado a firma
+                                        <i class="bi bi-pen me-1"></i>Pagaré enviado a firma
                                     </div>
                                     {% elif credito.estado == 'PENDIENTE_TRANSFERENCIA' %}
                                     <div class="small text-primary fw-semibold">
@@ -298,7 +378,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="9" class="empty-row">
+                            <td colspan="8" class="empty-row">
                                 <div class="empty-state">
                                     <i class="bi bi-table"></i>
                                     <p>No hay créditos para mostrar.</p>
@@ -319,23 +399,28 @@
                         <form method="post" action="{% url 'pagador:decidir_solicitud' credito.id %}">
                             {% csrf_token %}
                             <div class="modal-header">
-                                <h5 class="modal-title">Decision de Solicitud</h5>
+                                <h5 class="modal-title">Decisión de solicitud</h5>
                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
                             <div class="modal-body">
                                 <p class="mb-2">
-                                    <strong>{{ credito.detalle_libranza.nombre_completo }}</strong> -
-                                    {{ credito.detalle_libranza.cedula }}
+                                            <strong>{{ credito.nombre_cliente }}</strong> -
+                                            {{ credito.cliente_documento }}
                                 </p>
                                 <div class="small text-muted mb-3">
-                                    Monto solicitado: ${{ credito.monto_solicitado|intcomma }} ·
-                                    Plazo: {{ credito.plazo_solicitado }} meses
-                                </div>
-                                <label for="motivo-{{ credito.id }}" class="form-label">
+    Monto solicitado: ${{ credito.monto_solicitado|intcomma }} ·
+    Plazo: {{ credito.plazo_solicitado }} meses
+</div>
+{% if credito.tipo_regla_credito == 'ESPECIAL' %}
+<div class="alert alert-info py-2">
+    Este caso usa regla especial y puede tener una fecha inicial o estructura diferente al crédito estándar.
+</div>
+{% endif %}
+<label for="motivo-{{ credito.id }}" class="form-label">
                                     Campo de estudio (opcional)
                                 </label>
                                 <textarea id="motivo-{{ credito.id }}" name="motivo" class="form-control" rows="3"
-                                          placeholder="Ej: Aprobado por antiguedad / Rechazado por endeudamiento"></textarea>
+                                          placeholder="Ej. Aprobado por antigüedad / Rechazado por endeudamiento"></textarea>
                             </div>
                             <div class="modal-footer">
                                 <button type="submit" name="action" value="reject" class="btn btn-outline-danger">
@@ -343,7 +428,7 @@
                                 </button>
                                 <button type="submit" name="action" value="approve" class="btn btn-success"
                                         data-loader-type="check" data-loader-text="Aprobando solicitud...">
-                                    <i class="bi bi-check-circle me-1"></i> Aprobado
+                                    <i class="bi bi-check-circle me-1"></i> Aprobar
                                 </button>
                             </div>
                         </form>
@@ -360,7 +445,7 @@
                 <ul class="pagination">
                     {% if creditos.has_previous %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ creditos.previous_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">
+                        <a class="page-link" href="?page={{ creditos.previous_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">
                             Anterior
                         </a>
                     </li>
@@ -372,7 +457,7 @@
                     
                     {% if creditos.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ creditos.next_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">
+                        <a class="page-link" href="?page={{ creditos.next_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">
                             Siguiente
                         </a>
                     </li>
@@ -402,7 +487,7 @@
 
         <div class="card mt-4 mb-4">
             <div class="card-header">
-                <h3 class="card-title"><i class="bi bi-file-earmark-arrow-up me-2"></i>Pago Masivo por Archivo Plano</h3>
+                <h3 class="card-title"><i class="bi bi-file-earmark-arrow-up me-2"></i>Pago masivo por archivo plano</h3>
             </div>
             <div class="card-content">
                 <p class="text-secondary">Sube un archivo CSV para procesar los pagos de forma masiva.</p>
@@ -415,33 +500,33 @@
                         </div>
                         <div class="col-lg-auto">
                             <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-upload me-1"></i> Procesar Archivo
+                                <i class="bi bi-upload me-1"></i> Procesar archivo
                             </button>
                         </div>
                         <div class="col-lg-auto">
-                            <a href="{% url 'pagador:descargar_csv_cuotas' %}?formato=csv" class="btn btn-success">
-                                <i class="bi bi-file-earmark-spreadsheet me-1"></i> Descargar Cuotas Pendientes
+                            <a href="{% url 'pagador:descargar_csv_cuotas' %}formato=csv" class="btn btn-success">
+                                <i class="bi bi-file-earmark-spreadsheet me-1"></i> Descargar reporte de cuotas CSV
                             </a>
                         </div>
                         <div class="col-lg-auto">
-                            <a href="{% url 'pagador:descargar_csv_cuotas' %}?formato=xlsx" class="btn btn-outline-success">
-                                <i class="bi bi-file-earmark-excel me-1"></i> Cuotas Pendientes Excel
+                            <a href="{% url 'pagador:descargar_csv_cuotas' %}formato=xlsx" class="btn btn-outline-success">
+                                <i class="bi bi-file-earmark-excel me-1"></i> Descargar reporte de cuotas Excel
                             </a>
                         </div>
                         <div class="col-lg-auto">
                              <a href="{% static 'files/plantilla_pagos_masivos.csv' %}" download class="btn btn-outline-success">
-                                <i class="bi bi-download me-1"></i> Plantilla Vacía
+                                <i class="bi bi-download me-1"></i> Descargar plantilla vacía
                             </a>
                         </div>
                     </div>
                     <div class="alert alert-info mt-3 mb-0">
                         <h6 class="mb-2"><i class="bi bi-info-circle me-1"></i> Instrucciones del archivo CSV:</h6>
                         <ul class="mb-0 small">
-                            <li><strong>Opción 1 (Recomendada):</strong> Descarga "Cuotas Pendientes" para obtener un CSV listo con todos los empleados y sus cuotas (montos redondeados sin centavos)</li>
-                            <li><strong>Opción 2:</strong> Descarga "Plantilla Vacía" y completa manualmente</li>
-                            <li><strong>Columnas requeridas:</strong> 'cedula' y 'monto_a_pagar'</li>
-                            <li><strong>Formato de cédula:</strong> Solo números, sin puntos ni espacios (Ejemplo: 1234567890)</li>
-                            <li><strong>Formato de monto:</strong> Solo números enteros, sin puntos, comas ni símbolos $ (Ejemplo: 50000 para $50.000)</li>
+                            <li><strong>Opción 1 (recomendada):</strong> descarga el reporte de cuotas pendientes para obtener un CSV ya diligenciado.</li>
+                            <li><strong>Opción 2:</strong> descarga la plantilla vacía y complétala manualmente.</li>
+                            <li><strong>Columnas requeridas:</strong> <code>cedula</code> y <code>monto_a_pagar</code>.</li>
+                            <li><strong>Formato de cédula:</strong> solo números, sin puntos ni espacios (ejemplo: 1234567890).</li>
+                            <li><strong>Formato de monto:</strong> solo números enteros, sin puntos, comas ni símbolos $ (ejemplo: 50000 para $50.000).</li>
                         </ul>
                     </div>
                 </form>
@@ -464,3 +549,9 @@
 <script src="{% static 'js/global_loader.js' %}"></script>
 </body>
 </html>
+
+
+
+
+
+

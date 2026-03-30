@@ -8,7 +8,10 @@ from django.core.exceptions import ValidationError
 from .models import (
     Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago, WompiIntent,
     CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, ImagenNegocio, Notificacion,
-    Pagare, ZapSignWebhookLog, MarketplaceItem, MarketplaceItemHistorialEstado
+    Pagare, ZapSignWebhookLog, MarketplaceItem, MarketplaceItemHistorialEstado,
+    MarketplacePedido, MarketplacePedidoItem, MarketplacePago, MarketplaceDireccionEntrega,
+    MarketplaceLiquidacionEmpresa, InvestorAccount, InvestmentPosition, InvestmentCashflow,
+    InvestmentReturnSnapshot, InvestmentEvent, VinculoLaboralEmpresa, CreditoAdelantoNomina
 )
 from django.utils import timezone
 from datetime import timedelta
@@ -18,6 +21,7 @@ from .services.marketplace_service import (
     registrar_historial_publicacion,
     notificar_empresa_estado_publicacion,
 )
+from usuarios.investor_activation_service import enviar_invitacion_inversionista
 
 # Hotfix de etiquetas con tildes para el index de admin.
 # Evita tocar masivamente cadenas en modelos por ahora.
@@ -58,6 +62,13 @@ class CreditoLibranzaInline(admin.StackedInline):
     verbose_name_plural = 'Detalle de Libranza'
     fk_name = 'credito'
 
+
+class CreditoAdelantoNominaInline(admin.StackedInline):
+    model = CreditoAdelantoNomina
+    can_delete = False
+    verbose_name_plural = 'Detalle de Adelanto de Nomina'
+    fk_name = 'credito'
+
 @admin.register(Credito)
 class CreditoAdmin(admin.ModelAdmin):
     list_display = ('numero_credito', 'usuario', 'linea', 'estado', 'fecha_solicitud')
@@ -80,6 +91,8 @@ class CreditoAdmin(admin.ModelAdmin):
                 return [CreditoEmprendimientoInline]
             elif obj.linea == Credito.LineaCredito.LIBRANZA:
                 return [CreditoLibranzaInline]
+            elif obj.linea == Credito.LineaCredito.ADELANTO_NOMINA:
+                return [CreditoAdelantoNominaInline]
         return []
 
     def save_model(self, request, obj, form, change):
@@ -193,8 +206,25 @@ class CreditoEmprendimientoAdmin(admin.ModelAdmin):
 
 @admin.register(Empresa)
 class EmpresaAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'slug', 'whatsapp_contacto')
-    search_fields = ('nombre', 'slug')
+    list_display = ('nombre', 'slug', 'tipo_empresa', 'convenio_activo', 'correo_contacto', 'telefono_contacto', 'marketplace_fee_percent', 'pagos_habilitados')
+    search_fields = ('nombre', 'slug', 'nit', 'correo_contacto')
+    list_filter = ('tipo_empresa', 'convenio_activo', 'pagos_habilitados',)
+
+
+@admin.register(VinculoLaboralEmpresa)
+class VinculoLaboralEmpresaAdmin(admin.ModelAdmin):
+    list_display = ('nombre_empleado', 'empresa', 'documento_empleado', 'estado_vinculo', 'fecha_alta_aprobado', 'salario_base_mensual', 'validado_por_pagador')
+    list_filter = ('estado_vinculo', 'validado_por_pagador', 'empresa')
+    search_fields = ('nombre_empleado', 'documento_empleado', 'correo_empleado', 'empresa__nombre')
+    readonly_fields = ('creado_en', 'actualizado_en')
+
+
+@admin.register(CreditoAdelantoNomina)
+class CreditoAdelantoNominaAdmin(admin.ModelAdmin):
+    list_display = ('credito', 'vinculo_laboral', 'monto_solicitado', 'monto_maximo_calculado', 'dias_adelanto')
+    list_filter = ('dias_adelanto', 'vinculo_laboral__empresa')
+    search_fields = ('credito__numero_credito', 'vinculo_laboral__nombre_empleado', 'vinculo_laboral__documento_empleado')
+    readonly_fields = ('creado_en', 'actualizado_en')
 
 
 class MarketplaceItemHistorialEstadoInline(admin.TabularInline):
@@ -366,6 +396,42 @@ class MarketplaceItemHistorialEstadoAdmin(admin.ModelAdmin):
     search_fields = ('item__titulo', 'item__empresa__nombre', 'usuario__username', 'comentario')
     readonly_fields = ('item', 'estado_anterior', 'estado_nuevo', 'origen', 'usuario', 'comentario', 'fecha_cambio')
 
+
+class MarketplacePedidoItemInline(admin.TabularInline):
+    model = MarketplacePedidoItem
+    extra = 0
+
+
+@admin.register(MarketplacePedido)
+class MarketplacePedidoAdmin(admin.ModelAdmin):
+    list_display = ('numero_pedido', 'empresa', 'comprador_email', 'estado', 'total', 'created_at')
+    list_filter = ('estado', 'empresa', 'created_at')
+    search_fields = ('numero_pedido', 'comprador_email', 'comprador_nombre', 'empresa__nombre')
+    readonly_fields = ('numero_pedido', 'created_at', 'updated_at')
+    inlines = [MarketplacePedidoItemInline]
+
+
+@admin.register(MarketplacePago)
+class MarketplacePagoAdmin(admin.ModelAdmin):
+    list_display = ('pedido', 'proveedor', 'estado', 'amount_gross', 'amount_net', 'paid_at')
+    list_filter = ('proveedor', 'estado', 'created_at')
+    search_fields = ('pedido__numero_pedido', 'provider_payment_id', 'external_reference')
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(MarketplaceDireccionEntrega)
+class MarketplaceDireccionEntregaAdmin(admin.ModelAdmin):
+    list_display = ('pedido', 'nombre_contacto', 'ciudad', 'telefono_contacto')
+    search_fields = ('pedido__numero_pedido', 'nombre_contacto', 'ciudad', 'telefono_contacto')
+
+
+@admin.register(MarketplaceLiquidacionEmpresa)
+class MarketplaceLiquidacionEmpresaAdmin(admin.ModelAdmin):
+    list_display = ('pedido', 'empresa', 'estado', 'valor_bruto', 'marketplace_fee_amount', 'valor_neto', 'paid_at')
+    list_filter = ('estado', 'empresa', 'created_at')
+    search_fields = ('pedido__numero_pedido', 'empresa__nombre', 'external_reference')
+    readonly_fields = ('created_at', 'updated_at')
+
 @admin.register(HistorialPago)
 class HistorialPagoAdmin(admin.ModelAdmin):
     list_display = ('credito', 'fecha_pago', 'monto', 'estado', 'referencia_pago')
@@ -395,6 +461,67 @@ class MovimientoAhorroAdmin(admin.ModelAdmin):
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('cuenta__usuario', 'procesado_por')
+
+
+@admin.register(InvestorAccount)
+class InvestorAccountAdmin(admin.ModelAdmin):
+    list_display = ('usuario', 'moneda', 'activa', 'fecha_apertura', 'password_configurado')
+    list_filter = ('activa', 'moneda')
+    search_fields = ('usuario__username', 'usuario__email')
+    readonly_fields = ('fecha_apertura', 'fecha_actualizacion')
+    actions = ['enviar_invitacion_activacion']
+
+    def password_configurado(self, obj):
+        return obj.usuario.has_usable_password()
+    password_configurado.boolean = True
+    password_configurado.short_description = 'Password configurado'
+
+    @admin.action(description='Enviar invitacion de activacion a inversionistas seleccionados')
+    def enviar_invitacion_activacion(self, request, queryset):
+        enviados = 0
+        errores = 0
+        for account in queryset.select_related('usuario'):
+            try:
+                enviar_invitacion_inversionista(account.usuario, created_by=request.user)
+                enviados += 1
+            except Exception:
+                errores += 1
+        if enviados:
+            self.message_user(request, f'Se enviaron {enviados} invitaciones de activacion.', level=messages.SUCCESS)
+        if errores:
+            self.message_user(request, f'No se pudieron enviar {errores} invitaciones.', level=messages.WARNING)
+
+
+@admin.register(InvestmentPosition)
+class InvestmentPositionAdmin(admin.ModelAdmin):
+    list_display = ('referencia', 'account', 'titulo', 'estado', 'aporte_inicial', 'capital_activo', 'capital_recuperado', 'fecha_inicio')
+    list_filter = ('estado', 'fecha_inicio')
+    search_fields = ('referencia', 'titulo', 'account__usuario__email')
+    readonly_fields = ('referencia', 'created_at', 'updated_at')
+
+
+@admin.register(InvestmentCashflow)
+class InvestmentCashflowAdmin(admin.ModelAdmin):
+    list_display = ('position', 'tipo', 'monto', 'fecha_efectiva', 'created_at')
+    list_filter = ('tipo', 'fecha_efectiva')
+    search_fields = ('position__referencia', 'position__account__usuario__email', 'descripcion')
+    readonly_fields = ('created_at',)
+
+
+@admin.register(InvestmentReturnSnapshot)
+class InvestmentReturnSnapshotAdmin(admin.ModelAdmin):
+    list_display = ('account', 'fecha_corte', 'roi_acumulado', 'roi_mensual', 'capital_activo', 'capital_recuperado')
+    list_filter = ('fecha_corte',)
+    search_fields = ('account__usuario__email',)
+    readonly_fields = ('created_at',)
+
+
+@admin.register(InvestmentEvent)
+class InvestmentEventAdmin(admin.ModelAdmin):
+    list_display = ('account', 'position', 'titulo', 'fecha_evento')
+    list_filter = ('fecha_evento',)
+    search_fields = ('account__usuario__email', 'position__referencia', 'titulo')
+    readonly_fields = ('fecha_evento',)
 
 @admin.register(ConfiguracionTasaInteres)
 class ConfiguracionTasaInteresAdmin(admin.ModelAdmin):

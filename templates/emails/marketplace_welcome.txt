@@ -1,0 +1,8 @@
+Hola {{ display_name }},
+
+Tu cuenta de comprador en el marketplace de Aprobado fue creada correctamente.
+
+Desde ahora puedes iniciar sesion, registrar pedidos y consultar el estado de tus compras.
+
+Ingresa aqui:
+{{ SITE_URL|default:"https://market.aprobado.com.co" }}

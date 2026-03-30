@@ -59,9 +59,10 @@ def generar_pagare_pdf(credito, usuario_creador=None, forzar_regeneracion=False)
     lineas_permitidas = [
         Credito.LineaCredito.EMPRENDIMIENTO,
         Credito.LineaCredito.LIBRANZA,
+        Credito.LineaCredito.ADELANTO_NOMINA,
     ]
     if credito.linea not in lineas_permitidas:
-        raise ValueError("Solo se pueden generar pagares para creditos de EMPRENDIMIENTO o LIBRANZA")
+        raise ValueError("Solo se pueden generar pagares para creditos de EMPRENDIMIENTO, LIBRANZA o ADELANTO_NOMINA")
 
     estados_permitidos = [
         Credito.EstadoCredito.APROBADO_PAGADOR,
@@ -177,6 +178,13 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
         telefono_deudor = detalle.telefono or usuario.email
         direccion_deudor = detalle.direccion or "NO REGISTRADA"
         email_deudor = detalle.correo_electronico or usuario.email
+    elif credito.linea == Credito.LineaCredito.ADELANTO_NOMINA:
+        vinculo = detalle.vinculo_laboral
+        nombre_deudor = vinculo.nombre_empleado or f"{usuario.first_name} {usuario.last_name}".strip() or usuario.username
+        cedula_deudor = vinculo.documento_empleado or "NO REGISTRADA"
+        telefono_deudor = vinculo.telefono_empleado or usuario.email
+        direccion_deudor = "NO REGISTRADA"
+        email_deudor = vinculo.correo_empleado or usuario.email
     else:
         nombre_deudor = detalle.nombre or f"{usuario.first_name} {usuario.last_name}".strip() or usuario.username
         cedula_deudor = detalle.numero_cedula or "NO REGISTRADA"
@@ -210,6 +218,8 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
     # Obtener ciudad del deudor o usar Villavicencio por defecto
     if credito.linea == Credito.LineaCredito.LIBRANZA:
         ciudad_deudor = getattr(detalle, 'ciudad', "Villavicencio")
+    elif credito.linea == Credito.LineaCredito.ADELANTO_NOMINA:
+        ciudad_deudor = "Villavicencio"
     else:
         # Para emprendimiento, extraer de la dirección o usar default
         ciudad_deudor = "Villavicencio"

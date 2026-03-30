@@ -20,7 +20,9 @@ class SubdomainRoutingMiddleware:
         market_host = getattr(settings, "MARKET_SUBDOMAIN_HOST", "market.aprobado.com.co").lower()
         www_primary_host = f"www.{primary_host}"
 
-        if host == emprender_host:
+        if host in {'127.0.0.1', 'localhost'}:
+            request.urlconf = self._urlconf_for_local_path(request.path)
+        elif host == emprender_host:
             request.urlconf = "aprobado_web.urls_emprender"
             redirect_host = self._redirect_host_for_path(request.path, primary_host, emprender_host, market_host)
             if redirect_host and redirect_host != host:
@@ -39,6 +41,15 @@ class SubdomainRoutingMiddleware:
                     return self._redirect(request, redirect_host)
 
         return self.get_response(request)
+
+    @staticmethod
+    def _urlconf_for_local_path(path):
+        normalized_path = (path or "/").lower()
+        if normalized_path.startswith('/emprendimiento/'):
+            return "aprobado_web.urls_emprender"
+        if normalized_path.startswith('/marketplace/'):
+            return "aprobado_web.urls_market"
+        return "aprobado_web.urls_main"
 
     @staticmethod
     def _redirect_host_for_path(path, primary_host, emprender_host, market_host):

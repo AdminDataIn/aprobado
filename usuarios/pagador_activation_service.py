@@ -138,12 +138,12 @@ def enviar_invitacion_activacion_pagador(perfil_pagador, created_by=None):
 
 
 def obtener_perfil_pagador_por_identificador(identificador):
-    identificador = (identificador or '').strip()
+    identificador = (identificador or '').strip().lower()
     if not identificador:
         return None
 
     user = User.objects.filter(
-        Q(username__iexact=identificador) | Q(email__iexact=identificador),
+        Q(email__iexact=identificador),
         perfil_pagador__isnull=False,
     ).select_related('perfil_pagador__empresa').first()
 

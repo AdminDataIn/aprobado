@@ -3,14 +3,41 @@ from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator, FileExtensionValidator
 from django.core.exceptions import ValidationError
 from django.utils.text import slugify
+from decimal import Decimal
 import uuid
 
 #? Modelo movido de credito_libranza (la idea es crear las empresas directamente desde el admin)
 class Empresa(models.Model):
+    class TipoEmpresa(models.TextChoices):
+        CONVENIO = 'CONVENIO', 'Convenio'
+        MARKETPLACE_EXTERNA = 'MARKETPLACE_EXTERNA', 'Marketplace externa'
+        MIXTA = 'MIXTA', 'Mixta'
+
     nombre = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(max_length=120, unique=True, blank=True)
     descripcion_marketplace = models.TextField(blank=True)
     whatsapp_contacto = models.CharField(max_length=20, blank=True)
+    logo = models.ImageField(
+        upload_to='marketplace/logos/',
+        validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'webp'])],
+        blank=True,
+        null=True
+    )
+    convenio_activo = models.BooleanField(default=False)
+    tipo_empresa = models.CharField(
+        max_length=24,
+        choices=TipoEmpresa.choices,
+        default=TipoEmpresa.CONVENIO,
+    )
+    razon_social = models.CharField(max_length=160, blank=True)
+    nit = models.CharField(max_length=30, blank=True)
+    representante_legal = models.CharField(max_length=160, blank=True)
+    correo_contacto = models.EmailField(blank=True)
+    telefono_contacto = models.CharField(max_length=20, blank=True)
+    mp_user_id = models.CharField(max_length=80, blank=True)
+    mp_access_token = models.CharField(max_length=255, blank=True)
+    marketplace_fee_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('10.00'))
+    pagos_habilitados = models.BooleanField(default=False)
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -23,11 +50,46 @@ class Empresa(models.Model):
             self.slug = slug
         super().save(*args, **kwargs)
 
+    def clean(self):
+        super().clean()
+        if not self.logo:
+            return
+
+        max_logo_bytes = 2 * 1024 * 1024
+        if self.logo.size > max_logo_bytes:
+            raise ValidationError({'logo': 'El logo no debe superar 2 MB.'})
+
+        try:
+            from PIL import Image
+
+            image = Image.open(self.logo)
+            width, height = image.size
+            self.logo.seek(0)
+        except Exception as exc:
+            raise ValidationError({'logo': 'No pudimos procesar el logo. Usa una imagen valida.'}) from exc
+
+        if width < 120 or height < 120:
+            raise ValidationError({'logo': 'El logo debe tener al menos 120x120 px.'})
+        if width > 2400 or height > 2400:
+            raise ValidationError({'logo': 'El logo no debe superar 2400x2400 px.'})
+
+        ratio = width / float(height)
+        if ratio < 1 or ratio > 3:
+            raise ValidationError({'logo': 'El logo debe estar entre proporcion 1:1 y 3:1.'})
+
     class Meta:
         ordering = ['nombre']
 
     def __str__(self):
         return self.nombre
+
+    @property
+    def permite_libranza(self):
+        return self.tipo_empresa in {self.TipoEmpresa.CONVENIO, self.TipoEmpresa.MIXTA} and self.convenio_activo
+
+    @property
+    def permite_marketplace(self):
+        return self.tipo_empresa in {self.TipoEmpresa.MARKETPLACE_EXTERNA, self.TipoEmpresa.MIXTA}
 
 
 class MarketplaceItem(models.Model):
@@ -118,11 +180,184 @@ class MarketplaceItemHistorialEstado(models.Model):
     def __str__(self):
         return f"{self.item.titulo}: {self.estado_anterior or '-'} -> {self.estado_nuevo}"
 
+
+class MarketplacePedido(models.Model):
+    class EstadoPedido(models.TextChoices):
+        BORRADOR = 'borrador', 'Borrador'
+        PENDIENTE_PAGO = 'pendiente_pago', 'Pendiente de pago'
+        PAGADO = 'pagado', 'Pagado'
+        EN_GESTION = 'en_gestion', 'En gestion'
+        COMPLETADO = 'completado', 'Completado'
+        CANCELADO = 'cancelado', 'Cancelado'
+
+    numero_pedido = models.CharField(max_length=30, unique=True, editable=False)
+    empresa = models.ForeignKey(Empresa, on_delete=models.PROTECT, related_name='marketplace_pedidos')
+    comprador = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='marketplace_pedidos'
+    )
+    comprador_nombre = models.CharField(max_length=160)
+    comprador_email = models.EmailField()
+    comprador_telefono = models.CharField(max_length=20, blank=True)
+    estado = models.CharField(max_length=20, choices=EstadoPedido.choices, default=EstadoPedido.BORRADOR)
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    marketplace_fee_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    moneda = models.CharField(max_length=10, default='COP')
+    external_reference = models.CharField(max_length=100, blank=True)
+    notas = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Pedido marketplace'
+        verbose_name_plural = 'Pedidos marketplace'
+
+    def save(self, *args, **kwargs):
+        if not self.numero_pedido:
+            ultimo = MarketplacePedido.objects.order_by('-id').first()
+            numero = (ultimo.id + 1) if ultimo else 1
+            self.numero_pedido = f"MKP-{numero:06d}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.numero_pedido
+
+
+class MarketplaceDireccionEntrega(models.Model):
+    pedido = models.OneToOneField(
+        MarketplacePedido,
+        on_delete=models.CASCADE,
+        related_name='direccion_entrega'
+    )
+    nombre_contacto = models.CharField(max_length=160)
+    telefono_contacto = models.CharField(max_length=20)
+    direccion_linea_1 = models.CharField(max_length=255)
+    direccion_linea_2 = models.CharField(max_length=255, blank=True)
+    ciudad = models.CharField(max_length=120)
+    departamento = models.CharField(max_length=120, blank=True)
+    referencia = models.CharField(max_length=255, blank=True)
+    instrucciones = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = 'Direccion de entrega marketplace'
+        verbose_name_plural = 'Direcciones de entrega marketplace'
+
+    def __str__(self):
+        return f"{self.pedido.numero_pedido} - {self.ciudad}"
+
+
+class MarketplacePedidoItem(models.Model):
+    pedido = models.ForeignKey(
+        MarketplacePedido,
+        on_delete=models.CASCADE,
+        related_name='items'
+    )
+    item = models.ForeignKey(
+        MarketplaceItem,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pedido_items'
+    )
+    titulo_snapshot = models.CharField(max_length=120)
+    tipo_snapshot = models.CharField(max_length=20, choices=MarketplaceItem.TipoItem.choices)
+    cantidad = models.PositiveIntegerField(default=1)
+    precio_unitario = models.DecimalField(max_digits=12, decimal_places=2)
+    total_linea = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        verbose_name = 'Item de pedido marketplace'
+        verbose_name_plural = 'Items de pedido marketplace'
+
+    def __str__(self):
+        return f"{self.pedido.numero_pedido} - {self.titulo_snapshot}"
+
+
+class MarketplacePago(models.Model):
+    class ProveedorPago(models.TextChoices):
+        MERCADO_PAGO = 'mercado_pago', 'Mercado Pago'
+        WOMPI = 'wompi', 'Wompi'
+        OTRO = 'otro', 'Otro'
+
+    class EstadoPago(models.TextChoices):
+        CREADO = 'creado', 'Creado'
+        PENDIENTE = 'pendiente', 'Pendiente'
+        APROBADO = 'aprobado', 'Aprobado'
+        RECHAZADO = 'rechazado', 'Rechazado'
+        CANCELADO = 'cancelado', 'Cancelado'
+
+    pedido = models.OneToOneField(
+        MarketplacePedido,
+        on_delete=models.CASCADE,
+        related_name='pago'
+    )
+    proveedor = models.CharField(max_length=20, choices=ProveedorPago.choices, default=ProveedorPago.MERCADO_PAGO)
+    estado = models.CharField(max_length=20, choices=EstadoPago.choices, default=EstadoPago.CREADO)
+    provider_payment_id = models.CharField(max_length=120, blank=True)
+    provider_preference_id = models.CharField(max_length=120, blank=True)
+    init_point_url = models.URLField(max_length=500, blank=True)
+    external_reference = models.CharField(max_length=120, blank=True)
+    payload = models.JSONField(default=dict, blank=True)
+    amount_gross = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    marketplace_fee_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    amount_net = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Pago marketplace'
+        verbose_name_plural = 'Pagos marketplace'
+
+    def __str__(self):
+        return f"{self.pedido.numero_pedido} - {self.proveedor}"
+
+
+class MarketplaceLiquidacionEmpresa(models.Model):
+    class EstadoLiquidacion(models.TextChoices):
+        PENDIENTE = 'pendiente', 'Pendiente'
+        PROGRAMADA = 'programada', 'Programada'
+        PAGADA = 'pagada', 'Pagada'
+        CONCILIADA = 'conciliada', 'Conciliada'
+        MANUAL = 'manual', 'Manual'
+
+    empresa = models.ForeignKey(Empresa, on_delete=models.PROTECT, related_name='marketplace_liquidaciones')
+    pedido = models.OneToOneField(
+        MarketplacePedido,
+        on_delete=models.CASCADE,
+        related_name='liquidacion_empresa'
+    )
+    estado = models.CharField(max_length=20, choices=EstadoLiquidacion.choices, default=EstadoLiquidacion.PENDIENTE)
+    valor_bruto = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    marketplace_fee_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    valor_neto = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    external_reference = models.CharField(max_length=120, blank=True)
+    programmed_for = models.DateField(null=True, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    notas = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Liquidacion marketplace'
+        verbose_name_plural = 'Liquidaciones marketplace'
+
+    def __str__(self):
+        return f"{self.empresa.nombre} - {self.pedido.numero_pedido}"
+
 #? ----- Modelo principal de crédito ----
 class Credito(models.Model):
     class LineaCredito(models.TextChoices):
         EMPRENDIMIENTO = 'EMPRENDIMIENTO', 'Emprendimiento'
         LIBRANZA = 'LIBRANZA', 'Libranza'
+        ADELANTO_NOMINA = 'ADELANTO_NOMINA', 'Adelanto de Nomina'
 
     class TipoReglaCredito(models.TextChoices):
         NORMAL = 'NORMAL', 'Normal'
@@ -344,6 +579,8 @@ class Credito(models.Model):
                 return self.detalle.nombre
             elif self.linea == self.LineaCredito.LIBRANZA and hasattr(self.detalle, 'nombre_completo'):
                 return self.detalle.nombre_completo
+            elif self.linea == self.LineaCredito.ADELANTO_NOMINA and hasattr(self.detalle, 'nombre_cliente'):
+                return self.detalle.nombre_cliente
         # Fallback por si el detalle no está o por alguna razón no tiene nombre
         return self.usuario.get_full_name() or self.usuario.username
 
@@ -357,7 +594,58 @@ class Credito(models.Model):
             return getattr(self, 'detalle_libranza', None)
         elif self.linea == self.LineaCredito.EMPRENDIMIENTO:
             return getattr(self, 'detalle_emprendimiento', None)
+        elif self.linea == self.LineaCredito.ADELANTO_NOMINA:
+            return getattr(self, 'detalle_adelanto_nomina', None)
         return None
+
+    @property
+    def cliente_documento(self):
+        detalle = self.detalle
+        if not detalle:
+            return ''
+        if self.linea == self.LineaCredito.LIBRANZA:
+            return getattr(detalle, 'cedula', '')
+        if self.linea == self.LineaCredito.EMPRENDIMIENTO:
+            return getattr(detalle, 'numero_cedula', '')
+        if self.linea == self.LineaCredito.ADELANTO_NOMINA:
+            return getattr(detalle.vinculo_laboral, 'documento_empleado', '')
+        return ''
+
+    @property
+    def cliente_email(self):
+        detalle = self.detalle
+        if self.linea == self.LineaCredito.LIBRANZA and detalle:
+            return getattr(detalle, 'correo_electronico', '') or self.usuario.email
+        if self.linea == self.LineaCredito.ADELANTO_NOMINA and detalle:
+            return getattr(detalle.vinculo_laboral, 'correo_empleado', '') or self.usuario.email
+        return self.usuario.email
+
+    @property
+    def cliente_telefono(self):
+        detalle = self.detalle
+        if self.linea == self.LineaCredito.LIBRANZA and detalle:
+            return getattr(detalle, 'telefono', '')
+        if self.linea == self.LineaCredito.EMPRENDIMIENTO and detalle:
+            return getattr(detalle, 'celular_wh', '')
+        if self.linea == self.LineaCredito.ADELANTO_NOMINA and detalle:
+            return getattr(detalle.vinculo_laboral, 'telefono_empleado', '')
+        return ''
+
+    @property
+    def empresa_relacionada(self):
+        detalle = self.detalle
+        if self.linea == self.LineaCredito.LIBRANZA and detalle:
+            return getattr(detalle, 'empresa', None)
+        if self.linea == self.LineaCredito.ADELANTO_NOMINA and detalle:
+            return getattr(detalle.vinculo_laboral, 'empresa', None)
+        return None
+
+    @property
+    def es_linea_libranza_operativa(self):
+        return self.linea in {
+            self.LineaCredito.LIBRANZA,
+            self.LineaCredito.ADELANTO_NOMINA,
+        }
 
     @property
     def dias_en_mora(self):
@@ -629,6 +917,115 @@ class CreditoLibranza(models.Model):
     @property
     def nombre_completo(self):
         return f'{self.nombres} {self.apellidos}'
+
+
+class VinculoLaboralEmpresa(models.Model):
+    class EstadoVinculo(models.TextChoices):
+        ACTIVO = 'ACTIVO', 'Activo'
+        INACTIVO = 'INACTIVO', 'Inactivo'
+        SUSPENDIDO = 'SUSPENDIDO', 'Suspendido'
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='vinculos_laborales'
+    )
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.CASCADE,
+        related_name='vinculos_laborales'
+    )
+    documento_empleado = models.CharField(max_length=20)
+    tipo_documento = models.CharField(max_length=10, default='CC')
+    nombre_empleado = models.CharField(max_length=160)
+    correo_empleado = models.EmailField(blank=True)
+    telefono_empleado = models.CharField(max_length=20, blank=True)
+    estado_vinculo = models.CharField(
+        max_length=20,
+        choices=EstadoVinculo.choices,
+        default=EstadoVinculo.ACTIVO
+    )
+    fecha_alta_aprobado = models.DateField()
+    salario_base_mensual = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    auxilio_transporte_mensual = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    descuentos_fijos_mensuales = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    validado_por_pagador = models.BooleanField(default=False)
+    observaciones = models.TextField(blank=True)
+    cargado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='vinculos_cargados',
+    )
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Vinculo laboral con empresa'
+        verbose_name_plural = 'Vinculos laborales con empresas'
+        ordering = ['-fecha_alta_aprobado', '-creado_en']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['usuario', 'empresa'],
+                name='uniq_vinculo_laboral_usuario_empresa'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.nombre_empleado} - {self.empresa.nombre}"
+
+    @property
+    def cumple_antiguedad_minima(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        return self.fecha_alta_aprobado <= (timezone.localdate() - timedelta(days=30))
+
+    @property
+    def ingreso_laboral_total(self):
+        return (self.salario_base_mensual or Decimal('0.00')) + (self.auxilio_transporte_mensual or Decimal('0.00'))
+
+    @property
+    def ingreso_neto_estimado(self):
+        neto = self.ingreso_laboral_total - (self.descuentos_fijos_mensuales or Decimal('0.00'))
+        return neto if neto > 0 else Decimal('0.00')
+
+    @property
+    def adelanto_maximo(self):
+        if not self.ingreso_neto_estimado:
+            return Decimal('0.00')
+        return (self.ingreso_neto_estimado / Decimal('30') * Decimal('5')).quantize(Decimal('0.01'))
+
+
+class CreditoAdelantoNomina(models.Model):
+    credito = models.OneToOneField(
+        Credito,
+        on_delete=models.CASCADE,
+        related_name='detalle_adelanto_nomina'
+    )
+    vinculo_laboral = models.ForeignKey(
+        VinculoLaboralEmpresa,
+        on_delete=models.PROTECT,
+        related_name='creditos_adelanto'
+    )
+    monto_solicitado = models.DecimalField(max_digits=12, decimal_places=2)
+    monto_maximo_calculado = models.DecimalField(max_digits=12, decimal_places=2)
+    dias_adelanto = models.PositiveSmallIntegerField(default=5)
+    salario_base_usado = models.DecimalField(max_digits=12, decimal_places=2)
+    motivo_bloqueo = models.CharField(max_length=255, blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Detalle de adelanto de nomina'
+        verbose_name_plural = 'Detalles de adelanto de nomina'
+
+    def __str__(self):
+        return f"Adelanto {self.credito.numero_credito} - {self.vinculo_laboral.nombre_empleado}"
+
+    @property
+    def nombre_cliente(self):
+        return self.vinculo_laboral.nombre_empleado
 
 
 #? ----- Modelo de historial de pagos -----
@@ -975,6 +1372,145 @@ class MovimientoAhorro(models.Model):
         
     def __str__(self):
         return f"{self.tipo} - ${self.monto} - {self.estado}"
+
+
+class InvestorAccount(models.Model):
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='investor_account'
+    )
+    activa = models.BooleanField(default=True)
+    moneda = models.CharField(max_length=10, default='COP')
+    fecha_apertura = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Cuenta inversionista'
+        verbose_name_plural = 'Cuentas inversionista'
+
+    def __str__(self):
+        return f"Inversionista {self.usuario.email or self.usuario.username}"
+
+
+class InvestmentPosition(models.Model):
+    class EstadoPosicion(models.TextChoices):
+        BORRADOR = 'borrador', 'Borrador'
+        ACTIVA = 'activa', 'Activa'
+        CERRADA = 'cerrada', 'Cerrada'
+        CANCELADA = 'cancelada', 'Cancelada'
+
+    account = models.ForeignKey(
+        InvestorAccount,
+        on_delete=models.CASCADE,
+        related_name='positions'
+    )
+    referencia = models.CharField(max_length=50, unique=True, blank=True)
+    titulo = models.CharField(max_length=160)
+    estado = models.CharField(max_length=20, choices=EstadoPosicion.choices, default=EstadoPosicion.BORRADOR)
+    aporte_inicial = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    capital_activo = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    capital_recuperado = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tasa_proyectada_anual = models.DecimalField(max_digits=7, decimal_places=2, default=0)
+    fecha_inicio = models.DateField()
+    fecha_cierre = models.DateField(null=True, blank=True)
+    descripcion = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-fecha_inicio', '-created_at']
+        verbose_name = 'Posicion de inversion'
+        verbose_name_plural = 'Posiciones de inversion'
+
+    def save(self, *args, **kwargs):
+        if not self.referencia:
+            ultimo = InvestmentPosition.objects.order_by('-id').first()
+            numero = (ultimo.id + 1) if ultimo else 1
+            self.referencia = f"INV-{numero:06d}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.referencia
+
+
+class InvestmentCashflow(models.Model):
+    class TipoCashflow(models.TextChoices):
+        APORTE = 'aporte', 'Aporte'
+        RETORNO = 'retorno', 'Retorno'
+        COMISION = 'comision', 'Comision'
+        AJUSTE = 'ajuste', 'Ajuste'
+        SALIDA_CAPITAL = 'salida_capital', 'Salida de capital'
+
+    position = models.ForeignKey(
+        InvestmentPosition,
+        on_delete=models.CASCADE,
+        related_name='cashflows'
+    )
+    tipo = models.CharField(max_length=20, choices=TipoCashflow.choices)
+    monto = models.DecimalField(max_digits=12, decimal_places=2)
+    fecha_efectiva = models.DateField()
+    descripcion = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha_efectiva', '-created_at']
+        verbose_name = 'Movimiento de inversion'
+        verbose_name_plural = 'Movimientos de inversion'
+
+    def __str__(self):
+        return f"{self.position.referencia} - {self.tipo} - {self.monto}"
+
+
+class InvestmentReturnSnapshot(models.Model):
+    account = models.ForeignKey(
+        InvestorAccount,
+        on_delete=models.CASCADE,
+        related_name='snapshots'
+    )
+    fecha_corte = models.DateField()
+    roi_acumulado = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    roi_mensual = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    tasa_retorno_proyectada = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    capital_activo = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    capital_recuperado = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tiempo_promedio_retorno_dias = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha_corte', '-created_at']
+        verbose_name = 'Snapshot de retorno'
+        verbose_name_plural = 'Snapshots de retorno'
+        unique_together = ('account', 'fecha_corte')
+
+    def __str__(self):
+        return f"{self.account.usuario.email} - {self.fecha_corte}"
+
+
+class InvestmentEvent(models.Model):
+    account = models.ForeignKey(
+        InvestorAccount,
+        on_delete=models.CASCADE,
+        related_name='events'
+    )
+    position = models.ForeignKey(
+        InvestmentPosition,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='events'
+    )
+    titulo = models.CharField(max_length=120)
+    descripcion = models.TextField(blank=True)
+    fecha_evento = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha_evento']
+        verbose_name = 'Evento de inversion'
+        verbose_name_plural = 'Eventos de inversion'
+
+    def __str__(self):
+        return self.titulo
 
 
 class ConfiguracionTasaInteres(models.Model):

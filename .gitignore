@@ -128,11 +128,24 @@ token.json
 PENDIENTES.md
 DOCUMENTACION_APROBADO.md
 INTEGRACION_WOMPI_ESENCIAL.md
-README.md
 Flujo de Pago.md
 test_email.py
 test_pagare.py
 test_zapsign_integration.py
 ZapSign.md
 generar_pagare_manual.py
-aprobado_web/settings.py
+DONE.md
+ESTADO_PROYECTO_Y_PENDIENTES.md
+SKILLS.md
+Aplicacion_Ley_Libranza.md
+
+# Reportes y archivos operativos locales
+reports/
+*.tmp
+*.bak
+
+# Documentos bancarios locales / no funcionales
+CertificacionBancaria.pdf
+Certificado_nequi.pdf
+Referencias_Bancarias_2026.pdf
+certificado-bancario-certificadoapertur-*.pdf

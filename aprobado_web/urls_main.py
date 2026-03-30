@@ -22,6 +22,7 @@ urlpatterns = [
 
     # Billetera
     path("billetera/", include("gestion_creditos.urls_billetera")),
+    path("inversionista/", include("gestion_creditos.urls_inversionista")),
 
     # Inicio segun host
     path("", portal_entrypoint_view, name="home"),

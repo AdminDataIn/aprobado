@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.http import HttpResponse
 from django.urls import reverse
 from gestion_creditos.models import Credito, HistorialPago, HistorialEstado, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, CuotaAmortizacion
+from gestion_creditos.services.adelanto_nomina_service import evaluar_elegibilidad_adelanto
 from django.utils import timezone
 from django.db.models import Sum
 from django.template.loader import get_template
@@ -14,6 +15,7 @@ import json
 import base64
 import io
 from pypdf import PdfReader, PdfWriter
+from usuarios.product_flow import flow_login_required, path_login_required
 
 
 def _aprobacion_admin_registrada(credito):
@@ -56,7 +58,7 @@ def get_logo_base64():
     except (IOError, FileNotFoundError):
         return None
 
-@login_required
+@flow_login_required('LIBRANZA', '/libranza/login/')
 def dashboard_libranza_view(request, credito_id=None):
     """
     Dashboard EXCLUSIVO para créditos de LIBRANZA.
@@ -65,14 +67,15 @@ def dashboard_libranza_view(request, credito_id=None):
     # Filtrar SOLO créditos de libranza
     creditos_usuario = Credito.objects.filter(
         usuario=request.user,
-        linea=Credito.LineaCredito.LIBRANZA
-    ).select_related('detalle_libranza')
+        linea__in=[Credito.LineaCredito.LIBRANZA, Credito.LineaCredito.ADELANTO_NOMINA]
+    ).select_related('detalle_libranza', 'detalle_adelanto_nomina__vinculo_laboral__empresa')
 
     if not creditos_usuario.exists():
         # Usuario sin créditos de libranza - mostrar página genérica
         return render(request, 'usuariocreditos/sin_creditos.html', {
             'nombre_asociado': request.user.get_full_name() or request.user.username,
-            'es_empleado': True  # En libranza, asumimos que es empleado
+            'es_empleado': True,  # En libranza, asumimos que es empleado
+            'adelanto_eligibility': evaluar_elegibilidad_adelanto(request.user),
         })
 
     if credito_id:
@@ -145,11 +148,12 @@ def dashboard_libranza_view(request, credito_id=None):
         'plan_pagos': plan_pagos,
         'mostrar_info_financiera': _puede_ver_info_financiera(credito_actual),
         'es_libranza': True,  # ⭐ Flag para identificar dashboard de Libranza
+        'adelanto_eligibility': evaluar_elegibilidad_adelanto(request.user),
     }
     return render(request, 'usuariocreditos/dashboard_libranza.html', context)
 
 
-@login_required
+@flow_login_required('EMPRENDIMIENTO', '/emprendimiento/login/')
 def dashboard_view(request, credito_id=None):
     """
     Dashboard EXCLUSIVO para créditos de EMPRENDIMIENTO.
@@ -302,7 +306,7 @@ def billetera_digital(request):
     return render(request, 'Billetera/billetera_digital.html', context)
 
 
-@login_required
+@path_login_required
 def descargar_extracto(request, credito_id):
     """
     Genera y descarga un PDF con el extracto de pagos de un crédito.
@@ -391,7 +395,7 @@ def descargar_extracto(request, credito_id):
     return response
 
 
-@login_required
+@path_login_required
 def descargar_plan_pagos_pdf(request, credito_id):
     """
     Genera y descarga un PDF con el plan de pagos detallado de un crédito,

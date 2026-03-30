@@ -1,8 +1,136 @@
 from django.contrib import admin
 from django.contrib import messages
+from django.contrib.admin import SimpleListFilter
+from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
+from django.contrib.auth.models import User
+from django.contrib.admin.sites import NotRegistered
 
-from .models import PerfilPagador, PerfilEmpresaMarketing, PagadorAccessToken
+from .models import PerfilPagador, PerfilEmpresaMarketing, PagadorAccessToken, ProductAccessProfile
 from .pagador_activation_service import enviar_invitacion_activacion_pagador
+
+
+class UserRoleFilter(SimpleListFilter):
+    title = 'rol operativo'
+    parameter_name = 'rol_operativo'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('staff', 'Administradores'),
+            ('pagador', 'Pagadores'),
+            ('inversionista', 'Inversionistas'),
+            ('marketplace_admin', 'Admins marketplace'),
+            ('libranza', 'Clientes libranza'),
+            ('emprendimiento', 'Clientes emprendimiento'),
+            ('marketplace_buyer', 'Compradores marketplace'),
+            ('sin_clasificar', 'Sin clasificar'),
+        )
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value == 'staff':
+            return queryset.filter(is_staff=True)
+        if value == 'pagador':
+            return queryset.filter(perfil_pagador__isnull=False)
+        if value == 'inversionista':
+            return queryset.filter(investor_account__isnull=False)
+        if value == 'marketplace_admin':
+            return queryset.filter(perfil_marketing__isnull=False)
+        if value == 'libranza':
+            return queryset.filter(product_access_profile__flow=ProductAccessProfile.ProductFlow.LIBRANZA)
+        if value == 'emprendimiento':
+            return queryset.filter(product_access_profile__flow=ProductAccessProfile.ProductFlow.EMPRENDIMIENTO)
+        if value == 'marketplace_buyer':
+            return queryset.filter(product_access_profile__flow=ProductAccessProfile.ProductFlow.MARKETPLACE_BUYER)
+        if value == 'sin_clasificar':
+            return queryset.filter(
+                perfil_pagador__isnull=True,
+                perfil_marketing__isnull=True,
+                investor_account__isnull=True,
+                product_access_profile__isnull=True,
+                is_staff=False,
+                is_superuser=False,
+            )
+        return queryset
+
+
+class ProductFlowFilter(SimpleListFilter):
+    title = 'flujo principal'
+    parameter_name = 'flujo_principal'
+
+    def lookups(self, request, model_admin):
+        return ProductAccessProfile.ProductFlow.choices
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(product_access_profile__flow=self.value())
+        return queryset
+
+
+try:
+    admin.site.unregister(User)
+except NotRegistered:
+    pass
+
+
+@admin.register(User)
+class UserAdmin(DjangoUserAdmin):
+    list_display = (
+        'username',
+        'email',
+        'first_name',
+        'last_name',
+        'role_summary',
+        'flow_summary',
+        'is_staff',
+        'is_active',
+        'last_login',
+    )
+    list_filter = (
+        'is_staff',
+        'is_superuser',
+        'is_active',
+        UserRoleFilter,
+        ProductFlowFilter,
+    )
+    search_fields = (
+        'username',
+        'email',
+        'first_name',
+        'last_name',
+        'perfil_pagador__empresa__nombre',
+        'perfil_marketing__empresa__nombre',
+    )
+    ordering = ('-is_staff', 'username')
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'perfil_pagador',
+            'perfil_marketing',
+            'product_access_profile',
+            'investor_account',
+        )
+
+    @admin.display(description='Roles')
+    def role_summary(self, obj):
+        roles = []
+        if obj.is_superuser:
+            roles.append('Superadmin')
+        elif obj.is_staff:
+            roles.append('Admin')
+        if hasattr(obj, 'perfil_pagador'):
+            roles.append('Pagador')
+        if hasattr(obj, 'perfil_marketing'):
+            roles.append('Marketplace admin')
+        if hasattr(obj, 'investor_account'):
+            roles.append('Inversionista')
+        if not roles:
+            roles.append('Usuario base')
+        return ' / '.join(roles)
+
+    @admin.display(description='Flujo')
+    def flow_summary(self, obj):
+        profile = getattr(obj, 'product_access_profile', None)
+        return profile.get_flow_display() if profile else 'Sin flujo'
 
 @admin.register(PerfilPagador)
 class PerfilPagadorAdmin(admin.ModelAdmin):
@@ -110,3 +238,11 @@ class PagadorAccessTokenAdmin(admin.ModelAdmin):
         if request.method in ('GET', 'HEAD', 'OPTIONS'):
             return True
         return False
+
+
+@admin.register(ProductAccessProfile)
+class ProductAccessProfileAdmin(admin.ModelAdmin):
+    list_display = ('usuario', 'flow', 'locked_at', 'updated_at')
+    list_filter = ('flow',)
+    search_fields = ('usuario__username', 'usuario__email')
+    readonly_fields = ('locked_at', 'updated_at')

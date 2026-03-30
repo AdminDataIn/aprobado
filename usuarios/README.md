@@ -132,11 +132,11 @@ Vistas de la aplicación usuarios.
 
 #### `LoginLibranzaView`
 - Vista de login específica para Libranza
-- Usa template `account/login_libranza.html`
+- Usa template `account/libranza/login.html`
 
 #### `LoginEmprendimientoView`
 - Vista de login específica para Emprendimiento
-- Usa template `account/login_emprendimiento.html`
+- Usa template `account/emprendimiento/login.html`
 
 #### `CustomLogoutView`
 - Vista personalizada de logout que redirige según el producto del usuario

@@ -1,0 +1,323 @@
+﻿{% extends "inversionista/_base.html" %}
+{% load humanize %}
+
+{% block title %}Mi portafolio{% endblock %}
+
+{% block extra_head %}
+<style>
+    .invest-shell {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 2rem 1rem 4rem;
+    }
+    .invest-topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .invest-topbar h1 {
+        margin: 0;
+        font-size: 2.35rem;
+        color: #0f172a;
+    }
+    .invest-topbar p {
+        margin: 0.45rem 0 0;
+        color: #64748b;
+    }
+    .invest-status-card {
+        min-width: 280px;
+        background: linear-gradient(180deg, #102a46 0%, #08192d 100%);
+        border-radius: 24px;
+        color: #fff;
+        padding: 1.1rem 1.25rem;
+        box-shadow: 0 22px 44px rgba(15, 23, 42, 0.18);
+    }
+    .invest-status-card span {
+        display: block;
+        color: rgba(255, 255, 255, 0.72);
+        font-size: 0.82rem;
+        margin-bottom: 0.22rem;
+    }
+    .invest-status-card strong {
+        display: block;
+        font-size: 1.05rem;
+        margin-bottom: 0.85rem;
+    }
+    .invest-kpis {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .invest-kpi,
+    .invest-panel {
+        background: #fff;
+        border: 1px solid #dbe7f3;
+        border-radius: 24px;
+        box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
+    }
+    .invest-kpi {
+        padding: 1.15rem 1.2rem;
+    }
+    .invest-kpi span {
+        display: block;
+        font-size: 0.82rem;
+        color: #64748b;
+        margin-bottom: 0.28rem;
+    }
+    .invest-kpi strong {
+        font-size: 1.55rem;
+        color: #0f172a;
+    }
+    .invest-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.95fr);
+        gap: 1rem;
+    }
+    .invest-panel-body {
+        padding: 1.4rem;
+    }
+    .invest-section-title {
+        margin: 0 0 0.55rem;
+        font-size: 1.55rem;
+        color: #0f172a;
+    }
+    .invest-section-copy {
+        margin: 0 0 1rem;
+        color: #64748b;
+    }
+    .invest-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .invest-table th,
+    .invest-table td {
+        padding: 0.9rem 0.65rem;
+        border-bottom: 1px solid #edf2f7;
+        text-align: left;
+    }
+    .invest-table th {
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-size: 0.76rem;
+        color: #64748b;
+    }
+    .invest-status {
+        display: inline-flex;
+        padding: 0.32rem 0.7rem;
+        border-radius: 999px;
+        background: #e0f2fe;
+        color: #0369a1;
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
+    .invest-demo-grid {
+        display: grid;
+        gap: 0.9rem;
+    }
+    .invest-demo-card {
+        border: 1px solid #dbe7f3;
+        border-radius: 18px;
+        padding: 1rem 1.05rem;
+        background: linear-gradient(180deg, #fff 0%, #f8fbff 100%);
+    }
+    .invest-demo-card-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+        margin-bottom: 0.65rem;
+    }
+    .invest-demo-card h3 {
+        margin: 0;
+        font-size: 1rem;
+        color: #0f172a;
+    }
+    .invest-demo-card p {
+        margin: 0.2rem 0 0;
+        color: #64748b;
+        font-size: 0.92rem;
+    }
+    .invest-demo-metrics {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.7rem;
+    }
+    .invest-demo-metrics div,
+    .invest-summary-item {
+        border: 1px solid #e7eef8;
+        border-radius: 16px;
+        background: #fff;
+        padding: 0.8rem 0.9rem;
+    }
+    .invest-demo-metrics span,
+    .invest-summary-item span {
+        display: block;
+        font-size: 0.78rem;
+        color: #64748b;
+        margin-bottom: 0.24rem;
+    }
+    .invest-demo-metrics strong,
+    .invest-summary-item strong {
+        color: #0f172a;
+        font-size: 1rem;
+    }
+    .invest-summary-list {
+        display: grid;
+        gap: 0.8rem;
+    }
+    .invest-note {
+        margin-top: 1rem;
+        border-radius: 18px;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        color: #1d4ed8;
+        padding: 1rem 1.05rem;
+    }
+    @media (max-width: 920px) {
+        .invest-topbar,
+        .invest-grid {
+            grid-template-columns: 1fr;
+            display: grid;
+        }
+        .invest-status-card {
+            min-width: 0;
+        }
+        .invest-topbar h1 {
+            font-size: 2rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="invest-shell">
+    <section class="invest-topbar">
+        <div>
+            <h1>Mi portafolio</h1>
+            
+        </div>
+        <aside class="invest-status-card">
+            <span>Cuenta asociada</span>
+            <strong>{{ request.user.email|default:request.user.username }}</strong>
+            <span>{% if latest_snapshot %}Último corte{% else %}Estado del portal{% endif %}</span>
+            <strong>{% if latest_snapshot %}{{ latest_snapshot.fecha_corte }}{% else %}Listo para operación{% endif %}</strong>
+        </aside>
+    </section>
+
+    <section class="invest-kpis" id="panel-kpis">
+        <article class="invest-kpi">
+            <span>Aporte inicial</span>
+            <strong>${{ kpis.aporte_inicial|floatformat:0|intcomma }}</strong>
+        </article>
+        <article class="invest-kpi">
+            <span>Capital activo</span>
+            <strong>${{ kpis.capital_activo|floatformat:0|intcomma }}</strong>
+        </article>
+        <article class="invest-kpi">
+            <span>Capital recuperado</span>
+            <strong>${{ kpis.capital_recuperado|floatformat:0|intcomma }}</strong>
+        </article>
+        <article class="invest-kpi">
+            <span>ROI acumulado</span>
+            <strong>{{ kpis.roi_acumulado }}%</strong>
+        </article>
+        <article class="invest-kpi">
+            <span>ROI mensual</span>
+            <strong>{{ kpis.roi_mensual }}%</strong>
+        </article>
+        <article class="invest-kpi">
+            <span>Tasa proyectada</span>
+            <strong>{{ kpis.tasa_proyectada }}%</strong>
+        </article>
+    </section>
+
+    <section class="invest-grid">
+        <article class="invest-panel" id="portafolio">
+            <div class="invest-panel-body">
+                <h2 class="invest-section-title">Estado de inversiones</h2>
+                {% if positions %}
+                <p class="invest-section-copy">Estas son tus posiciones activas y cerradas con capital activo y capital recuperado.</p>
+                <div style="overflow:auto;">
+                    <table class="invest-table">
+                        <thead>
+                            <tr>
+                                <th>Referencia</th>
+                                <th>Título</th>
+                                <th>Estado</th>
+                                <th>Capital activo</th>
+                                <th>Capital recuperado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for position in positions %}
+                            <tr>
+                                <td>{{ position.referencia }}</td>
+                                <td>{{ position.titulo }}</td>
+                                <td><span class="invest-status">{{ position.get_estado_display }}</span></td>
+                                <td>${{ position.capital_activo|floatformat:0|intcomma }}</td>
+                                <td>${{ position.capital_recuperado|floatformat:0|intcomma }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="invest-section-copy">Aún no hay posiciones cargadas. Este espacio mostrará tus inversiones activas y cerradas cuando el equipo registre tu portafolio.</p>
+                <div class="invest-demo-grid">
+                    {% for card in showcase_positions %}
+                    <article class="invest-demo-card">
+                        <div class="invest-demo-card-head">
+                            <div>
+                                <h3>{{ card.titulo }}</h3>
+                                <p>Vista previa del formato en el que se mostrará una posición real.</p>
+                            </div>
+                            <span class="invest-status">{{ card.estado }}</span>
+                        </div>
+                        <div class="invest-demo-metrics">
+                            <div>
+                                <span>Capital estimado</span>
+                                <strong>{{ card.capital }}</strong>
+                            </div>
+                            <div>
+                                <span>Lectura clave</span>
+                                <strong>{{ card.retorno }}</strong>
+                            </div>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </article>
+
+        <aside class="invest-panel" id="resumen">
+            <div class="invest-panel-body">
+                <h2 class="invest-section-title">Resumen del portafolio</h2>
+                <div class="invest-summary-list">
+                    <div class="invest-summary-item">
+                        <span>Tiempo promedio de retorno</span>
+                        <strong>{{ kpis.tiempo_promedio_retorno_dias }} días</strong>
+                    </div>
+                    <div class="invest-summary-item">
+                        <span>Cuenta</span>
+                        <strong>{{ request.user.email|default:request.user.username }}</strong>
+                    </div>
+                    <div class="invest-summary-item">
+                        <span>Modo actual</span>
+                        <strong>{% if is_demo_mode %}Sin posiciones cargadas{% else %}Datos reales disponibles{% endif %}</strong>
+                    </div>
+                </div>
+                {% if is_demo_mode %}
+                <div class="invest-note">
+                    Tu acceso ya está listo. Cuando el equipo cargue posiciones o snapshots, este mismo portal mostrará cortes, retornos y avances sin cambiar de flujo.
+                </div>
+                {% endif %}
+            </div>
+        </aside>
+    </section>
+</div>
+{% endblock %}
+

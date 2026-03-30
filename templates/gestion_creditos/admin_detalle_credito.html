@@ -150,6 +150,47 @@
                     </div>
                 </div>
 
+                {% if capacidad_descuento %}
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="bi bi-calculator me-2"></i>
+                            Capacidad de descuento
+                        </h2>
+                    </div>
+                    <div class="card-content">
+                        <div class="info-grid-finance">
+                            <div class="info-item">
+                                <span class="info-label">Ingreso base usado</span>
+                                <span class="info-value">${{ capacidad_descuento.ingreso_base|floatformat:0|intcomma }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Descuentos considerados</span>
+                                <span class="info-value">${{ capacidad_descuento.descuentos_considerados|floatformat:0|intcomma }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Ingreso neto</span>
+                                <span class="info-value">${{ capacidad_descuento.ingreso_neto|floatformat:0|intcomma }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Capacidad disponible</span>
+                                <span class="info-value">${{ capacidad_descuento.capacidad_disponible|floatformat:0|intcomma }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Monto solicitado</span>
+                                <span class="info-value">${{ capacidad_descuento.monto_solicitado|floatformat:0|intcomma }}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Resultado preliminar</span>
+                                <span class="info-value {% if capacidad_descuento.decision_preliminar == 'APLICA' %}text-success{% elif capacidad_descuento.decision_preliminar == 'NO_APLICA' %}text-danger{% endif %}">
+                                    {{ capacidad_descuento.decision_preliminar }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- Credit Details -->
                 {% if credito.estado == 'ACTIVO' or credito.estado == 'EN_MORA' or credito.estado == 'PAGADO' %}
                 <div class="card" style="margin-bottom: 2rem;">

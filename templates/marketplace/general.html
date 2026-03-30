@@ -12,12 +12,32 @@
     <div class="mp-orb orb-1"></div>
     <div class="mp-orb orb-2"></div>
 
+    <form id="mp-logout-form" method="post" action="{% url 'marketplace:logout' %}" style="display:none;">
+        {% csrf_token %}
+    </form>
+
     <header class="mp-header mp-container">
         <a href="/" class="mp-brand">
             <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado">
             Marketplace Aliados
         </a>
         <div class="mp-header-meta">
+            {% if marketplace_is_authenticated %}
+                {% if marketplace_is_admin_user %}
+                <a href="{% url 'marketplace:panel' %}" class="mp-btn ghost mp-btn-sm">Panel empresas</a>
+                {% else %}
+                <span class="mp-company-pill">
+                    <i class="bi bi-person-circle"></i>
+                    {{ marketplace_display_name }}
+                </span>
+                <a href="{% url 'marketplace:orders' %}" class="mp-btn ghost mp-btn-sm">Mis pedidos</a>
+                {% endif %}
+                <a href="#" class="mp-btn primary mp-btn-sm" onclick="event.preventDefault();document.getElementById('mp-logout-form').submit();">Cerrar sesion</a>
+            {% else %}
+            <a href="{% url 'marketplace:login' %}?next={{ request.get_full_path|urlencode }}" class="mp-btn ghost mp-btn-sm">Iniciar sesion</a>
+            <a href="{% url 'marketplace:register' %}?next={{ request.get_full_path|urlencode }}" class="mp-btn primary mp-btn-sm">Crear cuenta</a>
+            <a href="{% url 'marketplace:admin_login_without_company' %}" class="mp-btn ghost mp-btn-sm">Panel empresas</a>
+            {% endif %}
             <span class="mp-company-pill">
                 <i class="bi bi-buildings"></i>
                 Empresas aliadas
@@ -47,6 +67,15 @@
                 <a href="#empresas" class="mp-btn ghost">
                     <i class="bi bi-buildings"></i>Empresas aliadas
                 </a>
+                {% if marketplace_is_authenticated %}
+                <a href="{% url 'marketplace:orders' %}" class="mp-btn ghost">
+                    <i class="bi bi-bag-check"></i>Mis pedidos
+                </a>
+                {% else %}
+                <a href="{% url 'marketplace:login' %}?next={{ request.get_full_path|urlencode }}" class="mp-btn ghost">
+                    <i class="bi bi-person-circle"></i>Iniciar sesion
+                </a>
+                {% endif %}
             </div>
         </div>
         <div class="mp-hero-card">
@@ -111,7 +140,11 @@
                     <div class="mp-card-meta">
                         <span class="mp-price">{{ item.precio|default:"Precio especial" }}</span>
                         <a href="{% url 'marketplace:empresa' item.empresa.slug %}" class="mp-company-link mp-company-link-brand">
-                            {% if item.empresa.logo_marketplace %}
+                            {% if item.empresa.logo %}
+                            <span class="mp-company-mini-logo">
+                                <img src="{{ item.empresa.logo.url }}" alt="{{ item.empresa.nombre }}">
+                            </span>
+                            {% elif item.empresa.logo_marketplace %}
                             <span class="mp-company-mini-logo">
                                 <img src="{% static item.empresa.logo_marketplace %}" alt="{{ item.empresa.nombre }}">
                             </span>
@@ -121,6 +154,11 @@
                             <span>{{ item.empresa.nombre }}</span>
                         </a>
                     </div>
+                    {% if item.precio %}
+                    <a class="mp-btn ghost" href="{% url 'marketplace:checkout' item.id %}" style="width:100%;justify-content:center;">
+                        <i class="bi bi-bag"></i>Solicitar pedido
+                    </a>
+                    {% endif %}
                     <a class="mp-cta" href="#" target="_blank" rel="noopener">
                         <i class="bi bi-whatsapp"></i>Escribir por WhatsApp
                     </a>
@@ -155,8 +193,10 @@
             <div class="mp-allies-marquee-track">
                 {% for empresa in empresas_aliadas %}
                 <a href="{% url 'marketplace:empresa' empresa.slug %}" class="mp-ally-logo-card" aria-label="Ver vitrina de {{ empresa.nombre }}">
-                    <span class="mp-ally-logo-badge{% if empresa.logo_marketplace %} is-logo{% endif %}">
-                        {% if empresa.logo_marketplace %}
+                    <span class="mp-ally-logo-badge{% if empresa.logo or empresa.logo_marketplace %} is-logo{% endif %}">
+                        {% if empresa.logo %}
+                        <img src="{{ empresa.logo.url }}" alt="{{ empresa.nombre }}">
+                        {% elif empresa.logo_marketplace %}
                         <img src="{% static empresa.logo_marketplace %}" alt="{{ empresa.nombre }}">
                         {% else %}
                         {{ empresa.nombre|slice:":2"|upper }}
@@ -171,8 +211,10 @@
                 {% if total_empresas > 3 %}
                 {% for empresa in empresas_aliadas %}
                 <a href="{% url 'marketplace:empresa' empresa.slug %}" class="mp-ally-logo-card duplicated" aria-hidden="true" tabindex="-1">
-                    <span class="mp-ally-logo-badge{% if empresa.logo_marketplace %} is-logo{% endif %}">
-                        {% if empresa.logo_marketplace %}
+                    <span class="mp-ally-logo-badge{% if empresa.logo or empresa.logo_marketplace %} is-logo{% endif %}">
+                        {% if empresa.logo %}
+                        <img src="{{ empresa.logo.url }}" alt="{{ empresa.nombre }}">
+                        {% elif empresa.logo_marketplace %}
                         <img src="{% static empresa.logo_marketplace %}" alt="{{ empresa.nombre }}">
                         {% else %}
                         {{ empresa.nombre|slice:":2"|upper }}

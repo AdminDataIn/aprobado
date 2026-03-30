@@ -1,0 +1,39 @@
+{% extends "account/libranza/_base.html" %}
+
+{% block title %}Registro - Libranza{% endblock %}
+{% block body_class %}auth-body{% endblock %}
+
+{% block content %}
+{% include "account/common/_auth_content_styles.html" %}
+
+<main class="section-main">
+  <section class="hero-section-account">
+    <div class="container-account">
+      <div class="div-card-agent-account">
+        <div class="mb-3"><span class="badge rounded-pill border">Nueva cuenta</span></div>
+        <h1>Crea tu acceso de Libranza</h1>
+        <p class="auth-desc">Registrate con nombre, correo y contrasena. Si tu cuenta ya existe por Google, usa recuperar acceso para definir tu contrasena local.</p>
+        <form method="post">
+          {% csrf_token %}
+          {% if next_url %}
+          <input type="hidden" name="next" value="{{ next_url }}">
+          {% endif %}
+          {% if form.non_field_errors %}<div class="alert alert-danger py-2">{{ form.non_field_errors }}</div>{% endif %}
+          <div class="auth-field"><label class="form-label">{{ form.first_name.label }}</label>{{ form.first_name }}{% if form.first_name.errors %}{{ form.first_name.errors }}{% endif %}</div>
+          <div class="auth-field"><label class="form-label">{{ form.last_name.label }}</label>{{ form.last_name }}{% if form.last_name.errors %}{{ form.last_name.errors }}{% endif %}</div>
+          <div class="auth-field"><label class="form-label">{{ form.email.label }}</label>{{ form.email }}{% if form.email.errors %}{{ form.email.errors }}{% endif %}</div>
+          <div class="auth-field"><label class="form-label">{{ form.password1.label }}</label>{{ form.password1 }}{% if form.password1.errors %}{{ form.password1.errors }}{% endif %}</div>
+          <div class="auth-field"><label class="form-label">{{ form.password2.label }}</label>{{ form.password2 }}{% if form.password2.errors %}{{ form.password2.errors }}{% endif %}</div>
+          <button type="submit" class="btn-account">Crear cuenta</button>
+        </form>
+        <div class="auth-divider">o continua con</div>
+        <a href="{{ google_login_url }}" class="btn-social-account">Continuar con Google</a>
+        <div class="auth-footer-links">
+          <a href="{{ login_url }}">Ya tengo cuenta</a>
+          <a href="{{ back_url }}">&larr; Volver a Libranza</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+{% endblock %}

@@ -50,7 +50,10 @@
         <!-- Page Title & Breadcrumb -->
         <div class="d-flex align-items-center justify-content-between mb-4 px-4">
             <div>
-                <h1 class="page-title">Solicitudes de Crédito</h1>
+                <h1 class="page-title">{{ dashboard_title|default:"Solicitudes de Crédito" }}</h1>
+                {% if dashboard_subtitle %}
+                <p class="text-secondary mb-2">{{ dashboard_subtitle }}</p>
+                {% endif %}
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
                         {# NUEVA URL - Gestión #}
@@ -58,6 +61,14 @@
                         <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-journal-text me-1"></i>Solicitudes</li>
                     </ol>
                 </nav>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                    <a href="{% url 'gestion:solicitudes' %}" class="btn btn-sm {% if not solo_adelantos %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        Solicitudes generales
+                    </a>
+                    <a href="{% url 'gestion:adelantos_nomina' %}" class="btn btn-sm {% if solo_adelantos %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        Adelantos de nomina
+                    </a>
+                </div>
             </div>
             {# NUEVA URL - Gestión #}
             <a href="{% url 'gestion:dashboard' %}" class="btn btn-outline-primary">
@@ -82,7 +93,7 @@
                         <label for="linea" class="form-label">
                             <i class="bi bi-tag me-1"></i>Línea de Crédito
                         </label>
-                        <select name="linea" id="linea" class="form-select">
+                        <select name="linea" id="linea" class="form-select" {% if solo_adelantos %}disabled{% endif %}>
                             <option value="">Todas las líneas</option>
                             {% for choice in lineas_choices %}
                             <option value="{{ choice.0 }}" {% if linea_filter == choice.0 %}selected{% endif %}>{{ choice.1 }}</option>
@@ -145,7 +156,7 @@
         <div class="table-container">
             <div class="table-header">
                 <h3 class="table-title">
-                    <i class="bi bi-table me-2"></i>Lista de solicitudes
+                    <i class="bi bi-table me-2"></i>{% if solo_adelantos %}Lista de adelantos{% else %}Lista de solicitudes{% endif %}
                     {% if solicitudes.paginator.count %}
                     <span class="badge bg-primary ms-2">{{ solicitudes.paginator.count }}</span>
                     {% endif %}

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registro marketplace - Aprobado</title>
+  {% include "account/_auth_content_styles.html" %}
+  <style>body{margin:0;background:radial-gradient(circle at top,#122340 0%,#08101d 72%);}</style>
+</head>
+<body>
+  <main class="section-main">
+    <section class="hero-section-account">
+      <div class="container-account">
+        <div class="div-card-agent-account">
+          <div class="mb-3"><span class="badge rounded-pill border">Cuenta comprador</span></div>
+          <h1>Crea tu cuenta</h1>
+          <p class="auth-desc">Registrate para comprar productos, pagar y consultar tus pedidos del marketplace.</p>
+          <form method="post">
+            {% csrf_token %}
+            {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+            {% if form.non_field_errors %}<div class="alert alert-danger py-2">{{ form.non_field_errors }}</div>{% endif %}
+            <div class="auth-field"><label class="form-label">{{ form.first_name.label }}</label>{{ form.first_name }}{% if form.first_name.errors %}{{ form.first_name.errors }}{% endif %}</div>
+            <div class="auth-field"><label class="form-label">{{ form.last_name.label }}</label>{{ form.last_name }}{% if form.last_name.errors %}{{ form.last_name.errors }}{% endif %}</div>
+            <div class="auth-field"><label class="form-label">{{ form.email.label }}</label>{{ form.email }}{% if form.email.errors %}{{ form.email.errors }}{% endif %}</div>
+            <div class="auth-field">
+              <label class="form-label">{{ form.password1.label }}</label>
+              <div class="auth-password-wrap">
+                {{ form.password1 }}
+                <button type="button" class="auth-password-toggle" data-password-toggle="#{{ form.password1.id_for_label }}" aria-label="Mostrar u ocultar contrasena">
+                  <i class="bi bi-eye"></i>
+                </button>
+              </div>
+              {% if form.password1.errors %}{{ form.password1.errors }}{% endif %}
+            </div>
+            <div class="auth-field">
+              <label class="form-label">{{ form.password2.label }}</label>
+              <div class="auth-password-wrap">
+                {{ form.password2 }}
+                <button type="button" class="auth-password-toggle" data-password-toggle="#{{ form.password2.id_for_label }}" aria-label="Mostrar u ocultar contrasena">
+                  <i class="bi bi-eye"></i>
+                </button>
+              </div>
+              {% if form.password2.errors %}{{ form.password2.errors }}{% endif %}
+            </div>
+            <button type="submit" class="btn-account">Crear cuenta</button>
+          </form>
+          <div class="auth-footer-links">
+            <a href="{{ login_url }}">Ya tengo cuenta</a>
+            <a href="{% url 'marketplace:home' %}">&larr; Volver al marketplace</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script>
+    document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const input = document.querySelector(button.dataset.passwordToggle);
+        if (!input) return;
+        const visible = input.type === 'text';
+        input.type = visible ? 'password' : 'text';
+        button.innerHTML = visible ? '<i class="bi bi-eye"></i>' : '<i class="bi bi-eye-slash"></i>';
+      });
+    });
+  </script>
+</body>
+</html>

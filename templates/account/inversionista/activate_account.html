@@ -1,0 +1,58 @@
+{% extends "account/pagador/_base.html" %}
+
+{% block title %}Activar acceso inversionista{% endblock %}
+{% block card_class %}is-status-card{% endblock %}
+
+{% block content %}
+  {% if token_valido %}
+    <div class="auth-status-icon is-success"><i class="bi bi-graph-up-arrow"></i></div>
+    <div class="mb-3"><span class="badge rounded-pill border">Activacion inversionista</span></div>
+    <h1>Activa tu acceso</h1>
+    <p class="auth-desc">Define tu contrasena para ingresar por primera vez a tu portal de inversionista.</p>
+
+    <div class="auth-field">
+      <label class="form-label">Correo asociado</label>
+      <input type="text" value="{{ usuario_email }}" readonly>
+    </div>
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="auth-field">
+        <label class="form-label" for="{{ form.new_password1.id_for_label }}">Nueva contrasena</label>
+        <div class="auth-password-wrap">
+          {{ form.new_password1 }}
+          <button type="button" class="auth-password-toggle" data-password-toggle="{{ form.new_password1.id_for_label }}" aria-label="Mostrar u ocultar contrasena">
+            <i class="bi bi-eye"></i>
+          </button>
+        </div>
+        {% if form.new_password1.errors %}{{ form.new_password1.errors }}{% endif %}
+      </div>
+      <div class="auth-field">
+        <label class="form-label" for="{{ form.new_password2.id_for_label }}">Confirmar contrasena</label>
+        <div class="auth-password-wrap">
+          {{ form.new_password2 }}
+          <button type="button" class="auth-password-toggle" data-password-toggle="{{ form.new_password2.id_for_label }}" aria-label="Mostrar u ocultar contrasena">
+            <i class="bi bi-eye"></i>
+          </button>
+        </div>
+        {% if form.new_password2.errors %}{{ form.new_password2.errors }}{% endif %}
+      </div>
+      {% if form.non_field_errors %}
+      <div class="alert alert-danger">{{ form.non_field_errors|join:", " }}</div>
+      {% endif %}
+      <button type="submit" class="btn-account">Activar cuenta</button>
+    </form>
+  {% else %}
+    <div class="auth-status-icon"><i class="bi bi-exclamation-circle"></i></div>
+    <div class="mb-3"><span class="badge rounded-pill border">Enlace no disponible</span></div>
+    <h1>El enlace ya no esta disponible</h1>
+    <p class="auth-desc">Este enlace ya fue usado o expiro. Solicita un nuevo envio al equipo interno.</p>
+    {% if usuario_email %}
+    <div class="auth-field">
+      <label class="form-label">Correo asociado</label>
+      <input type="text" value="{{ usuario_email }}" readonly>
+    </div>
+    {% endif %}
+    <a href="{% url 'inversionista:login' %}" class="btn-account">Ir al login</a>
+  {% endif %}
+{% endblock %}

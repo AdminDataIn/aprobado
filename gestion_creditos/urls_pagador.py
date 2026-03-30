@@ -15,6 +15,7 @@ urlpatterns = [
     # AUTENTICACIÓN
     # ========================================
     path('login/', usuarios_views.EmpresaLoginView.as_view(), name='login'),
+    path('logout/', usuarios_views.CustomLogoutView.as_view(), name='logout'),
     path('activar/<str:token>/', usuarios_views.pagador_activate_account_view, name='activar_cuenta'),
     path('recuperar-acceso/', usuarios_views.pagador_password_reset_request_view, name='password_reset_request'),
     path('recuperar-acceso/<str:token>/', usuarios_views.pagador_password_reset_confirm_view, name='reset_password_confirm'),
@@ -23,6 +24,10 @@ urlpatterns = [
     # DASHBOARD
     # ========================================
     path('', views.pagador_dashboard_view, name='dashboard'),
+    path('adelantos/', views.pagador_adelantos_dashboard_view, name='adelantos_dashboard'),
+    path('empleados/cargar/', views.pagador_carga_empleados_view, name='carga_empleados'),
+    path('empleados/plantilla/', views.descargar_plantilla_empleados_view, name='descargar_plantilla_empleados'),
+    path('empleados/reconciliar/', views.pagador_reconciliar_empleados_view, name='reconciliar_empleados'),
     path('credito/<int:credito_id>/', views.pagador_detalle_credito_view, name='credito_detalle'),
     path('credito/<int:credito_id>/decision/', views.pagador_decidir_solicitud_view, name='decidir_solicitud'),
 

@@ -24,6 +24,7 @@ import csv
 import io
 from django.db import transaction
 from django.contrib import messages
+from django.urls import NoReverseMatch, reverse
 
 logger = logging.getLogger(__name__)
 
@@ -801,7 +802,16 @@ def activar_credito(credito):
         f"Total a pagar: ${total_a_pagar:,.2f}"
     )
 
-def get_billetera_context(user):
+def _reverse_url_safe(view_name, *, urlconf=None, fallback=None, kwargs=None):
+    try:
+        if kwargs:
+            return reverse(view_name, kwargs=kwargs, urlconf=urlconf)
+        return reverse(view_name, urlconf=urlconf)
+    except NoReverseMatch:
+        return fallback
+
+
+def get_billetera_context(user, request=None):
     """
     Prepara el contexto de datos para la vista de la billetera digital.
     """
@@ -887,6 +897,41 @@ def get_billetera_context(user):
         linea='LIBRANZA'
     ).exists()
     es_libranza = es_empleado or tiene_credito_libranza
+    urlconf = getattr(request, 'urlconf', None) if request is not None else None
+    access_profile = getattr(user, 'product_access_profile', None)
+    has_investor_account = hasattr(user, 'investor_account')
+    is_pagador = hasattr(user, 'perfil_pagador')
+
+    home_url = _reverse_url_safe('home', urlconf=urlconf, fallback='/')
+    billetera_home_url = home_url
+    dashboard_label = 'Mi panel'
+    dashboard_url = home_url
+
+    if has_investor_account:
+        billetera_home_url = _reverse_url_safe('inversionista:dashboard', urlconf=urlconf, fallback=home_url)
+        dashboard_url = billetera_home_url
+        dashboard_label = 'Mi portafolio'
+    elif is_pagador:
+        billetera_home_url = _reverse_url_safe('pagador:dashboard', urlconf=urlconf, fallback=home_url)
+        dashboard_url = _reverse_url_safe('pagador:dashboard', urlconf=urlconf, fallback=billetera_home_url)
+        dashboard_label = 'Panel pagador'
+    elif es_libranza:
+        billetera_home_url = _reverse_url_safe('libranza:landing', urlconf=urlconf, fallback=home_url)
+        dashboard_url = _reverse_url_safe('libranza:mi_credito', urlconf=urlconf, fallback=billetera_home_url)
+        dashboard_label = 'Mi crédito'
+    elif access_profile and access_profile.flow == 'EMPRENDIMIENTO':
+        billetera_home_url = _reverse_url_safe('home', urlconf=urlconf, fallback=home_url)
+        dashboard_url = _reverse_url_safe('emprendimiento:mi_credito', urlconf=urlconf, fallback=billetera_home_url)
+        dashboard_label = 'Mi crédito'
+
+    logout_url = (
+        _reverse_url_safe('inversionista:logout', urlconf=urlconf)
+        or _reverse_url_safe('pagador:logout', urlconf=urlconf)
+        or _reverse_url_safe('libranza:logout', urlconf=urlconf)
+        or _reverse_url_safe('emprendimiento:logout', urlconf=urlconf)
+        or _reverse_url_safe('account_logout', urlconf=urlconf)
+        or '/'
+    )
 
     return {
         'cuenta': cuenta,
@@ -904,6 +949,10 @@ def get_billetera_context(user):
         'total_depositado': total_depositado,
         'es_empleado': es_empleado,
         'es_libranza': es_libranza,
+        'billetera_home_url': billetera_home_url,
+        'billetera_dashboard_url': dashboard_url,
+        'billetera_dashboard_label': dashboard_label,
+        'billetera_logout_url': logout_url,
     }
 
 def _leer_csv_pagos(csv_file):

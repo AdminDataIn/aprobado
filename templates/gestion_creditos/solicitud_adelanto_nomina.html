@@ -1,0 +1,359 @@
+{% load humanize %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adelanto de nomina - Aprobado</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+    <style>
+        .adelanto-shell {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 2rem 1rem 4rem;
+            display: grid;
+            grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
+            gap: 1.5rem;
+        }
+        .adelanto-card {
+            background: #fff;
+            border-radius: 26px;
+            border: 1px solid #dbe7f3;
+            box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08);
+            padding: 1.75rem;
+        }
+        .adelanto-dark {
+            background: linear-gradient(180deg, #102a46 0%, #08192d 100%);
+            color: #f8fbff;
+            border: 0;
+        }
+        .adelanto-badge {
+            display: inline-flex;
+            padding: 0.45rem 0.9rem;
+            border-radius: 999px;
+            background: rgba(23,180,230,0.12);
+            color: #0c4a6e;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .adelanto-hero-title {
+            margin: 1rem 0 0.5rem;
+            font-size: 2.6rem;
+            line-height: 1.05;
+            color: #0f172a;
+        }
+        .adelanto-hero-copy {
+            color: #64748b;
+            font-size: 1.02rem;
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+        }
+        .adelanto-alert {
+            border-radius: 16px;
+            padding: 1rem 1.1rem;
+            margin-bottom: 1rem;
+            border: 1px solid transparent;
+        }
+        .adelanto-alert.warning { background: #fff7ed; border-color: #fdba74; color: #9a3412; }
+        .adelanto-alert.info { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }
+        .adelanto-kpis,
+        .adelanto-breakdown {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+        }
+        .adelanto-kpi,
+        .adelanto-breakdown-item {
+            padding: 1rem;
+            border-radius: 18px;
+            background: #f8fbff;
+            border: 1px solid #dbe7f3;
+        }
+        .adelanto-dark .adelanto-kpi,
+        .adelanto-dark .adelanto-breakdown-item {
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(255,255,255,0.09);
+        }
+        .adelanto-kpi span,
+        .adelanto-breakdown-item span {
+            display: block;
+            font-size: 0.82rem;
+            color: #64748b;
+            margin-bottom: 0.3rem;
+        }
+        .adelanto-dark .adelanto-kpi span,
+        .adelanto-dark .adelanto-breakdown-item span {
+            color: rgba(255,255,255,0.7);
+        }
+        .adelanto-kpi strong,
+        .adelanto-breakdown-item strong {
+            font-size: 1.2rem;
+            color: #0f172a;
+        }
+        .adelanto-dark .adelanto-kpi strong,
+        .adelanto-dark .adelanto-breakdown-item strong {
+            color: #fff;
+        }
+        .adelanto-form {
+            margin-top: 1.5rem;
+            display: grid;
+            gap: 1rem;
+        }
+        .adelanto-field label {
+            display: block;
+            margin-bottom: 0.45rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .adelanto-field input,
+        .adelanto-field textarea {
+            width: 100%;
+            border-radius: 14px;
+            border: 1px solid #cbd5e1;
+            padding: 0.95rem 1rem;
+            font-size: 0.95rem;
+        }
+        .adelanto-field input.is-invalid {
+            border-color: #ef4444;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+        }
+        .adelanto-field small {
+            display: block;
+            margin-top: 0.45rem;
+            color: #64748b;
+        }
+        .adelanto-field small.is-error {
+            color: #b91c1c;
+            font-weight: 600;
+        }
+        .adelanto-actions {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-top: 0.5rem;
+        }
+        .adelanto-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            border: 0;
+            cursor: pointer;
+            border-radius: 14px;
+            padding: 0.95rem 1.4rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #17b4e6, #198cff);
+            color: #fff;
+        }
+        .adelanto-btn.secondary {
+            background: #edf5ff;
+            color: #0f3557;
+        }
+        .adelanto-side-list {
+            padding-left: 1.1rem;
+            margin: 0;
+        }
+        .adelanto-side-list li {
+            margin-bottom: 0.85rem;
+            line-height: 1.5;
+        }
+        .adelanto-neto-box {
+            background: linear-gradient(135deg, rgba(34,211,238,0.2), rgba(6,182,212,0.08));
+            border: 1px solid rgba(34,211,238,0.2);
+            border-radius: 20px;
+            padding: 1rem 1.1rem;
+            margin-bottom: 1rem;
+        }
+        .adelanto-neto-box span {
+            display: block;
+            color: rgba(255,255,255,0.75);
+        }
+        .adelanto-neto-box strong {
+            display: block;
+            font-size: 2rem;
+            margin-top: 0.3rem;
+        }
+        @media (max-width: 920px) {
+            .adelanto-shell {
+                grid-template-columns: 1fr;
+            }
+            .adelanto-kpis,
+            .adelanto-breakdown {
+                grid-template-columns: 1fr;
+            }
+            .adelanto-hero-title {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body class="body-index">
+{% include 'base/loader_global.html' %}
+<div class="div-body-main">
+    {% include 'base/navbar_libranza.html' %}
+    <main class="adelanto-shell">
+        <section class="adelanto-card">
+            <span class="adelanto-badge">Producto de libranza</span>
+            <h1 class="adelanto-hero-title">Adelanto de nomina por 5 dias</h1>
+            <p class="adelanto-hero-copy">
+                Este flujo se gestiona por separado del credito tradicional. Primero calculamos tu estimado, luego validamos
+                elegibilidad, pasa a revision del pagador y finalmente a firma y desembolso.
+            </p>
+
+            {% if not eligibility.eligible %}
+            <div class="adelanto-alert warning">
+                <strong>No disponible por ahora.</strong> {{ eligibility.reason }}
+            </div>
+            {% endif %}
+
+            {% if adelanto_actual %}
+            <div class="adelanto-alert info">
+                <strong>Ultima solicitud registrada:</strong> {{ adelanto_actual.numero_credito }} en estado
+                <strong>{{ adelanto_actual.get_estado_display }}</strong>.
+            </div>
+            {% endif %}
+
+            {% if form.non_field_errors %}
+            <div class="adelanto-alert warning">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <div class="adelanto-kpis">
+                <div class="adelanto-kpi">
+                    <span>Empresa vinculada</span>
+                    <strong>{{ vinculo.empresa.nombre|default:'Sin empresa' }}</strong>
+                </div>
+                <div class="adelanto-kpi">
+                    <span>Estado de elegibilidad</span>
+                    <strong>{% if eligibility.eligible %}Disponible{% else %}Pendiente de requisitos{% endif %}</strong>
+                </div>
+                <div class="adelanto-kpi">
+                    <span>Ingreso base usado</span>
+                    <strong>${{ simulacion.ingreso_base|floatformat:0|intcomma }}</strong>
+                </div>
+                <div class="adelanto-kpi">
+                    <span>Capacidad de descuento</span>
+                    <strong>${{ simulacion.capacidad_disponible|floatformat:0|intcomma }}</strong>
+                </div>
+            </div>
+
+            <form method="post" class="adelanto-form">
+                {% csrf_token %}
+                <div class="adelanto-field">
+                    <label for="{{ form.monto_solicitado.id_for_label }}">{{ form.monto_solicitado.label }}</label>
+                    {{ form.monto_solicitado }}
+                    <small id="adelanto-monto-helper">Maximo disponible: ${{ simulacion.monto_bruto_adelanto|floatformat:0|intcomma }}</small>
+                    {% if form.monto_solicitado.errors %}{{ form.monto_solicitado.errors }}{% endif %}
+                </div>
+                <div class="adelanto-field">
+                    <label for="{{ form.observaciones.id_for_label }}">{{ form.observaciones.label }}</label>
+                    {{ form.observaciones }}
+                    {% if form.observaciones.errors %}{{ form.observaciones.errors }}{% endif %}
+                </div>
+                <div class="adelanto-actions">
+                    <button type="submit" class="adelanto-btn" {% if not eligibility.eligible %}disabled{% endif %}>Enviar solicitud</button>
+                    <a href="{% url 'libranza:mi_credito' %}" class="adelanto-btn secondary">Ir a mi panel</a>
+                </div>
+            </form>
+        </section>
+
+        <aside class="adelanto-card adelanto-dark">
+            <div class="adelanto-neto-box">
+                <span>Neto estimado a recibir</span>
+                <strong>${{ simulacion.neto_a_recibir|floatformat:0|intcomma }}</strong>
+            </div>
+
+            <div class="adelanto-breakdown">
+                <div class="adelanto-breakdown-item">
+                    <span>Monto bruto del adelanto</span>
+                    <strong>${{ simulacion.monto_bruto_adelanto|floatformat:0|intcomma }}</strong>
+                </div>
+                <div class="adelanto-breakdown-item">
+                    <span>Valor diario estimado</span>
+                    <strong>${{ simulacion.valor_diario_estimado|floatformat:0|intcomma }}</strong>
+                </div>
+                <div class="adelanto-breakdown-item">
+                    <span>Comision</span>
+                    <strong>${{ simulacion.comision|floatformat:0|intcomma }}</strong>
+                </div>
+                <div class="adelanto-breakdown-item">
+                    <span>IVA comision</span>
+                    <strong>${{ simulacion.iva_comision|floatformat:0|intcomma }}</strong>
+                </div>
+                <div class="adelanto-breakdown-item">
+                    <span>Interes NM {{ simulacion.tasa_mensual|floatformat:1 }}</span>
+                    <strong>${{ simulacion.interes|floatformat:0|intcomma }}</strong>
+                </div>
+                <div class="adelanto-breakdown-item">
+                    <span>Descuento estimado por nomina</span>
+                    <strong>${{ simulacion.descuento_nomina_estimado|floatformat:0|intcomma }}</strong>
+                </div>
+            </div>
+
+            <hr style="border-color:rgba(255,255,255,0.12);margin:1.4rem 0;">
+            <h3 style="margin-top:0;">Como funciona</h3>
+            <ul class="adelanto-side-list">
+                <li>Confirmamos que tu empresa tenga convenio activo y que tu vinculo haya sido cargado por el pagador.</li>
+                <li>Validamos minimo 30 dias desde tu alta en Aprobado.</li>
+                <li>El pagador revisa capacidad de descuento, monto solicitado y soportes del empleado.</li>
+                <li>Si aprueba, el flujo pasa a firma y luego a transferencia.</li>
+            </ul>
+        </aside>
+    </main>
+    {% include 'base/footer_libranza.html' %}
+</div>
+{% include 'base/public_whatsapp_button.html' %}
+<script>
+    (function () {
+        const moneyInput = document.querySelector('[data-money-input="true"]');
+        if (!moneyInput) return;
+
+        const helper = document.getElementById('adelanto-monto-helper');
+        const maxAmount = parseInt(moneyInput.dataset.maxAmount || '0', 10);
+
+        function parseMoney(value) {
+            const digits = String(value || '').replace(/\D/g, '');
+            return digits  parseInt(digits, 10) : 0;
+        }
+
+        function formatMoney(value) {
+            const digits = String(value || '').replace(/\D/g, '');
+            if (!digits) return '';
+            return Number(digits).toLocaleString('es-CO');
+        }
+
+        function validateAmount() {
+            const currentValue = parseMoney(moneyInput.value);
+            const exceeds = maxAmount && currentValue > maxAmount;
+            moneyInput.classList.toggle('is-invalid', exceeds);
+            if (helper) {
+                helper.textContent = exceeds
+                     `El monto no puede superar ${maxAmount.toLocaleString('es-CO')}.`
+                    : `Maximo disponible: ${{ simulacion.monto_bruto_adelanto|floatformat:0|intcomma }}`;
+                helper.classList.toggle('is-error', exceeds);
+            }
+            return !exceeds;
+        }
+
+        moneyInput.addEventListener('input', function () {
+            const formatted = formatMoney(moneyInput.value);
+            moneyInput.value = formatted;
+            validateAmount();
+        });
+
+        moneyInput.addEventListener('blur', validateAmount);
+
+        moneyInput.form.addEventListener('submit', function (event) {
+            if (!validateAmount()) {
+                event.preventDefault();
+                moneyInput.focus();
+            }
+        });
+    })();
+</script>
+</body>
+</html>
+

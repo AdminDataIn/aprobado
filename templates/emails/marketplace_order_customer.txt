@@ -1,0 +1,12 @@
+Recibimos tu solicitud de compra en Aprobado.
+
+Pedido: {{ pedido.numero_pedido }}
+Empresa: {{ empresa.nombre }}
+Estado del pago: {{ estado_pago }}
+Total: ${{ pedido.total }}
+
+Detalle:
+{% for line in items %}- {{ line.titulo_snapshot }} x{{ line.cantidad }}: ${{ line.total_linea }}
+{% endfor %}
+
+La empresa o el equipo de Aprobado se pondran en contacto contigo para continuar con el proceso.

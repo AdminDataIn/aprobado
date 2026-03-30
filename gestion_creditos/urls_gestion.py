@@ -15,6 +15,7 @@ urlpatterns = [
     # ========================================
     path('', views.admin_dashboard_view, name='dashboard'),
     path('solicitudes/', views.admin_solicitudes_view, name='solicitudes'),
+    path('adelantos-nomina/', views.admin_adelantos_nomina_view, name='adelantos_nomina'),
     path('creditos/', views.admin_creditos_activos_view, name='creditos_activos'),
     path('cartera/', views.admin_cartera_view, name='cartera_mora'),
 

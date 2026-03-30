@@ -1,0 +1,140 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carga de empleados - {{ empresa.nombre }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+</head>
+<body class="theme-dashboard">
+{% include 'base/loader_global.html' %}
+<div class="container py-4" style="max-width: 1100px;">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <h1 class="page-title mb-2">Carga estructurada de empleados</h1>
+            <p class="text-muted mb-0">Este flujo tiene dos pasos claros: descarga la plantilla oficial en Excel y luego sube el archivo diligenciado para actualizar la base laboral.</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'pagador:descargar_plantilla_empleados' %}" class="btn btn-outline-primary">
+                <i class="bi bi-file-earmark-spreadsheet me-2"></i>Paso 1: Descargar plantilla Excel
+            </a>
+            <a href="{% url 'pagador:descargar_plantilla_empleados' %}?formato=csv" class="btn btn-outline-secondary">
+                <i class="bi bi-filetype-csv me-2"></i>Plantilla CSV opcional
+            </a>
+            <a href="{% url 'pagador:dashboard' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Volver al panel
+            </a>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-danger{% elif message.tags == 'warning' %}alert-warning{% else %}alert-success{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title mb-0"><i class="bi bi-file-earmark-arrow-up me-2"></i>Paso 2: Cargar archivo de empleados</h3>
+                </div>
+                <div class="card-content">
+                    <form method="post" enctype="multipart/form-data" class="d-grid gap-3">
+                        {% csrf_token %}
+                        <div>
+                            <label class="form-label" for="{{ form.archivo.id_for_label }}">CSV o XLSX</label>
+                            {{ form.archivo }}
+                            {% if form.archivo.errors %}{{ form.archivo.errors }}{% endif %}
+                            <small class="text-muted d-block mt-2">La experiencia principal es Excel (.xlsx). El CSV queda disponible solo para integraciones internas o ajustes rápidos.</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-upload me-2"></i>Procesar carga
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h3 class="card-title mb-0"><i class="bi bi-info-circle me-2"></i>Campos obligatorios</h3>
+                </div>
+                <div class="card-content">
+                    <ul class="mb-0 ps-3 text-muted">
+                        <li>tipo_documento, documento, nombres, apellidos</li>
+                        <li>correo y celular</li>
+                        <li>salario_base, auxilio_transporte, descuentos_fijos</li>
+                        <li>fecha_alta_aprobado y estado_vinculo</li>
+                        <li>convenio_activo</li>
+                    </ul>
+                    <div class="alert alert-info mt-3 mb-0 small">
+                        Si ya tenías empleados creados antes de esta carga, no repitas manualmente el registro. Usa la reconciliación legacy para vincular usuarios antiguos con la nueva base.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3 class="card-title mb-0"><i class="bi bi-table me-2"></i>Resultado de la ultima carga</h3>
+                    <form method="post" action="{% url 'pagador:reconciliar_empleados' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-secondary">Reconciliar usuarios legacy</button>
+                    </form>
+                </div>
+                <div class="card-content">
+                    <p class="text-muted small">La reconciliación legacy es un flujo aparte: busca usuarios antiguos en el sistema y los asocia con la nueva carga para evitar duplicados.</p>
+                    {% if resultados %}
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Fila</th>
+                                    <th>Documento</th>
+                                    <th>Correo</th>
+                                    <th>Estado</th>
+                                    <th>Detalle</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for resultado in resultados %}
+                                <tr>
+                                    <td>{{ resultado.fila }}</td>
+                                    <td>{{ resultado.documento|default:'-' }}</td>
+                                    <td>{{ resultado.correo|default:'-' }}</td>
+                                    <td>
+                                        {% if resultado.estado == 'error' %}
+                                        <span class="badge bg-danger">Error</span>
+                                        {% elif resultado.estado == 'creado' %}
+                                        <span class="badge bg-success">Creado</span>
+                                        {% elif resultado.estado == 'actualizado' %}
+                                        <span class="badge bg-primary">Actualizado</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">{{ resultado.estado }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ resultado.error|default:'Procesado correctamente.' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-file-earmark-spreadsheet" style="font-size:2rem;"></i>
+                        <p class="mt-3 mb-0">Todavía no has cargado una plantilla en esta sesión. Descarga primero la base en Excel y luego sube el archivo diligenciado.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

@@ -185,7 +185,7 @@
                                 </div>
                                 <div class="header-meta">
                                     <i class="bi bi-hash me-2"></i>
-                                    <span>Crédito <strong>{{ credito_actual.numero_credito }}</strong></span>
+                                    <span>Crédito <strong>{{ credito_actual.numero_credito }}</strong></span>{% if credito_actual.tipo_regla_credito == 'ESPECIAL' %}<span class="badge bg-dark ms-2">Especial</span>{% endif %}
                                 </div>
                             </div>
                         </div>
@@ -216,6 +216,50 @@
                 </div>
                 {% endif %}
             </div>
+            {% endif %}
+
+            {% if adelanto_eligibility %}
+            <section class="payment-card mb-4">
+                <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start gap-3">
+                    <div>
+                        <h5 class="mb-2"><i class="bi bi-grid me-2"></i>Productos disponibles en libranza</h5>
+                        <p class="text-muted mb-0">
+                            El adelanto de nómina vive como producto independiente y no depende de tener un crédito activo.
+                        </p>
+                    </div>
+                    <a href="{% url 'libranza:adelanto_nomina' %}" class="btn {% if adelanto_eligibility.eligible %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        <i class="bi bi-cash-coin me-2"></i>{% if adelanto_eligibility.eligible %}Solicitar adelanto{% else %}Ver adelanto de nómina{% endif %}
+                    </a>
+                </div>
+                <div class="row g-3 mt-1">
+                    <div class="col-md-6">
+                        <div class="info-card-item">
+                            <div class="icon-wrapper">
+                                <i class="bi bi-cash-coin"></i>
+                            </div>
+                            <div class="label">Estado del adelanto</div>
+                            <div class="value" style="font-size:1rem;">
+                                {% if adelanto_eligibility.eligible %}
+                                    Disponible para solicitar
+                                {% else %}
+                                    No disponible aún
+                                {% endif %}
+                            </div>
+                            <small class="text-muted d-block mt-2">{{ adelanto_eligibility.reason|default:"Cumples condiciones para iniciar el flujo." }}</small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="info-card-item">
+                            <div class="icon-wrapper">
+                                <i class="bi bi-bank"></i>
+                            </div>
+                            <div class="label">Monto máximo estimado</div>
+                            <div class="value">${{ adelanto_eligibility.monto_maximo|floatformat:0|intcomma }}</div>
+                            <small class="text-muted d-block mt-2">Se calcula sobre 5 días de salario base y pasa por revisión del pagador.</small>
+                        </div>
+                    </div>
+                </div>
+            </section>
             {% endif %}
 
             {% if mostrar_info_financiera %}
@@ -493,19 +537,47 @@
             {% endif %}
 
         {% else %}
-            <!-- Sin créditos -->
-            <div class="empty-state">
-                <i class="bi bi-journal-x"></i>
-                <h3 class="mt-3">No tienes créditos ni solicitudes</h3>
-                <p class="text-muted mb-4">
-                    Parece que aún no has solicitado ningún crédito con nosotros.
-                </p>
-                {# NUEVA URL - Libranza #}
-                <a href="{% url 'libranza:solicitar' %}" class="btn btn-primary btn-lg">
-                    <i class="bi bi-plus-circle me-2"></i>
-                    Solicita tu primer crédito
-                </a>
-            </div>
+            <section class="payment-card mb-4">
+                <div class="text-center py-4">
+                    <i class="bi bi-journal-x" style="font-size: 3rem; color: #94a3b8;"></i>
+                    <h3 class="mt-3">Aún no tienes créditos activos</h3>
+                    <p class="text-muted mb-4">
+                        Puedes iniciar un crédito de libranza tradicional o, si cumples condiciones, solicitar un adelanto de nómina sin depender de tener crédito previo.
+                    </p>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="info-card-item">
+                            <div class="icon-wrapper">
+                                <i class="bi bi-wallet2"></i>
+                            </div>
+                            <div class="label">Crédito de libranza</div>
+                            <div class="value" style="font-size: 1rem;">Disponible para solicitar</div>
+                            <small class="text-muted d-block mt-2">Completa tu solicitud tradicional y sigue el flujo normal de evaluación.</small>
+                            <a href="{% url 'libranza:solicitar' %}" class="btn btn-primary mt-3">Solicitar crédito</a>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="info-card-item">
+                            <div class="icon-wrapper">
+                                <i class="bi bi-cash-coin"></i>
+                            </div>
+                            <div class="label">Adelanto de nómina</div>
+                            <div class="value" style="font-size: 1rem;">
+                                {% if adelanto_eligibility.eligible %}
+                                    Disponible para solicitar
+                                {% else %}
+                                    No disponible aún
+                                {% endif %}
+                            </div>
+                            <small class="text-muted d-block mt-2">{{ adelanto_eligibility.reason|default:"Revisa si tu empresa tiene convenio y si ya cumples la antigüedad mínima." }}</small>
+                            <a href="{% url 'libranza:adelanto_nomina' %}" class="btn {% if adelanto_eligibility.eligible %}btn-primary{% else %}btn-outline-primary{% endif %} mt-3">
+                                Ver adelanto
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </section>
         {% endif %}
     </main>
 
@@ -520,5 +592,6 @@
     </script>
 </body>
 </html>
+
 
 

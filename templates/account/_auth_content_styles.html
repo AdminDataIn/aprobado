@@ -1,0 +1,325 @@
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap');
+
+  .hero-section-account {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 80px);
+    padding: 2rem 1rem;
+  }
+
+  .container-account {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
+  .div-card-agent-account {
+    width: 100%;
+    max-width: 470px;
+    background: rgba(12, 28, 48, 0.55);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 22px;
+    padding: 44px 40px 40px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    font-family: 'DM Sans', sans-serif;
+    animation: cardIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .div-card-agent-account.is-status-card {
+    max-width: 520px;
+  }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .div-card-agent-account .badge {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(0, 210, 255, 0.9) !important;
+    border-color: rgba(0, 210, 255, 0.2) !important;
+    background: rgba(0, 210, 255, 0.07) !important;
+    padding: 6px 14px !important;
+  }
+
+  .div-card-agent-account h1,
+  .div-card-agent-account h2 {
+    font-family: sans-serif;
+    font-size: 1.65rem;
+    font-weight: 700;
+    color: #f0f8ff;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+    margin-bottom: 8px !important;
+  }
+
+  .div-card-agent-account > p,
+  .div-card-agent-account .auth-desc {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.72);
+    line-height: 1.6;
+    margin-bottom: 28px !important;
+  }
+
+  .div-card-agent-account .form-label {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.58);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .div-card-agent-account .mb-3,
+  .div-card-agent-account .auth-field {
+    margin-bottom: 20px !important;
+  }
+
+  .div-card-agent-account input[type="text"],
+  .div-card-agent-account input[type="email"],
+  .div-card-agent-account input[type="password"],
+  .div-card-agent-account input[type="tel"],
+  .div-card-agent-account textarea,
+  .div-card-agent-account select {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    color: #e8f4ff;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-sizing: border-box;
+    display: block;
+  }
+
+  .auth-password-wrap {
+    position: relative;
+  }
+
+  .auth-password-wrap input[type="password"],
+  .auth-password-wrap input[type="text"] {
+    padding-right: 52px;
+  }
+
+  .auth-password-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.72);
+    cursor: pointer;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .auth-password-toggle:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+  }
+
+  .div-card-agent-account input::placeholder,
+  .div-card-agent-account textarea::placeholder {
+    color: rgba(255, 255, 255, 0.36);
+  }
+
+  .div-card-agent-account input:focus,
+  .div-card-agent-account textarea:focus,
+  .div-card-agent-account select:focus {
+    border-color: rgba(0, 210, 255, 0.4);
+    box-shadow: 0 0 0 3px rgba(0, 210, 255, 0.07);
+    background: rgba(0, 210, 255, 0.04);
+  }
+
+  .div-card-agent-account .alert-danger,
+  .div-card-agent-account .alert-info {
+    background: rgba(255, 70, 70, 0.08);
+    border: 1px solid rgba(255, 70, 70, 0.2);
+    border-radius: 10px;
+    color: #ffb0b0;
+    font-size: 0.85rem;
+    margin-bottom: 20px;
+    padding: 12px 14px;
+  }
+
+  .div-card-agent-account .alert-info {
+    background: rgba(0, 160, 210, 0.09);
+    border-color: rgba(0, 160, 210, 0.18);
+    color: #9fe9ff;
+  }
+
+  .div-card-agent-account .errorlist {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0 0;
+    color: #ffb0b0;
+    font-size: 0.8rem;
+  }
+
+  .forgot-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: -8px;
+    margin-bottom: 28px;
+  }
+
+  .btn-account {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 14px 20px;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #00c4ee 0%, #0080c8 100%);
+    color: #fff !important;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+    text-decoration: none !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .btn-account:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 26px rgba(0, 160, 210, 0.38);
+    color: #fff !important;
+  }
+
+  .btn-account:active {
+    transform: translateY(0);
+  }
+
+  .btn-account.is-ghost {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: none;
+  }
+
+  .auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 28px 0;
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.35);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .auth-divider::before,
+  .auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  .btn-social-account {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    padding: 14px 18px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: #f0f8ff;
+    text-decoration: none;
+    font-size: 0.92rem;
+    font-weight: 500;
+    transition: background 0.2s, border-color 0.2s, transform 0.2s;
+  }
+
+  .btn-social-account:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.14);
+    color: #fff;
+    transform: translateY(-1px);
+  }
+
+  .auth-footer-links {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    margin-top: 22px;
+  }
+
+  .auth-footer-links.is-centered {
+    justify-content: center;
+  }
+
+  .div-card-agent-account a:not(.btn-account):not(.btn-social-account) {
+    color: rgba(0, 210, 255, 0.78);
+    font-size: 0.83rem;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+
+  .div-card-agent-account a:not(.btn-account):not(.btn-social-account):hover {
+    color: #00d4ff;
+  }
+
+  .auth-status-icon {
+    width: 74px;
+    height: 74px;
+    margin: 0 0 20px;
+    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 210, 255, 0.08);
+    border: 1px solid rgba(0, 210, 255, 0.18);
+    color: #9fe9ff;
+    font-size: 2rem;
+  }
+
+  .auth-status-icon.is-success {
+    background: rgba(51, 214, 128, 0.1);
+    border-color: rgba(51, 214, 128, 0.18);
+    color: #96f0bf;
+  }
+
+  .auth-helper-text {
+    margin-top: 10px;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.52);
+    line-height: 1.5;
+  }
+
+  @media (max-width: 480px) {
+    .div-card-agent-account {
+      padding: 30px 22px 26px;
+    }
+
+    .auth-footer-links {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+</style>

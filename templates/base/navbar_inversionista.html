@@ -1,0 +1,33 @@
+{% load static %}
+<header id="main-navbar" class="navbar">
+    <div class="container">
+        <div class="logo">
+            <a href="{% url 'inversionista:dashboard' %}">
+                <img src="{% static 'images/logo.png' %}" alt="Aprobado Inversionista" id="navbar-logo"/>
+            </a>
+        </div>
+
+        <div class="navbar-right d-flex align-items-center gap-2">
+            {% if request.user.is_authenticated %}
+            <div class="dropdown investor-user-dropdown">
+                <button class="btn btn-outline-light dropdown-toggle d-flex align-items-center gap-2 px-3" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-person-circle"></i>
+                    <span>{{ request.user.first_name|default:request.user.username }}</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
+                    <li><a class="dropdown-item" href="{% url 'inversionista:dashboard' %}#portafolio">Mi portafolio</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <form method="post" action="{% url 'inversionista:logout' %}" class="m-0">
+                            {% csrf_token %}
+                            <button type="submit" class="dropdown-item text-danger">Cerrar sesión</button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+            {% else %}
+            <a href="{% url 'inversionista:login' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-apply">Iniciar sesión</a>
+            {% endif %}
+        </div>
+    </div>
+</header>

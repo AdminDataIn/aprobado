@@ -1,5 +1,16 @@
+import re
+
 from django import forms
-from .models import CreditoLibranza, Empresa, CreditoEmprendimiento, MovimientoAhorro, MarketplaceItem
+from django.contrib.auth import get_user_model
+from django.forms import HiddenInput
+from .models import (
+    CreditoLibranza,
+    Empresa,
+    CreditoEmprendimiento,
+    MovimientoAhorro,
+    MarketplaceItem,
+    VinculoLaboralEmpresa,
+)
 from decimal import Decimal
 import hashlib
 import os
@@ -13,7 +24,63 @@ from gestion_creditos.services.libranza_rules import (
     permitir_multiples_creditos_libranza_en_pruebas,
 )
 
-#? --------- FORMULARIO DE CREDITO DE LIBRANZA ------------
+
+NAME_ALLOWED_RE = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ' -]+$")
+OBVIOUS_GARBAGE_PARTS = (
+    'asdf', 'asd', 'qwe', 'zxc', 'test', 'prueba', 'nombre',
+    'apellido', 'xxxxx', 'xxxx', 'abc', 'demo',
+)
+
+
+def _contains_obvious_garbage(value):
+    lowered = (value or '').lower().replace(' ', '')
+    if any(part in lowered for part in OBVIOUS_GARBAGE_PARTS):
+        return True
+    if re.search(r'(.)\1{2,}', lowered):
+        return True
+    return False
+
+
+def _clean_person_name(value, field_label):
+    normalized = re.sub(r'\s+', ' ', (value or '').strip())
+    if not normalized:
+        raise forms.ValidationError(f'{field_label} son requeridos.')
+    if not NAME_ALLOWED_RE.match(normalized):
+        raise forms.ValidationError(f'{field_label} solo pueden contener letras, espacios, apostrofes o guiones.')
+    letters = re.findall(r'[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]', normalized)
+    if len(letters) < 2:
+        raise forms.ValidationError(f'{field_label} deben tener al menos 2 letras.')
+    if _contains_obvious_garbage(normalized):
+        raise forms.ValidationError(f'{field_label} no parecen validos. Ingresa tu nombre real.')
+    return normalized.title()
+
+
+def _clean_address(value):
+    normalized = re.sub(r'\s+', ' ', (value or '').strip())
+    if len(normalized) < 8:
+        raise forms.ValidationError('La direccion debe ser mas completa.')
+    if _contains_obvious_garbage(normalized):
+        raise forms.ValidationError('Ingresa una direccion valida.')
+    if len(re.findall(r'[A-Za-z0-9]', normalized)) < 6:
+        raise forms.ValidationError('Ingresa una direccion valida.')
+    return normalized
+
+
+class MoneyTextDecimalField(forms.DecimalField):
+    """
+    Acepta montos digitados como texto con separadores visuales de miles.
+    Ejemplo: 2.400.000 -> 2400000
+    """
+
+    def to_python(self, value):
+        if isinstance(value, str):
+            normalized = value.strip().replace('.', '').replace(' ', '')
+            if ',' in normalized and normalized.count(',') == 1:
+                normalized = normalized.replace(',', '.')
+            value = normalized
+        return super().to_python(value)
+
+# --------- FORMULARIO DE CREDITO DE LIBRANZA ------------
 class CreditoLibranzaForm(forms.ModelForm):
     valor_credito = forms.CharField(label='Valor crédito solicitado', required=True)
     ingresos_mensuales = forms.CharField(label='Ingresos mensuales', required=True)
@@ -49,14 +116,57 @@ class CreditoLibranzaForm(forms.ModelForm):
         ]
 
     def __init__(self, *args, **kwargs):
+        self.vinculo_laboral = kwargs.pop('vinculo_laboral', None)
         super().__init__(*args, **kwargs)
 
-        self.fields['empresa'].queryset = Empresa.objects.all()
+        self.fields['empresa'].queryset = Empresa.objects.filter(convenio_activo=True).exclude(
+            tipo_empresa=Empresa.TipoEmpresa.MARKETPLACE_EXTERNA
+        )
         self.fields['empresa'].empty_label = "Seleccione una empresa"
-        self.fields['empresa'].widget.attrs.update({
-            'class': 'form-select company-select',
+        self.fields['empresa'].widget = HiddenInput(attrs={
             'data-company-select': 'true',
         })
+        self.fields['nombres'].widget.attrs.update({
+            'autocomplete': 'given-name',
+            'maxlength': '80',
+            'placeholder': 'Tus nombres',
+        })
+        self.fields['apellidos'].widget.attrs.update({
+            'autocomplete': 'family-name',
+            'maxlength': '80',
+            'placeholder': 'Tus apellidos',
+        })
+        self.fields['cedula'].widget.attrs.update({
+            'inputmode': 'numeric',
+            'maxlength': '10',
+            'autocomplete': 'off',
+            'placeholder': 'Solo numeros',
+        })
+        self.fields['telefono'].widget.attrs.update({
+            'inputmode': 'numeric',
+            'maxlength': '10',
+            'autocomplete': 'tel',
+            'placeholder': '3001234567',
+        })
+        self.fields['correo_electronico'].widget.attrs.update({
+            'autocomplete': 'email',
+            'placeholder': 'tu@correo.com',
+        })
+        self.fields['direccion'].widget.attrs.update({
+            'autocomplete': 'street-address',
+            'maxlength': '180',
+            'placeholder': 'Direccion completa',
+        })
+
+        if self.vinculo_laboral:
+            self.fields['empresa'].initial = self.vinculo_laboral.empresa
+            self.fields['empresa'].widget = HiddenInput()
+            self.fields['nombres'].initial = self.vinculo_laboral.nombre_empleado.split(' ')[0]
+            self.fields['apellidos'].initial = ' '.join(self.vinculo_laboral.nombre_empleado.split(' ')[1:]).strip()
+            self.fields['cedula'].initial = self.vinculo_laboral.documento_empleado
+            self.fields['telefono'].initial = self.vinculo_laboral.telefono_empleado
+            self.fields['correo_electronico'].initial = self.vinculo_laboral.correo_empleado
+            self.fields['ingresos_mensuales'].initial = self.vinculo_laboral.ingreso_laboral_total
 
         self.fields['valor_credito'].error_messages.update({
             'required': 'El valor del crédito es requerido.',
@@ -142,8 +252,10 @@ class CreditoLibranzaForm(forms.ModelForm):
         cedula = self.cleaned_data.get('cedula', '').strip()
         if cedula and not cedula.isdigit():
             raise forms.ValidationError('La cedula debe contener solo numeros.')
-        if cedula and len(cedula) < 7:
-            raise forms.ValidationError('La cedula debe tener al menos 7 digitos.')
+        if cedula and len(cedula) < 6:
+            raise forms.ValidationError('La cedula debe tener al menos 6 digitos.')
+        if cedula and len(cedula) > 10:
+            raise forms.ValidationError('La cedula no puede superar 10 digitos.')
         if cedula and not permitir_multiples_creditos_libranza_en_pruebas():
             creditos_bloqueantes = obtener_creditos_libranza_bloqueantes(cedula)
             if creditos_bloqueantes.exists():
@@ -157,10 +269,33 @@ class CreditoLibranzaForm(forms.ModelForm):
     def clean_telefono(self):
         telefono = self.cleaned_data.get('telefono', '').strip()
         telefono_limpio = ''.join(filter(str.isdigit, telefono))
-        if telefono_limpio and len(telefono_limpio) < 7:
-            raise forms.ValidationError('Ingrese un número de teléfono válido.')
-        return telefono
+        if not telefono_limpio:
+            raise forms.ValidationError('El celular es requerido.')
+        if len(telefono_limpio) != 10:
+            raise forms.ValidationError('El celular debe contener exactamente 10 numeros.')
+        return telefono_limpio
 
+    def clean_nombres(self):
+        return _clean_person_name(self.cleaned_data.get('nombres'), 'Los nombres')
+
+    def clean_apellidos(self):
+        return _clean_person_name(self.cleaned_data.get('apellidos'), 'Los apellidos')
+
+    def clean_direccion(self):
+        return _clean_address(self.cleaned_data.get('direccion'))
+
+    def clean_correo_electronico(self):
+        return (self.cleaned_data.get('correo_electronico') or '').strip().lower()
+
+    def clean_empresa(self):
+        empresa = self.cleaned_data.get('empresa') or getattr(self.vinculo_laboral, 'empresa', None)
+        if not empresa:
+            raise forms.ValidationError('Debes seleccionar una empresa con convenio activo.')
+        if not empresa.convenio_activo:
+            raise forms.ValidationError('La empresa seleccionada no tiene convenio activo.')
+        if empresa.tipo_empresa == Empresa.TipoEmpresa.MARKETPLACE_EXTERNA:
+            raise forms.ValidationError('La empresa seleccionada no pertenece al canal de convenio de libranza.')
+        return empresa
 
     def clean_cedula_frontal(self):
         archivo = self.cleaned_data.get('cedula_frontal')
@@ -272,7 +407,7 @@ class CreditoLibranzaForm(forms.ModelForm):
         return archivo
 
 
-#? --------- FORMULARIO DE CREDITO DE EMPRENDIMIENTO ------------
+# --------- FORMULARIO DE CREDITO DE EMPRENDIMIENTO ------------
 class CreditoEmprendimientoForm(forms.ModelForm):
     valor_credito = forms.CharField(label='Valor crédito solicitado', required=True)
     plazo = forms.ChoiceField(
@@ -446,6 +581,111 @@ class MarketplaceItemForm(forms.ModelForm):
             raise forms.ValidationError('Extension de video no valida. Usa .mp4 o .webm.')
 
         return video
+
+
+class CreditoAdelantoNominaForm(forms.Form):
+    monto_solicitado = MoneyTextDecimalField(
+        label='Monto solicitado',
+        min_value=Decimal('1'),
+        decimal_places=2,
+        max_digits=12,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Ej. 1.200.000',
+            'inputmode': 'numeric',
+            'autocomplete': 'off',
+            'data-money-input': 'true',
+        }),
+    )
+    observaciones = forms.CharField(
+        label='Observaciones',
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Si necesitas aclarar algo para el pagador, indicalo aqui.',
+        }),
+    )
+
+    def __init__(self, *args, vinculo_laboral=None, **kwargs):
+        self.vinculo_laboral = vinculo_laboral
+        super().__init__(*args, **kwargs)
+        monto_maximo = getattr(self.vinculo_laboral, 'adelanto_maximo', None) or self.initial.get('monto_solicitado')
+        if monto_maximo:
+            self.fields['monto_solicitado'].widget.attrs.update({
+                'data-max-amount': f'{Decimal(monto_maximo):.0f}',
+            })
+
+    def clean_monto_solicitado(self):
+        monto = self.cleaned_data['monto_solicitado']
+        if not self.vinculo_laboral:
+            raise forms.ValidationError('No se encontro un vinculo laboral valido para solicitar el adelanto.')
+        monto_maximo = self.initial.get('monto_solicitado') or self.vinculo_laboral.adelanto_maximo
+        if monto > monto_maximo:
+            raise forms.ValidationError(
+                f'El monto solicitado no puede superar ${monto_maximo:,.0f} para este adelanto.'.replace(',', '.')
+            )
+        return monto
+
+
+class EmployeeBulkUploadForm(forms.Form):
+    archivo = forms.FileField(
+        label='Archivo de empleados',
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.csv,.xlsx',
+        }),
+    )
+
+    def clean_archivo(self):
+        archivo = self.cleaned_data['archivo']
+        extension = (archivo.name.rsplit('.', 1)[-1] if '.' in archivo.name else '').lower()
+        if extension not in {'csv', 'xlsx'}:
+            raise forms.ValidationError('Usa un archivo CSV o XLSX.')
+        return archivo
+
+
+class InvestorInviteForm(forms.Form):
+    email = forms.EmailField(label='Correo del inversionista')
+    first_name = forms.CharField(label='Nombre', max_length=150)
+    last_name = forms.CharField(label='Apellido', max_length=150, required=False)
+
+    def clean_email(self):
+        email = (self.cleaned_data.get('email') or '').strip().lower()
+        if not email:
+            raise forms.ValidationError('El correo es obligatorio.')
+        return email
+
+    def save_user(self):
+        User = get_user_model()
+        email = self.cleaned_data['email']
+        user = User.objects.filter(email__iexact=email).first()
+        created = user is None
+        if created:
+            user = User.objects.create(
+                username=email,
+                email=email,
+                first_name=self.cleaned_data.get('first_name', '').strip(),
+                last_name=self.cleaned_data.get('last_name', '').strip(),
+                is_active=True,
+            )
+        if created:
+            user.set_unusable_password()
+            user.save(update_fields=['password'])
+        else:
+            updates = []
+            if not user.username:
+                user.username = email
+                updates.append('username')
+            if not user.first_name:
+                user.first_name = self.cleaned_data.get('first_name', '').strip()
+                updates.append('first_name')
+            if not user.last_name and self.cleaned_data.get('last_name'):
+                user.last_name = self.cleaned_data.get('last_name', '').strip()
+                updates.append('last_name')
+            if updates:
+                user.save(update_fields=updates)
+        return user
 
 
 class AbonoManualAdminForm(forms.Form):
