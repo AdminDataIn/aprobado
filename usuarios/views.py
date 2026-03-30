@@ -1,4 +1,4 @@
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from django.shortcuts import render, redirect
 from django.conf import settings
@@ -82,8 +82,18 @@ def _get_safe_next_url(request, default_url):
 def _with_next(base_url, next_url):
     if not next_url:
         return base_url
-    separator = '&' if '' in base_url else ''
-    return f"{base_url}{separator}{urlencode({'next': next_url})}"
+    parsed = urlsplit(base_url)
+    query_params = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query_params['next'] = next_url
+    return urlunsplit(parsed._replace(query=urlencode(query_params)))
+
+
+def _build_google_login_url(next_url):
+    query = urlencode({
+        'process': 'login',
+        'next': next_url,
+    })
+    return f"/accounts/google/login/?{query}"
 
 
 # Create your views here.
@@ -110,8 +120,7 @@ def login_dispatch_view(request):
         destination = '/inversionista/login/'
     else:
         destination = '/accounts/login/'
-    query = django_urlencode({'next': next_url}) if next_url else ''
-    return redirect(f'{destination}{query}' if query else destination)
+    return redirect(_with_next(destination, next_url))
 
 #def aplicar_formulario(request):
 #    return render(request, 'emprendimiento/aplicando.html')
@@ -463,12 +472,7 @@ class ProductLoginView(LoginView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         next_url = _get_safe_next_url(self.request, self.next_default_url)
-        query = urlencode({
-            'process': 'login',
-            'next': next_url,
-        })
-        google_login_url = '/accounts/google/login/'
-        context['google_login_url'] = f"{google_login_url}{query}"
+        context['google_login_url'] = _build_google_login_url(next_url)
         context['next_url'] = next_url
         if getattr(self, 'registration_url_name', None):
             context['registration_url'] = _with_next(
@@ -568,13 +572,12 @@ class MarketplaceBuyerRegisterView(TemplateView):
             _send_marketplace_welcome_email(user)
             messages.success(request, 'Tu cuenta marketplace fue creada correctamente.')
             return redirect(next_url)
-        query = urlencode({'process': 'login', 'next': next_url})
         return render(
             request,
             self.template_name,
             {
                 'form': form,
-                'google_login_url': f"/accounts/google/login/{query}",
+                'google_login_url': _build_google_login_url(next_url),
                 'next_url': next_url,
                 'login_url': _with_next(reverse('marketplace:login'), next_url),
             },
@@ -589,8 +592,7 @@ class MarketplaceBuyerRegisterView(TemplateView):
                 target_flow=ProductAccessProfile.ProductFlow.MARKETPLACE_BUYER
             ),
         )
-        query = urlencode({'process': 'login', 'next': next_url})
-        context['google_login_url'] = f"/accounts/google/login/{query}"
+        context['google_login_url'] = _build_google_login_url(next_url)
         context['next_url'] = next_url
         context['login_url'] = _with_next(reverse('marketplace:login'), next_url)
         return context
@@ -632,12 +634,11 @@ class ProductRegisterView(TemplateView):
 
     def _build_context(self, form):
         next_url = _get_safe_next_url(self.request, self.next_default_url)
-        query = urlencode({'process': 'login', 'next': next_url})
         return {
             'form': form,
             'login_url': _with_next(reverse(self.login_url_name), next_url),
             'back_url': reverse(self.landing_url_name),
-            'google_login_url': f"/accounts/google/login/{query}",
+            'google_login_url': _build_google_login_url(next_url),
             'next_url': next_url,
         }
 

@@ -232,15 +232,15 @@
                 </h3>
                 <div class="d-flex gap-2 align-items-center">
                     <div class="btn-group">
-                        <a href="{% url 'pagador:descargar_reporte' %}tipo=reducido&formato=csv{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
+                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=reducido&formato=csv{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
                             <i class="bi bi-filetype-csv"></i>
                             Descargar reporte CSV
                         </a>
-                        <a href="{% url 'pagador:descargar_reporte' %}tipo=reducido&formato=xlsx{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
+                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=reducido&formato=xlsx{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
                             <i class="bi bi-file-earmark-spreadsheet"></i>
                             Descargar reporte Excel
                         </a>
-                        <a href="{% url 'pagador:descargar_reporte' %}tipo=completo&formato=xlsx{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
+                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=completo&formato=xlsx{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
                             <i class="bi bi-file-earmark-text"></i>
                             Descargar reporte completo
                         </a>
@@ -504,12 +504,12 @@
                             </button>
                         </div>
                         <div class="col-lg-auto">
-                            <a href="{% url 'pagador:descargar_csv_cuotas' %}formato=csv" class="btn btn-success">
+                            <a href="{% url 'pagador:descargar_csv_cuotas' %}?formato=csv" class="btn btn-success">
                                 <i class="bi bi-file-earmark-spreadsheet me-1"></i> Descargar reporte de cuotas CSV
                             </a>
                         </div>
                         <div class="col-lg-auto">
-                            <a href="{% url 'pagador:descargar_csv_cuotas' %}formato=xlsx" class="btn btn-outline-success">
+                            <a href="{% url 'pagador:descargar_csv_cuotas' %}?formato=xlsx" class="btn btn-outline-success">
                                 <i class="bi bi-file-earmark-excel me-1"></i> Descargar reporte de cuotas Excel
                             </a>
                         </div>
