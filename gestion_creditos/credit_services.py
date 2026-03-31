@@ -1261,6 +1261,258 @@ def calcular_cuotas_restantes(credito):
     return cuotas_pendientes
 
 
+def obtener_resumen_pagos_credito(credito, historial_pagos=None):
+    """
+    Construye un resumen consistente del estado de pagos de un crédito.
+
+    La fuente de verdad preferida es la tabla de amortización. Esto permite
+    reflejar correctamente créditos especiales legacy cuyos pagos históricos se
+    cargaron marcando cuotas como pagadas, sin crear registros en HistorialPago.
+    """
+    cuotas = list(credito.tabla_amortizacion.all().order_by('numero_cuota'))
+    plazo_total = credito.plazo or len(cuotas) or 0
+
+    if cuotas:
+        cuotas_pagadas = sum(1 for cuota in cuotas if cuota.pagada)
+        cuotas_restantes = max(len(cuotas) - cuotas_pagadas, 0)
+
+        total_pagado = Decimal('0.00')
+        saldo_pendiente = Decimal('0.00')
+        for cuota in cuotas:
+            ya_pagado = cuota.monto_pagado or Decimal('0.00')
+            if cuota.pagada and cuota.monto_pagado is None:
+                ya_pagado = cuota.valor_cuota or Decimal('0.00')
+
+            total_pagado += ya_pagado
+
+            restante_cuota = (cuota.valor_cuota or Decimal('0.00')) - ya_pagado
+            if restante_cuota > 0:
+                saldo_pendiente += restante_cuota
+
+        capital_pendiente = sum(
+            (cuota.capital_a_pagar or Decimal('0.00'))
+            for cuota in cuotas
+            if not cuota.pagada
+        )
+
+        proxima_cuota = next((cuota for cuota in cuotas if not cuota.pagada), None)
+
+        return {
+            'cuotas_pagadas': cuotas_pagadas,
+            'cuotas_restantes': cuotas_restantes,
+            'total_pagado': total_pagado,
+            'saldo_pendiente': saldo_pendiente,
+            'capital_pendiente': capital_pendiente,
+            'fecha_proximo_pago': proxima_cuota.fecha_vencimiento if proxima_cuota else None,
+            'plazo_total': plazo_total,
+            'fuente': 'tabla_amortizacion',
+        }
+
+    if historial_pagos is None:
+        historial_pagos = HistorialPago.objects.filter(
+            credito=credito,
+            estado=HistorialPago.EstadoPago.EXITOSO,
+        )
+
+    total_pagado = historial_pagos.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
+    cuotas_pagadas = historial_pagos.count()
+    cuotas_restantes = max(plazo_total - cuotas_pagadas, 0)
+
+    return {
+        'cuotas_pagadas': cuotas_pagadas,
+        'cuotas_restantes': cuotas_restantes,
+        'total_pagado': total_pagado,
+        'saldo_pendiente': credito.saldo_pendiente or Decimal('0.00'),
+        'capital_pendiente': credito.capital_pendiente or Decimal('0.00'),
+        'fecha_proximo_pago': credito.fecha_proximo_pago,
+        'plazo_total': plazo_total,
+        'fuente': 'historial_pagos',
+    }
+
+
+def recalcular_credito_desde_tabla_amortizacion(credito, persist=False):
+    """
+    Recalcula saldos y próxima fecha de pago desde la tabla de amortización.
+
+    Útil para créditos legacy o especiales donde la tabla ya representa la
+    historia real y se necesita alinear los campos persistidos del crédito.
+    """
+    resumen = obtener_resumen_pagos_credito(credito)
+
+    if persist:
+        credito.saldo_pendiente = resumen['saldo_pendiente']
+        credito.capital_pendiente = resumen['capital_pendiente']
+        credito.fecha_proximo_pago = resumen['fecha_proximo_pago']
+        credito.estado = (
+            Credito.EstadoCredito.PAGADO
+            if resumen['cuotas_restantes'] == 0
+            else Credito.EstadoCredito.ACTIVO
+        )
+        credito.save(update_fields=['saldo_pendiente', 'capital_pendiente', 'fecha_proximo_pago', 'estado'])
+
+    return resumen
+
+
+def recalcular_credito_especial_sin_iva_comision(credito, *, persist=False):
+    """
+    Recalcula un credito especial de libranza eliminando el IVA de la comision.
+
+    Se usa para ajustes puntuales y seguros sobre creditos especiales ya
+    existentes. Requiere que el credito no tenga pagos registrados ni cuotas
+    historicamente marcadas como pagadas, porque regenera por completo el plan
+    de pagos.
+    """
+    if credito.linea != Credito.LineaCredito.LIBRANZA:
+        raise ValueError('Solo aplica a creditos de libranza.')
+    if credito.tipo_regla_credito != Credito.TipoReglaCredito.ESPECIAL:
+        raise ValueError('Solo aplica a creditos especiales.')
+    if not credito.monto_aprobado:
+        raise ValueError('El credito no tiene monto_aprobado.')
+
+    plazo_aplicado = obtener_plazo_credito_aplicado(credito)
+    if not plazo_aplicado:
+        raise ValueError('El credito no tiene plazo aplicable.')
+
+    tasa_default = credito.tasa_interes or obtener_tasa_credito(credito.linea)
+    tasa_aplicada = obtener_tasa_credito_aplicada(credito, tasa_default)
+    if tasa_aplicada is None:
+        raise ValueError('El credito no tiene tasa aplicable.')
+
+    historial_pagos_count = credito.historial_pagos.filter(
+        estado=HistorialPago.EstadoPago.EXITOSO
+    ).count()
+    cuotas_pagadas_count = credito.tabla_amortizacion.filter(pagada=True).count()
+    wompi_intentos_count = getattr(credito, 'wompi_intentos', None)
+    wompi_intentos_count = wompi_intentos_count.count() if wompi_intentos_count is not None else 0
+
+    if historial_pagos_count:
+        raise ValueError('El credito ya tiene pagos registrados.')
+    if cuotas_pagadas_count:
+        raise ValueError('El credito ya tiene cuotas marcadas como pagadas.')
+    if wompi_intentos_count:
+        raise ValueError('El credito ya tiene intentos de pago asociados.')
+
+    comision = credito.comision or (credito.monto_aprobado * Decimal('0.10'))
+    iva_actual = credito.iva_comision or Decimal('0.00')
+    iva_nuevo = Decimal('0.00')
+    capital_financiado = credito.monto_aprobado + comision + iva_nuevo
+
+    primera_cuota = credito.tabla_amortizacion.order_by('numero_cuota').values_list(
+        'fecha_vencimiento',
+        flat=True,
+    ).first()
+    if primera_cuota:
+        fecha_primera_cuota = primera_cuota
+    elif credito.fecha_primera_cuota_forzada:
+        fecha_primera_cuota = credito.fecha_primera_cuota_forzada
+    elif credito.fecha_proximo_pago:
+        fecha_primera_cuota = credito.fecha_proximo_pago
+    else:
+        fecha_primera_cuota = obtener_fecha_primera_cuota_credito(
+            credito,
+            credito.fecha_desembolso.date() if credito.fecha_desembolso else timezone.localdate(),
+        )
+
+    tasa_mensual = tasa_aplicada / Decimal('100')
+    if tasa_mensual > 0:
+        factor = (tasa_mensual * (Decimal('1.00') + tasa_mensual) ** plazo_aplicado) / (
+            ((Decimal('1.00') + tasa_mensual) ** plazo_aplicado) - Decimal('1.00')
+        )
+        valor_cuota = (capital_financiado * factor).quantize(Decimal('0.01'))
+    else:
+        valor_cuota = (capital_financiado / plazo_aplicado).quantize(Decimal('0.01'))
+
+    total_a_pagar = (valor_cuota * plazo_aplicado).quantize(Decimal('0.01'))
+
+    fecha_cuota = fecha_primera_cuota
+    dia_ancla = obtener_dia_ancla_vencimiento(credito, fecha_cuota)
+    saldo_restante = capital_financiado
+    cuotas_data = []
+
+    for numero in range(1, plazo_aplicado + 1):
+        interes_a_pagar = (saldo_restante * tasa_mensual).quantize(Decimal('0.01'))
+        capital_a_pagar = (valor_cuota - interes_a_pagar).quantize(Decimal('0.01'))
+
+        if numero == plazo_aplicado:
+            capital_a_pagar = saldo_restante.quantize(Decimal('0.01'))
+            interes_a_pagar = (valor_cuota - capital_a_pagar).quantize(Decimal('0.01'))
+            if interes_a_pagar < 0:
+                interes_a_pagar = Decimal('0.00')
+                capital_a_pagar = valor_cuota
+
+        saldo_restante = (saldo_restante - capital_a_pagar).quantize(Decimal('0.01'))
+        if saldo_restante < 0:
+            saldo_restante = Decimal('0.00')
+
+        cuotas_data.append({
+            'numero_cuota': numero,
+            'fecha_vencimiento': fecha_cuota,
+            'capital_a_pagar': capital_a_pagar,
+            'interes_a_pagar': interes_a_pagar,
+            'valor_cuota': valor_cuota,
+            'saldo_capital_pendiente': saldo_restante,
+        })
+
+        fecha_cuota = sumar_meses_con_dia_ancla(fecha_cuota, 1, dia_ancla)
+
+    result = {
+        'numero_credito': credito.numero_credito,
+        'linea': credito.linea,
+        'tipo_regla_credito': credito.tipo_regla_credito,
+        'plazo_aplicado': plazo_aplicado,
+        'tasa_aplicada': tasa_aplicada,
+        'comision_actual': comision,
+        'iva_actual': iva_actual,
+        'iva_nuevo': iva_nuevo,
+        'capital_financiado_nuevo': capital_financiado,
+        'valor_cuota_nuevo': valor_cuota,
+        'total_a_pagar_nuevo': total_a_pagar,
+        'fecha_primera_cuota': fecha_primera_cuota,
+        'fecha_proximo_pago_nueva': fecha_primera_cuota,
+        'saldo_pendiente_nuevo': total_a_pagar,
+        'capital_pendiente_nuevo': credito.monto_aprobado,
+        'cuotas_generadas': cuotas_data,
+    }
+
+    if persist:
+        credito.iva_comision = iva_nuevo
+        credito.valor_cuota = valor_cuota
+        credito.total_a_pagar = total_a_pagar
+        credito.saldo_pendiente = total_a_pagar
+        credito.capital_pendiente = credito.monto_aprobado
+        credito.fecha_proximo_pago = fecha_primera_cuota
+
+        nota_ajuste = (
+            f'Ajuste backend sin IVA sobre comision aplicado el '
+            f'{timezone.localtime().strftime("%Y-%m-%d %H:%M")}.'
+        )
+        observacion_actual = (credito.observacion_regla_especial or '').strip()
+        if nota_ajuste not in observacion_actual:
+            credito.observacion_regla_especial = (
+                f'{observacion_actual}\n{nota_ajuste}'.strip()
+                if observacion_actual
+                else nota_ajuste
+            )
+
+        credito.save(update_fields=[
+            'iva_comision',
+            'valor_cuota',
+            'total_a_pagar',
+            'saldo_pendiente',
+            'capital_pendiente',
+            'fecha_proximo_pago',
+            'observacion_regla_especial',
+        ])
+
+        credito.tabla_amortizacion.all().delete()
+        CuotaAmortizacion.objects.bulk_create([
+            CuotaAmortizacion(credito=credito, **cuota_data)
+            for cuota_data in cuotas_data
+        ])
+
+    return result
+
+
 def generar_plan_pagos_actual(credito):
     """
     Genera un JSON con el plan de pagos actual del crédito.

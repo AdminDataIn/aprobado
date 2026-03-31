@@ -220,7 +220,7 @@
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Saldo Pendiente</span>
-                                <span class="info-value">${{ credito.saldo_pendiente|default:"0"|intcomma }}</span>
+                                <span class="info-value">${{ saldo_pendiente|default:"0"|intcomma }}</span>
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Valor Cuota</span>
@@ -256,7 +256,7 @@
                             </div>
                             <div class="info-item">
                                 <span class="info-label">Próximo Vencimiento</span>
-                                <span class="info-value">{{ credito.fecha_proximo_pago|date:"d/m/Y"|default:"N/A" }}</span>
+                                <span class="info-value">{{ fecha_proximo_pago|date:"d/m/Y"|default:"N/A" }}</span>
                             </div>
                             {% if credito.dias_en_mora > 0 %}
                             <div class="info-item">

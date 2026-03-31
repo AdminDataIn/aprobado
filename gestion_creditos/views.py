@@ -1223,8 +1223,8 @@ def detalle_credito_view(request, credito_id):
     
     historial_pagos = HistorialPago.objects.filter(credito=credito, estado='EXITOSO').order_by('-fecha_pago')
     historial_estados = HistorialEstado.objects.filter(credito=credito).order_by('-fecha')
-
-    monto_total_pagado = historial_pagos.aggregate(Sum('monto'))['monto__sum'] or 0
+    resumen_pagos = credit_services.obtener_resumen_pagos_credito(credito, historial_pagos=historial_pagos)
+    monto_total_pagado = resumen_pagos['total_pagado']
 
     #! Unificar el acceso a los detalles del crédito (NO SE EST? USANDO)
     detalle_credito = credito.detalle
@@ -1233,8 +1233,8 @@ def detalle_credito_view(request, credito_id):
     #! la vista solo se encarga de mostrar la información.
 
     #? Nuevos c?lculos para la vista de detalle
-    cuotas_pagadas = historial_pagos.count()
-    cuotas_restantes = (credito.plazo - cuotas_pagadas) if credito.plazo else 0
+    cuotas_pagadas = resumen_pagos['cuotas_pagadas']
+    cuotas_restantes = resumen_pagos['cuotas_restantes']
 
     # Tabla de amortización (si existe)
     tabla_amortizacion = credito.tabla_amortizacion.all().order_by('numero_cuota')
@@ -1267,9 +1267,9 @@ def detalle_credito_view(request, credito_id):
         'monto_aprobado': credito.monto_aprobado,
         'plazo': credito.plazo,
         'tasa_interes': credito.tasa_interes,
-        'saldo_pendiente': credito.saldo_pendiente,
+        'saldo_pendiente': resumen_pagos['saldo_pendiente'],
         'valor_cuota': credito.valor_cuota,
-        'fecha_proximo_pago': credito.fecha_proximo_pago,
+        'fecha_proximo_pago': resumen_pagos['fecha_proximo_pago'],
         'total_a_pagar': credito.total_a_pagar,
         'comision': credito.comision,
         'iva_comision': credito.iva_comision,
@@ -1281,6 +1281,7 @@ def detalle_credito_view(request, credito_id):
         'puede_procesar': puede_procesar,
         'cuotas_pagadas': cuotas_pagadas,
         'cuotas_restantes': cuotas_restantes,
+        'monto_total_pagado': monto_total_pagado,
         'tabla_amortizacion': tabla_amortizacion,  #  NUEVA: Tabla de amortización
         'pagador_decision': pagador_decision,
         'pagador_aprobado': pagador_aprobado,
@@ -1804,10 +1805,11 @@ def pagador_detalle_credito_view(request, credito_id):
         return redirect('pagador:dashboard')
 
     historial_pagos = HistorialPago.objects.filter(credito=credito, estado=HistorialPago.EstadoPago.EXITOSO).order_by('-fecha_pago')
-    total_pagado = historial_pagos.aggregate(total=Sum('monto'))['total'] or Decimal(0)
+    resumen_pagos = credit_services.obtener_resumen_pagos_credito(credito, historial_pagos=historial_pagos)
+    total_pagado = resumen_pagos['total_pagado']
     
     #? Usar el saldo pendiente del modelo que ya se actualiza correctamente
-    saldo_pendiente = credito.saldo_pendiente
+    saldo_pendiente = resumen_pagos['saldo_pendiente']
     pagador_decision = _obtener_decision_pagador(credito)
     capacidad_descuento = _build_capacidad_descuento_context(credito)
 
@@ -1816,6 +1818,9 @@ def pagador_detalle_credito_view(request, credito_id):
         'historial_pagos': historial_pagos,
         'total_pagado': total_pagado,
         'saldo_pendiente': saldo_pendiente,
+        'fecha_proximo_pago': resumen_pagos['fecha_proximo_pago'],
+        'cuotas_pagadas': resumen_pagos['cuotas_pagadas'],
+        'cuotas_restantes': resumen_pagos['cuotas_restantes'],
         'pagador_decision': pagador_decision,
         'pagador_aprobado': bool(pagador_decision and pagador_decision.estado_nuevo == Credito.EstadoCredito.APROBADO_PAGADOR),
         'pagador_rechazado': bool(pagador_decision and pagador_decision.estado_nuevo == Credito.EstadoCredito.RECHAZADO),

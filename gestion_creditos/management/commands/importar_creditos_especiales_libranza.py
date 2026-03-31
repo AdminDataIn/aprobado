@@ -483,25 +483,7 @@ class Command(BaseCommand):
                 cuota.fecha_pago = None
             cuota.save(update_fields=['pagada', 'monto_pagado', 'fecha_pago'])
 
-        capital_financiado_inicial = (credito.monto_aprobado or Decimal('0.00')) + (credito.comision or Decimal('0.00')) + (credito.iva_comision or Decimal('0.00'))
-        if cuotas_pagadas == 0:
-            saldo_pendiente = capital_financiado_inicial
-        elif cuotas_pagadas >= total_cuotas:
-            saldo_pendiente = Decimal('0.00')
-        else:
-            saldo_pendiente = cuotas[cuotas_pagadas - 1].saldo_capital_pendiente
-
-        if capital_financiado_inicial > 0:
-            capital_pendiente = (credito.monto_aprobado * (saldo_pendiente / capital_financiado_inicial)).quantize(Decimal('0.01'))
-        else:
-            capital_pendiente = Decimal('0.00')
-
-        proxima_cuota = next((cuota for cuota in cuotas if not cuota.pagada), None)
-        credito.saldo_pendiente = saldo_pendiente
-        credito.capital_pendiente = capital_pendiente
-        credito.fecha_proximo_pago = proxima_cuota.fecha_vencimiento if proxima_cuota else None
-        credito.estado = Credito.EstadoCredito.PAGADO if not proxima_cuota else Credito.EstadoCredito.ACTIVO
-        credito.save(update_fields=['saldo_pendiente', 'capital_pendiente', 'fecha_proximo_pago', 'estado'])
+        credit_services.recalcular_credito_desde_tabla_amortizacion(credito, persist=True)
 
     def _attach_placeholder(self, instance, field_name, filename, payload):
         getattr(instance, field_name).save(filename, ContentFile(payload), save=False)

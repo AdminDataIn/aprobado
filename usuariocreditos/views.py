@@ -16,6 +16,7 @@ import base64
 import io
 from pypdf import PdfReader, PdfWriter
 from usuarios.product_flow import flow_login_required, path_login_required
+from gestion_creditos import credit_services
 
 
 def _aprobacion_admin_registrada(credito):
@@ -102,14 +103,14 @@ def dashboard_libranza_view(request, credito_id=None):
             credito=credito_actual,
             estado=HistorialPago.EstadoPago.EXITOSO
         ).order_by('-fecha_pago')
-
-        monto_total_pagado = historial_pagos.aggregate(total=Sum('monto'))['total'] or Decimal(0)
-
         plan_pagos = credito_actual.tabla_amortizacion.all().order_by('numero_cuota')
-        cuotas_pagadas = plan_pagos.filter(pagada=True).count()
-
-        if credito_actual.plazo:
-            cuotas_restantes = credito_actual.plazo - cuotas_pagadas
+        resumen_pagos = credit_services.obtener_resumen_pagos_credito(
+            credito_actual,
+            historial_pagos=historial_pagos,
+        )
+        monto_total_pagado = resumen_pagos['total_pagado']
+        cuotas_pagadas = resumen_pagos['cuotas_pagadas']
+        cuotas_restantes = resumen_pagos['cuotas_restantes']
 
     # --- Usar propiedades del modelo para cálculos financieros ---
     capital_pagado_monto = credito_actual.capital_pagado
@@ -196,14 +197,14 @@ def dashboard_view(request, credito_id=None):
             credito=credito_actual, 
             estado=HistorialPago.EstadoPago.EXITOSO
         ).order_by('-fecha_pago')
-        
-        monto_total_pagado = historial_pagos.aggregate(total=Sum('monto'))['total'] or Decimal(0)
-        
         plan_pagos = credito_actual.tabla_amortizacion.all().order_by('numero_cuota')
-        cuotas_pagadas = plan_pagos.filter(pagada=True).count()
-
-        if credito_actual.plazo:
-            cuotas_restantes = credito_actual.plazo - cuotas_pagadas
+        resumen_pagos = credit_services.obtener_resumen_pagos_credito(
+            credito_actual,
+            historial_pagos=historial_pagos,
+        )
+        monto_total_pagado = resumen_pagos['total_pagado']
+        cuotas_pagadas = resumen_pagos['cuotas_pagadas']
+        cuotas_restantes = resumen_pagos['cuotas_restantes']
 
     # --- Usar propiedades del modelo para cálculos financieros ---
     capital_pagado_monto = credito_actual.capital_pagado
@@ -325,7 +326,11 @@ def descargar_extracto(request, credito_id):
         credito=credito,
         estado=HistorialPago.EstadoPago.EXITOSO
     ).order_by('fecha_pago')
-    monto_total_pagado = historial_pagos.aggregate(total=Sum('monto'))['total'] or Decimal(0)
+    resumen_pagos = credit_services.obtener_resumen_pagos_credito(
+        credito,
+        historial_pagos=historial_pagos,
+    )
+    monto_total_pagado = resumen_pagos['total_pagado']
 
     cuotas_qs = credito.tabla_amortizacion.all()
     costo_total_credito = (

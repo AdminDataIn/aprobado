@@ -282,8 +282,8 @@
                                 <div class="info-item">
                                     <span class="info-label">Saldo Pendiente</span>
                                     <span class="info-value">
-                                        {% if credito.saldo_pendiente %}
-                                            ${{ credito.saldo_pendiente|intcomma }}
+                                        {% if saldo_pendiente %}
+                                            ${{ saldo_pendiente|intcomma }}
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}
@@ -335,8 +335,8 @@
                                 <div class="info-item">
                                     <span class="info-label">Próximo Vencimiento</span>
                                     <span class="info-value">
-                                        {% if credito.fecha_proximo_pago %}
-                                            {{ credito.fecha_proximo_pago|date:"d/m/Y" }}
+                                        {% if fecha_proximo_pago %}
+                                            {{ fecha_proximo_pago|date:"d/m/Y" }}
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}
@@ -347,8 +347,8 @@
                                 <div class="info-item">
                                     <span class="info-label">Cuotas Pagadas</span>
                                     <span class="info-value">
-                                        {% if credito.cuotas_pagadas is not None %}
-                                            {{ credito.cuotas_pagadas }}
+                                        {% if cuotas_pagadas is not None %}
+                                            {{ cuotas_pagadas }}
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}
@@ -361,8 +361,8 @@
                                 <div class="info-item">
                                     <span class="info-label">Cuotas Restantes</span>
                                     <span class="info-value">
-                                        {% if credito.cuotas_restantes is not None %}
-                                            {{ credito.cuotas_restantes }}
+                                        {% if cuotas_restantes is not None %}
+                                            {{ cuotas_restantes }}
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}
