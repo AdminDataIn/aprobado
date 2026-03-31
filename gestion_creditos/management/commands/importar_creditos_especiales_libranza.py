@@ -49,6 +49,20 @@ def _normalize_header(value):
     return ' '.join(text.split())
 
 
+def _repair_mojibake(value):
+    text = str(value or '').strip()
+    if not text:
+        return ''
+    suspicious_markers = ('Ã', 'Â', 'â', '€', '™')
+    if any(marker in text for marker in suspicious_markers):
+        try:
+            repaired = text.encode('latin-1').decode('utf-8')
+            return repaired.strip()
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            return text
+    return text
+
+
 HEADER_MAP = {
     'pagare': 'pagare',
     'empresa': 'empresa',
@@ -211,13 +225,13 @@ class Command(BaseCommand):
         for field in missing_fields:
             errors.append(f'Campo obligatorio ausente: {field}.')
 
-        empresa_archivo = str(row.get('empresa') or '').strip()
+        empresa_archivo = _repair_mojibake(row.get('empresa'))
         if empresa_archivo and _normalize_header(empresa_archivo) != _normalize_header(empresa.nombre):
             errors.append(f'La empresa del archivo ("{empresa_archivo}") no coincide con "{empresa.nombre}".')
 
         documento = ''.join(ch for ch in str(row.get('documento') or '') if ch.isdigit())
-        nombre = str(row.get('nombre') or '').strip()
-        correo = str(row.get('correo') or '').strip().lower()
+        nombre = _repair_mojibake(row.get('nombre'))
+        correo = _repair_mojibake(row.get('correo')).lower()
         telefono = ''.join(ch for ch in str(row.get('telefono') or '') if ch.isdigit())
 
         monto_inicial = self._parse_money(row.get('monto_inicial'), 'monto_inicial', errors)
