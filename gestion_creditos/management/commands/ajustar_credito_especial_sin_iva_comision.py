@@ -35,13 +35,14 @@ class Command(BaseCommand):
         apply_changes = options['apply']
         report_file = options.get('report_file')
 
+        base_queryset = (
+            Credito.objects
+            .select_related('detalle_libranza')
+            .prefetch_related('tabla_amortizacion', 'historial_pagos', 'wompi_intentos')
+        )
+
         try:
-            credito = (
-                Credito.objects
-                .select_related('detalle_libranza')
-                .prefetch_related('tabla_amortizacion', 'historial_pagos', 'wompi_intentos')
-                .get(numero_credito=numero_credito)
-            )
+            credito = base_queryset.get(numero_credito=numero_credito)
         except Credito.DoesNotExist as exc:
             raise CommandError(f'No existe el credito {numero_credito}.') from exc
 
@@ -52,13 +53,8 @@ class Command(BaseCommand):
         try:
             with transaction.atomic():
                 if apply_changes:
-                    credito = (
-                        Credito.objects
-                        .select_for_update()
-                        .select_related('detalle_libranza')
-                        .prefetch_related('tabla_amortizacion', 'historial_pagos', 'wompi_intentos')
-                        .get(pk=credito.pk)
-                    )
+                    Credito.objects.select_for_update().get(pk=credito.pk)
+                    credito = base_queryset.get(pk=credito.pk)
 
                 antes = {
                     'numero_credito': credito.numero_credito,
