@@ -5,8 +5,10 @@ from django.contrib.auth import get_user_model
 from django.forms import HiddenInput
 from .models import (
     CreditoLibranza,
+    HistorialPago,
     Empresa,
     CreditoEmprendimiento,
+    LotePagoEmpresa,
     MovimientoAhorro,
     MarketplaceItem,
     VinculoLaboralEmpresa,
@@ -643,6 +645,102 @@ class EmployeeBulkUploadForm(forms.Form):
         if extension not in {'csv', 'xlsx'}:
             raise forms.ValidationError('Usa un archivo CSV o XLSX.')
         return archivo
+
+
+class PagoCreditoOfflineForm(forms.Form):
+    monto = forms.DecimalField(
+        label='Monto a aplicar',
+        min_value=Decimal('0.01'),
+        max_digits=12,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'step': '0.01',
+            'min': '0.01',
+            'placeholder': 'Ej: 198575.00',
+        }),
+    )
+    referencia_pago = forms.CharField(
+        label='Referencia de pago',
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Ej: TRANSF-FERTOBRA-20260331',
+        }),
+    )
+    metodo_pago = forms.ChoiceField(
+        label='Metodo de pago',
+        choices=[
+            (HistorialPago.MetodoPago.TRANSFERENCIA_DIRECTA, 'Transferencia directa'),
+            (HistorialPago.MetodoPago.OFFLINE_MANUAL, 'Registro offline manual'),
+        ],
+        initial=HistorialPago.MetodoPago.TRANSFERENCIA_DIRECTA,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    comprobante = forms.FileField(
+        label='Comprobante (opcional)',
+        required=False,
+        validators=[FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'webp'])],
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.pdf,.jpg,.jpeg,.png,.webp',
+        }),
+    )
+    nota = forms.CharField(
+        label='Nota',
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Observacion interna del recaudo.',
+        }),
+    )
+
+    def clean_comprobante(self):
+        comprobante = self.cleaned_data.get('comprobante')
+        if comprobante and comprobante.size > 8 * 1024 * 1024:
+            raise forms.ValidationError('El comprobante no debe superar 8MB.')
+        return comprobante
+
+
+class PagoMasivoEmpresaUploadForm(forms.ModelForm):
+    archivo = forms.FileField(
+        label='Archivo de pagos',
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.csv,.xlsx',
+        }),
+        help_text='Soporta CSV o XLSX. Usa numero_credito o cedula como llave de conciliacion.',
+    )
+
+    class Meta:
+        model = LotePagoEmpresa
+        fields = ['archivo', 'comprobante', 'notas']
+        widgets = {
+            'comprobante': forms.FileInput(attrs={
+                'class': 'form-control',
+                'accept': '.pdf,.jpg,.jpeg,.png,.webp',
+            }),
+            'notas': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Ej: Recaudo de quincena marzo pagado por transferencia.',
+            }),
+        }
+
+    def clean_archivo(self):
+        archivo = self.cleaned_data['archivo']
+        extension = (archivo.name.rsplit('.', 1)[-1] if '.' in archivo.name else '').lower()
+        if extension not in {'csv', 'xlsx'}:
+            raise forms.ValidationError('Usa un archivo CSV o XLSX.')
+        return archivo
+
+    def clean_comprobante(self):
+        comprobante = self.cleaned_data.get('comprobante')
+        if comprobante and comprobante.size > 8 * 1024 * 1024:
+            raise forms.ValidationError('El comprobante no debe superar 8MB.')
+        return comprobante
 
 
 class InvestorInviteForm(forms.Form):

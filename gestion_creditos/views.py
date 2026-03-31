@@ -35,6 +35,8 @@ from .forms import (
     ConsignacionOfflineForm,
     EmployeeBulkUploadForm,
     MarketplaceItemForm,
+    PagoCreditoOfflineForm,
+    PagoMasivoEmpresaUploadForm,
 )
 from . import credit_services
 from datetime import datetime, timedelta
@@ -1221,7 +1223,7 @@ def detalle_credito_view(request, credito_id):
     
     credito = get_object_or_404(Credito.objects.select_related('detalle_libranza', 'detalle_emprendimiento'), id=credito_id)
     
-    historial_pagos = HistorialPago.objects.filter(credito=credito, estado='EXITOSO').order_by('-fecha_pago')
+    historial_pagos = HistorialPago.objects.filter(credito=credito, estado='EXITOSO').order_by('-fecha_aplicacion', '-fecha_pago')
     historial_estados = HistorialEstado.objects.filter(credito=credito).order_by('-fecha')
     resumen_pagos = credit_services.obtener_resumen_pagos_credito(credito, historial_pagos=historial_pagos)
     monto_total_pagado = resumen_pagos['total_pagado']
@@ -1371,6 +1373,53 @@ def agregar_pago_manual_view(request, credito_id):
         messages.error(request, f"Error en el monto: {e}")
     except Exception as e:
         messages.error(request, f"Ocurrió un error inesperado: {e}")
+
+    return redirect('gestion:credito_detalle', credito_id=credito.id)
+
+
+@staff_member_required
+@require_POST
+def _legacy_agregar_pago_manual_view(request, credito_id):
+    credito = get_object_or_404(Credito, id=credito_id)
+    form = PagoCreditoOfflineForm(request.POST, request.FILES)
+    auth_key = request.POST.get('auth_key')
+
+    if not auth_key:
+        messages.error(request, "La clave de autorizacion es requerida.")
+        return redirect('gestion:credito_detalle', credito_id=credito.id)
+
+    if auth_key != getattr(settings, 'MANUAL_PAYMENT_AUTH_KEY', None):
+        messages.error(request, "Clave de autorizacion no valida.")
+        return redirect('gestion:credito_detalle', credito_id=credito.id)
+
+    if not form.is_valid():
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                messages.error(request, error)
+        return redirect('gestion:credito_detalle', credito_id=credito.id)
+
+    try:
+        referencia = (form.cleaned_data.get('referencia_pago') or '').strip().upper()
+        if not referencia:
+            referencia = f"MANUAL-{credito.id}-{timezone.now().strftime('%Y%m%d%H%M%S%f')}"
+
+        pago, created = credit_services.registrar_pago_credito(
+            credito=credito,
+            monto=form.cleaned_data['monto'],
+            referencia_pago=referencia,
+            metodo_pago=form.cleaned_data['metodo_pago'],
+            origen_registro=HistorialPago.OrigenRegistro.REGISTRO_MANUAL_ADMIN,
+            usuario=request.user,
+            empresa=credito.empresa_relacionada,
+            comprobante=form.cleaned_data.get('comprobante'),
+            notas=form.cleaned_data.get('nota') or 'Pago offline registrado por administracion.',
+        )
+        if created:
+            messages.success(request, f"Pago de ${pago.monto:,.2f} registrado exitosamente.")
+        else:
+            messages.warning(request, f"La referencia {referencia} ya existia y no se aplico de nuevo.")
+    except Exception as e:
+        messages.error(request, f"Ocurrio un error inesperado: {e}")
 
     return redirect('gestion:credito_detalle', credito_id=credito.id)
 
@@ -1729,6 +1778,7 @@ def pagador_dashboard_view(request):
         'empresa': empresa,
         'creditos': creditos_page,
         'errores_pago_masivo': errores_pago_masivo,
+        'pago_masivo_form': PagoMasivoEmpresaUploadForm(),
         'solicitudes_pendientes_count': solicitudes_pendientes.count(),
         'search_query': search_query,
         'estado_filter': estado_filter,
@@ -1772,6 +1822,7 @@ def pagador_adelantos_dashboard_view(request):
         'empresa': empresa,
         'creditos': creditos_page,
         'errores_pago_masivo': errores_pago_masivo,
+        'pago_masivo_form': PagoMasivoEmpresaUploadForm(),
         'solicitudes_pendientes_count': solicitudes_pendientes.count(),
         'search_query': search_query,
         'estado_filter': estado_filter,
@@ -1804,7 +1855,7 @@ def pagador_detalle_credito_view(request, credito_id):
         messages.error(request, "No tiene permiso para ver este crédito.")
         return redirect('pagador:dashboard')
 
-    historial_pagos = HistorialPago.objects.filter(credito=credito, estado=HistorialPago.EstadoPago.EXITOSO).order_by('-fecha_pago')
+    historial_pagos = HistorialPago.objects.filter(credito=credito, estado=HistorialPago.EstadoPago.EXITOSO).order_by('-fecha_aplicacion', '-fecha_pago')
     resumen_pagos = credit_services.obtener_resumen_pagos_credito(credito, historial_pagos=historial_pagos)
     total_pagado = resumen_pagos['total_pagado']
     
@@ -1826,9 +1877,58 @@ def pagador_detalle_credito_view(request, credito_id):
         'pagador_rechazado': bool(pagador_decision and pagador_decision.estado_nuevo == Credito.EstadoCredito.RECHAZADO),
         'empresa_credito': credito.empresa_relacionada,
         'capacidad_descuento': capacidad_descuento,
+        'pago_offline_form': PagoCreditoOfflineForm(),
     }
     
     return render(request, 'pagador/pagador_detalle_credito.html', context)
+
+
+@login_required(login_url='/pagador/login/')
+@require_POST
+@pagador_required
+def pagador_registrar_pago_offline_view(request, credito_id):
+    empresa = request.empresa
+    credito = get_object_or_404(
+        Credito.objects.select_related('detalle_libranza', 'detalle_adelanto_nomina__vinculo_laboral__empresa'),
+        id=credito_id,
+        linea__in=[Credito.LineaCredito.LIBRANZA, Credito.LineaCredito.ADELANTO_NOMINA],
+    )
+    if credito.empresa_relacionada != empresa:
+        messages.error(request, "No tiene permiso para registrar pagos sobre este credito.")
+        return redirect('pagador:dashboard')
+
+    form = PagoCreditoOfflineForm(request.POST, request.FILES)
+    if not form.is_valid():
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                messages.error(request, error)
+        return redirect('pagador:credito_detalle', credito_id=credito.id)
+
+    referencia = (form.cleaned_data.get('referencia_pago') or '').strip().upper()
+    if not referencia:
+        referencia = f"OFFLINE-{credito.id}-{timezone.now().strftime('%Y%m%d%H%M%S%f')}"
+
+    try:
+        pago, created = credit_services.registrar_pago_credito(
+            credito=credito,
+            monto=form.cleaned_data['monto'],
+            referencia_pago=referencia,
+            metodo_pago=form.cleaned_data['metodo_pago'],
+            origen_registro=HistorialPago.OrigenRegistro.REGISTRO_MANUAL_PAGADOR,
+            usuario=request.user,
+            empresa=empresa,
+            comprobante=form.cleaned_data.get('comprobante'),
+            notas=form.cleaned_data.get('nota') or 'Pago offline registrado por pagador.',
+        )
+        if created:
+            messages.success(request, f"Pago de ${pago.monto:,.2f} aplicado correctamente.")
+        else:
+            messages.warning(request, f"La referencia {referencia} ya existia y no se aplico de nuevo.")
+    except Exception as exc:
+        logger.exception("Error al registrar pago offline de pagador para %s", credito.numero_credito)
+        messages.error(request, f"No pudimos registrar el pago: {exc}")
+
+    return redirect('pagador:credito_detalle', credito_id=credito.id)
 
 
 @login_required(login_url='/pagador/login/')
@@ -1923,7 +2023,7 @@ def pagador_decidir_solicitud_view(request, credito_id):
 @login_required(login_url='/pagador/login/')
 @require_POST
 @pagador_required
-def pagador_procesar_pagos_view(request):
+def _legacy_pagador_procesar_pagos_view(request):
     """
     Valida un archivo CSV de pagos masivos y muestra confirmación para pagar con WOMPI.
     """
@@ -1988,6 +2088,52 @@ def pagador_procesar_pagos_view(request):
     }
 
     return render(request, 'pagador/confirmacion_pago_masivo.html', context)
+
+
+@login_required(login_url='/pagador/login/')
+@require_POST
+@pagador_required
+def pagador_procesar_pagos_view(request):
+    """
+    Procesa pagos offline de empresa desde archivo CSV/XLSX.
+    La ruta WOMPI masiva queda separada en pagar_masivo_wompi.
+    """
+    empresa = request.empresa
+    form = PagoMasivoEmpresaUploadForm(request.POST, request.FILES)
+
+    if not form.is_valid():
+        errores = []
+        for field_errors in form.errors.values():
+            errores.extend(field_errors)
+        request.session['errores_pago_masivo'] = errores
+        messages.error(request, "No pudimos validar el archivo o el comprobante del lote.")
+        return redirect('pagador:dashboard')
+
+    archivo = form.cleaned_data['archivo']
+    comprobante = form.cleaned_data.get('comprobante')
+    notas = form.cleaned_data.get('notas') or ''
+
+    pagos_exitosos, errores, lote = credit_services.procesar_pagos_masivos_archivo(
+        archivo,
+        empresa,
+        usuario=request.user,
+        comprobante=comprobante,
+        notas=notas,
+    )
+
+    if errores:
+        request.session['errores_pago_masivo'] = errores
+        messages.error(request, f"Se procesaron {pagos_exitosos} pagos, pero se detectaron {len(errores)} novedades.")
+    elif pagos_exitosos:
+        messages.success(
+            request,
+            f"Se aplicaron {pagos_exitosos} pagos offline correctamente."
+            + (f" Lote #{lote.id} registrado." if lote else '')
+        )
+    else:
+        messages.warning(request, "El archivo no genero pagos aplicables.")
+
+    return redirect('pagador:dashboard')
 
 
 def _build_pagador_creditos_report_queryset_legacy(empresa, search_query='', estado_filter='', sort_by='cliente_documento'):
@@ -2368,16 +2514,16 @@ def procesar_pago_callback_view(request):
                 #? Convertir a Decimal (Ej: "1,234.56" -> Decimal("1234.56")
                 monto_decimal = Decimal(monto_limpio)
                 
-                #! Crear el registro del pago
-                HistorialPago.objects.create(
+                credit_services.registrar_pago_credito(
                     credito=credito,
                     monto=monto_decimal,
                     referencia_pago=referencia,
-                    estado=HistorialPago.EstadoPago.EXITOSO
+                    metodo_pago=HistorialPago.MetodoPago.OFFLINE_MANUAL,
+                    origen_registro=HistorialPago.OrigenRegistro.REGISTRO_MANUAL_PAGADOR,
+                    usuario=request.user if request.user.is_authenticated else None,
+                    empresa=credito.empresa_relacionada,
+                    notas='Pago registrado por callback legacy de simulacion.',
                 )
-
-                #! Actualizar saldo y estado usando el helper
-                credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
                 
                 messages.success(request, f"Pago de ${monto_decimal:,.2f} para el crédito #{credito.id} procesado exitosamente.")
 
@@ -2886,16 +3032,16 @@ def procesar_pago_wompi_emprendimiento_view(request):
                     )
                 messages.success(request, f'Abono a capital de ${monto_decimal:,.2f} aplicado exitosamente.')
             else:
-                pago, created = HistorialPago.objects.get_or_create(
+                pago, created = credit_services.registrar_pago_credito(
+                    credito=credito,
+                    monto=monto_decimal,
                     referencia_pago=reference,
-                    defaults={
-                        'credito': credito,
-                        'monto': monto_decimal,
-                        'estado': HistorialPago.EstadoPago.EXITOSO,
-                    }
+                    metodo_pago=HistorialPago.MetodoPago.WOMPI,
+                    origen_registro=HistorialPago.OrigenRegistro.PASARELA_WOMPI,
+                    usuario=request.user,
+                    empresa=credito.empresa_relacionada,
+                    notas='Pago de cuota procesado por Wompi.',
                 )
-                if created:
-                    credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
                 messages.success(request, f'Pago de ${monto_decimal:,.2f} procesado exitosamente.')
             return redirect('emprendimiento:mi_credito_detalle', credito_id=credito.id)
         if status == 'DECLINED':
@@ -3003,16 +3149,16 @@ def pago_wompi_emprendimiento_callback_view(request):
                     )
                 messages.success(request, f'Abono a capital de ${monto_decimal:,.2f} aplicado exitosamente.')
             else:
-                pago, created = HistorialPago.objects.get_or_create(
+                pago, created = credit_services.registrar_pago_credito(
+                    credito=credito,
+                    monto=monto_decimal,
                     referencia_pago=reference,
-                    defaults={
-                        'credito': credito,
-                        'monto': monto_decimal,
-                        'estado': HistorialPago.EstadoPago.EXITOSO,
-                    }
+                    metodo_pago=HistorialPago.MetodoPago.WOMPI,
+                    origen_registro=HistorialPago.OrigenRegistro.PASARELA_WOMPI,
+                    usuario=request.user,
+                    empresa=credito.empresa_relacionada,
+                    notas='Pago de cuota procesado por Wompi.',
                 )
-                if created:
-                    credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
                 messages.success(request, f'Pago de ${monto_decimal:,.2f} procesado exitosamente.')
         elif status == 'DECLINED':
             messages.error(request, 'El pago fue rechazado.')
@@ -3303,16 +3449,17 @@ def procesar_pago_wompi_view(request):
 
         status = transaction_status
         if status == 'APPROVED':
-            pago, created = HistorialPago.objects.get_or_create(
+            pago, created = credit_services.registrar_pago_credito(
+                credito=credito,
+                monto=monto_decimal,
                 referencia_pago=reference,
-                defaults={
-                    'credito': credito,
-                    'monto': monto_decimal,
-                    'estado': HistorialPago.EstadoPago.EXITOSO,
-                }
+                metodo_pago=HistorialPago.MetodoPago.WOMPI,
+                origen_registro=HistorialPago.OrigenRegistro.PASARELA_WOMPI,
+                usuario=request.user if request.user.is_authenticated else None,
+                empresa=credito.empresa_relacionada,
+                wompi_intento=intent,
+                notas='Pago de cuota procesado por Wompi para pagador.',
             )
-            if created:
-                credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
             if tipo_pago != 'MASIVO':
                 credito.refresh_from_db()
                 _enviar_resumen_pago_pagador(request, credito, transaction_data)
@@ -3415,17 +3562,18 @@ def pago_wompi_callback_view(request):
                         if credito:
                             monto_pago = Decimal(pago_info['monto'])
 
-                            pago, created = HistorialPago.objects.get_or_create(
+                            pago, created = credit_services.registrar_pago_credito(
+                                credito=credito,
+                                monto=monto_pago,
                                 referencia_pago=f"{reference}-{credito.id}",
-                                defaults={
-                                    'credito': credito,
-                                    'monto': monto_pago,
-                                    'estado': HistorialPago.EstadoPago.EXITOSO,
-                                }
+                                metodo_pago=HistorialPago.MetodoPago.WOMPI,
+                                origen_registro=HistorialPago.OrigenRegistro.PASARELA_WOMPI,
+                                usuario=request.user if request.user.is_authenticated else None,
+                                empresa=credito.empresa_relacionada,
+                                notas='Pago masivo procesado por Wompi.',
                             )
 
                             if created:
-                                credit_services.actualizar_saldo_tras_pago(credito, monto_pago)
                                 pagos_exitosos += 1
 
                 messages.success(
@@ -3459,13 +3607,15 @@ def pago_wompi_callback_view(request):
 
         if status == 'APPROVED':
             monto_decimal = Decimal(transaction_data.get('amount_in_cents', 0)) / 100
-            pago, created = HistorialPago.objects.get_or_create(
+            pago, created = credit_services.registrar_pago_credito(
+                credito=credito,
+                monto=monto_decimal,
                 referencia_pago=reference,
-                defaults={
-                    'credito': credito,
-                    'monto': monto_decimal,
-                    'estado': HistorialPago.EstadoPago.EXITOSO,
-                }
+                metodo_pago=HistorialPago.MetodoPago.WOMPI,
+                origen_registro=HistorialPago.OrigenRegistro.PASARELA_WOMPI,
+                usuario=request.user if request.user.is_authenticated else None,
+                empresa=credito.empresa_relacionada,
+                notas='Pago individual procesado por Wompi.',
             )
             if created:
                 credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
@@ -3790,19 +3940,19 @@ def wompi_webhook_view(request):
                         try:
                             with transaction.atomic():
                                 credito = Credito.objects.select_for_update().get(id=credito_id)
-                                pago, created = HistorialPago.objects.get_or_create(
+                                pago, created = credit_services.registrar_pago_credito(
+                                    credito=credito,
+                                    monto=monto_decimal,
                                     referencia_pago=reference,
-                                    defaults={
-                                        'credito': credito,
-                                        'monto': monto_decimal,
-                                        'estado': HistorialPago.EstadoPago.EXITOSO
-                                    }
+                                    metodo_pago=HistorialPago.MetodoPago.WOMPI,
+                                    origen_registro=HistorialPago.OrigenRegistro.PASARELA_WOMPI,
+                                    empresa=credito.empresa_relacionada,
+                                    notas='Pago conciliado desde webhook Wompi.',
                                 )
 
                                 if not created:
                                     logger.info(f"Pago con referencia {reference} ya existe, omitiendo.")
                                 else:
-                                    credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
                                     logger.info(f"Pago de ${monto_decimal} registrado exitosamente para crédito {credito_id}")
                         except IntegrityError as e:
                             # Puede ocurrir por concurrencia - verificar si el pago ya se procesó

@@ -29,6 +29,7 @@ urlpatterns = [
     path('empleados/plantilla/', views.descargar_plantilla_empleados_view, name='descargar_plantilla_empleados'),
     path('empleados/reconciliar/', views.pagador_reconciliar_empleados_view, name='reconciliar_empleados'),
     path('credito/<int:credito_id>/', views.pagador_detalle_credito_view, name='credito_detalle'),
+    path('credito/<int:credito_id>/registrar-pago-offline/', views.pagador_registrar_pago_offline_view, name='registrar_pago_offline'),
     path('credito/<int:credito_id>/decision/', views.pagador_decidir_solicitud_view, name='decidir_solicitud'),
 
     # ========================================

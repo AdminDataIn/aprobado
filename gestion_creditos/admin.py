@@ -6,7 +6,7 @@ from django.utils.html import format_html
 from django.template.response import TemplateResponse
 from django.core.exceptions import ValidationError
 from .models import (
-    Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago, WompiIntent,
+    Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago, WompiIntent, LotePagoEmpresa,
     CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, ImagenNegocio, Notificacion,
     Pagare, ZapSignWebhookLog, MarketplaceItem, MarketplaceItemHistorialEstado,
     MarketplacePedido, MarketplacePedidoItem, MarketplacePago, MarketplaceDireccionEntrega,
@@ -434,9 +434,17 @@ class MarketplaceLiquidacionEmpresaAdmin(admin.ModelAdmin):
 
 @admin.register(HistorialPago)
 class HistorialPagoAdmin(admin.ModelAdmin):
-    list_display = ('credito', 'fecha_pago', 'monto', 'estado', 'referencia_pago')
-    list_filter = ('estado', 'fecha_pago')
+    list_display = ('credito', 'fecha_aplicacion', 'monto', 'estado', 'metodo_pago', 'origen_registro', 'referencia_pago')
+    list_filter = ('estado', 'metodo_pago', 'origen_registro', 'fecha_aplicacion')
     search_fields = ('credito__numero_credito', 'referencia_pago')
+
+
+@admin.register(LotePagoEmpresa)
+class LotePagoEmpresaAdmin(admin.ModelAdmin):
+    list_display = ('id', 'empresa', 'nombre_original', 'estado', 'pagos_aplicados', 'errores_count', 'creado_en')
+    list_filter = ('estado', 'creado_en', 'empresa')
+    search_fields = ('nombre_original', 'checksum', 'empresa__nombre')
+    readonly_fields = ('checksum', 'creado_en')
 
 @admin.register(WompiIntent)
 class WompiIntentAdmin(admin.ModelAdmin):

@@ -487,16 +487,24 @@
 
         <div class="card mt-4 mb-4">
             <div class="card-header">
-                <h3 class="card-title"><i class="bi bi-file-earmark-arrow-up me-2"></i>Pago masivo por archivo plano</h3>
+                <h3 class="card-title"><i class="bi bi-file-earmark-arrow-up me-2"></i>Registro offline por archivo plano</h3>
             </div>
             <div class="card-content">
-                <p class="text-secondary">Sube un archivo CSV para procesar los pagos de forma masiva.</p>
+                <p class="text-secondary">Sube un archivo CSV o Excel con los recaudos pagados por la empresa. Cada fila se aplica sobre cuotas reales del crédito y deja trazabilidad del lote.</p>
                 <form action="{% url 'pagador:pagos_masivos' %}" method="post" enctype="multipart/form-data" class="mt-3">
                     {% csrf_token %}
                     <div class="row align-items-end g-3">
                         <div class="col-lg-5">
-                            <label for="csv_file" class="form-label visually-hidden">Archivo CSV</label>
-                            <input type="file" class="form-control" id="csv_file" name="csv_file" accept=".csv" required>
+                            <label for="id_archivo" class="form-label">Archivo de pagos</label>
+                            <input type="file" class="form-control" id="id_archivo" name="archivo" accept=".csv,.xlsx" required>
+                        </div>
+                        <div class="col-lg-3">
+                            <label for="id_comprobante_lote" class="form-label">Comprobante del lote (opcional)</label>
+                            <input type="file" class="form-control" id="id_comprobante_lote" name="comprobante" accept=".pdf,.jpg,.jpeg,.png,.webp">
+                        </div>
+                        <div class="col-lg-4">
+                            <label for="id_notas_lote" class="form-label">Nota del recaudo (opcional)</label>
+                            <input type="text" class="form-control" id="id_notas_lote" name="notas" placeholder="Ej: Pago de nómina quincena marzo">
                         </div>
                         <div class="col-lg-auto">
                             <button type="submit" class="btn btn-primary">
@@ -520,13 +528,13 @@
                         </div>
                     </div>
                     <div class="alert alert-info mt-3 mb-0">
-                        <h6 class="mb-2"><i class="bi bi-info-circle me-1"></i> Instrucciones del archivo CSV:</h6>
+                        <h6 class="mb-2"><i class="bi bi-info-circle me-1"></i> Instrucciones del archivo plano:</h6>
                         <ul class="mb-0 small">
-                            <li><strong>Opción 1 (recomendada):</strong> descarga el reporte de cuotas pendientes para obtener un CSV ya diligenciado.</li>
-                            <li><strong>Opción 2:</strong> descarga la plantilla vacía y complétala manualmente.</li>
-                            <li><strong>Columnas requeridas:</strong> <code>cedula</code> y <code>monto_a_pagar</code>.</li>
-                            <li><strong>Formato de cédula:</strong> solo números, sin puntos ni espacios (ejemplo: 1234567890).</li>
-                            <li><strong>Formato de monto:</strong> solo números enteros, sin puntos, comas ni símbolos $ (ejemplo: 50000 para $50.000).</li>
+                            <li><strong>Formato admitido:</strong> CSV o XLSX.</li>
+                            <li><strong>Llave recomendada:</strong> <code>numero_credito</code>. Si no viene, puedes usar <code>cedula</code> siempre que la persona no tenga más de un crédito activo.</li>
+                            <li><strong>Monto requerido:</strong> usa la columna <code>monto_a_pagar</code> o <code>monto</code>.</li>
+                            <li><strong>Opcionales:</strong> <code>referencia_pago</code>, <code>fecha_pago</code>, <code>nota</code>.</li>
+                            <li><strong>Deduplicación:</strong> si repites la misma referencia o subes exactamente el mismo archivo ya procesado, el sistema lo bloqueará.</li>
                         </ul>
                     </div>
                 </form>

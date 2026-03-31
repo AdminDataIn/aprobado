@@ -384,19 +384,31 @@
                         {% if historial_pagos %}
                             <table class="table table-hover">
                                 <thead>
-                                    <tr>
-                                        <th>Fecha</th>
-                                        <th>Referencia</th>
-                                        <th class="text-end">Monto</th>
-                                    </tr>
+                                      <tr>
+                                          <th>Fecha</th>
+                                          <th>Referencia</th>
+                                          <th>Método</th>
+                                          <th class="text-end">Monto</th>
+                                          <th class="text-center">Comprobante</th>
+                                      </tr>
                                 </thead>
                                 <tbody>
                                 {% for pago in historial_pagos %}
                                     <tr>
-                                        <td>{{ pago.fecha_pago|date:"d/m/Y H:i" }}</td>
-                                        <td>{{ pago.referencia_pago }}</td>
-                                        <td class="text-end">${{ pago.monto|intcomma }}</td>
-                                    </tr>
+                                          <td>{{ pago.fecha_aplicacion|default:pago.fecha_pago|date:"d/m/Y H:i" }}</td>
+                                          <td>{{ pago.referencia_pago }}</td>
+                                          <td>{{ pago.get_metodo_pago_display|default:"-" }}</td>
+                                          <td class="text-end">${{ pago.monto|intcomma }}</td>
+                                          <td class="text-center">
+                                              {% if pago.comprobante %}
+                                              <a href="{{ pago.comprobante.url }}" target="_blank" class="btn btn-outline-primary btn-sm">Ver</a>
+                                              {% elif pago.lote_pago and pago.lote_pago.comprobante %}
+                                              <a href="{{ pago.lote_pago.comprobante.url }}" target="_blank" class="btn btn-outline-primary btn-sm">Lote</a>
+                                              {% else %}
+                                              <span class="text-muted">-</span>
+                                              {% endif %}
+                                          </td>
+                                      </tr>
                                 {% endfor %}
                                 </tbody>
                             </table>
@@ -569,7 +581,7 @@
                         </h2>
                     </div>
                     <div class="card-content">
-                        <form method="post" action="{% url 'gestion:credito_agregar_pago' credito.id %}" >
+                        <form method="post" action="{% url 'gestion:credito_agregar_pago' credito.id %}" enctype="multipart/form-data">
                             {% csrf_token %}
                             <div class="form-group">
                                 <label for="id_monto" class="form-label">Monto a Pagar</label>
@@ -577,7 +589,22 @@
                             </div>
                             <div class="form-group">
                                 <label for="id_referencia" class="form-label">Referencia (Opcional)</label>
-                                <input type="text" name="referencia" id="id_referencia" class="form-control" placeholder="Ej: Abono especial">
+                                <input type="text" name="referencia_pago" id="id_referencia" class="form-control" placeholder="Ej: TRANSF-EMPRESA-20260331">
+                            </div>
+                            <div class="form-group">
+                                <label for="id_metodo_pago" class="form-label">Metodo</label>
+                                <select name="metodo_pago" id="id_metodo_pago" class="form-control">
+                                    <option value="TRANSFERENCIA_DIRECTA">Transferencia directa</option>
+                                    <option value="OFFLINE_MANUAL">Registro offline manual</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="id_comprobante" class="form-label">Comprobante (Opcional)</label>
+                                <input type="file" name="comprobante" id="id_comprobante" class="form-control" accept=".pdf,.jpg,.jpeg,.png,.webp">
+                            </div>
+                            <div class="form-group">
+                                <label for="id_nota_manual" class="form-label">Nota (Opcional)</label>
+                                <textarea name="nota" id="id_nota_manual" class="form-control" rows="2" placeholder="Detalle interno del recaudo"></textarea>
                             </div>
                             <div class="form-group">
                                 <label for="id_auth_key" class="form-label">Clave de Autorización</label>

@@ -2,6 +2,7 @@ from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator, FileExtensionValidator
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 from django.utils.text import slugify
 from decimal import Decimal
 import uuid
@@ -1028,6 +1029,49 @@ class CreditoAdelantoNomina(models.Model):
         return self.vinculo_laboral.nombre_empleado
 
 
+#? ----- Modelo de lote de pagos de empresa -----
+class LotePagoEmpresa(models.Model):
+    class EstadoLote(models.TextChoices):
+        CARGADO = 'CARGADO', 'Cargado'
+        PROCESADO = 'PROCESADO', 'Procesado'
+        PROCESADO_CON_ERRORES = 'PROCESADO_CON_ERRORES', 'Procesado con errores'
+
+    empresa = models.ForeignKey('Empresa', on_delete=models.CASCADE, related_name='lotes_pago')
+    archivo = models.FileField(upload_to='creditos/pagos/lotes/%Y/%m/')
+    comprobante = models.FileField(
+        upload_to='creditos/pagos/comprobantes/%Y/%m/',
+        blank=True,
+        null=True,
+        validators=[FileExtensionValidator(['pdf', 'jpg', 'jpeg', 'png', 'webp'])],
+    )
+    nombre_original = models.CharField(max_length=255)
+    checksum = models.CharField(max_length=64, db_index=True)
+    estado = models.CharField(max_length=32, choices=EstadoLote.choices, default=EstadoLote.CARGADO)
+    total_registros = models.PositiveIntegerField(default=0)
+    pagos_aplicados = models.PositiveIntegerField(default=0)
+    errores_count = models.PositiveIntegerField(default=0)
+    notas = models.TextField(blank=True)
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='lotes_pago_creados',
+    )
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-creado_en']
+        verbose_name = 'Lote de pago de empresa'
+        verbose_name_plural = 'Lotes de pago de empresas'
+        indexes = [
+            models.Index(fields=['empresa', 'checksum'], name='lote_pago_emp_chk_idx'),
+        ]
+
+    def __str__(self):
+        return f"Lote {self.nombre_original} - {self.empresa.nombre}"
+
+
 #? ----- Modelo de historial de pagos -----
 class HistorialPago(models.Model):
     """
@@ -1039,11 +1083,25 @@ class HistorialPago(models.Model):
         FALLIDO = 'FALLIDO', 'Fallido'
         PENDIENTE = 'PENDIENTE', 'Pendiente'
 
+    class MetodoPago(models.TextChoices):
+        NO_DEFINIDO = 'NO_DEFINIDO', 'No definido'
+        WOMPI = 'WOMPI', 'Wompi'
+        TRANSFERENCIA_DIRECTA = 'TRANSFERENCIA_DIRECTA', 'Transferencia directa'
+        OFFLINE_MANUAL = 'OFFLINE_MANUAL', 'Offline manual'
+
+    class OrigenRegistro(models.TextChoices):
+        LEGACY = 'LEGACY', 'Legacy'
+        PASARELA_WOMPI = 'PASARELA_WOMPI', 'Pasarela Wompi'
+        CARGA_MASIVA_EMPRESA = 'CARGA_MASIVA_EMPRESA', 'Carga masiva empresa'
+        REGISTRO_MANUAL_ADMIN = 'REGISTRO_MANUAL_ADMIN', 'Registro manual admin'
+        REGISTRO_MANUAL_PAGADOR = 'REGISTRO_MANUAL_PAGADOR', 'Registro manual pagador'
+
     #! Relación con el crédito principal
     credito = models.ForeignKey(Credito, on_delete=models.CASCADE, related_name='historial_pagos')
     
     # Información del pago
     fecha_pago = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de pago")
+    fecha_aplicacion = models.DateTimeField(default=timezone.now, verbose_name="Fecha de aplicacion")
     monto = models.DecimalField(
         max_digits=10, 
         decimal_places=2,
@@ -1058,6 +1116,50 @@ class HistorialPago(models.Model):
         max_length=20, 
         choices=EstadoPago.choices, 
         default=EstadoPago.PENDIENTE
+    )
+    metodo_pago = models.CharField(
+        max_length=30,
+        choices=MetodoPago.choices,
+        default=MetodoPago.NO_DEFINIDO,
+    )
+    origen_registro = models.CharField(
+        max_length=32,
+        choices=OrigenRegistro.choices,
+        default=OrigenRegistro.LEGACY,
+    )
+    empresa_origen = models.ForeignKey(
+        'Empresa',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pagos_credito_registrados',
+    )
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pagos_credito_registrados',
+    )
+    lote_pago = models.ForeignKey(
+        'LotePagoEmpresa',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pagos',
+    )
+    wompi_intento = models.ForeignKey(
+        'WompiIntent',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pagos_historial',
+    )
+    comprobante = models.FileField(
+        upload_to='creditos/pagos/comprobantes/%Y/%m/',
+        blank=True,
+        null=True,
+        validators=[FileExtensionValidator(['pdf', 'jpg', 'jpeg', 'png', 'webp'])],
     )
     
     # Desglose del pago (calculado al momento de registrar)
@@ -1084,7 +1186,7 @@ class HistorialPago(models.Model):
     )
 
     class Meta:
-        ordering = ['-fecha_pago']
+        ordering = ['-fecha_aplicacion', '-fecha_pago']
         verbose_name = 'Historial de Pago'
         verbose_name_plural = 'Historial de Pagos'
 

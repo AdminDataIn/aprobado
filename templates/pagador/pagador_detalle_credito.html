@@ -69,21 +69,33 @@
                     <table class="table table-stack-mobile">
                         <thead>
                             <tr>
-                                <th>Fecha</th>
+                                <th>Fecha aplicación</th>
                                 <th>Referencia</th>
+                                <th>Método</th>
                                 <th class="text-end">Monto</th>
+                                <th class="text-center">Soporte</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for pago in historial_pagos %}
                             <tr>
-                                <td class="date-display" data-label="Fecha">{{ pago.fecha_pago|date:"d/m/Y" }}</td>
+                                <td class="date-display" data-label="Fecha aplicación">{{ pago.fecha_aplicacion|default:pago.fecha_pago|date:"d/m/Y" }}</td>
                                 <td data-label="Referencia">{{ pago.referencia_pago }}</td>
+                                <td data-label="Método">{{ pago.get_metodo_pago_display|default:"-" }}</td>
                                 <td class="text-end amount-display" data-label="Monto">${{ pago.monto|intcomma }}</td>
+                                <td class="text-center" data-label="Soporte">
+                                    {% if pago.comprobante %}
+                                    <a href="{{ pago.comprobante.url }}" class="btn btn-sm btn-outline-primary" target="_blank">Ver</a>
+                                    {% elif pago.lote_pago and pago.lote_pago.comprobante %}
+                                    <a href="{{ pago.lote_pago.comprobante.url }}" class="btn btn-sm btn-outline-primary" target="_blank">Lote</a>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="3" class="empty-row">
+                                <td colspan="5" class="empty-row">
                                     <div class="empty-state">
                                         <i class="bi bi-receipt"></i>
                                         <p>No se han registrado pagos.</p>
@@ -398,6 +410,44 @@
                         </div>
 
                         {% if credito.estado == 'ACTIVO' or credito.estado == 'EN_MORA' %}
+                        <div class="mt-4">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h4 class="h6 mb-3"><i class="bi bi-bank me-2"></i>Registrar pago offline</h4>
+                                    <form method="post" action="{% url 'pagador:registrar_pago_offline' credito.id %}" enctype="multipart/form-data" class="row g-3">
+                                        {% csrf_token %}
+                                        <div class="col-md-6">
+                                            <label for="id_monto_pago_offline" class="form-label">Monto a aplicar</label>
+                                            <input type="number" step="0.01" min="0.01" class="form-control" id="id_monto_pago_offline" name="monto" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="id_referencia_pago_offline" class="form-label">Referencia de pago</label>
+                                            <input type="text" class="form-control" id="id_referencia_pago_offline" name="referencia_pago" placeholder="Ej: TRANSF-FERTOBRA-20260331">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="id_metodo_pago_offline" class="form-label">Método</label>
+                                            <select class="form-select" id="id_metodo_pago_offline" name="metodo_pago">
+                                                <option value="TRANSFERENCIA_DIRECTA">Transferencia directa</option>
+                                                <option value="OFFLINE_MANUAL">Registro offline manual</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="id_comprobante_pago_offline" class="form-label">Comprobante (opcional)</label>
+                                            <input type="file" class="form-control" id="id_comprobante_pago_offline" name="comprobante" accept=".pdf,.jpg,.jpeg,.png,.webp">
+                                        </div>
+                                        <div class="col-12">
+                                            <label for="id_nota_pago_offline" class="form-label">Nota</label>
+                                            <textarea class="form-control" id="id_nota_pago_offline" name="nota" rows="2" placeholder="Ej: Transferencia confirmada por tesorería de la empresa."></textarea>
+                                        </div>
+                                        <div class="col-12">
+                                            <button type="submit" class="btn btn-outline-primary w-100">
+                                                <i class="bi bi-check-circle me-2"></i>Aplicar pago offline
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
                         <div class="mt-4">
                             <a href="{% url 'pagador:pagar_wompi' credito.id %}" class="btn btn-pagar w-100">
                                 <i class="bi bi-credit-card me-2"></i>Pagar Cuota con WOMPI (${{ credito.valor_cuota|intcomma }})

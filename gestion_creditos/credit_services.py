@@ -1,12 +1,14 @@
 from decimal import Decimal, ConversionSyntax
 import logging
 import uuid
+import hashlib
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
+from django.core.files.base import ContentFile
 from openai import OpenAI
 from configuraciones.models import ConfiguracionPeso
-from .models import Credito, HistorialEstado, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, HistorialPago, CuotaAmortizacion
+from .models import Credito, HistorialEstado, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, HistorialPago, CuotaAmortizacion, Empresa, LotePagoEmpresa
 from .services.tasa_service import obtener_tasa_credito
 from .services.libranza_rules import (
     calcular_primera_fecha_pago_libranza,
@@ -1147,6 +1149,281 @@ def procesar_pagos_masivos_csv(csv_file, empresa):
         logger.error(f"Error al procesar pagos masivos: {e}")
         errores.append(f"Error inesperado al procesar el archivo: {e}")
 
+    return pagos_exitosos, errores
+
+
+def _leer_archivo_pagos(uploaded_file):
+    if hasattr(uploaded_file, 'seek'):
+        uploaded_file.seek(0)
+    raw = uploaded_file.read()
+    if hasattr(uploaded_file, 'seek'):
+        uploaded_file.seek(0)
+    return raw, getattr(uploaded_file, 'name', 'pagos.csv')
+
+
+def _iter_rows_pagos_archivo(file_bytes, filename):
+    extension = (filename.rsplit('.', 1)[-1] if '.' in filename else '').lower()
+    if extension == 'xlsx':
+        from openpyxl import load_workbook
+
+        workbook = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+        sheet = workbook.active
+        rows = list(sheet.iter_rows(values_only=True))
+        if not rows:
+            return
+        headers = [str(value or '').strip() for value in rows[0]]
+        for row_number, values in enumerate(rows[1:], start=2):
+            row = {headers[idx]: values[idx] for idx in range(min(len(headers), len(values)))}
+            yield row_number, row
+        return
+
+    reader = _leer_csv_pagos(io.BytesIO(file_bytes))
+    for row_number, row in enumerate(reader, start=2):
+        yield row_number, row
+
+
+def _normalizar_fila_pago(row):
+    return {str(k).strip().lower(): (v.strip() if isinstance(v, str) else v) for k, v in row.items() if k}
+
+
+def _parsear_monto_pago(value):
+    raw = str(value or '').strip()
+    if not raw:
+        raise ValueError('El monto es obligatorio.')
+    normalized = raw.replace('$', '').replace(' ', '')
+    if ',' in normalized and '.' in normalized:
+        if normalized.rfind(',') > normalized.rfind('.'):
+            normalized = normalized.replace('.', '').replace(',', '.')
+        else:
+            normalized = normalized.replace(',', '')
+    elif ',' in normalized:
+        normalized = normalized.replace(',', '.')
+    try:
+        monto = Decimal(normalized)
+    except (ValueError, TypeError, ConversionSyntax) as exc:
+        raise ValueError(f"Monto '{raw}' no es valido.") from exc
+    if monto <= 0:
+        raise ValueError('El monto debe ser mayor a cero.')
+    return monto
+
+
+def _parsear_fecha_aplicacion(value):
+    if not value:
+        return timezone.now()
+    if isinstance(value, datetime):
+        dt = value
+    elif hasattr(value, 'year') and hasattr(value, 'month') and hasattr(value, 'day'):
+        dt = datetime.combine(value, datetime.min.time())
+    else:
+        raw = str(value).strip()
+        parsed = None
+        for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%d/%m/%Y', '%d-%b-%y', '%d-%m-%Y'):
+            try:
+                parsed = datetime.strptime(raw, fmt)
+                break
+            except ValueError:
+                continue
+        if parsed is None:
+            raise ValueError(f"Fecha '{value}' no es valida.")
+        dt = parsed
+    if timezone.is_naive(dt):
+        return timezone.make_aware(dt, timezone.get_current_timezone())
+    return timezone.localtime(dt)
+
+
+def _resolver_credito_pago_empresa(empresa, normalized_row):
+    numero_credito = str(normalized_row.get('numero_credito') or '').strip().upper()
+    cedula_raw = str(normalized_row.get('cedula') or normalized_row.get('documento') or '').strip()
+    cedula = ''.join(ch for ch in cedula_raw if ch.isdigit())
+
+    base_queryset = Credito.objects.filter(
+        estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]
+    ).select_related('detalle_libranza', 'detalle_adelanto_nomina__vinculo_laboral__empresa')
+
+    if numero_credito:
+        credito = base_queryset.filter(numero_credito=numero_credito).first()
+        if not credito:
+            raise ValueError(f"No se encontro el credito {numero_credito}.")
+        if credito.empresa_relacionada != empresa:
+            raise ValueError(f"El credito {numero_credito} no pertenece a {empresa.nombre}.")
+        return credito
+
+    if not cedula:
+        raise ValueError('Debes enviar numero_credito o cedula.')
+
+    candidatos = base_queryset.filter(
+        Q(linea=Credito.LineaCredito.LIBRANZA, detalle_libranza__empresa=empresa, detalle_libranza__cedula=cedula) |
+        Q(linea=Credito.LineaCredito.ADELANTO_NOMINA, detalle_adelanto_nomina__vinculo_laboral__empresa=empresa, detalle_adelanto_nomina__vinculo_laboral__documento_empleado=cedula)
+    )
+    total = candidatos.count()
+    if total == 0:
+        raise ValueError(f"No se encontro un credito activo para la cedula {cedula}.")
+    if total > 1:
+        raise ValueError(f"La cedula {cedula} tiene mas de un credito activo. Usa numero_credito en el archivo.")
+    return candidatos.first()
+
+
+@transaction.atomic
+def registrar_pago_credito(
+    *,
+    credito,
+    monto,
+    referencia_pago,
+    metodo_pago=HistorialPago.MetodoPago.NO_DEFINIDO,
+    origen_registro=HistorialPago.OrigenRegistro.LEGACY,
+    estado=HistorialPago.EstadoPago.EXITOSO,
+    usuario=None,
+    empresa=None,
+    comprobante=None,
+    fecha_aplicacion=None,
+    notas='',
+    wompi_intento=None,
+    lote_pago=None,
+):
+    pago, created = HistorialPago.objects.get_or_create(
+        referencia_pago=referencia_pago,
+        defaults={
+            'credito': credito,
+            'monto': monto,
+            'estado': estado,
+            'metodo_pago': metodo_pago,
+            'origen_registro': origen_registro,
+            'empresa_origen': empresa,
+            'registrado_por': usuario,
+            'comprobante': comprobante,
+            'fecha_aplicacion': fecha_aplicacion or timezone.now(),
+            'notas': notas or '',
+            'wompi_intento': wompi_intento,
+            'lote_pago': lote_pago,
+        }
+    )
+    if not created:
+        return pago, False
+
+    if estado == HistorialPago.EstadoPago.EXITOSO:
+        actualizar_saldo_tras_pago(credito, monto)
+        recalcular_credito_desde_tabla_amortizacion(credito, persist=True)
+    return pago, True
+
+
+def validar_archivo_pagos_masivos(uploaded_file, empresa):
+    pagos_validos = []
+    errores = []
+    checksum = None
+    filename = getattr(uploaded_file, 'name', 'pagos.csv')
+
+    try:
+        file_bytes, filename = _leer_archivo_pagos(uploaded_file)
+        checksum = hashlib.sha256(file_bytes).hexdigest()
+        lote_existente = LotePagoEmpresa.objects.filter(empresa=empresa, checksum=checksum, pagos_aplicados__gt=0).first()
+        if lote_existente:
+            errores.append(
+                f"Ya existe un lote procesado con este archivo para {empresa.nombre} (#{lote_existente.id}). "
+                "No se aplicara de nuevo para evitar duplicados."
+            )
+            return pagos_validos, errores, {'checksum': checksum, 'filename': filename, 'lote_existente': lote_existente}
+
+        for row_number, row in _iter_rows_pagos_archivo(file_bytes, filename):
+            normalized = _normalizar_fila_pago(row)
+            monto_value = normalized.get('monto_a_pagar') or normalized.get('monto')
+            try:
+                credito = _resolver_credito_pago_empresa(empresa, normalized)
+                monto_a_pagar = _parsear_monto_pago(monto_value)
+                fecha_aplicacion = _parsear_fecha_aplicacion(normalized.get('fecha_pago') or normalized.get('fecha_aplicacion'))
+            except ValueError as exc:
+                errores.append(f"Fila {row_number}: {exc}")
+                continue
+
+            referencia = str(normalized.get('referencia_pago') or '').strip().upper()
+            if not referencia:
+                referencia = f"LOTE-{checksum[:12].upper()}-{row_number}"
+
+            if HistorialPago.objects.filter(referencia_pago=referencia).exists():
+                errores.append(f"Fila {row_number}: La referencia {referencia} ya existe. Ajusta el archivo para evitar doble aplicacion.")
+                continue
+
+            pagos_validos.append({
+                'credito_id': credito.id,
+                'numero_credito': credito.numero_credito,
+                'cedula': credito.cliente_documento,
+                'nombre': credito.nombre_cliente,
+                'monto': monto_a_pagar,
+                'referencia_pago': referencia,
+                'fecha_aplicacion': fecha_aplicacion,
+                'nota': str(normalized.get('nota') or normalized.get('observacion') or '').strip(),
+                'fila': row_number,
+            })
+    except Exception as e:
+        logger.error(f"Error al leer archivo de pagos: {e}")
+        errores.append(f"Error al procesar el archivo: {e}")
+
+    return pagos_validos, errores, {'checksum': checksum, 'filename': filename}
+
+
+def procesar_pagos_masivos_archivo(uploaded_file, empresa, usuario=None, comprobante=None, notas=''):
+    pagos_exitosos = 0
+    errores = []
+    lote = None
+
+    try:
+        pagos_validos, errores_validacion, metadata = validar_archivo_pagos_masivos(uploaded_file, empresa)
+        if errores_validacion:
+            return pagos_exitosos, errores_validacion, lote
+
+        file_bytes, _ = _leer_archivo_pagos(uploaded_file)
+
+        with transaction.atomic():
+            lote = LotePagoEmpresa(
+                empresa=empresa,
+                nombre_original=metadata['filename'],
+                checksum=metadata['checksum'] or '',
+                notas=notas or '',
+                creado_por=usuario,
+                total_registros=len(pagos_validos),
+            )
+            lote.archivo.save(metadata['filename'], ContentFile(file_bytes), save=False)
+            if comprobante:
+                lote.comprobante = comprobante
+            lote.save()
+
+            for pago_data in pagos_validos:
+                credito = Credito.objects.get(id=pago_data['credito_id'])
+                registrar_pago_credito(
+                    credito=credito,
+                    monto=pago_data['monto'],
+                    referencia_pago=pago_data['referencia_pago'],
+                    metodo_pago=HistorialPago.MetodoPago.TRANSFERENCIA_DIRECTA,
+                    origen_registro=HistorialPago.OrigenRegistro.CARGA_MASIVA_EMPRESA,
+                    usuario=usuario,
+                    empresa=empresa,
+                    fecha_aplicacion=pago_data['fecha_aplicacion'],
+                    notas=pago_data['nota'] or notas or 'Pago aplicado por archivo plano.',
+                    lote_pago=lote,
+                )
+                pagos_exitosos += 1
+
+            lote.pagos_aplicados = pagos_exitosos
+            lote.errores_count = len(errores)
+            lote.estado = LotePagoEmpresa.EstadoLote.PROCESADO if not errores else LotePagoEmpresa.EstadoLote.PROCESADO_CON_ERRORES
+            lote.save(update_fields=['pagos_aplicados', 'errores_count', 'estado'])
+    except Exception as e:
+        logger.error(f"Error al procesar pagos masivos: {e}")
+        errores.append(f"Error inesperado al procesar el archivo: {e}")
+        if lote and lote.pk:
+            lote.errores_count = len(errores)
+            lote.estado = LotePagoEmpresa.EstadoLote.PROCESADO_CON_ERRORES
+            lote.save(update_fields=['errores_count', 'estado'])
+
+    return pagos_exitosos, errores, lote
+
+
+def validar_csv_pagos_masivos(csv_file, empresa):
+    pagos_validos, errores, _ = validar_archivo_pagos_masivos(csv_file, empresa)
+    return pagos_validos, errores
+
+
+def procesar_pagos_masivos_csv(csv_file, empresa):
+    pagos_exitosos, errores, _ = procesar_pagos_masivos_archivo(csv_file, empresa)
     return pagos_exitosos, errores
 
 def marcar_creditos_en_mora():
