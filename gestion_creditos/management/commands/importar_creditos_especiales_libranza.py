@@ -43,6 +43,9 @@ MONTHS_ES = {
 }
 
 
+LEGACY_IMPORT_OBSERVATION = 'Credito especial legacy importado por backend desde base controlada de Fertobra.'
+
+
 def _normalize_header(value):
     text = unicodedata.normalize('NFKD', str(value or '')).encode('ascii', 'ignore').decode('ascii')
     text = text.strip().lower()
@@ -329,9 +332,7 @@ class Command(BaseCommand):
             fecha_primera_cuota_forzada=row['fecha_primer_pago'],
             plazo_forzado=row['nro_cuotas'],
             tasa_forzada=row['tasa'],
-            observacion_regla_especial=(
-                'Credito especial legacy importado por backend desde base controlada de Fertobra.'
-            ),
+            observacion_regla_especial=LEGACY_IMPORT_OBSERVATION,
         )
 
         detalle = CreditoLibranza(
