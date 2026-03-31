@@ -716,18 +716,28 @@ def activar_credito(credito):
     # El capital financiado incluye monto + comisión + IVA (esto se paga en cuotas)
     capital_financiado = credito.monto_aprobado + comision + iva_comision
 
-    # ✅ Calcular cuota mensual sobre el capital financiado total
-    tasa_mensual = tasa_interes / Decimal(100)
-    if tasa_mensual > 0:
-        # Fórmula de amortización francesa: C = P * [i(1+i)^n] / [(1+i)^n - 1]
-        factor = (tasa_mensual * (1 + tasa_mensual) ** plazo_aplicado) / (((1 + tasa_mensual) ** plazo_aplicado) - 1)
-        valor_cuota = capital_financiado * factor
-    else:
-        # Caso sin interés (división simple del capital financiado)
-        valor_cuota = capital_financiado / plazo_aplicado
+    usar_condiciones_historicas = (
+        credito.tipo_regla_credito == Credito.TipoReglaCredito.ESPECIAL
+        and credito.valor_cuota is not None
+        and credito.total_a_pagar is not None
+    )
 
-    # Total a pagar es la suma de todas las cuotas
-    total_a_pagar = valor_cuota * plazo_aplicado
+    # ✅ Calcular o respetar cuota mensual
+    tasa_mensual = tasa_interes / Decimal(100)
+    if usar_condiciones_historicas:
+        valor_cuota = credito.valor_cuota
+        total_a_pagar = credito.total_a_pagar
+    else:
+        if tasa_mensual > 0:
+            # Fórmula de amortización francesa: C = P * [i(1+i)^n] / [(1+i)^n - 1]
+            factor = (tasa_mensual * (1 + tasa_mensual) ** plazo_aplicado) / (((1 + tasa_mensual) ** plazo_aplicado) - 1)
+            valor_cuota = capital_financiado * factor
+        else:
+            # Caso sin interés (división simple del capital financiado)
+            valor_cuota = capital_financiado / plazo_aplicado
+
+        # Total a pagar es la suma de todas las cuotas
+        total_a_pagar = valor_cuota * plazo_aplicado
 
     # ✅ Actualizar campos financieros en el crédito
     credito.tasa_interes = tasa_interes
@@ -747,7 +757,8 @@ def activar_credito(credito):
     hoy = timezone.now().date()
     credito.fecha_proximo_pago = obtener_fecha_primera_cuota_credito(credito, hoy)
 
-    credito.fecha_desembolso = timezone.now()
+    if not credito.fecha_desembolso:
+        credito.fecha_desembolso = timezone.now()
     credito.save()
 
     # ✅ Generar tabla de amortización
