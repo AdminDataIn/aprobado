@@ -11,8 +11,10 @@ from .services.tasa_service import obtener_tasa_credito
 from .services.libranza_rules import (
     calcular_primera_fecha_pago_libranza,
     obtener_fecha_primera_cuota_credito,
+    obtener_dia_ancla_vencimiento,
     obtener_plazo_credito_aplicado,
     obtener_tasa_credito_aplicada,
+    sumar_meses_con_dia_ancla,
 )
 from django.db.models import Sum, Count, Case, When, F, DecimalField, Q, Avg, Value, ExpressionWrapper, Value, ExpressionWrapper
 from django.db.models.functions import TruncMonth, Coalesce
@@ -272,6 +274,7 @@ def actualizar_saldo_tras_pago(credito, monto_pagado):
     ):
         saldo_capital_restante = capital_financiado_inicial
         fecha_cuota = credito.fecha_proximo_pago
+        dia_ancla = obtener_dia_ancla_vencimiento(credito, fecha_cuota)
         tasa_mensual_tabla = (credito.tasa_interes or Decimal('0.00')) / Decimal(100)
         cuotas = []
         for i in range(1, credito.plazo + 1):
@@ -299,7 +302,10 @@ def actualizar_saldo_tras_pago(credito, monto_pagado):
                     saldo_capital_pendiente=saldo_capital_restante
                 )
             )
-            fecha_cuota += relativedelta(months=1)
+            if credito.linea == Credito.LineaCredito.LIBRANZA:
+                fecha_cuota = sumar_meses_con_dia_ancla(fecha_cuota, 1, dia_ancla)
+            else:
+                fecha_cuota += relativedelta(months=1)
 
         if cuotas:
             CuotaAmortizacion.objects.bulk_create(cuotas, ignore_conflicts=True)
@@ -357,7 +363,15 @@ def actualizar_saldo_tras_pago(credito, monto_pagado):
         if credito.valor_cuota and credito.valor_cuota > 0 and credito.fecha_proximo_pago:
             cuotas_pagadas = int(monto_pagado // credito.valor_cuota)
             if cuotas_pagadas > 0:
-                credito.fecha_proximo_pago += relativedelta(months=cuotas_pagadas)
+                if credito.linea == Credito.LineaCredito.LIBRANZA:
+                    dia_ancla = obtener_dia_ancla_vencimiento(credito)
+                    credito.fecha_proximo_pago = sumar_meses_con_dia_ancla(
+                        credito.fecha_proximo_pago,
+                        cuotas_pagadas,
+                        dia_ancla,
+                    )
+                else:
+                    credito.fecha_proximo_pago += relativedelta(months=cuotas_pagadas)
 
         # 8. Si estaba en mora y se puso al día, volver a ACTIVO
         hoy = timezone.now().date()
@@ -540,6 +554,9 @@ def calcular_total_en_mora(creditos=None):
         pagada=False,
         fecha_vencimiento__lt=today
     )
+
+    if not getattr(settings, 'LIBRANZA_AUTO_MARK_MORA_ENABLED', True):
+        cuotas = cuotas.exclude(credito__linea=Credito.LineaCredito.LIBRANZA)
 
     if creditos is not None:
         cuotas = cuotas.filter(credito__in=creditos)
@@ -765,6 +782,7 @@ def activar_credito(credito):
     # La tabla amortiza el capital_financiado completo (no solo monto_aprobado)
     saldo_capital_restante = capital_financiado  # ✅ CORRECCIÓN: Amortizar el capital financiado total
     fecha_cuota = credito.fecha_proximo_pago
+    dia_ancla = obtener_dia_ancla_vencimiento(credito, fecha_cuota)
 
     cuotas = []
     for i in range(1, plazo_aplicado + 1):
@@ -801,7 +819,10 @@ def activar_credito(credito):
         )
 
         # Avanzar a la siguiente fecha de cuota
-        fecha_cuota += relativedelta(months=1)
+        if credito.linea == Credito.LineaCredito.LIBRANZA:
+            fecha_cuota = sumar_meses_con_dia_ancla(fecha_cuota, 1, dia_ancla)
+        else:
+            fecha_cuota += relativedelta(months=1)
 
     if cuotas:
         CuotaAmortizacion.objects.bulk_create(cuotas, ignore_conflicts=True)

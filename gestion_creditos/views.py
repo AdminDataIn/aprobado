@@ -1070,6 +1070,8 @@ def admin_cartera_view(request):
 
     #? Base de créditos en mora
     creditos_en_mora = Credito.objects.filter(estado=Credito.EstadoCredito.EN_MORA)
+    if not getattr(settings, 'LIBRANZA_AUTO_MARK_MORA_ENABLED', True):
+        creditos_en_mora = creditos_en_mora.exclude(linea=Credito.LineaCredito.LIBRANZA)
 
     #? Aplicar filtros de búsqueda y línea de crédito
     creditos_filtrados = credit_services.filtrar_creditos(request, creditos_en_mora)

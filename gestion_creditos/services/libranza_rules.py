@@ -1,3 +1,4 @@
+from calendar import monthrange
 from datetime import date, datetime
 
 from dateutil.relativedelta import relativedelta
@@ -60,13 +61,41 @@ def obtener_fecha_primera_cuota_credito(credito, fecha_aprobacion=None):
     )
 
 
+def obtener_dia_ancla_vencimiento(credito, fecha_base=None):
+    if fecha_base:
+        return _to_date(fecha_base).day
+
+    primera_cuota = credito.tabla_amortizacion.order_by('numero_cuota').values_list('fecha_vencimiento', flat=True).first()
+    if primera_cuota:
+        return _to_date(primera_cuota).day
+
+    if credito.fecha_primera_cuota_forzada:
+        return _to_date(credito.fecha_primera_cuota_forzada).day
+
+    if credito.fecha_proximo_pago:
+        return _to_date(credito.fecha_proximo_pago).day
+
+    return 30 if credito.linea == Credito.LineaCredito.LIBRANZA else 1
+
+
+def sumar_meses_con_dia_ancla(fecha_base, meses=1, dia_ancla=None):
+    fecha_cursor = _to_date(fecha_base) + relativedelta(months=meses, day=1)
+    dia_objetivo = dia_ancla or _to_date(fecha_base).day
+    ultimo_dia = monthrange(fecha_cursor.year, fecha_cursor.month)[1]
+    return fecha_cursor.replace(day=min(dia_objetivo, ultimo_dia))
+
+
 def reprogramar_cuotas_pendientes(credito, fecha_primera_cuota):
     fecha_cursor = _to_date(fecha_primera_cuota)
+    dia_ancla = obtener_dia_ancla_vencimiento(credito, fecha_cursor)
     cuotas_pendientes = list(credito.tabla_amortizacion.filter(pagada=False).order_by('numero_cuota'))
     for cuota in cuotas_pendientes:
         cuota.fecha_vencimiento = fecha_cursor
         cuota.save(update_fields=['fecha_vencimiento'])
-        fecha_cursor += relativedelta(months=1)
+        if credito.linea == Credito.LineaCredito.LIBRANZA:
+            fecha_cursor = sumar_meses_con_dia_ancla(fecha_cursor, 1, dia_ancla)
+        else:
+            fecha_cursor += relativedelta(months=1)
 
     credito.fecha_proximo_pago = fecha_primera_cuota
     credito.save(update_fields=['fecha_proximo_pago'])
