@@ -153,6 +153,10 @@
         }
         if (link.dataset.loader === 'off' || link.dataset.download === 'true' || link.hasAttribute('download')) {
             skipNextUnload = true;
+            hideLoader();
+            setTimeout(function () {
+                hideLoader();
+            }, 400);
             setTimeout(function () {
                 skipNextUnload = false;
             }, 1000);

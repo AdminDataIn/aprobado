@@ -121,16 +121,16 @@
             <div class="col-lg-5">
                 <div class="card h-100">
                     <div class="card-header">
-                        <h3 class="card-title mb-0"><i class="bi bi-arrow-left-right me-2"></i>Herramientas legacy</h3>
+                        <h3 class="card-title mb-0"><i class="bi bi-person-check me-2"></i>Completar datos de usuarios existentes</h3>
                     </div>
                     <div class="card-content">
-                        <p class="text-muted mb-2">La reconciliación legacy no carga archivos nuevos. Revisa usuarios antiguos y trata de empatar su documento, correo y empresa con la base laboral ya cargada.</p>
+                        <p class="text-muted mb-2">Usa esta opción solo después de cargar la base laboral. Sirve para completar correo y nombre de usuarios antiguos que ya estaban relacionados con la empresa.</p>
                         <div class="small text-muted mb-3">
-                            Úsala solo después de subir la plantilla oficial de empleados. Resuelve cuentas heredadas sin duplicar registros ni volver a importar el archivo.
+                            No sube un archivo nuevo. Solo revisa usuarios ya vinculados para evitar duplicados y dejar sus datos básicos alineados con la base actual.
                         </div>
                         <form method="post" action="{% url 'pagador:reconciliar_empleados' %}">
                             {% csrf_token %}
-                            <button type="submit" class="btn btn-outline-secondary btn-sm">Reconciliar usuarios legacy</button>
+                            <button type="submit" class="btn btn-outline-secondary btn-sm">Completar usuarios existentes</button>
                         </form>
                     </div>
                 </div>
@@ -159,7 +159,7 @@
                 <h5 class="mb-0 card-title"><i class="bi bi-exclamation-triangle-fill me-2"></i>Errores en el Procesamiento</h5>
             </div>
             <div class="card-content">
-                <p>Se encontraron los siguientes errores al procesar el archivo de pago masivo. Por favor, corríjalos y vuelva a intentarlo.</p>
+                <p>Se encontraron los siguientes errores al procesar el archivo de pagos. Corrige cada fila y vuelve a subir el mismo Excel.</p>
                 <ul class="mb-0">
                     {% for error in errores_pago_masivo %}
                         <li>{{ error }}</li>
@@ -230,25 +230,23 @@
                     <i class="bi bi-card-list me-2"></i>{% if solo_adelantos %}Adelantos de nómina{% else %}Créditos y solicitudes{% endif %}
                     <span class="badge bg-primary ms-2">{{ total_registros|default:0|intcomma }}</span>
                 </h3>
+                {% if not solo_adelantos %}
                 <div class="d-flex gap-2 align-items-center">
                     <div class="btn-group">
-                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=reducido&formato=csv{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
-                            <i class="bi bi-filetype-csv"></i>
-                            Descargar reporte CSV
-                        </a>
-                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=reducido&formato=xlsx{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
+                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=reducido{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
                             <i class="bi bi-file-earmark-spreadsheet"></i>
-                            Descargar reporte Excel
+                            Descargar reporte operativo Excel
                         </a>
-                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=completo&formato=xlsx{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
+                        <a href="{% url 'pagador:descargar_reporte' %}?tipo=completo{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="btn btn-sm btn-outline-primary" data-download="true">
                             <i class="bi bi-file-earmark-text"></i>
-                            Descargar reporte completo
+                            Descargar reporte completo Excel
                         </a>
                     </div>
                     <button class="btn btn-sm btn-outline-primary" onclick="location.reload()">
                         <i class="bi bi-arrow-clockwise"></i>
                     </button>
                 </div>
+                {% endif %}
             </div>
             <div class="table-responsive">
                 <table class="table table-hover table-stack-mobile">
@@ -485,61 +483,45 @@
             });
         </script>
 
+        {% if not solo_adelantos %}
         <div class="card mt-4 mb-4">
             <div class="card-header">
-                <h3 class="card-title"><i class="bi bi-file-earmark-arrow-up me-2"></i>Registro offline por archivo plano</h3>
+                <h3 class="card-title"><i class="bi bi-file-earmark-arrow-up me-2"></i>Cargar pagos por Excel</h3>
             </div>
             <div class="card-content">
-                <p class="text-secondary">Sube un archivo CSV o Excel con los recaudos pagados por la empresa. Cada fila se aplica sobre cuotas reales del crédito y deja trazabilidad del lote.</p>
+                <p class="text-secondary">Descarga la plantilla oficial, revisa el valor sugerido de cada cuota y luego sube ese mismo Excel para validar la carga antes de aplicar pagos.</p>
                 <form action="{% url 'pagador:pagos_masivos' %}" method="post" enctype="multipart/form-data" class="mt-3">
                     {% csrf_token %}
                     <div class="row align-items-end g-3">
-                        <div class="col-lg-5">
+                        <div class="col-lg-6">
                             <label for="id_archivo" class="form-label">Archivo de pagos</label>
-                            <input type="file" class="form-control" id="id_archivo" name="archivo" accept=".csv,.xlsx" required>
+                            <input type="file" class="form-control" id="id_archivo" name="archivo" accept=".xlsx" required>
                         </div>
                         <div class="col-lg-3">
-                            <label for="id_comprobante_lote" class="form-label">Comprobante del lote (opcional)</label>
-                            <input type="file" class="form-control" id="id_comprobante_lote" name="comprobante" accept=".pdf,.jpg,.jpeg,.png,.webp">
-                        </div>
-                        <div class="col-lg-4">
-                            <label for="id_notas_lote" class="form-label">Nota del recaudo (opcional)</label>
-                            <input type="text" class="form-control" id="id_notas_lote" name="notas" placeholder="Ej: Pago de nómina quincena marzo">
+                            <a href="{% url 'pagador:descargar_cuotas_excel' %}" class="btn btn-outline-success w-100" data-download="true">
+                                <i class="bi bi-file-earmark-excel me-1"></i> Descargar plantilla oficial Excel
+                            </a>
                         </div>
                         <div class="col-lg-auto">
                             <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-upload me-1"></i> Procesar archivo
+                                <i class="bi bi-upload me-1"></i> Revisar carga de pagos
                             </button>
-                        </div>
-                        <div class="col-lg-auto">
-                            <a href="{% url 'pagador:descargar_csv_cuotas' %}?formato=csv" class="btn btn-success">
-                                <i class="bi bi-file-earmark-spreadsheet me-1"></i> Descargar reporte de cuotas CSV
-                            </a>
-                        </div>
-                        <div class="col-lg-auto">
-                            <a href="{% url 'pagador:descargar_csv_cuotas' %}?formato=xlsx" class="btn btn-outline-success">
-                                <i class="bi bi-file-earmark-excel me-1"></i> Descargar reporte de cuotas Excel
-                            </a>
-                        </div>
-                        <div class="col-lg-auto">
-                             <a href="{% static 'files/plantilla_pagos_masivos.csv' %}" download class="btn btn-outline-success">
-                                <i class="bi bi-download me-1"></i> Descargar plantilla vacía
-                            </a>
                         </div>
                     </div>
                     <div class="alert alert-info mt-3 mb-0">
-                        <h6 class="mb-2"><i class="bi bi-info-circle me-1"></i> Instrucciones del archivo plano:</h6>
+                        <h6 class="mb-2"><i class="bi bi-info-circle me-1"></i> Cómo funciona:</h6>
                         <ul class="mb-0 small">
-                            <li><strong>Formato admitido:</strong> CSV o XLSX.</li>
-                            <li><strong>Llave recomendada:</strong> <code>numero_credito</code>. Si no viene, puedes usar <code>cedula</code> siempre que la persona no tenga más de un crédito activo.</li>
-                            <li><strong>Monto requerido:</strong> usa la columna <code>monto_a_pagar</code> o <code>monto</code>.</li>
-                            <li><strong>Opcionales:</strong> <code>referencia_pago</code>, <code>fecha_pago</code>, <code>nota</code>.</li>
-                            <li><strong>Deduplicación:</strong> si repites la misma referencia o subes exactamente el mismo archivo ya procesado, el sistema lo bloqueará.</li>
+                            <li><strong>Formato oficial:</strong> Excel (.xlsx).</li>
+                            <li><strong>Columnas base:</strong> cédula y monto a pagar. También puedes completar referencia, fecha del pago y nota.</li>
+                            <li><strong>Formato oficial:</strong> .xlsx. La fecha debe venir como DD/MM/AAAA o YYYY-MM-DD.</li>
+                            <li><strong>Confirmación:</strong> después de subir el Excel, verás el detalle de la carga y allí podrás adjuntar el comprobante antes de aplicar.</li>
+                            <li><strong>Seguridad:</strong> si repites la misma referencia o subes exactamente el mismo archivo ya procesado, el sistema lo bloqueará.</li>
                         </ul>
                     </div>
                 </form>
             </div>
         </div>
+        {% endif %}
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

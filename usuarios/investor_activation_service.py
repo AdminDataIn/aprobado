@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
+from django.core import signing
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -13,15 +14,42 @@ from .models import InvestorAccessToken
 
 
 logger = logging.getLogger(__name__)
+INVESTOR_TOKEN_SALT = 'investor-access-token'
 
 
 def _hash_token(raw_token):
     return hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
 
 
-def _build_investor_url(raw_token, route_name):
+def _serialize_investor_token(token):
+    return signing.dumps(
+        {
+            'token_id': token.id,
+            'tipo': token.tipo,
+            'scope': 'investor',
+        },
+        salt=INVESTOR_TOKEN_SALT,
+    )
+
+
+def _build_investor_url(public_token, route_name):
     host = getattr(settings, 'PRIMARY_DOMAIN_HOST', 'aprobado.com.co')
-    return f"https://{host}{reverse(route_name, kwargs={'token': raw_token})}"
+    return f"https://{host}{reverse(route_name, kwargs={'token': public_token})}"
+
+
+def _get_active_investor_token(usuario, tipo):
+    return (
+        InvestorAccessToken.objects.filter(
+            usuario=usuario,
+            tipo=tipo,
+            used_at__isnull=True,
+            invalidated_at__isnull=True,
+            expires_at__gt=timezone.now(),
+        )
+        .select_related('usuario')
+        .order_by('-created_at')
+        .first()
+    )
 
 
 def invalidar_tokens_inversionista(usuario, tipo=InvestorAccessToken.TipoToken.ACTIVACION):
@@ -33,14 +61,20 @@ def invalidar_tokens_inversionista(usuario, tipo=InvestorAccessToken.TipoToken.A
     ).update(invalidated_at=timezone.now())
 
 
-def crear_token_inversionista(usuario, tipo=InvestorAccessToken.TipoToken.ACTIVACION, created_by=None):
-    raw_token = secrets.token_urlsafe(32)
+def crear_token_inversionista(usuario, tipo=InvestorAccessToken.TipoToken.ACTIVACION, created_by=None, force_new=False):
     expiration_setting = 'INVESTOR_ACTIVATION_EXPIRATION_HOURS'
     default_hours = 24
     if tipo == InvestorAccessToken.TipoToken.RESET_PASSWORD:
         expiration_setting = 'INVESTOR_RESET_EXPIRATION_HOURS'
         default_hours = 2
     expiracion_horas = int(getattr(settings, expiration_setting, default_hours) or default_hours)
+
+    if not force_new:
+        existing_token = _get_active_investor_token(usuario, tipo)
+        if existing_token:
+            return existing_token, _serialize_investor_token(existing_token)
+
+    raw_token = secrets.token_urlsafe(32)
     invalidar_tokens_inversionista(usuario, tipo=tipo)
     token = InvestorAccessToken.objects.create(
         usuario=usuario,
@@ -51,10 +85,27 @@ def crear_token_inversionista(usuario, tipo=InvestorAccessToken.TipoToken.ACTIVA
         expires_at=timezone.now() + timedelta(hours=expiracion_horas),
         created_by=created_by,
     )
-    return token, raw_token
+    return token, _serialize_investor_token(token)
 
 
 def buscar_token_inversionista(raw_token, tipo=InvestorAccessToken.TipoToken.ACTIVACION):
+    try:
+        payload = signing.loads(raw_token, salt=INVESTOR_TOKEN_SALT)
+        if payload.get('scope') != 'investor' or payload.get('tipo') != tipo:
+            return None
+        return InvestorAccessToken.objects.select_related('usuario').get(
+            id=payload.get('token_id'),
+            tipo=tipo,
+        )
+    except (
+        signing.BadSignature,
+        signing.SignatureExpired,
+        InvestorAccessToken.DoesNotExist,
+        TypeError,
+        ValueError,
+    ):
+        pass
+
     try:
         return InvestorAccessToken.objects.select_related('usuario').get(
             token_hash=_hash_token(raw_token),
@@ -71,18 +122,36 @@ def marcar_token_inversionista_como_usado(token):
     invalidar_tokens_inversionista(token.usuario, tipo=token.tipo)
 
 
-def enviar_invitacion_inversionista(usuario, created_by=None):
+def enviar_invitacion_inversionista(usuario, created_by=None, force_new=False):
     if not usuario.email:
         raise ValueError('El usuario inversionista no tiene correo configurado.')
 
-    token, raw_token = crear_token_inversionista(usuario, InvestorAccessToken.TipoToken.ACTIVACION, created_by=created_by)
-    activation_url = _build_investor_url(raw_token, 'inversionista:activar_cuenta')
+    if usuario.last_login is None and not usuario.has_usable_password():
+        update_fields = []
+        if usuario.is_active:
+            usuario.is_active = False
+            update_fields.append('is_active')
+        if not update_fields:
+            update_fields = []
+        usuario.set_unusable_password()
+        update_fields.append('password')
+        usuario.save(update_fields=list(dict.fromkeys(update_fields)))
+
+    token, public_token = crear_token_inversionista(
+        usuario,
+        InvestorAccessToken.TipoToken.ACTIVACION,
+        created_by=created_by,
+        force_new=force_new,
+    )
+    activation_url = _build_investor_url(public_token, 'inversionista:activar_cuenta')
     expiration_hours = int(getattr(settings, 'INVESTOR_ACTIVATION_EXPIRATION_HOURS', 24) or 24)
 
     context = {
         'usuario': usuario,
+        'display_name': usuario.first_name or usuario.get_full_name() or usuario.email,
         'activation_url': activation_url,
         'expiration_hours': expiration_hours,
+        'expires_at': token.expires_at,
     }
     html_content = render_to_string('emails/investor_activation.html', context)
     text_content = render_to_string('emails/investor_activation.txt', context)

@@ -143,6 +143,8 @@ Aplicacion_Ley_Libranza.md
 reports/
 *.tmp
 *.bak
+Creditos_Cargar_*.xlsx
+fertobra_creditos_especiales_*.json
 
 # Documentos bancarios locales / no funcionales
 CertificacionBancaria.pdf

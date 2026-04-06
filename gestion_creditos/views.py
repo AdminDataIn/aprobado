@@ -1327,7 +1327,7 @@ def confirmar_desembolso_view(request, credito_id):
             comprobante=comprobante,
             usuario_modificacion=request.user
         )
-        messages.success(request, f"?Crédito {credito.numero_credito} activado exitosamente!")
+        messages.success(request, f"Crédito {credito.numero_credito} activado exitosamente.")
     except Exception as e:
         messages.error(request, f"Ocurrió un error inesperado al activar el crédito: {e}")
         logger.error(f"Error al activar crédito {credito.id} vía confirmación de desembolso: {e}", exc_info=True)

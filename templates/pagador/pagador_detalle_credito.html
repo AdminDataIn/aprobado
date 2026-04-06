@@ -87,7 +87,7 @@
                                     {% if pago.comprobante %}
                                     <a href="{{ pago.comprobante.url }}" class="btn btn-sm btn-outline-primary" target="_blank">Ver</a>
                                     {% elif pago.lote_pago and pago.lote_pago.comprobante %}
-                                    <a href="{{ pago.lote_pago.comprobante.url }}" class="btn btn-sm btn-outline-primary" target="_blank">Lote</a>
+                                    <a href="{{ pago.lote_pago.comprobante.url }}" class="btn btn-sm btn-outline-primary" target="_blank">Carga</a>
                                     {% else %}
                                     <span class="text-muted">-</span>
                                     {% endif %}
@@ -418,7 +418,8 @@
                                         {% csrf_token %}
                                         <div class="col-md-6">
                                             <label for="id_monto_pago_offline" class="form-label">Monto a aplicar</label>
-                                            <input type="number" step="0.01" min="0.01" class="form-control" id="id_monto_pago_offline" name="monto" required>
+                                            <input type="number" step="0.01" min="0.01" class="form-control" id="id_monto_pago_offline" name="monto" value="{{ pago_offline_form.monto.value|default_if_none:'' }}" required>
+                                            <div class="form-text">Valor sugerido para la próxima cuota: ${{ monto_sugerido_pago|floatformat:2|intcomma }}</div>
                                         </div>
                                         <div class="col-md-6">
                                             <label for="id_referencia_pago_offline" class="form-label">Referencia de pago</label>
@@ -436,8 +437,9 @@
                                             <input type="file" class="form-control" id="id_comprobante_pago_offline" name="comprobante" accept=".pdf,.jpg,.jpeg,.png,.webp">
                                         </div>
                                         <div class="col-12">
-                                            <label for="id_nota_pago_offline" class="form-label">Nota</label>
-                                            <textarea class="form-control" id="id_nota_pago_offline" name="nota" rows="2" placeholder="Ej: Transferencia confirmada por tesorería de la empresa."></textarea>
+                                            <label for="id_nota_pago_offline" class="form-label">Motivo o contexto del pago</label>
+                                            <textarea class="form-control" id="id_nota_pago_offline" name="nota" rows="2" placeholder="Ej: Transferencia confirmada por tesorería de la empresa." required>{{ pago_offline_form.nota.value|default_if_none:'' }}</textarea>
+                                            <div class="form-text">Deja una nota breve para que el equipo pueda identificar este pago después.</div>
                                         </div>
                                         <div class="col-12">
                                             <button type="submit" class="btn btn-outline-primary w-100">

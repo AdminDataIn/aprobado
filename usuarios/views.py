@@ -38,12 +38,14 @@ from .product_flow import (
 )
 from .pagador_activation_service import (
     buscar_token_vigente,
+    enviar_invitacion_activacion_pagador,
     marcar_token_como_usado,
     obtener_perfil_pagador_por_identificador,
     enviar_reset_password_pagador,
 )
 from .investor_activation_service import (
     buscar_token_inversionista,
+    enviar_invitacion_inversionista,
     marcar_token_inversionista_como_usado,
 )
 
@@ -94,6 +96,18 @@ def _build_google_login_url(next_url):
         'next': next_url,
     })
     return f"/accounts/google/login/?{query}"
+
+
+def _get_token_invalid_reason(access_token):
+    if not access_token:
+        return 'not_found'
+    if access_token.used_at:
+        return 'used'
+    if access_token.invalidated_at:
+        return 'replaced'
+    if access_token.expires_at <= timezone.now():
+        return 'expired'
+    return 'unknown'
 
 
 # Create your views here.
@@ -212,15 +226,30 @@ def pagador_activate_account_view(request, token):
             'token_valido': False,
             'expirado': True,
             'form': None,
+            'invalid_reason': 'not_found',
+            'permite_reenvio': False,
         })
 
     expirado = access_token.expires_at <= timezone.now() or access_token.used_at or access_token.invalidated_at
     if expirado:
+        if request.method == 'POST' and request.POST.get('action') == 'resend_activation':
+            try:
+                enviar_invitacion_activacion_pagador(access_token.perfil_pagador, force_new=False)
+                messages.success(
+                    request,
+                    f'Enviamos un nuevo enlace de activacion a {access_token.email_destino}. Usa solo el correo mas reciente.'
+                )
+                return redirect('pagador:login')
+            except Exception as exc:
+                messages.error(request, f'No se pudo reenviar el enlace de activacion: {exc}')
         return render(request, 'account/pagador/activate_account.html', {
             'token_valido': False,
             'expirado': True,
             'form': None,
             'usuario_email': access_token.email_destino,
+            'invalid_reason': _get_token_invalid_reason(access_token),
+            'permite_reenvio': True,
+            'modo': 'activacion',
         })
 
     user = access_token.usuario
@@ -243,6 +272,7 @@ def pagador_activate_account_view(request, token):
         'usuario_email': access_token.email_destino,
         'empresa': access_token.perfil_pagador.empresa,
         'modo': 'activacion',
+        'permite_reenvio': False,
     })
 
 
@@ -281,6 +311,8 @@ def pagador_password_reset_confirm_view(request, token):
             'expirado': True,
             'form': None,
             'modo': 'reset',
+            'invalid_reason': 'not_found',
+            'permite_reenvio': False,
         })
 
     expirado = access_token.expires_at <= timezone.now() or access_token.used_at or access_token.invalidated_at
@@ -291,6 +323,8 @@ def pagador_password_reset_confirm_view(request, token):
             'form': None,
             'usuario_email': access_token.email_destino,
             'modo': 'reset',
+            'invalid_reason': _get_token_invalid_reason(access_token),
+            'permite_reenvio': False,
         })
 
     user = access_token.usuario
@@ -314,6 +348,7 @@ def pagador_password_reset_confirm_view(request, token):
         'usuario_email': access_token.email_destino,
         'empresa': access_token.perfil_pagador.empresa,
         'modo': 'reset',
+        'permite_reenvio': False,
     })
 
 
@@ -675,15 +710,29 @@ def investor_activate_account_view(request, token):
             'token_valido': False,
             'expirado': True,
             'form': None,
+            'invalid_reason': 'not_found',
+            'permite_reenvio': False,
         })
 
     expirado = access_token.expires_at <= timezone.now() or access_token.used_at or access_token.invalidated_at
     if expirado:
+        if request.method == 'POST' and request.POST.get('action') == 'resend_activation':
+            try:
+                enviar_invitacion_inversionista(access_token.usuario, force_new=False)
+                messages.success(
+                    request,
+                    f'Enviamos un nuevo enlace de activacion a {access_token.email_destino}. Usa solo el correo mas reciente.'
+                )
+                return redirect('inversionista:login')
+            except Exception as exc:
+                messages.error(request, f'No se pudo reenviar el enlace de activacion: {exc}')
         return render(request, 'account/inversionista/activate_account.html', {
             'token_valido': False,
             'expirado': True,
             'form': None,
             'usuario_email': access_token.email_destino,
+            'invalid_reason': _get_token_invalid_reason(access_token),
+            'permite_reenvio': True,
         })
 
     user = access_token.usuario
@@ -705,6 +754,7 @@ def investor_activate_account_view(request, token):
         'expirado': False,
         'form': form,
         'usuario_email': access_token.email_destino,
+        'permite_reenvio': False,
     })
 
 

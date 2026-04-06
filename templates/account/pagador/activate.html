@@ -4,16 +4,16 @@
 
 {% block content %}
 {% if token_valido %}
-    <div class="auth-status-icon">🔐</div>
+    <div class="auth-status-icon"><i class="bi bi-shield-lock"></i></div>
     <div class="mb-3">
         <span class="badge rounded-pill border">{% if modo == 'reset' %}Restablecer acceso{% else %}Activar acceso{% endif %}</span>
     </div>
     <h1>{% if modo == 'reset' %}Restablece tu acceso{% else %}Activa tu acceso{% endif %}</h1>
     <p class="auth-desc">
         {% if modo == 'reset' %}
-        Define una nueva contrasena para volver a ingresar al panel de pagador.
+        Define una nueva contraseña para volver a ingresar al panel de pagador.
         {% else %}
-        Define tu contrasena inicial para activar el acceso de pagador.
+        Define tu contraseña inicial para activar el acceso de pagador.
         {% endif %}
     </p>
 
@@ -31,21 +31,21 @@
     <form method="post">
         {% csrf_token %}
         <div class="auth-field">
-            <label class="form-label" for="{{ form.new_password1.id_for_label }}">Nueva contrasena</label>
+            <label class="form-label" for="{{ form.new_password1.id_for_label }}">Nueva contraseña</label>
             <div class="auth-password-wrap">
                 {{ form.new_password1 }}
-                <button type="button" class="auth-password-toggle" data-password-toggle="{{ form.new_password1.id_for_label }}" aria-label="Mostrar u ocultar contrasena">
-                  <i class="bi bi-eye"></i>
+                <button type="button" class="auth-password-toggle" data-password-toggle="{{ form.new_password1.id_for_label }}" aria-label="Mostrar u ocultar contraseña">
+                    <i class="bi bi-eye"></i>
                 </button>
             </div>
             {% if form.new_password1.errors %}{{ form.new_password1.errors }}{% endif %}
         </div>
         <div class="auth-field">
-            <label class="form-label" for="{{ form.new_password2.id_for_label }}">Confirmar contrasena</label>
+            <label class="form-label" for="{{ form.new_password2.id_for_label }}">Confirmar contraseña</label>
             <div class="auth-password-wrap">
                 {{ form.new_password2 }}
-                <button type="button" class="auth-password-toggle" data-password-toggle="{{ form.new_password2.id_for_label }}" aria-label="Mostrar u ocultar contrasena">
-                  <i class="bi bi-eye"></i>
+                <button type="button" class="auth-password-toggle" data-password-toggle="{{ form.new_password2.id_for_label }}" aria-label="Mostrar u ocultar contraseña">
+                    <i class="bi bi-eye"></i>
                 </button>
             </div>
             {% if form.new_password2.errors %}{{ form.new_password2.errors }}{% endif %}
@@ -53,19 +53,25 @@
         {% if form.non_field_errors %}
         <div class="alert alert-danger">{{ form.non_field_errors|join:", " }}</div>
         {% endif %}
-        <button type="submit" class="btn-account">{% if modo == 'reset' %}Actualizar contrasena{% else %}Activar cuenta{% endif %}</button>
+        <button type="submit" class="btn-account">{% if modo == 'reset' %}Actualizar contraseña{% else %}Activar cuenta{% endif %}</button>
     </form>
 {% else %}
-    <div class="auth-status-icon">!</div>
+    <div class="auth-status-icon"><i class="bi bi-exclamation-circle"></i></div>
     <div class="mb-3">
         <span class="badge rounded-pill border">Enlace no disponible</span>
     </div>
-    <h1>El enlace ya no esta disponible</h1>
+    <h1>El enlace ya no está disponible</h1>
     <p class="auth-desc">
-        {% if modo == 'reset' %}
-        Este enlace ya fue usado o expiro. Solicita un nuevo enlace de recuperacion.
+        {% if invalid_reason == 'replaced' %}
+        Este enlace fue reemplazado por uno más reciente. Usa el último correo recibido o solicita un reenvío.
+        {% elif invalid_reason == 'used' %}
+        Este enlace ya fue usado. Por seguridad no puede reutilizarse.
+        {% elif invalid_reason == 'expired' %}
+        Este enlace expiró. Solicita uno nuevo para continuar.
+        {% elif modo == 'reset' %}
+        Este enlace ya fue usado o expiró. Solicita un nuevo enlace de recuperación.
         {% else %}
-        Este enlace ya fue usado o expiro. Solicita un nuevo envio al equipo interno.
+        Este enlace ya fue usado o expiró. Solicita un nuevo envío.
         {% endif %}
     </p>
     {% if usuario_email %}
@@ -74,8 +80,16 @@
         <input type="text" value="{{ usuario_email }}" readonly>
     </div>
     {% endif %}
+    {% if modo != 'reset' and permite_reenvio %}
+    <form method="post" class="d-grid gap-2">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="resend_activation">
+        <button type="submit" class="btn-account">Reenviar activación</button>
+    </form>
+    {% else %}
     <a href="{% if modo == 'reset' %}{% url 'pagador:password_reset_request' %}{% else %}{% url 'pagador:login' %}{% endif %}" class="btn-account">
         {% if modo == 'reset' %}Solicitar nuevo enlace{% else %}Ir al login{% endif %}
     </a>
+    {% endif %}
 {% endif %}
 {% endblock %}

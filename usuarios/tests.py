@@ -3,8 +3,11 @@ from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from django.utils import timezone
+
 from gestion_creditos.models import Empresa
-from .models import PerfilPagador, PagadorAccessToken
+from .models import InvestorAccessToken, PerfilPagador, PagadorAccessToken
+from .investor_activation_service import enviar_invitacion_inversionista
 from .pagador_activation_service import (
     crear_token_pagador,
     crear_token_activacion_pagador,
@@ -32,15 +35,16 @@ class PagadorActivationFlowTests(TestCase):
         )
         self.perfil = PerfilPagador.objects.create(usuario=self.user, empresa=self.empresa, es_pagador=True)
 
-    def test_envio_invitacion_invalida_tokens_previos(self):
-        token_1, _ = crear_token_activacion_pagador(self.perfil)
-        token_2, _ = crear_token_activacion_pagador(self.perfil)
+    def test_envio_invitacion_reutiliza_token_activo(self):
+        token_1, public_token_1 = crear_token_activacion_pagador(self.perfil)
+        token_2, public_token_2 = crear_token_activacion_pagador(self.perfil)
 
         token_1.refresh_from_db()
         token_2.refresh_from_db()
 
-        self.assertIsNotNone(token_1.invalidated_at)
-        self.assertIsNone(token_2.invalidated_at)
+        self.assertEqual(token_1.pk, token_2.pk)
+        self.assertEqual(public_token_1, public_token_2)
+        self.assertIsNone(token_1.invalidated_at)
 
     def test_envio_email_activa_flujo_para_cuenta_nueva(self):
         self.user.last_login = None
@@ -53,6 +57,29 @@ class PagadorActivationFlowTests(TestCase):
         self.assertFalse(self.user.has_usable_password())
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('Activa tu acceso aqui:', mail.outbox[0].body)
+
+    def test_enlace_invalido_permite_reenvio(self):
+        _, public_token = crear_token_activacion_pagador(self.perfil)
+        PagadorAccessToken.objects.filter(usuario=self.user).update(invalidated_at=timezone.now())
+
+        response = self.client.post(
+            reverse('pagador:activar_cuenta', kwargs={'token': public_token}),
+            data={'action': 'resend_activation'},
+            follow=True,
+            secure=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Enviamos un nuevo enlace de activacion')
+        self.assertEqual(PagadorAccessToken.objects.filter(usuario=self.user).count(), 2)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIsNone(
+            PagadorAccessToken.objects.filter(
+                usuario=self.user,
+                used_at__isnull=True,
+                invalidated_at__isnull=True,
+            ).first().invalidated_at
+        )
 
     def test_activacion_define_contrasena_y_habilita_usuario(self):
         self.user.last_login = None
@@ -123,7 +150,7 @@ class PagadorActivationFlowTests(TestCase):
     def test_request_reset_por_usuario_envia_mensaje_neutro(self):
         response = self.client.post(
             reverse('pagador:password_reset_request'),
-            data={'identificador': self.user.username},
+            data={'email': self.user.email},
             follow=True,
             secure=True,
         )
@@ -140,3 +167,30 @@ class PagadorActivationFlowTests(TestCase):
             ).count(),
             1,
         )
+
+
+@override_settings(
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    DEFAULT_FROM_EMAIL='no-reply@aprobado.test',
+    PRIMARY_DOMAIN_HOST='aprobado.test',
+)
+class InvestorActivationFlowTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create(
+            username='investor@test.com',
+            email='investor@test.com',
+            is_active=True,
+        )
+        self.user.set_unusable_password()
+        self.user.save(update_fields=['password'])
+
+    def test_invitation_deactivates_account_without_password_and_sends_link(self):
+        enviar_invitacion_inversionista(self.user)
+        self.user.refresh_from_db()
+        token = InvestorAccessToken.objects.get(usuario=self.user)
+
+        self.assertFalse(self.user.is_active)
+        self.assertFalse(self.user.has_usable_password())
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('/inversionista/activar/', mail.outbox[0].body)
+        self.assertIsNone(token.invalidated_at)

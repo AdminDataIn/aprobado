@@ -6,9 +6,9 @@
 {% block content %}
   {% if token_valido %}
     <div class="auth-status-icon is-success"><i class="bi bi-graph-up-arrow"></i></div>
-    <div class="mb-3"><span class="badge rounded-pill border">Activacion inversionista</span></div>
+    <div class="mb-3"><span class="badge rounded-pill border">Activación inversionista</span></div>
     <h1>Activa tu acceso</h1>
-    <p class="auth-desc">Define tu contrasena para ingresar por primera vez a tu portal de inversionista.</p>
+    <p class="auth-desc">Define tu contraseña para ingresar por primera vez a tu portal de inversionista.</p>
 
     <div class="auth-field">
       <label class="form-label">Correo asociado</label>
@@ -18,20 +18,20 @@
     <form method="post">
       {% csrf_token %}
       <div class="auth-field">
-        <label class="form-label" for="{{ form.new_password1.id_for_label }}">Nueva contrasena</label>
+        <label class="form-label" for="{{ form.new_password1.id_for_label }}">Nueva contraseña</label>
         <div class="auth-password-wrap">
           {{ form.new_password1 }}
-          <button type="button" class="auth-password-toggle" data-password-toggle="{{ form.new_password1.id_for_label }}" aria-label="Mostrar u ocultar contrasena">
+          <button type="button" class="auth-password-toggle" data-password-toggle="{{ form.new_password1.id_for_label }}" aria-label="Mostrar u ocultar contraseña">
             <i class="bi bi-eye"></i>
           </button>
         </div>
         {% if form.new_password1.errors %}{{ form.new_password1.errors }}{% endif %}
       </div>
       <div class="auth-field">
-        <label class="form-label" for="{{ form.new_password2.id_for_label }}">Confirmar contrasena</label>
+        <label class="form-label" for="{{ form.new_password2.id_for_label }}">Confirmar contraseña</label>
         <div class="auth-password-wrap">
           {{ form.new_password2 }}
-          <button type="button" class="auth-password-toggle" data-password-toggle="{{ form.new_password2.id_for_label }}" aria-label="Mostrar u ocultar contrasena">
+          <button type="button" class="auth-password-toggle" data-password-toggle="{{ form.new_password2.id_for_label }}" aria-label="Mostrar u ocultar contraseña">
             <i class="bi bi-eye"></i>
           </button>
         </div>
@@ -45,14 +45,32 @@
   {% else %}
     <div class="auth-status-icon"><i class="bi bi-exclamation-circle"></i></div>
     <div class="mb-3"><span class="badge rounded-pill border">Enlace no disponible</span></div>
-    <h1>El enlace ya no esta disponible</h1>
-    <p class="auth-desc">Este enlace ya fue usado o expiro. Solicita un nuevo envio al equipo interno.</p>
+    <h1>El enlace ya no está disponible</h1>
+    <p class="auth-desc">
+      {% if invalid_reason == 'replaced' %}
+      Este enlace fue reemplazado por uno más reciente. Usa el último correo recibido o solicita un reenvío.
+      {% elif invalid_reason == 'used' %}
+      Este enlace ya fue usado. Por seguridad no puede reutilizarse.
+      {% elif invalid_reason == 'expired' %}
+      Este enlace expiró. Solicita uno nuevo para continuar.
+      {% else %}
+      Este enlace ya fue usado o expiró. Solicita un nuevo envío.
+      {% endif %}
+    </p>
     {% if usuario_email %}
     <div class="auth-field">
       <label class="form-label">Correo asociado</label>
       <input type="text" value="{{ usuario_email }}" readonly>
     </div>
     {% endif %}
+    {% if permite_reenvio %}
+    <form method="post" class="d-grid gap-2">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="resend_activation">
+      <button type="submit" class="btn-account">Reenviar activación</button>
+    </form>
+    {% else %}
     <a href="{% url 'inversionista:login' %}" class="btn-account">Ir al login</a>
+    {% endif %}
   {% endif %}
 {% endblock %}

@@ -38,6 +38,7 @@ urlpatterns = [
     path('pagar/<int:credito_id>/', views.iniciar_pago_view, name='pagar_individual'),
     path('pagar/callback/', views.procesar_pago_callback_view, name='pago_callback'),
     path('pagos-masivos/', views.pagador_procesar_pagos_view, name='pagos_masivos'),
+    path('pagos-masivos/<int:lote_id>/', views.pagador_confirmar_pagos_masivos_view, name='pagos_masivos_confirmar'),
 
     # ========================================
     # PROCESAMIENTO DE PAGOS - WOMPI (REAL)
@@ -56,7 +57,8 @@ urlpatterns = [
     # ========================================
     # UTILIDADES Y REPORTES
     # ========================================
-    path('descargar-csv-cuotas/', views.descargar_csv_cuotas_pendientes_view, name='descargar_csv_cuotas'),
+    path('descargar-cuotas-excel/', views.descargar_csv_cuotas_pendientes_view, name='descargar_cuotas_excel'),
+    path('descargar-cuotas/', views.descargar_csv_cuotas_pendientes_view, name='descargar_cuotas_excel_legacy'),
     path('descargar-reporte/', views.descargar_reporte_pagador_view, name='descargar_reporte'),
 
     # API endpoints

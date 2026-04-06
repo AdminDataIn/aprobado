@@ -4,6 +4,7 @@ from django.contrib.admin import SimpleListFilter
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.models import User
 from django.contrib.admin.sites import NotRegistered
+from django.conf import settings
 
 from .models import PerfilPagador, PerfilEmpresaMarketing, PagadorAccessToken, ProductAccessProfile
 from .pagador_activation_service import enviar_invitacion_activacion_pagador
@@ -146,6 +147,13 @@ class PerfilPagadorAdmin(admin.ModelAdmin):
         # Si el usuario ya tenia acceso previo, el servicio no lo bloquea de
         # forma retroactiva. Si falta correo, dejamos mensaje y no rompemos.
         if not change:
+            if not getattr(settings, 'PAGADOR_AUTO_SEND_ACTIVATION_ON_CREATE', True):
+                self.message_user(
+                    request,
+                    'El pagador fue creado sin envio automatico. Usa la accion de reenvio cuando quieras habilitar el acceso.',
+                    level=messages.INFO
+                )
+                return
             usuario = obj.usuario
             if not usuario.email:
                 self.message_user(
