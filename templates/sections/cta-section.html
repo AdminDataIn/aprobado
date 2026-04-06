@@ -1,5 +1,8 @@
 {% load static %}
 
+{% load contact_tags %}
+{% contact_email as support_email %}
+{% contact_mailto as support_mailto %}
 <section class="cta-section">
   <div class="cta-container">
     <div class="cta-card">
@@ -27,7 +30,7 @@
           </div>
 
           <div class="cta-contact">
-            <a href="mailto:info@aprobado.com.co">info@aprobado.com.co</a>
+            <a href="{{ support_mailto }}">{{ support_email }}</a>
           </div>
         </div>
 

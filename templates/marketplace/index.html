@@ -1,4 +1,5 @@
-{% load static %}
+{% load static contact_tags %}
+{% contact_mailto as support_mailto %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -167,7 +168,7 @@
             <a class="mp-btn primary" href="https://wa.me/{{ empresa.whatsapp_contacto }}" target="_blank" rel="noopener">
                 <i class="bi bi-whatsapp"></i>Escribir por WhatsApp
             </a>
-            <a class="mp-btn ghost" href="mailto:info@aprobado.com.co">
+            <a class="mp-btn ghost" href="{{ support_mailto }}">
                 <i class="bi bi-envelope"></i>Contactar Aprobado
             </a>
         </div>

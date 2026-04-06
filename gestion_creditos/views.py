@@ -24,6 +24,7 @@ from .models import (
     WompiIntent,
     MarketplaceItem,
     MarketplaceItemHistorialEstado,
+    LotePagoEmpresa,
     Notificacion,
     VinculoLaboralEmpresa,
 )
@@ -36,6 +37,7 @@ from .forms import (
     EmployeeBulkUploadForm,
     MarketplaceItemForm,
     PagoCreditoOfflineForm,
+    PagoMasivoEmpresaConfirmForm,
     PagoMasivoEmpresaUploadForm,
 )
 from . import credit_services
@@ -69,7 +71,6 @@ from .services.marketplace_service import registrar_historial_publicacion, cambi
 from .services.adelanto_nomina_service import evaluar_elegibilidad_adelanto, obtener_vinculo_laboral_activo
 from .services.capacidad_descuento_service import calcular_capacidad_descuento, simular_adelanto_nomina
 from .services.empleados_service import (
-    plantilla_empleados_csv,
     plantilla_empleados_xlsx,
     procesar_carga_empleados,
     reconciliar_usuarios_empleados_legacy,
@@ -496,14 +497,6 @@ def simular_adelanto_nomina_view(request):
 @pagador_required
 @require_http_methods(["GET"])
 def descargar_plantilla_empleados_view(request):
-    formato = (request.GET.get('formato') or 'xlsx').lower()
-    if formato == 'csv':
-        response = HttpResponse(content_type='text/csv; charset=utf-8')
-        response['Content-Disposition'] = 'attachment; filename="plantilla_empleados_aprobado.csv"'
-        response.write('\ufeff')
-        response.write(plantilla_empleados_csv())
-        return response
-
     response = HttpResponse(
         plantilla_empleados_xlsx(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -538,6 +531,13 @@ def pagador_carga_empleados_view(request):
         'form': form,
         'resultados': resultados,
         'empresa': request.empresa,
+        'dashboard_title': 'Gestión de empleados',
+        'section_description': 'Mantén la base laboral actualizada para habilitar libranza y adelanto de nómina sin digitación manual dispersa.',
+        'legacy_flow_title': 'Completar datos de usuarios existentes',
+        'legacy_flow_description': (
+            'Usa esta opción solo cuando ya cargaste la base laboral y quieres completar '
+            'correo o nombre de usuarios antiguos que ya estaban relacionados con la empresa.'
+        ),
     })
 
 
@@ -546,7 +546,10 @@ def pagador_carga_empleados_view(request):
 @require_http_methods(["POST"])
 def pagador_reconciliar_empleados_view(request):
     resultados = reconciliar_usuarios_empleados_legacy(empresa=request.empresa)
-    messages.success(request, f'Se revisaron {len(resultados)} vinculos legacy para {request.empresa.nombre}.')
+    messages.success(
+        request,
+        f'Se revisaron {len(resultados)} usuarios ya vinculados a {request.empresa.nombre} para completar sus datos básicos.'
+    )
     return redirect('pagador:carga_empleados')
 
 
@@ -1858,6 +1861,14 @@ def pagador_detalle_credito_view(request, credito_id):
     historial_pagos = HistorialPago.objects.filter(credito=credito, estado=HistorialPago.EstadoPago.EXITOSO).order_by('-fecha_aplicacion', '-fecha_pago')
     resumen_pagos = credit_services.obtener_resumen_pagos_credito(credito, historial_pagos=historial_pagos)
     total_pagado = resumen_pagos['total_pagado']
+    siguiente_cuota = credito.tabla_amortizacion.filter(pagada=False).order_by('numero_cuota').first()
+    monto_sugerido = (
+        (siguiente_cuota.valor_cuota - (siguiente_cuota.monto_pagado or Decimal('0.00')))
+        if siguiente_cuota else
+        (credito.valor_cuota or Decimal('0.00'))
+    )
+    if monto_sugerido < Decimal('0.00'):
+        monto_sugerido = Decimal('0.00')
     
     #? Usar el saldo pendiente del modelo que ya se actualiza correctamente
     saldo_pendiente = resumen_pagos['saldo_pendiente']
@@ -1877,7 +1888,11 @@ def pagador_detalle_credito_view(request, credito_id):
         'pagador_rechazado': bool(pagador_decision and pagador_decision.estado_nuevo == Credito.EstadoCredito.RECHAZADO),
         'empresa_credito': credito.empresa_relacionada,
         'capacidad_descuento': capacidad_descuento,
-        'pago_offline_form': PagoCreditoOfflineForm(),
+        'pago_offline_form': PagoCreditoOfflineForm(initial={
+            'monto': monto_sugerido,
+            'nota': 'Pago registrado por la empresa para esta cuota.',
+        }),
+        'monto_sugerido_pago': monto_sugerido,
     }
     
     return render(request, 'pagador/pagador_detalle_credito.html', context)
@@ -2095,8 +2110,7 @@ def _legacy_pagador_procesar_pagos_view(request):
 @pagador_required
 def pagador_procesar_pagos_view(request):
     """
-    Procesa pagos offline de empresa desde archivo CSV/XLSX.
-    La ruta WOMPI masiva queda separada en pagar_masivo_wompi.
+    Recibe la plantilla oficial en Excel y crea un lote borrador para confirmación offline.
     """
     empresa = request.empresa
     form = PagoMasivoEmpresaUploadForm(request.POST, request.FILES)
@@ -2106,34 +2120,95 @@ def pagador_procesar_pagos_view(request):
         for field_errors in form.errors.values():
             errores.extend(field_errors)
         request.session['errores_pago_masivo'] = errores
-        messages.error(request, "No pudimos validar el archivo o el comprobante del lote.")
+        messages.error(request, "No pudimos validar el archivo Excel de la carga de pagos.")
         return redirect('pagador:dashboard')
 
     archivo = form.cleaned_data['archivo']
-    comprobante = form.cleaned_data.get('comprobante')
-    notas = form.cleaned_data.get('notas') or ''
-
-    pagos_exitosos, errores, lote = credit_services.procesar_pagos_masivos_archivo(
+    _, errores, lote = credit_services.crear_borrador_pagos_masivos_archivo(
         archivo,
         empresa,
         usuario=request.user,
-        comprobante=comprobante,
-        notas=notas,
     )
 
     if errores:
         request.session['errores_pago_masivo'] = errores
-        messages.error(request, f"Se procesaron {pagos_exitosos} pagos, pero se detectaron {len(errores)} novedades.")
-    elif pagos_exitosos:
-        messages.success(
-            request,
-            f"Se aplicaron {pagos_exitosos} pagos offline correctamente."
-            + (f" Lote #{lote.id} registrado." if lote else '')
-        )
-    else:
-        messages.warning(request, "El archivo no genero pagos aplicables.")
+        messages.error(request, "No pudimos preparar la carga de pagos.")
+        return redirect('pagador:dashboard')
 
-    return redirect('pagador:dashboard')
+    return redirect('pagador:pagos_masivos_confirmar', lote_id=lote.id)
+
+
+def _build_pagador_pagos_masivos_preview(lote):
+    pagos_validos, errores, _ = credit_services.validar_archivo_pagos_masivos(lote.archivo, lote.empresa)
+    monto_total = sum(p['monto'] for p in pagos_validos)
+    return pagos_validos, errores, monto_total
+
+
+@login_required(login_url='/pagador/login/')
+@pagador_required
+@require_http_methods(["GET", "POST"])
+def pagador_confirmar_pagos_masivos_view(request, lote_id):
+    lote = get_object_or_404(LotePagoEmpresa.objects.select_related('empresa', 'creado_por'), pk=lote_id, empresa=request.empresa)
+    pagos_validos, errores_preview, monto_total = _build_pagador_pagos_masivos_preview(lote)
+
+    if lote.estado != LotePagoEmpresa.EstadoLote.CARGADO:
+        messages.warning(request, f'La carga de pagos #{lote.id} ya fue procesada o no está disponible para confirmación.')
+        return redirect('pagador:dashboard')
+
+    if request.method == 'POST':
+        form = PagoMasivoEmpresaConfirmForm(request.POST, request.FILES, instance=lote)
+        if form.is_valid():
+            pagos_exitosos, errores = credit_services.procesar_lote_pago_empresa(
+                lote,
+                usuario=request.user,
+                comprobante=form.cleaned_data.get('comprobante'),
+                notas=form.cleaned_data.get('notas') or '',
+            )
+            if errores:
+                context = {
+                    'empresa': request.empresa,
+                    'lote': lote,
+                    'pagos_validos': pagos_validos,
+                    'errores_pago_masivo': errores,
+                    'monto_total': monto_total,
+                    'cantidad_pagos': len(pagos_validos),
+                    'form': form,
+                }
+                return render(request, 'pagador/confirmacion_pago_masivo.html', context)
+
+            try:
+                from .email_service import enviar_resumen_pago_masivo_pagador
+                enviar_resumen_pago_masivo_pagador(
+                    lote=lote,
+                    pagos_aplicados=pagos_exitosos,
+                    monto_total=monto_total,
+                    pagador_email=request.user.email,
+                    pagador_nombre=request.user.get_full_name() or request.user.username,
+                )
+            except Exception:
+                logger.exception(
+                    "No pudimos enviar el resumen de la carga de pagos al pagador para lote %s",
+                    lote.id,
+                )
+
+            messages.success(
+                request,
+                f'Se aplicaron {pagos_exitosos} pagos correctamente. La carga de pagos #{lote.id} quedó registrada.'
+            )
+            return redirect('pagador:dashboard')
+    else:
+        form = PagoMasivoEmpresaConfirmForm(instance=lote)
+
+    context = {
+        'empresa': request.empresa,
+        'lote': lote,
+        'pagos_validos': pagos_validos,
+        'errores_pago_masivo': errores_preview,
+        'monto_total': monto_total,
+        'cantidad_pagos': len(pagos_validos),
+        'form': form,
+    }
+    return render(request, 'pagador/confirmacion_pago_masivo.html', context)
 
 
 def _build_pagador_creditos_report_queryset_legacy(empresa, search_query='', estado_filter='', sort_by='cliente_documento'):
@@ -2361,14 +2436,9 @@ def _pagador_report_rows(request, creditos, empresa, report_type):
 @pagador_required
 def descargar_csv_cuotas_pendientes_view(request):
     """
-    Genera y descarga cuotas pendientes en CSV o XLSX.
+    Genera la plantilla oficial en Excel para carga offline de cuotas.
     """
-    import csv
-
     empresa = request.empresa
-    formato = (request.GET.get('formato') or 'csv').strip().lower()
-    if formato not in {'csv', 'xlsx'}:
-        formato = 'csv'
 
     creditos = Credito.objects.filter(
         linea=Credito.LineaCredito.LIBRANZA,
@@ -2392,30 +2462,77 @@ def descargar_csv_cuotas_pendientes_view(request):
 
         monto = int(valor.to_integral_value(rounding=ROUND_CEILING))
 
-        rows.append([cedula, monto])
+        rows.append([cedula, monto, '', '', ''])
 
     filename = f'cuotas_pendientes_{empresa.nombre}_{timezone.now().strftime("%Y%m%d")}'
-    if formato == 'xlsx':
-        from openpyxl import Workbook
+    from openpyxl import Workbook
+    from openpyxl.comments import Comment
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.worksheet.datavalidation import DataValidation
 
-        response = HttpResponse(
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        response['Content-Disposition'] = f'attachment; filename="{filename}.xlsx"'
-        workbook = Workbook(write_only=True)
-        sheet = workbook.create_sheet(title='Cuotas pendientes')
-        sheet.append(['cedula', 'monto_a_pagar'])
-        for row in rows:
-            sheet.append(row)
-        workbook.save(response)
-        return response
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}.xlsx"'
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = 'Pagos a cargar'
 
-    response = HttpResponse(content_type='text/csv; charset=utf-8')
-    response['Content-Disposition'] = f'attachment; filename="{filename}.csv"'
-    response.write('\ufeffsep=,\n')
-    writer = csv.writer(response)
-    writer.writerow(['cedula', 'monto_a_pagar'])
-    writer.writerows(rows)
+    headers = ['cedula', 'monto_a_pagar', 'referencia_pago', 'fecha_pago', 'nota']
+    sheet.append(headers)
+    for row in rows:
+        sheet.append(row)
+
+    header_fill = PatternFill(fill_type='solid', fgColor='0B5ED7')
+    header_font = Font(color='FFFFFF', bold=True)
+    for cell in sheet[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+
+    widths = {'A': 18, 'B': 18, 'C': 26, 'D': 18, 'E': 42}
+    for column, width in widths.items():
+        sheet.column_dimensions[column].width = width
+
+    sheet.freeze_panes = 'A2'
+    sheet['D1'].comment = Comment(
+        'Usa el formato DD/MM/AAAA. Ejemplo: 30/03/2026. '
+        'Si no diligencias la fecha, el sistema tomará la fecha actual.',
+        'Aprobado',
+    )
+    sheet['E1'].comment = Comment(
+        'Describe brevemente el contexto del pago. Ejemplo: Nómina marzo pagada por transferencia.',
+        'Aprobado',
+    )
+
+    for row_idx in range(2, len(rows) + 2):
+        sheet[f'D{row_idx}'].number_format = 'DD/MM/YYYY'
+        sheet[f'E{row_idx}'].alignment = Alignment(wrap_text=True)
+
+    date_validation = DataValidation(
+        type='date',
+        operator='between',
+        formula1='DATE(2020,1,1)',
+        formula2='DATE(2100,12,31)',
+        allow_blank=True,
+    )
+    date_validation.prompt = 'Usa una fecha con formato DD/MM/AAAA. Ejemplo: 30/03/2026.'
+    date_validation.promptTitle = 'Fecha de pago'
+    date_validation.error = 'La fecha debe estar en formato DD/MM/AAAA. Ejemplo: 30/03/2026.'
+    date_validation.errorTitle = 'Fecha inválida'
+    sheet.add_data_validation(date_validation)
+    date_validation.add(f'D2:D{max(len(rows) + 1, 500)}')
+
+    instrucciones = workbook.create_sheet(title='Instrucciones')
+    instrucciones['A1'] = 'Cómo usar esta plantilla'
+    instrucciones['A1'].font = Font(bold=True, size=13)
+    instrucciones['A3'] = '1. No cambies los nombres de las columnas.'
+    instrucciones['A4'] = '2. Si ya aparece el valor sugerido de la cuota, solo ajusta si la empresa pagó un monto diferente.'
+    instrucciones['A5'] = '3. En fecha_pago usa siempre DD/MM/AAAA. Ejemplo: 30/03/2026.'
+    instrucciones['A6'] = '4. La nota debe explicar el contexto del pago. Ejemplo: Nómina marzo pagada por transferencia.'
+    instrucciones['A7'] = '5. Después de subir el archivo, podrás revisar la carga y adjuntar el comprobante antes de confirmar.'
+    instrucciones.column_dimensions['A'].width = 110
+    workbook.save(response)
     return response
 
 
@@ -2423,17 +2540,12 @@ def descargar_csv_cuotas_pendientes_view(request):
 @pagador_required
 def descargar_reporte_pagador_view(request):
     """
-    Genera y descarga un reporte completo de los creditos de libranza de la empresa.
+    Genera y descarga en Excel el reporte operativo de los creditos de libranza de la empresa.
     """
-    import csv
-
     empresa = request.empresa
     search_query = request.GET.get('search', '').strip()
     estado_filter = request.GET.get('estado', '').strip()
     sort_by = request.GET.get('sort_by', 'cliente_documento')
-    formato = (request.GET.get('formato') or 'csv').strip().lower()
-    if formato not in {'csv', 'xlsx'}:
-        formato = 'csv'
 
     creditos = _build_pagador_creditos_queryset(empresa, search_query, estado_filter, sort_by)
 
@@ -2443,28 +2555,18 @@ def descargar_reporte_pagador_view(request):
 
     headers, rows = _pagador_report_rows(request, creditos, empresa, report_type)
     filename = f'reporte_pagador_{report_type}_{empresa.nombre}_{timezone.now().strftime("%Y%m%d")}'
+    from openpyxl import Workbook
 
-    if formato == 'xlsx':
-        from openpyxl import Workbook
-
-        response = HttpResponse(
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        response['Content-Disposition'] = f'attachment; filename="{filename}.xlsx"'
-        workbook = Workbook(write_only=True)
-        sheet = workbook.create_sheet(title='Reporte pagador')
-        sheet.append(headers)
-        for row in rows:
-            sheet.append(row)
-        workbook.save(response)
-        return response
-
-    response = HttpResponse(content_type='text/csv; charset=utf-8')
-    response['Content-Disposition'] = f'attachment; filename="{filename}.csv"'
-    response.write('\ufeff')
-    writer = csv.writer(response)
-    writer.writerow(headers)
-    writer.writerows(rows)
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}.xlsx"'
+    workbook = Workbook(write_only=True)
+    sheet = workbook.create_sheet(title='Reporte pagador')
+    sheet.append(headers)
+    for row in rows:
+        sheet.append(row)
+    workbook.save(response)
     return response
 
 

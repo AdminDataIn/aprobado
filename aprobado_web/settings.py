@@ -29,13 +29,20 @@ def _split_env_list(name, default=''):
 PRIMARY_DOMAIN_HOST = os.environ.get('PRIMARY_DOMAIN_HOST', 'aprobado.com.co')
 EMPRENDER_SUBDOMAIN_HOST = os.environ.get('EMPRENDER_SUBDOMAIN_HOST', 'emprender.aprobado.com.co')
 MARKET_SUBDOMAIN_HOST = os.environ.get('MARKET_SUBDOMAIN_HOST', 'market.aprobado.com.co')
+CONTACT_EMAIL = os.environ.get(
+    'CONTACT_EMAIL',
+    'Info@aprobado.com.co'
+)
+EMAIL_QA_MODE = env_bool('EMAIL_QA_MODE', False)
+EMAIL_QA_REDIRECT_TO = os.environ.get('EMAIL_QA_REDIRECT_TO', '').strip()
+EMAIL_QA_SUBJECT_PREFIX = os.environ.get('EMAIL_QA_SUBJECT_PREFIX', '[QA]')
 
 # Correos internos para alertas operativas del flujo de credito.
 # Formato esperado en .env:
 # CREDIT_INTERNAL_NOTIFICATION_EMAILS=correo1@dominio.com,correo2@dominio.com
 CREDIT_INTERNAL_NOTIFICATION_EMAILS = _split_env_list(
     'CREDIT_INTERNAL_NOTIFICATION_EMAILS',
-    os.environ.get('EMAIL_HOST_USER', '')
+    CONTACT_EMAIL
 )
 
 # Tasas mensuales parametrizables por linea de credito.
@@ -249,14 +256,14 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ========================
 
 # Backend de email - usando SMTP de Gmail
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'aprobado_web.email_backends.SafeRoutingEmailBackend')
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'noreply.aprobado@gmail.com')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'noreply@aprobado.com.co')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')  # Contraseña de aplicación de Gmail
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', f'Aprobado <{EMAIL_HOST_USER}>')
-SERVER_EMAIL = EMAIL_HOST_USER
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Aprobado <noreply@aprobado.com.co>')
+SERVER_EMAIL = os.environ.get('SERVER_EMAIL', EMAIL_HOST_USER)
 
 # ========================
 # Configuración de WOMPI (Pasarela de Pagos)

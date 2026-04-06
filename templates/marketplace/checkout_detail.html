@@ -1,4 +1,5 @@
-{% load humanize static %}
+{% load humanize static contact_tags %}
+{% contact_mailto as support_mailto %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -77,7 +78,7 @@
                 <a class="mp-btn primary" href="{% url 'marketplace:empresa' empresa.slug %}">
                     <i class="bi bi-grid-3x3-gap"></i>Volver a la vitrina
                 </a>
-                <a class="mp-btn ghost" href="mailto:{{ empresa.correo_contacto|default:'info@aprobado.com.co' }}">
+                <a class="mp-btn ghost" href="{% if empresa.correo_contacto %}mailto:{{ empresa.correo_contacto }}{% else %}{{ support_mailto }}{% endif %}">
                     <i class="bi bi-envelope"></i>Contactar soporte
                 </a>
             </div>

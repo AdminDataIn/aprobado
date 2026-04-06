@@ -1,33 +1,136 @@
 {% load static %}
-<header id="main-navbar" class="navbar">
+<style>
+    .investor-navbar {
+        background: #0f1f33;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .investor-navbar .container {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 0.85rem 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .investor-brand img {
+        height: 40px;
+        width: auto;
+        display: block;
+    }
+    .investor-user-menu {
+        position: relative;
+    }
+    .investor-user-toggle {
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.05);
+        color: #f8fafc;
+        border-radius: 999px;
+        padding: 0.45rem 0.85rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        font-size: 0.92rem;
+        cursor: pointer;
+    }
+    .investor-user-toggle i {
+        font-size: 1rem;
+        opacity: 0.9;
+    }
+    .investor-user-panel {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 0.65rem);
+        min-width: 210px;
+        padding: 0.45rem;
+        background: #ffffff;
+        border: 1px solid #dbe4ee;
+        border-radius: 16px;
+        box-shadow: 0 18px 34px rgba(15, 23, 42, 0.14);
+        display: none;
+        z-index: 40;
+    }
+    .investor-user-panel.is-open {
+        display: block;
+    }
+    .investor-user-panel a,
+    .investor-user-panel button {
+        width: 100%;
+        text-align: left;
+        border: 0;
+        background: transparent;
+        border-radius: 12px;
+        padding: 0.72rem 0.82rem;
+        color: #0f172a;
+        font-size: 0.92rem;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+    }
+    .investor-user-panel a:hover,
+    .investor-user-panel button:hover {
+        background: #f4f7fb;
+    }
+    .investor-user-panel button {
+        color: #b91c1c;
+        cursor: pointer;
+    }
+</style>
+<header id="main-navbar" class="investor-navbar">
     <div class="container">
-        <div class="logo">
-            <a href="{% url 'inversionista:dashboard' %}">
-                <img src="{% static 'images/logo.png' %}" alt="Aprobado Inversionista" id="navbar-logo"/>
-            </a>
-        </div>
+        <a href="{% url 'inversionista:dashboard' %}" class="investor-brand">
+            <img src="{% static 'images/logo.png' %}" alt="Aprobado Inversionista"/>
+        </a>
 
-        <div class="navbar-right d-flex align-items-center gap-2">
-            {% if request.user.is_authenticated %}
-            <div class="dropdown investor-user-dropdown">
-                <button class="btn btn-outline-light dropdown-toggle d-flex align-items-center gap-2 px-3" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="bi bi-person-circle"></i>
-                    <span>{{ request.user.first_name|default:request.user.username }}</span>
-                </button>
-                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
-                    <li><a class="dropdown-item" href="{% url 'inversionista:dashboard' %}#portafolio">Mi portafolio</a></li>
-                    <li><hr class="dropdown-divider"></li>
-                    <li>
-                        <form method="post" action="{% url 'inversionista:logout' %}" class="m-0">
-                            {% csrf_token %}
-                            <button type="submit" class="dropdown-item text-danger">Cerrar sesión</button>
-                        </form>
-                    </li>
-                </ul>
+        {% if request.user.is_authenticated %}
+        <div class="investor-user-menu" data-investor-user-menu>
+            <button type="button" class="investor-user-toggle" data-investor-user-toggle aria-expanded="false">
+                <i class="bi bi-person-circle"></i>
+                <span>{{ request.user.first_name|default:request.user.username }}</span>
+                <i class="bi bi-chevron-down"></i>
+            </button>
+            <div class="investor-user-panel" data-investor-user-panel>
+                <a href="{% url 'inversionista:dashboard' %}#portafolio">
+                    <i class="bi bi-wallet2"></i>
+                    <span>Mi portafolio</span>
+                </a>
+                <form method="post" action="{% url 'inversionista:logout' %}" class="m-0">
+                    {% csrf_token %}
+                    <button type="submit">
+                        <i class="bi bi-box-arrow-right"></i>
+                        <span>Cerrar sesión</span>
+                    </button>
+                </form>
             </div>
-            {% else %}
-            <a href="{% url 'inversionista:login' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-apply">Iniciar sesión</a>
-            {% endif %}
         </div>
+        {% else %}
+        <a href="{% url 'inversionista:login' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-apply">Iniciar sesión</a>
+        {% endif %}
     </div>
 </header>
+<script>
+    (() => {
+        const menu = document.querySelector('[data-investor-user-menu]');
+        if (!menu) return;
+        const toggle = menu.querySelector('[data-investor-user-toggle]');
+        const panel = menu.querySelector('[data-investor-user-panel]');
+        const closeMenu = () => {
+            panel.classList.remove('is-open');
+            toggle.setAttribute('aria-expanded', 'false');
+        };
+        toggle.addEventListener('click', () => {
+            const willOpen = !panel.classList.contains('is-open');
+            closeMenu();
+            if (willOpen) {
+                panel.classList.add('is-open');
+                toggle.setAttribute('aria-expanded', 'true');
+            }
+        });
+        document.addEventListener('click', (event) => {
+            if (!menu.contains(event.target)) closeMenu();
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') closeMenu();
+        });
+    })();
+</script>

@@ -50,6 +50,33 @@ def _obtener_destinatarios_internos():
     ]
 
 
+def _agregar_destinatario(destinatarios, email):
+    if not email:
+        return
+    normalizado = str(email).strip()
+    if not normalizado:
+        return
+    existentes = {item.lower() for item in destinatarios}
+    if normalizado.lower() not in existentes:
+        destinatarios.append(normalizado)
+
+
+def _build_absolute_url(path):
+    if not path:
+        return None
+    host = getattr(settings, 'PRIMARY_DOMAIN_HOST', 'aprobado.com.co')
+    return f"https://{host}{path}"
+
+
+def _nombre_archivo(file_field):
+    if not file_field:
+        return None
+    try:
+        return file_field.name.split('/')[-1]
+    except Exception:
+        return str(file_field)
+
+
 def enviar_notificacion_interna_nueva_solicitud(credito):
     """
     Notifica al equipo interno cada vez que entra una nueva solicitud.
@@ -413,6 +440,217 @@ def enviar_notificacion_solicitud_libranza_empresa(destinatario, empresa, credit
         template_html='emails/notificacion_solicitud_libranza_empresa.html',
         context=context
     )
+
+
+def enviar_resumen_operativo_pago_offline(*, credito, pago, usuario=None):
+    destinatarios = _obtener_destinatarios_internos()
+    _agregar_destinatario(destinatarios, getattr(usuario, 'email', None))
+
+    if not destinatarios:
+        logger.warning(
+            "No hay destinatarios para el resumen operativo del pago offline %s.",
+            getattr(pago, 'referencia_pago', 'sin-referencia'),
+        )
+        return False
+
+    empresa = pago.empresa_origen or credito.empresa_relacionada
+    comprobante = pago.comprobante or getattr(getattr(pago, 'lote_pago', None), 'comprobante', None)
+    credito_url = None
+    try:
+        credito_url = _build_absolute_url(
+            reverse('gestion:credito_detalle', kwargs={'credito_id': credito.id})
+        )
+    except Exception:
+        credito_url = None
+
+    context = {
+        'titulo': 'Pago offline aplicado',
+        'subtitulo': 'Se registró un pago manual y quedó trazabilidad operativa del movimiento.',
+        'empresa_nombre': getattr(empresa, 'nombre', 'No definida'),
+        'referencia': pago.referencia_pago,
+        'fecha_aplicacion': pago.fecha_aplicacion,
+        'usuario_nombre': (
+            getattr(usuario, 'get_full_name', lambda: '')() or getattr(usuario, 'username', '') or 'Sistema'
+        ),
+        'comprobante_nombre': _nombre_archivo(comprobante),
+        'credito_url': credito_url,
+        'credito_numero': credito.numero_credito,
+        'cliente_nombre': credito.nombre_cliente,
+        'monto_total': pago.monto,
+        'cantidad_registros': 1,
+        'metodo_pago': pago.get_metodo_pago_display(),
+        'origen_label': 'Registro manual',
+        'notas': pago.notas or '',
+    }
+
+    try:
+        html_content = render_to_string('emails/resumen_operativo_pago_offline.html', context)
+        email = EmailMultiAlternatives(
+            subject=f"Pago offline aplicado - {credito.numero_credito}",
+            body=(
+                f"Empresa: {context['empresa_nombre']}\n"
+                f"Crédito: {credito.numero_credito}\n"
+                f"Cliente: {credito.nombre_cliente}\n"
+                f"Monto aplicado: ${pago.monto:,.2f}\n"
+                f"Referencia: {pago.referencia_pago}\n"
+                f"Registrado por: {context['usuario_nombre']}\n"
+                f"Fecha de aplicación: {context['fecha_aplicacion']:%d/%m/%Y %H:%M}\n"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=destinatarios,
+        )
+        email.attach_alternative(html_content, "text/html")
+        email.send()
+        logger.info(
+            "Resumen operativo de pago offline enviado para %s a %s",
+            credito.numero_credito,
+            ", ".join(destinatarios),
+        )
+        return True
+    except Exception as exc:
+        logger.error(
+            "Error al enviar resumen operativo del pago offline %s: %s",
+            pago.referencia_pago,
+            exc,
+        )
+        return False
+
+
+def enviar_resumen_operativo_carga_pagos(*, lote, pagos_aplicados, monto_total, usuario=None):
+    destinatarios = _obtener_destinatarios_internos()
+    _agregar_destinatario(destinatarios, getattr(usuario, 'email', None))
+
+    if not destinatarios:
+        logger.warning(
+            "No hay destinatarios para el resumen operativo de la carga de pagos %s.",
+            lote.id,
+        )
+        return False
+
+    dashboard_url = None
+    try:
+        dashboard_url = _build_absolute_url(reverse('pagador:dashboard'))
+    except Exception:
+        dashboard_url = None
+
+    referencia = f"CP-{lote.id:05d}"
+    context = {
+        'titulo': 'Carga de pagos confirmada',
+        'subtitulo': 'La carga de pagos por archivo fue aplicada y quedó registrada para seguimiento operativo.',
+        'empresa_nombre': lote.empresa.nombre,
+        'referencia': referencia,
+        'fecha_aplicacion': timezone.localtime(lote.creado_en),
+        'usuario_nombre': (
+            getattr(usuario, 'get_full_name', lambda: '')() or getattr(usuario, 'username', '') or 'Sistema'
+        ),
+        'comprobante_nombre': _nombre_archivo(lote.comprobante),
+        'credito_url': dashboard_url,
+        'credito_numero': lote.nombre_original,
+        'cliente_nombre': 'Carga por archivo',
+        'monto_total': monto_total,
+        'cantidad_registros': pagos_aplicados,
+        'metodo_pago': 'Transferencia directa',
+        'origen_label': 'Carga de pagos',
+        'notas': lote.notas or '',
+    }
+
+    try:
+        html_content = render_to_string('emails/resumen_operativo_pago_offline.html', context)
+        email = EmailMultiAlternatives(
+            subject=f"Carga de pagos confirmada - {lote.empresa.nombre} ({pagos_aplicados} aplicados)",
+            body=(
+                f"Empresa: {lote.empresa.nombre}\n"
+                f"Referencia: {referencia}\n"
+                f"Archivo: {lote.nombre_original}\n"
+                f"Pagos aplicados: {pagos_aplicados}\n"
+                f"Total aplicado: ${monto_total:,.2f}\n"
+                f"Registrado por: {context['usuario_nombre']}\n"
+                f"Fecha: {context['fecha_aplicacion']:%d/%m/%Y %H:%M}\n"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=destinatarios,
+        )
+        email.attach_alternative(html_content, "text/html")
+        email.send()
+        logger.info(
+            "Resumen operativo de carga de pagos enviado para lote %s a %s",
+            lote.id,
+            ", ".join(destinatarios),
+        )
+        return True
+    except Exception as exc:
+        logger.error(
+            "Error al enviar resumen operativo de la carga de pagos %s: %s",
+            lote.id,
+            exc,
+        )
+        return False
+
+
+def enviar_resumen_pago_masivo_pagador(*, lote, pagos_aplicados, monto_total, pagador_email, pagador_nombre=''):
+    if not pagador_email:
+        logger.warning(
+            "No se envió resumen de carga de pagos porque el pagador no tiene correo. Lote %s.",
+            lote.id,
+        )
+        return False
+
+    dashboard_url = None
+    try:
+        dashboard_url = _build_absolute_url(reverse('pagador:dashboard'))
+    except Exception:
+        dashboard_url = None
+
+    referencia = f"CP-{lote.id:05d}"
+    context = {
+        'titulo': 'Carga de pagos confirmada',
+        'subtitulo': 'Tu archivo fue aplicado correctamente y este correo resume la confirmación del pago masivo.',
+        'empresa_nombre': lote.empresa.nombre,
+        'referencia': referencia,
+        'fecha_aplicacion': timezone.localtime(lote.creado_en),
+        'usuario_nombre': pagador_nombre or 'Pagador',
+        'comprobante_nombre': _nombre_archivo(lote.comprobante),
+        'credito_url': dashboard_url,
+        'credito_numero': lote.nombre_original,
+        'cliente_nombre': 'Archivo de pagos',
+        'monto_total': monto_total,
+        'cantidad_registros': pagos_aplicados,
+        'metodo_pago': 'Transferencia directa',
+        'origen_label': 'Pago masivo offline',
+        'notas': lote.notas or '',
+    }
+
+    try:
+        html_content = render_to_string('emails/resumen_operativo_pago_offline.html', context)
+        email = EmailMultiAlternatives(
+            subject=f"Carga de pagos confirmada - {lote.empresa.nombre} ({pagos_aplicados} aplicados)",
+            body=(
+                f"Empresa: {lote.empresa.nombre}\n"
+                f"Referencia: {referencia}\n"
+                f"Archivo: {lote.nombre_original}\n"
+                f"Pagos aplicados: {pagos_aplicados}\n"
+                f"Total aplicado: ${monto_total:,.2f}\n"
+                f"Confirmado por: {context['usuario_nombre']}\n"
+                f"Fecha: {context['fecha_aplicacion']:%d/%m/%Y %H:%M}\n"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[pagador_email],
+        )
+        email.attach_alternative(html_content, "text/html")
+        email.send()
+        logger.info(
+            "Resumen de carga de pagos enviado al pagador para lote %s a %s",
+            lote.id,
+            pagador_email,
+        )
+        return True
+    except Exception as exc:
+        logger.error(
+            "Error al enviar resumen de la carga de pagos %s: %s",
+            lote.id,
+            exc,
+        )
+        return False
 
 
 def generar_pdf_plan_pagos(credito):

@@ -1,5 +1,6 @@
 {% extends "emails/base_email.html" %}
-{% load static %}
+{% load static contact_tags %}
+{% contact_mailto as support_mailto %}
 
 {% block title %}Solicitud No Aprobada - Aprobado{% endblock %}
 
@@ -89,7 +90,7 @@
             <div style="background-color: #374151; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;">
                 <h3 style="font-size: 16px; font-weight: 700; color: #ffffff; margin: 0 0 8px 0;">Necesitas mas informacion?</h3>
                 <p style="font-size: 13px; color: rgba(255, 255, 255, 0.85); margin: 0 0 16px 0; line-height: 1.4;">Nuestro equipo esta disponible para ayudarte a entender los requisitos.</p>
-                <a href="mailto:info@aprobado.com.co" style="display: inline-block; padding: 12px 32px; background-color: #ffffff; color: #111827; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600;">Contactar Soporte</a>
+                <a href="{{ support_mailto }}" style="display: inline-block; padding: 12px 32px; background-color: #ffffff; color: #111827; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600;">Contactar Soporte</a>
             </div>
 
             <!-- Contact Section -->

@@ -635,15 +635,15 @@ class EmployeeBulkUploadForm(forms.Form):
         label='Archivo de empleados',
         widget=forms.FileInput(attrs={
             'class': 'form-control',
-            'accept': '.csv,.xlsx',
+            'accept': '.xlsx',
         }),
     )
 
     def clean_archivo(self):
         archivo = self.cleaned_data['archivo']
         extension = (archivo.name.rsplit('.', 1)[-1] if '.' in archivo.name else '').lower()
-        if extension not in {'csv', 'xlsx'}:
-            raise forms.ValidationError('Usa un archivo CSV o XLSX.')
+        if extension != 'xlsx':
+            raise forms.ValidationError('Usa la plantilla oficial en formato Excel (.xlsx).')
         return archivo
 
 
@@ -657,7 +657,7 @@ class PagoCreditoOfflineForm(forms.Form):
             'class': 'form-control',
             'step': '0.01',
             'min': '0.01',
-            'placeholder': 'Ej: 198575.00',
+            'placeholder': 'Se cargará el valor esperado de la cuota',
         }),
     )
     referencia_pago = forms.CharField(
@@ -688,12 +688,12 @@ class PagoCreditoOfflineForm(forms.Form):
         }),
     )
     nota = forms.CharField(
-        label='Nota',
-        required=False,
+        label='Motivo o contexto del pago',
+        required=True,
         widget=forms.Textarea(attrs={
             'class': 'form-control',
             'rows': 3,
-            'placeholder': 'Observacion interna del recaudo.',
+            'placeholder': 'Ej: Pago de nómina de marzo confirmado por tesorería.',
         }),
     )
 
@@ -709,14 +709,27 @@ class PagoMasivoEmpresaUploadForm(forms.ModelForm):
         label='Archivo de pagos',
         widget=forms.FileInput(attrs={
             'class': 'form-control',
-            'accept': '.csv,.xlsx',
+            'accept': '.xlsx',
         }),
-        help_text='Soporta CSV o XLSX. Usa numero_credito o cedula como llave de conciliacion.',
+        help_text='Usa la plantilla oficial en Excel. Puedes identificar cada fila por número de crédito o cédula.',
     )
 
     class Meta:
         model = LotePagoEmpresa
-        fields = ['archivo', 'comprobante', 'notas']
+        fields = ['archivo']
+
+    def clean_archivo(self):
+        archivo = self.cleaned_data['archivo']
+        extension = (archivo.name.rsplit('.', 1)[-1] if '.' in archivo.name else '').lower()
+        if extension != 'xlsx':
+            raise forms.ValidationError('Usa la plantilla oficial en formato Excel (.xlsx).')
+        return archivo
+
+
+class PagoMasivoEmpresaConfirmForm(forms.ModelForm):
+    class Meta:
+        model = LotePagoEmpresa
+        fields = ['comprobante', 'notas']
         widgets = {
             'comprobante': forms.FileInput(attrs={
                 'class': 'form-control',
@@ -725,16 +738,15 @@ class PagoMasivoEmpresaUploadForm(forms.ModelForm):
             'notas': forms.Textarea(attrs={
                 'class': 'form-control',
                 'rows': 3,
-                'placeholder': 'Ej: Recaudo de quincena marzo pagado por transferencia.',
+                'placeholder': 'Ej: Pago de nómina de marzo confirmado por transferencia bancaria de la empresa.',
             }),
         }
 
-    def clean_archivo(self):
-        archivo = self.cleaned_data['archivo']
-        extension = (archivo.name.rsplit('.', 1)[-1] if '.' in archivo.name else '').lower()
-        if extension not in {'csv', 'xlsx'}:
-            raise forms.ValidationError('Usa un archivo CSV o XLSX.')
-        return archivo
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['notas'].required = True
+        self.fields['notas'].help_text = 'Describe brevemente a qué pago corresponde esta carga y cómo fue confirmada.'
+        self.fields['comprobante'].help_text = 'Opcional, pero recomendado cuando la empresa ya cuenta con soporte del pago.'
 
     def clean_comprobante(self):
         comprobante = self.cleaned_data.get('comprobante')

@@ -6,6 +6,8 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.utils.text import slugify
 from openpyxl import Workbook
+from openpyxl.comments import Comment
+from openpyxl.styles import Font
 
 from gestion_creditos.models import Empresa, VinculoLaboralEmpresa
 
@@ -42,7 +44,7 @@ def _parse_date(value):
             return datetime.strptime(raw, fmt).date()
         except ValueError:
             continue
-    raise ValueError('La fecha debe venir como YYYY-MM-DD o DD/MM/YYYY.')
+    raise ValueError('La fecha debe venir como DD/MM/AAAA o YYYY-MM-DD. Ejemplo: 30/03/2026.')
 
 
 def _normalize_phone(value):
@@ -121,7 +123,7 @@ def plantilla_empleados_xlsx():
     )
 
     for cell in sheet[1]:
-        cell.font = cell.font.copy(bold=True)
+        cell.font = Font(bold=True)
 
     widths = {
         'A': 18,
@@ -139,6 +141,22 @@ def plantilla_empleados_xlsx():
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
+
+    sheet.freeze_panes = 'A2'
+    sheet['J1'].comment = Comment(
+        'Usa DD/MM/AAAA o YYYY-MM-DD. Ejemplo: 30/03/2026.',
+        'Aprobado',
+    )
+
+    instrucciones = workbook.create_sheet(title='Instrucciones')
+    instrucciones['A1'] = 'Cómo diligenciar la plantilla'
+    instrucciones['A1'].font = Font(bold=True, size=13)
+    instrucciones['A3'] = '1. No cambies los nombres de las columnas.'
+    instrucciones['A4'] = '2. fecha_alta_aprobado debe venir como DD/MM/AAAA o YYYY-MM-DD.'
+    instrucciones['A5'] = '3. salario_base, auxilio_transporte y descuentos_fijos deben ir sin símbolos adicionales.'
+    instrucciones['A6'] = '4. convenio_activo usa SI o NO.'
+    instrucciones['A7'] = '5. estado_vinculo usa ACTIVO, RETIRADO o SUSPENDIDO según corresponda.'
+    instrucciones.column_dimensions['A'].width = 100
 
     output = io.BytesIO()
     workbook.save(output)

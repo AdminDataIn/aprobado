@@ -334,7 +334,7 @@
                 <div class="highlight-box">
                     <p>
                         <strong>Datos de contacto del responsable:</strong><br>
-                        📧 Email: <a href="mailto:info@aprobado.com.co" style="color: #6d28d9;">info@aprobado.com.co</a><br>
+                        📧 Email: <a href="{{ support_mailto }}" style="color: #6d28d9;">{{ support_email }}</a><br>
                         📱 WhatsApp: {{ whatsapp_support_display }}<br>
                         📍 Dirección: Villavicencio, Meta, Colombia<br>
                         🏢 NIT: 901949137-2
@@ -523,11 +523,11 @@
         <h3>Ejerce tus derechos</h3>
         <p>Para consultas, solicitudes o reclamos relacionados con tus datos personales, contáctanos:</p>
         <div class="contact-buttons">
-            <a href="mailto:info@aprobado.com.co">
+            <a href="{{ support_mailto }}">
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
                 </svg>
-                info@aprobado.com.co
+                {{ support_email }}
             </a>
             <a href="{{ whatsapp_support_href }}" target="_blank" rel="noopener">
                 <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
@@ -547,3 +547,6 @@
     </div>
 </div>
 {% endblock %}
+{% load contact_tags %}
+{% contact_email as support_email %}
+{% contact_mailto as support_mailto %}
