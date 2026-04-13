@@ -10,6 +10,7 @@ from openpyxl.comments import Comment
 from openpyxl.styles import Font
 
 from gestion_creditos.models import Empresa, VinculoLaboralEmpresa
+from gestion_creditos.services.name_normalization import build_full_name_upper, normalize_name_upper
 
 
 EMPLOYEE_UPLOAD_HEADERS = [
@@ -171,8 +172,8 @@ def procesar_carga_empleados(archivo, empresa: Empresa, actor=None):
     for index, row in enumerate(_iter_rows(archivo), start=2):
         try:
             documento = ''.join(ch for ch in str(row.get('documento') or '') if ch.isdigit())
-            nombres = str(row.get('nombres') or '').strip()
-            apellidos = str(row.get('apellidos') or '').strip()
+            nombres = normalize_name_upper(row.get('nombres'))
+            apellidos = normalize_name_upper(row.get('apellidos'))
             correo = str(row.get('correo') or '').strip().lower()
             if not documento or not correo or not nombres:
                 raise ValueError('Documento, correo y nombres son obligatorios.')
@@ -211,7 +212,7 @@ def procesar_carga_empleados(archivo, empresa: Empresa, actor=None):
                 defaults={
                     'tipo_documento': str(row.get('tipo_documento') or 'CC').strip().upper(),
                     'documento_empleado': documento,
-                    'nombre_empleado': f'{nombres} {apellidos}'.strip(),
+                    'nombre_empleado': build_full_name_upper(nombres, apellidos),
                     'correo_empleado': correo,
                     'telefono_empleado': _normalize_phone(row.get('celular')),
                     'estado_vinculo': str(row.get('estado_vinculo') or VinculoLaboralEmpresa.EstadoVinculo.ACTIVO).strip().upper(),
@@ -264,11 +265,22 @@ def reconciliar_usuarios_empleados_legacy(empresa=None):
         if not user.email and vinculo.correo_empleado:
             user.email = vinculo.correo_empleado.lower()
             user.save(update_fields=['email'])
-        if not user.first_name and vinculo.nombre_empleado:
+        if vinculo.correo_empleado and user.email != vinculo.correo_empleado.lower():
+            user.email = vinculo.correo_empleado.lower()
+            user.save(update_fields=['email'])
+        if vinculo.nombre_empleado:
             parts = vinculo.nombre_empleado.split()
-            user.first_name = parts[0][:150]
-            user.last_name = ' '.join(parts[1:])[:150]
-            user.save(update_fields=['first_name', 'last_name'])
+            update_fields = []
+            first_name = normalize_name_upper(parts[0][:150]) if parts else ''
+            last_name = normalize_name_upper(' '.join(parts[1:])[:150]) if len(parts) > 1 else ''
+            if user.first_name != first_name:
+                user.first_name = first_name
+                update_fields.append('first_name')
+            if user.last_name != last_name:
+                user.last_name = last_name
+                update_fields.append('last_name')
+            if update_fields:
+                user.save(update_fields=update_fields)
         resultados.append({
             'empresa': vinculo.empresa.nombre,
             'usuario': user.email or user.username,

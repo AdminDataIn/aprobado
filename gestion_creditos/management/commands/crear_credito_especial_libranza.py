@@ -9,6 +9,7 @@ from django.utils.text import slugify
 
 from gestion_creditos import credit_services
 from gestion_creditos.models import Credito, CreditoLibranza, Empresa, HistorialEstado
+from gestion_creditos.services.name_normalization import normalize_name_upper
 
 
 MINIMAL_PNG_BYTES = base64.b64decode(
@@ -190,9 +191,9 @@ class Command(BaseCommand):
         )
 
     def _resolver_nombre(self, options):
-        nombres = (options.get('nombres') or '').strip()
-        apellidos = (options.get('apellidos') or '').strip()
-        nombre_completo = (options.get('nombre_completo') or '').strip()
+        nombres = normalize_name_upper(options.get('nombres') or '')
+        apellidos = normalize_name_upper(options.get('apellidos') or '')
+        nombre_completo = normalize_name_upper(options.get('nombre_completo') or '')
 
         if nombres:
             return nombres, apellidos

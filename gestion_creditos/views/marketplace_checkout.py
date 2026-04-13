@@ -8,10 +8,10 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
 
-from .decorators import marketplace_buyer_required
-from .forms_marketplace import MarketplaceCheckoutForm
-from .models import MarketplaceItem, MarketplacePedido
-from .services.marketplace_checkout_service import (
+from ..decorators import marketplace_buyer_required
+from ..forms_marketplace import MarketplaceCheckoutForm
+from ..models import MarketplaceItem, MarketplacePedido
+from ..services.marketplace_checkout_service import (
     calcular_totales_checkout,
     crear_pedido_marketplace,
     enviar_notificaciones_pedido_marketplace,
@@ -93,11 +93,20 @@ def marketplace_checkout_view(request, item_id):
         estado=MarketplaceItem.EstadoItem.APROBADO,
     )
 
+    totals_error = ''
     try:
         totals = calcular_totales_checkout(item)
     except Exception as exc:
-        messages.error(request, str(exc))
-        return redirect('marketplace:empresa', empresa_slug=item.empresa.slug)
+        totals_error = str(exc)
+        totals = {
+            'precio_unitario': item.precio or 'Por confirmar',
+            'cantidad': 1,
+            'subtotal': item.precio or 'Por confirmar',
+            'marketplace_fee_percent': item.empresa.marketplace_fee_percent or 0,
+            'marketplace_fee_amount': '-',
+            'total': item.precio or 'Por confirmar',
+            'valor_neto_empresa': '-',
+        }
 
     checkout_token = uuid.uuid4().hex
     initial = {
@@ -137,15 +146,19 @@ def marketplace_checkout_view(request, item_id):
                 elif not cache.add(ip_key, timezone.now().timestamp(), timeout=CHECKOUT_COOLDOWN_SECONDS):
                     form.add_error(None, 'Detectamos demasiados intentos desde esta conexion. Intenta mas tarde.')
                 else:
-                    pedido, _pago = crear_pedido_marketplace(
-                        item=item,
-                        form_data=form.cleaned_data,
-                        comprador=request.user,
-                    )
-                    enviar_notificaciones_pedido_marketplace(pedido)
-                    _clear_checkout_context(request, item.id)
-                    messages.success(request, 'Tu pedido fue registrado correctamente.')
-                    return redirect('marketplace:checkout_detail', numero_pedido=pedido.numero_pedido)
+                    try:
+                        pedido, _pago = crear_pedido_marketplace(
+                            item=item,
+                            form_data=form.cleaned_data,
+                            comprador=request.user,
+                        )
+                    except Exception as exc:
+                        form.add_error(None, str(exc))
+                    else:
+                        enviar_notificaciones_pedido_marketplace(pedido)
+                        _clear_checkout_context(request, item.id)
+                        messages.success(request, 'Tu pedido fue registrado correctamente.')
+                        return redirect('marketplace:checkout_detail', numero_pedido=pedido.numero_pedido)
 
     context = {
         'item': item,
@@ -153,6 +166,7 @@ def marketplace_checkout_view(request, item_id):
         'form': form,
         'totals': totals,
         'checkout_token': checkout_token,
+        'totals_error': totals_error,
     }
     context.update(_marketplace_user_context(request))
     return render(request, 'marketplace/checkout_form.html', context)

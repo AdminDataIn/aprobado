@@ -194,3 +194,55 @@ class InvestorActivationFlowTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('/inversionista/activar/', mail.outbox[0].body)
         self.assertIsNone(token.invalidated_at)
+
+
+@override_settings(
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    DEFAULT_FROM_EMAIL='no-reply@aprobado.test',
+    PRIMARY_DOMAIN_HOST='aprobado.test',
+)
+class ClosedAuthUiTests(TestCase):
+    def setUp(self):
+        self.investor = User.objects.create_user(
+            username='investor.ui@test.com',
+            email='investor.ui@test.com',
+            password='InvestorUi2026!',
+            is_active=True,
+        )
+
+        self.pagador = User.objects.create_user(
+            username='pagador.ui@test.com',
+            email='pagador.ui@test.com',
+            password='PagadorUi2026!',
+            is_active=True,
+        )
+
+    def test_login_inversionista_no_expone_google(self):
+        response = self.client.get(reverse('inversionista:login'), secure=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Recuperar acceso')
+        self.assertNotContains(response, 'Continuar con Google')
+        self.assertNotContains(response, 'Crear cuenta')
+
+    def test_login_pagador_no_expone_google(self):
+        response = self.client.get(reverse('pagador:login'), secure=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Recuperar acceso')
+        self.assertNotContains(response, 'Continuar con Google')
+        self.assertNotContains(response, 'Crear cuenta')
+
+    def test_password_reset_inversionista_usa_ruta_propia(self):
+        response = self.client.post(
+            reverse('inversionista:password_reset'),
+            data={'email': self.investor.email},
+            follow=True,
+            secure=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña en los próximos minutos.',
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('/inversionista/reset/', mail.outbox[0].body)

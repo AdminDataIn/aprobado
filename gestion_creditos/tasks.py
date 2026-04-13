@@ -10,14 +10,17 @@ Este módulo contiene todas las tareas que se ejecutan de forma automática:
 import logging
 from celery import shared_task
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
-from .models import Credito
+from .models import Credito, CuotaAmortizacion
 from .credit_services import marcar_creditos_en_mora, gestionar_cambio_estado_credito
 from .email_service import (
+    enviar_alerta_obligacion_pendiente_usuario,
     enviar_recordatorio_pago,
     enviar_alerta_mora,
-    enviar_notificacion_cambio_estado
+    enviar_notificacion_cambio_estado,
+    enviar_resumen_cuotas_pendientes_pagador,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,6 +31,17 @@ def _debe_omitir_automatizacion_libranza(credito, setting_name):
         credito.linea == Credito.LineaCredito.LIBRANZA
         and not getattr(settings, setting_name, True)
     )
+
+
+def _usa_flujo_pagador_mensual(credito):
+    return credito.linea in {
+        Credito.LineaCredito.LIBRANZA,
+        Credito.LineaCredito.ADELANTO_NOMINA,
+    }
+
+
+def _es_ultimo_dia_del_mes(fecha):
+    return (fecha + timedelta(days=1)).month != fecha.month
 
 
 @shared_task(name='gestion_creditos.tasks.marcar_creditos_en_mora_task')
@@ -95,6 +109,12 @@ def enviar_recordatorios_pago_task():
             ).select_related('usuario')
 
             for credito in creditos:
+                if _usa_flujo_pagador_mensual(credito):
+                    logger.info(
+                        "Recordatorio legacy omitido para credito %s por flujo mensual de pagador.",
+                        credito.numero_credito,
+                    )
+                    continue
                 if _debe_omitir_automatizacion_libranza(credito, 'LIBRANZA_PAYMENT_REMINDERS_ENABLED'):
                     logger.info(
                         "Recordatorio omitido para crédito %s por configuración de Libranza.",
@@ -154,6 +174,12 @@ def enviar_alertas_mora_task():
         ).select_related('usuario')
 
         for credito in creditos_mora:
+            if _usa_flujo_pagador_mensual(credito):
+                logger.info(
+                    "Alerta legacy omitida para credito %s por flujo mensual de pagador.",
+                    credito.numero_credito,
+                )
+                continue
             if _debe_omitir_automatizacion_libranza(credito, 'LIBRANZA_MORA_ALERTS_ENABLED'):
                 logger.info(
                     "Alerta de mora omitida para crédito %s por configuración de Libranza.",
@@ -300,4 +326,98 @@ def generar_reporte_cartera_mensual():
             'error': str(e),
             'timestamp': timezone.now().isoformat()
         }
+
+
+@shared_task(name='gestion_creditos.tasks.enviar_resumen_mensual_pagador_task')
+def enviar_resumen_mensual_pagador_task():
+    hoy = timezone.now().date()
+    if not getattr(settings, 'PAGADOR_MONTHLY_PENDING_NOTIFICATIONS_ENABLED', True):
+        return {'status': 'skipped', 'reason': 'disabled'}
+    if not _es_ultimo_dia_del_mes(hoy):
+        return {'status': 'skipped', 'reason': 'not_month_end'}
+
+    cuotas = (
+        CuotaAmortizacion.objects.filter(
+            pagada=False,
+            fecha_vencimiento__lte=hoy,
+            credito__linea__in=[
+                Credito.LineaCredito.LIBRANZA,
+                Credito.LineaCredito.ADELANTO_NOMINA,
+            ],
+            credito__estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA],
+        )
+        .select_related(
+            'credito__detalle_libranza__empresa',
+            'credito__detalle_adelanto_nomina__vinculo_laboral__empresa',
+            'credito__usuario',
+        )
+        .order_by('fecha_vencimiento', 'credito__numero_credito')
+    )
+
+    cuotas_por_empresa = {}
+    for cuota in cuotas:
+        ultima = cuota.fecha_ultimo_recordatorio_pagador
+        if ultima:
+            ultima_fecha = timezone.localtime(ultima).date()
+            if ultima_fecha.month == hoy.month and ultima_fecha.year == hoy.year:
+                continue
+        empresa = cuota.credito.empresa_relacionada
+        if not empresa:
+            continue
+        cuotas_por_empresa.setdefault(empresa.id, {'empresa': empresa, 'cuotas': []})
+        cuotas_por_empresa[empresa.id]['cuotas'].append(cuota)
+
+    enviados = 0
+    for data in cuotas_por_empresa.values():
+        empresa = data['empresa']
+        cuotas_empresa = data['cuotas']
+        if enviar_resumen_cuotas_pendientes_pagador(empresa=empresa, cuotas=cuotas_empresa, fecha_corte=hoy):
+            enviados += 1
+            CuotaAmortizacion.objects.filter(
+                pk__in=[cuota.pk for cuota in cuotas_empresa]
+            ).update(fecha_ultimo_recordatorio_pagador=timezone.now())
+
+    return {'status': 'success', 'empresas_notificadas': enviados, 'timestamp': timezone.now().isoformat()}
+
+
+@shared_task(name='gestion_creditos.tasks.enviar_alertas_usuario_cuota_pendiente_task')
+def enviar_alertas_usuario_cuota_pendiente_task():
+    if not getattr(settings, 'WORKER_PENDING_PAYMENT_ALERTS_ENABLED', True):
+        return {'status': 'skipped', 'reason': 'disabled'}
+
+    hoy = timezone.now().date()
+    cuotas = (
+        CuotaAmortizacion.objects.filter(
+            pagada=False,
+            fecha_vencimiento__lte=hoy - timedelta(days=10),
+            credito__linea__in=[
+                Credito.LineaCredito.LIBRANZA,
+                Credito.LineaCredito.ADELANTO_NOMINA,
+            ],
+            credito__estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA],
+            fecha_ultimo_recordatorio_pagador__isnull=False,
+        )
+        .select_related('credito__usuario')
+        .order_by('fecha_vencimiento')
+    )
+
+    alertas = 0
+    for cuota in cuotas:
+        ultima_alerta = cuota.fecha_ultimo_aviso_usuario_mora
+        if ultima_alerta:
+            ultima_fecha = timezone.localtime(ultima_alerta).date()
+            if ultima_fecha >= hoy:
+                continue
+
+        dias_atraso = (hoy - cuota.fecha_vencimiento).days
+        if enviar_alerta_obligacion_pendiente_usuario(
+            credito=cuota.credito,
+            cuota=cuota,
+            dias_atraso=dias_atraso,
+        ):
+            cuota.fecha_ultimo_aviso_usuario_mora = timezone.now()
+            cuota.save(update_fields=['fecha_ultimo_aviso_usuario_mora'])
+            alertas += 1
+
+    return {'status': 'success', 'alertas_enviadas': alertas, 'timestamp': timezone.now().isoformat()}
 

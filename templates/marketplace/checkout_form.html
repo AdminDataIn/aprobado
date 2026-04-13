@@ -43,6 +43,9 @@
             {% if form.non_field_errors %}
             <div class="mp-alert error">{{ form.non_field_errors }}</div>
             {% endif %}
+            {% if totals_error %}
+            <div class="mp-alert error">{{ totals_error }}</div>
+            {% endif %}
 
             <div class="mp-checkout-grid">
                 <div class="mp-field">
@@ -123,11 +126,8 @@
         </form>
 
         <aside class="mp-checkout-summary">
-            <div class="mp-product-visual{% if item.video %} has-video{% endif %}" {% if item.imagen %}style="background-image:url('{{ item.imagen.url }}');"{% else %}style="background-image:url('https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80');"{% endif %}>
+            <div class="mp-product-visual" {% if item.imagen %}style="background-image:url('{{ item.imagen.url }}');"{% else %}style="background-image:url('https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80');"{% endif %}>
                 <span class="mp-card-tag">{{ item.get_tipo_display }}</span>
-                {% if item.video %}
-                <span class="mp-card-video-indicator"><i class="bi bi-play-circle-fill"></i>Video disponible</span>
-                {% endif %}
             </div>
             <span class="mp-card-tag-soft">{{ empresa.nombre }}</span>
             <h3>{{ item.titulo }}</h3>

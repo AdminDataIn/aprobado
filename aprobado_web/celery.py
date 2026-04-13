@@ -40,6 +40,17 @@ app.conf.beat_schedule = {
     },
 }
 
+app.conf.beat_schedule.update({
+    'enviar-resumen-mensual-pagador': {
+        'task': 'gestion_creditos.tasks.enviar_resumen_mensual_pagador_task',
+        'schedule': crontab(hour=8, minute=15),
+    },
+    'enviar-alertas-usuario-cuota-pendiente': {
+        'task': 'gestion_creditos.tasks.enviar_alertas_usuario_cuota_pendiente_task',
+        'schedule': crontab(hour=9, minute=0),
+    },
+})
+
 @app.task(bind=True)
 def debug_task(self):
     """Tarea de prueba para verificar que Celery funciona correctamente."""

@@ -7,6 +7,8 @@ from django.utils.text import slugify
 from decimal import Decimal
 import uuid
 
+from gestion_creditos.services.name_normalization import build_full_name_upper, normalize_name_upper
+
 #? Modelo movido de credito_libranza (la idea es crear las empresas directamente desde el admin)
 class Empresa(models.Model):
     class TipoEmpresa(models.TextChoices):
@@ -577,13 +579,13 @@ class Credito(models.Model):
         """
         if self.detalle:
             if self.linea == self.LineaCredito.EMPRENDIMIENTO and hasattr(self.detalle, 'nombre'):
-                return self.detalle.nombre
+                return normalize_name_upper(self.detalle.nombre)
             elif self.linea == self.LineaCredito.LIBRANZA and hasattr(self.detalle, 'nombre_completo'):
-                return self.detalle.nombre_completo
+                return normalize_name_upper(self.detalle.nombre_completo)
             elif self.linea == self.LineaCredito.ADELANTO_NOMINA and hasattr(self.detalle, 'nombre_cliente'):
-                return self.detalle.nombre_cliente
+                return normalize_name_upper(self.detalle.nombre_cliente)
         # Fallback por si el detalle no está o por alguna razón no tiene nombre
-        return self.usuario.get_full_name() or self.usuario.username
+        return normalize_name_upper(self.usuario.get_full_name() or self.usuario.username)
 
     @property
     def detalle(self):
@@ -917,7 +919,7 @@ class CreditoLibranza(models.Model):
 
     @property
     def nombre_completo(self):
-        return f'{self.nombres} {self.apellidos}'
+        return build_full_name_upper(self.nombres, self.apellidos)
 
 
 class VinculoLaboralEmpresa(models.Model):
@@ -1026,7 +1028,7 @@ class CreditoAdelantoNomina(models.Model):
 
     @property
     def nombre_cliente(self):
-        return self.vinculo_laboral.nombre_empleado
+        return normalize_name_upper(self.vinculo_laboral.nombre_empleado)
 
 
 #? ----- Modelo de lote de pagos de empresa -----
@@ -1329,6 +1331,16 @@ class CuotaAmortizacion(models.Model):
         null=True,
         blank=True,
         help_text="Monto efectivamente pagado (puede diferir del valor_cuota)"
+    )
+    fecha_ultimo_recordatorio_pagador = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Ultima vez que se incluyo esta cuota en el resumen mensual al pagador.',
+    )
+    fecha_ultimo_aviso_usuario_mora = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Ultima vez que se notifico al usuario por atraso posterior al resumen al pagador.',
     )
 
     class Meta:

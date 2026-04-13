@@ -25,7 +25,10 @@
         <div class="mp-header-meta">
             {% if marketplace_is_authenticated %}
                 {% if marketplace_is_admin_user %}
-                <a href="{% url 'marketplace:panel' %}" class="mp-btn ghost mp-btn-sm">Panel empresas</a>
+                <span class="mp-company-pill">
+                    <i class="bi bi-shield-lock"></i>
+                    Acceso administrativo
+                </span>
                 {% else %}
                 <span class="mp-company-pill">
                     <i class="bi bi-person-circle"></i>
@@ -37,7 +40,6 @@
             {% else %}
             <a href="{% url 'marketplace:login' %}?next={{ request.get_full_path|urlencode }}" class="mp-btn ghost mp-btn-sm">Iniciar sesion</a>
             <a href="{% url 'marketplace:register' %}?next={{ request.get_full_path|urlencode }}" class="mp-btn primary mp-btn-sm">Crear cuenta</a>
-            <a href="{% url 'marketplace:admin_login_without_company' %}" class="mp-btn ghost mp-btn-sm">Panel empresas</a>
             {% endif %}
             <span class="mp-company-pill">
                 <i class="bi bi-buildings"></i>
@@ -80,6 +82,15 @@
             </div>
         </div>
         <div class="mp-hero-card">
+            {% if empresa.logo_marketplace_url or empresa.logo_marketplace_static %}
+            <div class="mp-company-hero-logo">
+                {% if empresa.logo_marketplace_url %}
+                <img src="{{ empresa.logo_marketplace_url }}" alt="{{ empresa.nombre }}">
+                {% else %}
+                <img src="{% static empresa.logo_marketplace_static %}" alt="{{ empresa.nombre }}">
+                {% endif %}
+            </div>
+            {% endif %}
             <h3 style="margin:0; font-family:'Space Grotesk', sans-serif;">Sobre la empresa</h3>
             <p style="margin:8px 0 0; color: var(--mp-muted);">
                 {{ empresa.descripcion_marketplace|default:"Empresa aliada a Aprobado con beneficios especiales para la comunidad." }}
@@ -109,14 +120,8 @@
         {% if items %}
             {% for item in items %}
             <article class="mp-card" data-type="{{ item.tipo }}" data-company="{{ empresa.nombre }}" data-title="{{ item.titulo }}" data-whatsapp="{{ item.whatsapp_contacto|default:empresa.whatsapp_contacto }}">
-                <div class="mp-card-media{% if item.video %} has-video{% endif %}" {% if item.imagen and not item.video %}style="background-image: url('{{ item.imagen.url }}');"{% elif not item.video %}style="background-image: url('https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80');"{% endif %}>
+                <div class="mp-card-media" {% if item.imagen %}style="background-image: url('{{ item.imagen.url }}');"{% else %}style="background-image: url('https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80');"{% endif %}>
                     <span class="mp-card-tag">{{ item.get_tipo_display }}</span>
-                    {% if item.video %}
-                    <video class="mp-card-video" controls playsinline preload="metadata" {% if item.imagen %}poster="{{ item.imagen.url }}"{% endif %}>
-                        <source src="{{ item.video.url }}" type="video/mp4">
-                        Tu navegador no soporta video HTML5.
-                    </video>
-                    {% endif %}
                 </div>
                 <div class="mp-card-body">
                     <h3 class="mp-card-title">{{ item.titulo }}</h3>
@@ -124,7 +129,20 @@
                     <div class="mp-card-benefit">Beneficio: {{ item.beneficio }}</div>
                     <div class="mp-card-meta">
                         <span class="mp-price">{{ item.precio|default:"Precio especial" }}</span>
-                        <span>{{ empresa.nombre }}</span>
+                        <a href="{% url 'marketplace:empresa' empresa.slug %}" class="mp-company-link mp-company-link-brand">
+                            {% if empresa.logo_marketplace_url %}
+                            <span class="mp-company-mini-logo">
+                                <img src="{{ empresa.logo_marketplace_url }}" alt="{{ empresa.nombre }}">
+                            </span>
+                            {% elif empresa.logo_marketplace_static %}
+                            <span class="mp-company-mini-logo">
+                                <img src="{% static empresa.logo_marketplace_static %}" alt="{{ empresa.nombre }}">
+                            </span>
+                            {% else %}
+                            <span class="mp-company-mini-badge">{{ empresa.nombre|slice:":2"|upper }}</span>
+                            {% endif %}
+                            <span>{{ empresa.nombre }}</span>
+                        </a>
                     </div>
                     {% if item.precio %}
                     <a class="mp-btn ghost" href="{% url 'marketplace:checkout' item.id %}" style="width:100%;justify-content:center;">
@@ -148,7 +166,10 @@
                     <div class="mp-card-benefit">Beneficio: 18% de descuento</div>
                     <div class="mp-card-meta">
                         <span class="mp-price">$159.000</span>
-                        <span>{{ empresa.nombre }}</span>
+                        <a href="{% url 'marketplace:empresa' empresa.slug %}" class="mp-company-link mp-company-link-brand">
+                            <span class="mp-company-mini-badge">{{ empresa.nombre|slice:":2"|upper }}</span>
+                            <span>{{ empresa.nombre }}</span>
+                        </a>
                     </div>
                     <a class="mp-cta" href="https://wa.me/{{ empresa.whatsapp_contacto }}" target="_blank" rel="noopener">
                         <i class="bi bi-whatsapp"></i>Escribir por WhatsApp

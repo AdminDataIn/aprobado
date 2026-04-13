@@ -1,7 +1,10 @@
+from unittest.mock import patch
+
 from django.contrib.auth.models import User
 from django.core import mail
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.template.loader import render_to_string
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -17,7 +20,8 @@ from usuarios.models import PerfilEmpresaMarketing
 
 @override_settings(
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
-    DEFAULT_FROM_EMAIL='no-reply@aprobado.test'
+    DEFAULT_FROM_EMAIL='no-reply@aprobado.test',
+    ROOT_URLCONF='aprobado_web.urls_market',
 )
 class MarketplaceFlowServiceTest(TestCase):
     def setUp(self):
@@ -124,11 +128,15 @@ class MarketplaceFlowServiceTest(TestCase):
 
 @override_settings(
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
-    DEFAULT_FROM_EMAIL='no-reply@aprobado.test'
+    DEFAULT_FROM_EMAIL='no-reply@aprobado.test',
+    ROOT_URLCONF='aprobado_web.urls_market',
 )
 class MarketplacePanelIntegrationTest(TestCase):
     def setUp(self):
-        self.empresa = Empresa.objects.create(nombre='Empresa Panel')
+        self.empresa = Empresa.objects.create(
+            nombre='Empresa Panel',
+            tipo_empresa=Empresa.TipoEmpresa.MARKETPLACE_EXTERNA,
+        )
         self.user = User.objects.create_user(username='mkpanel', password='123', email='mkpanel@empresa.com')
         PerfilEmpresaMarketing.objects.create(usuario=self.user, empresa=self.empresa, activo=True)
         self.item = MarketplaceItem.objects.create(
@@ -151,7 +159,9 @@ class MarketplacePanelIntegrationTest(TestCase):
                 'tipo': MarketplaceItem.TipoItem.SERVICIO,
                 'precio': '',
                 'whatsapp_contacto': '573001234567',
-            }
+            },
+            HTTP_HOST='market.aprobado.com.co',
+            secure=True,
         )
         self.assertEqual(response.status_code, 302)
 
@@ -163,6 +173,34 @@ class MarketplacePanelIntegrationTest(TestCase):
                 estado_nuevo=MarketplaceItem.EstadoItem.PENDIENTE
             ).exists()
         )
+
+
+@override_settings(ROOT_URLCONF='aprobado_web.urls_market')
+class MarketplaceAdminPasswordResetRoutingTest(TestCase):
+    def test_panel_admin_password_reset_templates_use_admin_routes(self):
+        admin_login_path = reverse('marketplace:admin_login_without_company')
+        admin_confirm_path = reverse('marketplace:admin_password_reset_confirm', args=['uid123', 'tok456'])
+
+        form_html = render_to_string('account/marketplace_admin/password_reset_form.html')
+        done_html = render_to_string('account/marketplace_admin/password_reset_done.html')
+        complete_html = render_to_string('account/marketplace_admin/password_reset_complete.html')
+        reset_text = render_to_string(
+            'account/marketplace_admin/password_reset_email.txt',
+            {'protocol': 'https', 'domain': 'marketplace.aprobado.test', 'uid': 'uid123', 'token': 'tok456'}
+        )
+        reset_html = render_to_string(
+            'account/marketplace_admin/password_reset_email.html',
+            {'protocol': 'https', 'domain': 'marketplace.aprobado.test', 'uid': 'uid123', 'token': 'tok456'}
+        )
+
+        self.assertIn(admin_login_path, form_html)
+        self.assertIn(admin_login_path, done_html)
+        self.assertIn(admin_login_path, complete_html)
+        self.assertIn(admin_confirm_path, reset_text)
+        self.assertIn(admin_confirm_path, reset_html)
+        self.assertNotIn('panel_login', form_html)
+        self.assertNotIn('panel_login', done_html)
+        self.assertNotIn('panel_login', complete_html)
 
 
 class MarketplaceItemFormVideoValidationTest(TestCase):
@@ -194,3 +232,113 @@ class MarketplaceItemFormVideoValidationTest(TestCase):
         form = MarketplaceItemForm(data=self._base_data(), files={'video': video})
         self.assertFalse(form.is_valid())
         self.assertIn('Formato de video no permitido', str(form.errors))
+
+
+@override_settings(ROOT_URLCONF='aprobado_web.urls_market')
+class MarketplacePublicRoutesSmokeTest(TestCase):
+    market_request_kwargs = {
+        'HTTP_HOST': 'market.aprobado.com.co',
+        'secure': True,
+    }
+
+    def setUp(self):
+        self.visible_company = Empresa.objects.create(
+            nombre='Datain',
+            tipo_empresa=Empresa.TipoEmpresa.MARKETPLACE_EXTERNA,
+        )
+        self.hidden_company = Empresa.objects.create(
+            nombre='Empresa Convenio',
+            convenio_activo=True,
+        )
+        self.item_visible = MarketplaceItem.objects.create(
+            empresa=self.visible_company,
+            titulo='Producto visible',
+            descripcion='Visible en marketplace',
+            beneficio='Beneficio visible',
+            tipo=MarketplaceItem.TipoItem.PRODUCTO,
+            precio='$99.000',
+            estado=MarketplaceItem.EstadoItem.APROBADO,
+        )
+        MarketplaceItem.objects.create(
+            empresa=self.hidden_company,
+            titulo='Producto oculto',
+            descripcion='No debe aparecer en marketplace publico',
+            beneficio='Beneficio oculto',
+            tipo=MarketplaceItem.TipoItem.PRODUCTO,
+            precio='$50.000',
+            estado=MarketplaceItem.EstadoItem.APROBADO,
+        )
+
+        self.panel_user = User.objects.create_user(
+            username='panelmk',
+            password='123456',
+            email='panel@datain.test',
+        )
+        PerfilEmpresaMarketing.objects.create(usuario=self.panel_user, empresa=self.visible_company, activo=True)
+
+        self.buyer = User.objects.create_user(
+            username='buyer-market',
+            password='123456',
+            email='buyer@market.test',
+        )
+
+    def test_marketplace_publico_muestra_solo_empresas_habilitadas_y_sin_boton_panel(self):
+        response = self.client.get(reverse('marketplace:home'), **self.market_request_kwargs)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Datain')
+        self.assertNotContains(response, 'Empresa Convenio')
+        self.assertNotContains(response, 'Panel empresas')
+        self.assertContains(response, 'LogoDatain.png')
+
+    def test_detalle_empresa_publica_no_expone_boton_panel(self):
+        response = self.client.get(
+            reverse('marketplace:empresa', args=[self.visible_company.slug]),
+            **self.market_request_kwargs,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.visible_company.nombre)
+        self.assertNotContains(response, 'Panel empresas')
+        self.assertContains(response, 'LogoDatain.png')
+
+    def test_login_publico_y_login_panel_responden(self):
+        buyer_login = self.client.get(reverse('marketplace:login'), **self.market_request_kwargs)
+        admin_login = self.client.get(reverse('marketplace:admin_login_without_company'), **self.market_request_kwargs)
+
+        self.assertEqual(buyer_login.status_code, 200)
+        self.assertEqual(admin_login.status_code, 200)
+
+    def test_panel_empresa_exige_url_directa_y_muestra_cerrar_sesion(self):
+        self.client.login(username='panelmk', password='123456')
+        response = self.client.get(reverse('marketplace:panel'), **self.market_request_kwargs)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Cerrar sesion')
+        self.assertContains(response, 'Nueva publicacion')
+
+    def test_checkout_activo_responde_para_comprador_autenticado(self):
+        self.client.login(username='buyer-market', password='123456')
+        response = self.client.get(
+            reverse('marketplace:checkout', args=[self.item_visible.id]),
+            **self.market_request_kwargs,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Completa tu pedido')
+
+    def test_checkout_permanece_en_formulario_si_falla_el_calculo(self):
+        self.client.login(username='buyer-market', password='123456')
+
+        with patch(
+            'gestion_creditos.views.marketplace_checkout.calcular_totales_checkout',
+            side_effect=ValueError('No fue posible calcular el total')
+        ):
+            response = self.client.get(
+                reverse('marketplace:checkout', args=[self.item_visible.id]),
+                **self.market_request_kwargs,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Completa tu pedido')
+        self.assertContains(response, 'No fue posible calcular el total')

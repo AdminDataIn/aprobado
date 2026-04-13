@@ -3,23 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Créditos - Fintech Pro</title>
+    <title>Gestión de Créditos - Aprobado</title>
     {% load static %}
     {% load humanize %}
-    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-    <!-- Fintech Base Styles -->
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
 </head>
 <body class="theme-gestion theme-applications">
 {% include 'base/loader_global.html' %}
-    <!-- Header -->
     <header class="page-header">
         <div class="container-fluid" style="max-width: 1400px;">
             <div class="d-flex align-items-center justify-content-between">
-                {# NUEVA URL - Gestión #}
                 <a href="{% url 'gestion:dashboard' %}" class="logo">
                     <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;" />
                 </a>
@@ -41,25 +36,21 @@
     </header>
 
     <div class="container-fluid py-4" style="max-width: 1400px;">
-        <!-- Page Title & Breadcrumb -->
-        <div class="d-flex align-items-center justify-content-between mb-4 px-4">
+        <div class="d-flex align-items-center justify-content-between mb-4 px-4 flex-wrap gap-3">
             <div>
                 <h1 class="page-title">Gestión de Créditos</h1>
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
-                        {# NUEVA URL - Gestión #}
                         <li class="breadcrumb-item"><a href="{% url 'gestion:dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
                         <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-credit-card-2-front me-1"></i>Créditos Activos</li>
                     </ol>
                 </nav>
             </div>
-            {# NUEVA URL - Gestión #}
             <a href="{% url 'gestion:solicitudes' %}" class="btn btn-outline-primary">
                 <i class="bi bi-journal-text me-2"></i>Ver Solicitudes
             </a>
         </div>
 
-        <!-- Quick Actions -->
         <div class="quick-actions">
             <a href="#" class="action-card">
                 <div class="action-icon" style="background-color: var(--success);">
@@ -91,7 +82,6 @@
             </a>
         </div>
 
-        <!-- Filters Section -->
         <div class="filter-section">
             <h3 class="section-title">Filtros y Búsqueda</h3>
             <form method="get" id="filterForm">
@@ -100,8 +90,7 @@
                         <label for="search" class="form-label">
                             <i class="bi bi-search me-1"></i>Buscar Cliente
                         </label>
-                        <input type="text" name="search" id="search" value="{{ search }}" 
-                            class="form-control" placeholder="Nombre, usuario o documento...">
+                        <input type="text" name="search" id="search" value="{{ search }}" class="form-control" placeholder="Nombre, usuario o documento...">
                     </div>
                     <div class="form-group">
                         <label for="linea" class="form-label">
@@ -114,21 +103,31 @@
                             {% endfor %}
                         </select>
                     </div>
-
+                    <div class="form-group">
+                        <label for="empresa" class="form-label">
+                            <i class="bi bi-buildings me-1"></i>Empresa
+                        </label>
+                        <select name="empresa" id="empresa" class="form-select">
+                            <option value="">Todas las empresas</option>
+                            {% for empresa in empresas_choices %}
+                            <option value="{{ empresa }}" {% if empresa_filter == empresa %}selected{% endif %}>{{ empresa }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
                     <div class="form-group">
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary filter-btn">
                                 <i class="bi bi-funnel me-1"></i>Filtrar
                             </button>
-                            {# NUEVA URL - Gestión #}
-                            <a href="{% url 'gestion:creditos_activos' %}" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
+                            <a href="{% url 'gestion:creditos_activos' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-x-lg"></i>
+                            </a>
                         </div>
                     </div>
                 </div>
             </form>
         </div>
 
-        <!-- Credits Table -->
         <div class="table-container mt-4">
             <div class="table-header">
                 <h3 class="table-title">
@@ -139,12 +138,13 @@
                     <i class="bi bi-arrow-clockwise"></i>
                 </button>
             </div>
-            
+
             <div class="table-responsive">
                 <table class="table table-hover table-stack-mobile">
                     <thead>
                         <tr>
                             <th>Cliente</th>
+                            <th>Empresa</th>
                             <th>Línea</th>
                             <th>Monto Aprobado</th>
                             <th>Saldo Pendiente</th>
@@ -167,14 +167,25 @@
                                                 {{ credito.detalle_libranza.nombre_completo }}
                                             {% elif credito.linea == 'EMPRENDIMIENTO' %}
                                                 {{ credito.detalle_emprendimiento.nombre }}
+                                            {% elif credito.linea == 'ADELANTO_NOMINA' and credito.detalle_adelanto_nomina %}
+                                                {{ credito.detalle_adelanto_nomina.nombre_cliente }}
                                             {% else %}
                                                 {{ credito.usuario.get_full_name|default:credito.usuario.username }}
                                             {% endif %}
                                         </h6>
-                                        <small class="text-muted">{{ credito.detalle_libranza.cedula|default:credito.detalle_emprendimiento.numero_cedula }}</small>
+                                        <small class="text-muted">
+                                            {% if credito.linea == 'LIBRANZA' %}
+                                                {{ credito.detalle_libranza.cedula }}
+                                            {% elif credito.linea == 'EMPRENDIMIENTO' %}
+                                                {{ credito.detalle_emprendimiento.numero_cedula }}
+                                            {% elif credito.linea == 'ADELANTO_NOMINA' and credito.detalle_adelanto_nomina %}
+                                                {{ credito.detalle_adelanto_nomina.vinculo_laboral.documento_empleado }}
+                                            {% endif %}
+                                        </small>
                                     </div>
                                 </div>
                             </td>
+                            <td data-label="Empresa">{{ credito.empresa_relacionada.nombre|default:"SIN EMPRESA" }}</td>
                             <td data-label="Línea"><span class="line-badge">{{ credito.get_linea_display }}</span></td>
                             <td data-label="Monto aprobado"><strong class="text-primary">${{ credito.monto_aprobado|floatformat:2|intcomma }}</strong></td>
                             <td data-label="Saldo pendiente"><strong class="text-dark">${{ credito.saldo_pendiente|floatformat:2|intcomma }}</strong></td>
@@ -196,7 +207,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7">
+                            <td colspan="8">
                                 <div class="empty-state">
                                     <i class="bi bi-credit-card-2-front"></i>
                                     <h5>No se encontraron créditos</h5>
@@ -210,7 +221,6 @@
             </div>
         </div>
 
-        <!-- Pagination -->
         {% if creditos.has_other_pages %}
         <div class="pagination-container">
             <nav aria-label="Pagination">
@@ -222,11 +232,9 @@
                         </a>
                     </li>
                     {% endif %}
-                    
                     <li class="page-item active">
                         <span class="page-link">{{ creditos.number }} de {{ creditos.paginator.num_pages }}</span>
                     </li>
-                    
                     {% if creditos.has_next %}
                     <li class="page-item">
                         <a class="page-link" href="?page={{ creditos.next_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">
@@ -240,17 +248,14 @@
         {% endif %}
     </div>
 
-    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
     <script>
-        // Auto-submit del formulario cuando cambian los selects
         document.getElementById('linea').addEventListener('change', function() {
             this.form.submit();
         });
-
-        
-        // Búsqueda con Enter
+        document.getElementById('empresa').addEventListener('change', function() {
+            this.form.submit();
+        });
         document.getElementById('search').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 this.form.submit();

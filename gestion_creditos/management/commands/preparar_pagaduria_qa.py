@@ -3,6 +3,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from gestion_creditos.models import Empresa
+from gestion_creditos.services.name_normalization import normalize_name_upper
 from usuarios.models import PerfilPagador, ProductAccessProfile
 from usuarios.product_flow import ProductFlowConflict, assign_user_flow, get_user_flow
 
@@ -65,8 +66,8 @@ class Command(BaseCommand):
 
         user = User.objects.filter(email__iexact=pagador_email).first()
         nombres = pagador_nombre.split()
-        first_name = nombres[0] if nombres else 'Pagador'
-        last_name = ' '.join(nombres[1:]) if len(nombres) > 1 else 'QA'
+        first_name = normalize_name_upper(nombres[0] if nombres else 'Pagador')
+        last_name = normalize_name_upper(' '.join(nombres[1:]) if len(nombres) > 1 else 'QA')
 
         if not user:
             user = User.objects.create(

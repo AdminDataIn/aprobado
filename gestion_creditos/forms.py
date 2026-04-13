@@ -25,6 +25,7 @@ from gestion_creditos.services.libranza_rules import (
     obtener_creditos_libranza_bloqueantes,
     permitir_multiples_creditos_libranza_en_pruebas,
 )
+from gestion_creditos.services.name_normalization import normalize_name_upper
 
 
 NAME_ALLOWED_RE = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ' -]+$")
@@ -54,7 +55,7 @@ def _clean_person_name(value, field_label):
         raise forms.ValidationError(f'{field_label} deben tener al menos 2 letras.')
     if _contains_obvious_garbage(normalized):
         raise forms.ValidationError(f'{field_label} no parecen validos. Ingresa tu nombre real.')
-    return normalized.title()
+    return normalize_name_upper(normalized)
 
 
 def _clean_address(value):
@@ -704,6 +705,42 @@ class PagoCreditoOfflineForm(forms.Form):
         return comprobante
 
 
+class PagoObligacionesSeleccionadasForm(forms.Form):
+    metodo_pago = forms.ChoiceField(
+        label='Metodo de pago',
+        choices=[
+            (HistorialPago.MetodoPago.TRANSFERENCIA_DIRECTA, 'Transferencia directa'),
+            (HistorialPago.MetodoPago.OFFLINE_MANUAL, 'Registro offline manual'),
+        ],
+        initial=HistorialPago.MetodoPago.TRANSFERENCIA_DIRECTA,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    comprobante = forms.FileField(
+        label='Comprobante (opcional)',
+        required=False,
+        validators=[FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'webp'])],
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.pdf,.jpg,.jpeg,.png,.webp',
+        }),
+    )
+    nota = forms.CharField(
+        label='Notas de la aplicacion',
+        required=True,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Ej: Pago agrupado de obligaciones de la nomina del periodo.',
+        }),
+    )
+
+    def clean_comprobante(self):
+        comprobante = self.cleaned_data.get('comprobante')
+        if comprobante and comprobante.size > 8 * 1024 * 1024:
+            raise forms.ValidationError('El comprobante no debe superar 8MB.')
+        return comprobante
+
+
 class PagoMasivoEmpresaUploadForm(forms.ModelForm):
     archivo = forms.FileField(
         label='Archivo de pagos',
@@ -775,8 +812,8 @@ class InvestorInviteForm(forms.Form):
             user = User.objects.create(
                 username=email,
                 email=email,
-                first_name=self.cleaned_data.get('first_name', '').strip(),
-                last_name=self.cleaned_data.get('last_name', '').strip(),
+                first_name=normalize_name_upper(self.cleaned_data.get('first_name', ''))[:150],
+                last_name=normalize_name_upper(self.cleaned_data.get('last_name', ''))[:150],
                 is_active=True,
             )
         if created:
@@ -788,10 +825,10 @@ class InvestorInviteForm(forms.Form):
                 user.username = email
                 updates.append('username')
             if not user.first_name:
-                user.first_name = self.cleaned_data.get('first_name', '').strip()
+                user.first_name = normalize_name_upper(self.cleaned_data.get('first_name', ''))[:150]
                 updates.append('first_name')
             if not user.last_name and self.cleaned_data.get('last_name'):
-                user.last_name = self.cleaned_data.get('last_name', '').strip()
+                user.last_name = normalize_name_upper(self.cleaned_data.get('last_name', ''))[:150]
                 updates.append('last_name')
             if updates:
                 user.save(update_fields=updates)

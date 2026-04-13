@@ -539,7 +539,8 @@ class LoginInversionistaView(ProductLoginView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['forgot_password_url'] = reverse('account_reset_password')
+        context.pop('google_login_url', None)
+        context['forgot_password_url'] = reverse('inversionista:password_reset')
         context['back_url'] = reverse('home')
         return context
 

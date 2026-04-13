@@ -1,9 +1,3 @@
-
-<!--
-    Archivo: templates/gestion_creditos/admin_dashboard.html
-    Descripción: Dashboard principal para administradores con métricas clave y accesos rápidos.
--->
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -12,13 +6,9 @@
     <title>Dashboard de Administrador - Aprobado</title>
     {% load static %}
     {% load humanize %}
-    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" />
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Fintech Base Styles -->
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
     <style>
         .table-dashboard tbody td {
@@ -28,11 +18,39 @@
         .table-dashboard tbody strong {
             color: var(--text-primary);
         }
+        .dashboard-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 1rem;
+            flex-wrap: wrap;
+            padding: 1rem 1.25rem;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 1rem;
+            background: #fff;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+        }
+        .dashboard-toolbar .toolbar-form {
+            display: flex;
+            align-items: end;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            margin-left: auto;
+        }
+        .dashboard-toolbar .toolbar-field {
+            min-width: 190px;
+        }
+        .dashboard-toolbar .toolbar-label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body class="theme-gestion theme-dashboard">
 {% include 'base/loader_global.html' %}
-    <!-- Header -->
     <header class="page-header">
         <div class="container-fluid" style="max-width: 1400px;">
             <div class="d-flex align-items-center justify-content-between">
@@ -57,8 +75,7 @@
     </header>
 
     <div class="container-fluid py-4" style="max-width: 1400px;">
-        <!-- Page Title & Breadcrumb -->
-        <div class="d-flex align-items-center justify-content-between mb-4 px-4">
+        <div class="dashboard-toolbar mb-4">
             <div>
                 <h1 class="page-title">Dashboard de Administrador</h1>
                 <nav aria-label="breadcrumb">
@@ -67,24 +84,31 @@
                     </ol>
                 </nav>
             </div>
-            <div class="d-flex gap-2">
-                <button class="btn btn-outline-primary">
-                    <i class="bi bi-download me-2"></i>Exportar Reporte
-                </button>
-                <div class="dropdown">
-                    <button class="btn btn-primary dropdown-toggle" type="button" id="dropdownMenuButton1" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-plus-lg me-2"></i>Nuevo Crédito
-                    </button>
-                    <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
-                        <li><a class="dropdown-item" href="/emprendimiento/solicitar/">Emprendimiento</a></li>
-                        <li><a class="dropdown-item" href="/libranza/solicitar/">Libranza</a></li>
-                    </ul>
+            <form method="get" class="toolbar-form">
+                <div class="toolbar-field">
+                    <label for="empresaFilter" class="toolbar-label">Empresa</label>
+                    <select id="empresaFilter" name="empresa" class="form-select form-select-sm">
+                        <option value="">Todas las empresas</option>
+                        {% for empresa in empresas_choices %}
+                        <option value="{{ empresa }}" {% if empresa_filter == empresa %}selected{% endif %}>{{ empresa }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
-            </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-funnel me-1"></i>Aplicar
+                    </button>
+                    {% if empresa_filter %}
+                    <a href="{% url 'gestion:dashboard' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+                    {% endif %}
+                    <a href="{% url 'gestion:dashboard_export' %}{% if empresa_filter %}?empresa={{ empresa_filter|urlencode }}{% endif %}" class="btn btn-sm btn-primary" data-download="true">
+                        <i class="bi bi-file-earmark-spreadsheet me-1"></i>Exportar reporte Excel
+                    </a>
+                </div>
+            </form>
         </div>
 
         <div class="quick-actions">
-            {# NUEVA URL - Gestión #}
             <a href="{% url 'gestion:solicitudes' %}" class="action-card">
                 <div class="action-icon" style="background-color: var(--accent-blue);">
                     <i class="bi bi-clipboard-check"></i>
@@ -92,7 +116,6 @@
                 <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">Gestionar Solicitudes</h3>
                 <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Revisar y aprobar solicitudes pendientes</p>
             </a>
-            {# NUEVA URL - Gestión #}
             <a href="{% url 'gestion:creditos_activos' %}" class="action-card">
                 <div class="action-icon" style="background-color: var(--success);">
                     <i class="bi bi-credit-card"></i>
@@ -100,7 +123,6 @@
                 <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">Créditos Activos</h3>
                 <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Monitorear cartera activa</p>
             </a>
-            {# ✅ NUEVA URL - Gestión #}
             <a href="{% url 'gestion:cartera_mora' %}" class="action-card">
                 <div class="action-icon" style="background-color: var(--warning);">
                     <i class="bi bi-exclamation-triangle"></i>
@@ -115,9 +137,6 @@
                 <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">Análisis Financiero</h3>
                 <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Reportes y métricas avanzadas</p>
             </a>
-            <!-- Quick Actions -->
-            <!-- En la sección Quick Actions de admin_dashboard.html -->
-            {# ✅ NUEVA URL - Billetera #}
             <a href="{% url 'billetera:gestion_dashboard' %}" class="action-card">
                 <div class="action-icon" style="background-color: var(--purple);">
                     <i class="bi bi-wallet2"></i>
@@ -127,7 +146,6 @@
             </a>
         </div>
 
-        <!-- Metrics Grid -->
         <div class="row g-4 mb-4">
             <div class="col-12 col-md-6 col-xl-3">
                 <div class="card metric-card">
@@ -136,9 +154,6 @@
                     </div>
                     <div class="metric-value">${{ saldo_cartera_total|floatformat:2|intcomma }}</div>
                     <div class="metric-label">Saldo Total de Cartera</div>
-                    <div class="metric-change positive">
-                        <!-- <i class="bi bi-arrow-up"></i> +12.5% vs mes anterior SE COMENTA MIENTRAS NO HAYA DATOS -->
-                    </div>
                 </div>
             </div>
             <div class="col-12 col-md-6 col-xl-3">
@@ -148,9 +163,6 @@
                     </div>
                     <div class="metric-value text-danger">${{ monto_total_en_mora|floatformat:2|intcomma }}</div>
                     <div class="metric-label">Total en Mora</div>
-                    <div class="metric-change negative">
-                        <!-- <i class="bi bi-arrow-up"></i> +3.2% vs mes anterior SE COMENTA MIENTRAS NO HAYA DATOS -->
-                    </div>
                 </div>
             </div>
             <div class="col-12 col-md-6 col-xl-3">
@@ -160,9 +172,6 @@
                     </div>
                     <div class="metric-value">{{ total_creditos }}</div>
                     <div class="metric-label">Total de Créditos</div>
-                    <div class="metric-change positive">
-                        <!-- <i class="bi bi-arrow-up"></i> +8.1% vs mes anterior SE COMENTA MIENTRAS NO HAYA DATOS -->
-                    </div>
                 </div>
             </div>
             <div class="col-12 col-md-6 col-xl-3">
@@ -172,14 +181,10 @@
                     </div>
                     <div class="metric-value text-warning">{{ proximos_vencer }}</div>
                     <div class="metric-label">Próximos a Vencer</div>
-                    <div class="metric-change negative">
-                        <!-- <i class="bi bi-arrow-down"></i> -15.3% vs mes anterior SE COMENTA MIENTRAS NO HAYA DATOS -->
-                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Charts and Tables Row -->
         <div class="row g-4 mb-4">
             <div class="col-12 col-lg-8">
                 <div class="card">
@@ -196,7 +201,7 @@
             <div class="col-12 col-lg-4">
                 <div class="card h-100">
                     <div class="table-header">
-                        <h3 class="section-title">Distribución por Línea</h3>
+                        <h3 class="section-title">Distribución por Empresas</h3>
                     </div>
                     <div class="card-body">
                         <div class="chart-container">
@@ -207,7 +212,6 @@
             </div>
         </div>
 
-        <!-- Data Tables -->
         <div class="row g-4">
             <div class="col-12 col-lg-6">
                 <div class="table-container">
@@ -226,7 +230,7 @@
                             <tbody>
                                 {% for item in creditos_por_linea %}
                                 <tr>
-                                    <td data-label="Línea de crédito">{{ item.linea }}</td>
+                                    <td data-label="Línea de crédito">{{ item.linea_label|default:item.linea }}</td>
                                     <td data-label="Créditos activos"><strong>{{ item.count }}</strong></td>
                                     <td class="text-end" data-label="Saldo total"><strong>${{ item.saldo_total|floatformat:2|intcomma }}</strong></td>
                                 </tr>
@@ -278,11 +282,8 @@
         </div>
     </div>
 
-    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
     <script>
-        // Chart configurations
         const portfolioCtx = document.getElementById('portfolioChart').getContext('2d');
         new Chart(portfolioCtx, {
             type: 'line',
@@ -303,6 +304,13 @@
                     fill: true,
                     tension: 0.3
                 }, {
+                    label: 'Saldo Cartera Adelanto de Nómina',
+                    data: {{ adelanto_data|safe }},
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                }, {
                     label: 'Saldo Total',
                     data: {{ total_data|safe }},
                     borderColor: '#10b981',
@@ -314,6 +322,10 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
                 scales: {
                     y: {
                         beginAtZero: true
@@ -329,12 +341,17 @@
                 labels: {{ distribution_labels|safe }},
                 datasets: [{
                     data: {{ distribution_data|safe }},
-                    backgroundColor: ['#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6']
+                    backgroundColor: ['#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6', '#06b6d4', '#14b8a6', '#f97316', '#6366f1', '#ec4899']
                 }]
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
             }
         });
     </script>

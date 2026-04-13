@@ -1,13 +1,12 @@
 from django.urls import path
-from . import views
+
+from .. import views
 
 app_name = 'gestion_creditos'
 
 urlpatterns = [
     path('solicitar/libranza/', views.solicitud_credito_libranza_view, name='solicitud_libranza'),
     path('solicitar/emprendimiento/', views.solicitud_credito_emprendimiento_view, name='solicitud_emprendimiento'),
-    
-    #! URLs Dashboard Administrativo (APROBADOR DE CREDITOS)
     path('admin/dashboard/', views.admin_dashboard_view, name='admin_dashboard'),
     path('admin/solicitudes/', views.admin_solicitudes_view, name='admin_solicitudes'),
     path('admin/adelantos-nomina/', views.admin_adelantos_nomina_view, name='admin_adelantos_nomina'),
@@ -18,23 +17,15 @@ urlpatterns = [
     path('admin/credito/<int:credito_id>/confirmar-desembolso/', views.confirmar_desembolso_view, name='confirmar_desembolso'),
     path('admin/agregar-pago/<int:credito_id>/', views.agregar_pago_manual_view, name='agregar_pago_manual'),
     path('admin/descargar-documentos/<int:credito_id>/', views.descargar_documentos_view, name='descargar_documentos'),
-
-    #! URLs Dashboard Pagador
     path('pagador/dashboard/', views.pagador_dashboard_view, name='pagador_dashboard'),
     path('pagador/adelantos/', views.pagador_adelantos_dashboard_view, name='pagador_adelantos_dashboard'),
     path('pagador/credito/<int:credito_id>/', views.pagador_detalle_credito_view, name='pagador_detalle_credito'),
     path('pagador/procesar-pagos/', views.pagador_procesar_pagos_view, name='pagador_procesar_pagos'),
-
-    #! URLs Flujo de Pago Individual
     path('pago/iniciar/<int:credito_id>/', views.iniciar_pago_view, name='iniciar_pago'),
     path('pago/callback/', views.procesar_pago_callback_view, name='pago_callback'),
-
-    #! === BILLETERA DIGITAL - USUARIO ===
     path('billetera/', views.billetera_digital_view, name='billetera_digital'),
     path('billetera/consignacion-offline/', views.consignacion_offline_view, name='consignacion_offline'),
     path('billetera/notificaciones/marcar-leidas/', views.marcar_notificaciones_leidas_view, name='billetera_marcar_notificaciones_leidas'),
-    
-    #! === BILLETERA DIGITAL - ADMIN ===
     path('admin/billetera/', views.admin_billetera_dashboard_view, name='admin_billetera_dashboard'),
     path('admin/billetera/aprobar/<int:movimiento_id>/', views.aprobar_consignacion_view, name='aprobar_consignacion'),
     path('admin/billetera/rechazar/<int:movimiento_id>/', views.rechazar_consignacion_view, name='rechazar_consignacion'),

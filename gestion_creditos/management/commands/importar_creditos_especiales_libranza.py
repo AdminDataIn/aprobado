@@ -25,6 +25,7 @@ from gestion_creditos.models import (
     HistorialEstado,
     VinculoLaboralEmpresa,
 )
+from gestion_creditos.services.name_normalization import normalize_name_upper
 
 
 MONTHS_ES = {
@@ -404,8 +405,9 @@ class Command(BaseCommand):
             if correo and user.email != correo:
                 user.email = correo
                 updates.append('email')
-            if row['nombre'] and not user.first_name:
-                user.first_name = row['nombre'][:150]
+            normalized_name = normalize_name_upper(row['nombre'])
+            if normalized_name and not user.first_name:
+                user.first_name = normalized_name[:150]
                 updates.append('first_name')
             if updates:
                 user.save(update_fields=updates)
@@ -421,7 +423,7 @@ class Command(BaseCommand):
         user = User.objects.create(
             username=username,
             email=correo,
-            first_name=row['nombre'][:150],
+            first_name=normalize_name_upper(row['nombre'])[:150],
             last_name='',
         )
         user.set_unusable_password()
@@ -435,7 +437,7 @@ class Command(BaseCommand):
             documento_empleado=row['documento'],
             defaults={
                 'tipo_documento': 'CC',
-                'nombre_empleado': row['nombre'],
+                'nombre_empleado': normalize_name_upper(row['nombre']),
                 'correo_empleado': row['correo'],
                 'telefono_empleado': row['telefono'][:20],
                 'estado_vinculo': VinculoLaboralEmpresa.EstadoVinculo.ACTIVO,
@@ -445,8 +447,9 @@ class Command(BaseCommand):
             },
         )
         update_fields = []
-        if vinculo.nombre_empleado != row['nombre']:
-            vinculo.nombre_empleado = row['nombre']
+        normalized_name = normalize_name_upper(row['nombre'])
+        if vinculo.nombre_empleado != normalized_name:
+            vinculo.nombre_empleado = normalized_name
             update_fields.append('nombre_empleado')
         if row['correo'] and vinculo.correo_empleado != row['correo']:
             vinculo.correo_empleado = row['correo']

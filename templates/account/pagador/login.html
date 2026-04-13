@@ -7,7 +7,7 @@
     <span class="badge rounded-pill border">Acceso pagador</span>
 </div>
 <h1>Ingresa al panel de pagadores</h1>
-<p class="auth-desc">Usa tu correo corporativo y tu contrasena para revisar solicitudes, aprobar adelantos y gestionar pagos.</p>
+<p class="auth-desc">Usa tu correo corporativo y tu contraseña para revisar solicitudes, aprobar adelantos y gestionar pagos.</p>
 
 {% if messages %}
     {% for message in messages %}
@@ -33,10 +33,10 @@
     </div>
 
     <div class="auth-field">
-        <label class="form-label" for="{{ form.password.id_for_label }}">Contrasena</label>
+        <label class="form-label" for="{{ form.password.id_for_label }}">Contraseña</label>
         <div class="auth-password-wrap">
             {{ form.password }}
-            <button type="button" class="auth-password-toggle" data-password-toggle="{{ form.password.id_for_label }}" aria-label="Mostrar u ocultar contrasena">
+            <button type="button" class="auth-password-toggle" data-password-toggle="{{ form.password.id_for_label }}" aria-label="Mostrar u ocultar contraseña">
                 <i class="bi bi-eye"></i>
             </button>
         </div>

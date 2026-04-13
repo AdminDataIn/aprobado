@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
 from gestion_creditos.models import InvestorAccount
+from gestion_creditos.services.name_normalization import normalize_name_upper
 from usuarios.investor_activation_service import enviar_invitacion_inversionista
 from usuarios.models import ProductAccessProfile
 from usuarios.product_flow import assign_user_flow
@@ -18,8 +19,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         User = get_user_model()
         email = options['email'].strip().lower()
-        nombre = options['nombre'].strip()
-        apellido = options['apellido'].strip()
+        nombre = normalize_name_upper(options['nombre'])
+        apellido = normalize_name_upper(options['apellido'])
 
         user = User.objects.filter(email__iexact=email).first()
         created = False

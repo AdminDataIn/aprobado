@@ -70,6 +70,14 @@ body.mp-admin {
     color: var(--adm-muted);
 }
 
+.mp-admin-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
 /* Botones */
 .mp-admin-btn {
     padding: 11px 18px;

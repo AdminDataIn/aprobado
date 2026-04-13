@@ -7,10 +7,23 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from decimal import Decimal
 import json
-from gestion_creditos.models import Credito, CreditoLibranza, CreditoEmprendimiento, Empresa, Pagare, ZapSignWebhookLog
+from gestion_creditos.models import (
+    Credito,
+    CreditoEmprendimiento,
+    CreditoLibranza,
+    CuotaAmortizacion,
+    Empresa,
+    Pagare,
+    ZapSignWebhookLog,
+)
 from gestion_creditos.services import filtrar_creditos, get_billetera_context, procesar_pagos_masivos_csv
 import io
 from datetime import date
+
+
+def pdf_upload(name):
+    return SimpleUploadedFile(name, b'%PDF-1.4 test', content_type='application/pdf')
+
 
 class FiltrarCreditosServiceTest(TestCase):
     """Pruebas para la función de servicio `filtrar_creditos`."""
@@ -25,30 +38,37 @@ class FiltrarCreditosServiceTest(TestCase):
         credito_libranza_1 = Credito.objects.create(
             usuario=cls.user,
             linea=Credito.LineaCredito.LIBRANZA,
-            estado=Credito.EstadoCredito.ACTIVO
+            estado=Credito.EstadoCredito.ACTIVO,
+            monto_solicitado=Decimal('1000.00'),
+            plazo_solicitado=12,
         )
         CreditoLibranza.objects.create(
             credito=credito_libranza_1,
             nombres='Juan',
             apellidos='Perez',
             cedula='12345',
+            direccion='Calle 1',
+            telefono='3000000000',
+            correo_electronico='juan@example.com',
             empresa=cls.empresa,
-            valor_credito=1000,
-            plazo=12
+            ingresos_mensuales=Decimal('2500000.00'),
+            cedula_frontal=pdf_upload('cedula_frontal.pdf'),
+            cedula_trasera=pdf_upload('cedula_trasera.pdf'),
+            certificado_bancario=pdf_upload('certificado_bancario.pdf'),
         )
 
         # Crédito de Emprendimiento para filtrar
         credito_emprendimiento_1 = Credito.objects.create(
             usuario=cls.user,
             linea=Credito.LineaCredito.EMPRENDIMIENTO,
-            estado=Credito.EstadoCredito.EN_REVISION
+            estado=Credito.EstadoCredito.EN_REVISION,
+            monto_solicitado=Decimal('2000.00'),
+            plazo_solicitado=24,
         )
         CreditoEmprendimiento.objects.create(
             credito=credito_emprendimiento_1,
             nombre='Negocio de Ana',
             numero_cedula='67890',
-            valor_credito=2000,
-            plazo=24,
             fecha_nac=date(1990, 1, 1),
             celular_wh='3001234567',
             direccion='Calle Falsa 123',
@@ -143,17 +163,42 @@ class PagosMasivosCSVServiceTest(TestCase):
         credito_activo = Credito.objects.create(
             usuario=cls.user,
             linea=Credito.LineaCredito.LIBRANZA,
-            estado=Credito.EstadoCredito.ACTIVO
+            estado=Credito.EstadoCredito.ACTIVO,
+            monto_solicitado=Decimal('5000.00'),
+            plazo_solicitado=12,
+            monto_aprobado=Decimal('5000.00'),
+            plazo=12,
+            tasa_interes=Decimal('2.50'),
+            comision=Decimal('0.00'),
+            iva_comision=Decimal('0.00'),
+            total_a_pagar=Decimal('5000.00'),
+            saldo_pendiente=Decimal('5000.00'),
+            capital_pendiente=Decimal('5000.00'),
+            valor_cuota=Decimal('500.00'),
+            fecha_proximo_pago=timezone.now().date(),
         )
         CreditoLibranza.objects.create(
             credito=credito_activo,
+            nombres='Maria',
+            apellidos='Lopez',
             cedula='112233',
-            valor_credito=5000,
-            saldo_pendiente=5000,
-            capital_original_pendiente=4500, # Simulado
-            tasa_interes=Decimal('2.5'),
+            direccion='Calle 2',
+            telefono='3001112233',
+            correo_electronico='maria@example.com',
             empresa=cls.empresa,
-            plazo=12
+            ingresos_mensuales=Decimal('3200000.00'),
+            cedula_frontal=pdf_upload('cedula_frontal_maria.pdf'),
+            cedula_trasera=pdf_upload('cedula_trasera_maria.pdf'),
+            certificado_bancario=pdf_upload('certificado_bancario_maria.pdf'),
+        )
+        CuotaAmortizacion.objects.create(
+            credito=credito_activo,
+            numero_cuota=1,
+            fecha_vencimiento=timezone.now().date(),
+            capital_a_pagar=Decimal('500.00'),
+            interes_a_pagar=Decimal('0.00'),
+            valor_cuota=Decimal('500.00'),
+            saldo_capital_pendiente=Decimal('4500.00'),
         )
 
     def test_procesar_csv_exitoso(self):
@@ -167,7 +212,7 @@ class PagosMasivosCSVServiceTest(TestCase):
         self.assertEqual(len(errores), 0)
         
         credito_actualizado = Credito.objects.get(detalle_libranza__cedula='112233')
-        self.assertTrue(credito_actualizado.detalle.saldo_pendiente < 5000)
+        self.assertTrue(credito_actualizado.saldo_pendiente < Decimal('5000.00'))
 
     def test_procesar_csv_con_errores(self):
         """Verifica que se manejen correctamente las filas con errores en el CSV."""
@@ -179,8 +224,8 @@ class PagosMasivosCSVServiceTest(TestCase):
 
         self.assertEqual(pagos_exitosos, 0)
         self.assertEqual(len(errores), 2)
-        self.assertIn("No se encontró un crédito activo para la cédula 999999", errores[0])
-        self.assertIn("Monto 'monto_invalido' no es un número válido", errores[1])
+        self.assertIn("No se encontro un credito activo para la cedula 999999", errores[0])
+        self.assertIn("monto_invalido", errores[1])
 
 
 @override_settings(ZAPSIGN_WEBHOOK_SECRET='test-secret', ZAPSIGN_WEBHOOK_HEADER='X-ZapSign-Secret')

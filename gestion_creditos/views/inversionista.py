@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.shortcuts import render
 
-from .models import InvestorAccount
+from ..models import InvestorAccount
 from usuarios.product_flow import flow_login_required
 
 

@@ -1,10 +1,21 @@
 from pathlib import Path
+import importlib.util
 import os
-import dj_database_url
-from dotenv import load_dotenv
+import sys
+
+try:
+    import dj_database_url
+except ModuleNotFoundError:
+    dj_database_url = None
+
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError:
+    load_dotenv = None
 
 # Cargar variables de entorno desde .env
-load_dotenv()
+if load_dotenv is not None:
+    load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -17,6 +28,22 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key')  # clave de respaldo
 
 # Si existe la variable RENDER, asumimos que estamos en producción
 DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
+RUNNING_TESTS = 'test' in sys.argv
+
+
+def _module_available(module_name):
+    try:
+        return importlib.util.find_spec(module_name) is not None
+    except ModuleNotFoundError:
+        return False
+
+
+ALLAUTH_AVAILABLE = _module_available('allauth')
+ALLAUTH_ACCOUNT_AVAILABLE = _module_available('allauth.account')
+ALLAUTH_SOCIALACCOUNT_AVAILABLE = _module_available('allauth.socialaccount')
+ALLAUTH_GOOGLE_AVAILABLE = _module_available('allauth.socialaccount.providers.google')
+DJANGO_CELERY_BEAT_AVAILABLE = _module_available('django_celery_beat')
+WHITENOISE_AVAILABLE = _module_available('whitenoise')
 
 def env_bool(name, default=False):
     value = os.environ.get(name, str(default))
@@ -57,8 +84,11 @@ ALLOW_MULTIPLE_LIBRANZA_ACTIVE_CREDITS_FOR_TESTING = env_bool(
     False
 )
 LIBRANZA_AUTO_MARK_MORA_ENABLED = env_bool('LIBRANZA_AUTO_MARK_MORA_ENABLED', True)
-LIBRANZA_PAYMENT_REMINDERS_ENABLED = env_bool('LIBRANZA_PAYMENT_REMINDERS_ENABLED', True)
-LIBRANZA_MORA_ALERTS_ENABLED = env_bool('LIBRANZA_MORA_ALERTS_ENABLED', True)
+LIBRANZA_PAYMENT_REMINDERS_ENABLED = env_bool('LIBRANZA_PAYMENT_REMINDERS_ENABLED', False)
+LIBRANZA_MORA_ALERTS_ENABLED = env_bool('LIBRANZA_MORA_ALERTS_ENABLED', False)
+PAGADOR_MONTHLY_PENDING_NOTIFICATIONS_ENABLED = env_bool('PAGADOR_MONTHLY_PENDING_NOTIFICATIONS_ENABLED', True)
+WORKER_PENDING_PAYMENT_ALERTS_ENABLED = env_bool('WORKER_PENDING_PAYMENT_ALERTS_ENABLED', True)
+LIBRANZA_PRORATED_INTEREST_ENABLED = env_bool('LIBRANZA_PRORATED_INTEREST_ENABLED', False)
 WHATSAPP_SUPPORT_NUMBER = os.environ.get('WHATSAPP_SUPPORT_NUMBER', '573132477352')
 WHATSAPP_DEFAULT_MESSAGE = os.environ.get(
     'WHATSAPP_DEFAULT_MESSAGE',
@@ -108,21 +138,31 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.sites',
     'django.contrib.humanize',
-    'allauth',
-    'allauth.account',
-    'allauth.socialaccount',
-    'allauth.socialaccount.providers.google',
-    'django_celery_beat',  # Para tareas programadas con Celery
     'usuarios',
     'configuraciones',
     'gestion_creditos',
     'usuariocreditos',
 ]
 
+if ALLAUTH_AVAILABLE:
+    INSTALLED_APPS.append('allauth')
+if ALLAUTH_ACCOUNT_AVAILABLE:
+    INSTALLED_APPS.append('allauth.account')
+if ALLAUTH_SOCIALACCOUNT_AVAILABLE:
+    INSTALLED_APPS.append('allauth.socialaccount')
+if ALLAUTH_GOOGLE_AVAILABLE:
+    INSTALLED_APPS.append('allauth.socialaccount.providers.google')
+if DJANGO_CELERY_BEAT_AVAILABLE:
+    INSTALLED_APPS.append('django_celery_beat')
+
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
-    'allauth.account.auth_backends.AuthenticationBackend',
 ]
+
+if ALLAUTH_ACCOUNT_AVAILABLE:
+    AUTHENTICATION_BACKENDS.append(
+        'allauth.account.auth_backends.AuthenticationBackend'
+    )
 
 SITE_ID = 1
 
@@ -161,9 +201,12 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'usuarios.middleware.ProductoContextMiddleware',  # Detecta producto con auth/messages ya disponibles
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'allauth.account.middleware.AccountMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
+
+if ALLAUTH_ACCOUNT_AVAILABLE:
+    MIDDLEWARE.append('allauth.account.middleware.AccountMiddleware')
+if WHITENOISE_AVAILABLE:
+    MIDDLEWARE.append('whitenoise.middleware.WhiteNoiseMiddleware')
 
 ROOT_URLCONF = 'aprobado_web.urls_main'
 
@@ -196,7 +239,7 @@ WSGI_APPLICATION = 'aprobado_web.wsgi.application'
 USE_SQLITE = os.environ.get('USE_SQLITE', '').lower() == 'true'
 DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
 
-if USE_SQLITE or not DATABASE_URL:
+if USE_SQLITE or not DATABASE_URL or dj_database_url is None:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -236,7 +279,8 @@ USE_THOUSAND_SEPARATOR = True
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATIC_ROOT = '/var/www/aprobado/staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+if WHITENOISE_AVAILABLE:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
@@ -245,9 +289,9 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # Seguridad
 # ========================
 
-SECURE_SSL_REDIRECT = not DEBUG
-SESSION_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = not DEBUG and not RUNNING_TESTS
+SESSION_COOKIE_SECURE = not DEBUG and not RUNNING_TESTS
+CSRF_COOKIE_SECURE = not DEBUG and not RUNNING_TESTS
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -358,5 +402,6 @@ CELERY_TIMEZONE = 'America/Bogota'
 CELERY_ENABLE_UTC = False
 
 # Configuración de Celery Beat (tareas programadas)
-CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+if DJANGO_CELERY_BEAT_AVAILABLE:
+    CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 

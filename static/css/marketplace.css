@@ -113,6 +113,27 @@ body.marketplace {
     height: 36px;
 }
 
+.mp-company-hero-logo {
+    width: min(180px, 100%);
+    max-width: 180px;
+    height: 88px;
+    margin-bottom: 18px;
+    padding: 12px 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid var(--mp-border);
+    box-shadow: var(--mp-shadow-soft);
+}
+
+.mp-company-hero-logo img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
 .mp-nav {
     display: flex;
     gap: 22px;
@@ -336,6 +357,17 @@ body.marketplace {
     position: absolute;
     inset: 0;
     background: linear-gradient(180deg, rgba(15, 23, 42, 0.1), rgba(15, 23, 42, 0.38));
+    pointer-events: none;
+}
+
+.mp-card-video {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    position: relative;
+    z-index: 1;
+    background: #0f172a;
 }
 
 .mp-card-tag-soft {
@@ -554,6 +586,7 @@ body.marketplace {
     inset: 0;
     background: linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.42));
     z-index: 1;
+    pointer-events: none;
 }
 
 .mp-card-video-indicator {
@@ -571,6 +604,32 @@ body.marketplace {
     font-weight: 700;
     z-index: 2;
     box-shadow: 0 10px 24px -18px rgba(15, 23, 42, 0.85);
+    pointer-events: none;
+}
+
+.mp-card-video-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    padding: 24px;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.9));
+    color: #fff;
+    text-align: center;
+    z-index: 0;
+}
+
+.mp-card-video-placeholder i {
+    font-size: 32px;
+}
+
+.mp-card-video-placeholder span {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
 }
 
 .mp-card-video-indicator i {
@@ -682,8 +741,8 @@ body.marketplace {
 
 .mp-company-mini-logo,
 .mp-company-mini-badge {
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
     border-radius: 8px;
     display: inline-flex;
     align-items: center;
@@ -698,8 +757,8 @@ body.marketplace {
 }
 
 .mp-company-mini-logo img {
-    width: 100%;
-    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
     object-fit: contain;
 }
 
@@ -907,7 +966,7 @@ body.marketplace {
 }
 
 .mp-ally-logo-badge {
-    width: 48px;
+    width: 64px;
     height: 48px;
     border-radius: 16px;
     display: inline-flex;
@@ -928,8 +987,8 @@ body.marketplace {
 }
 
 .mp-ally-logo-badge.is-logo img {
-    width: 100%;
-    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
     object-fit: contain;
 }
 

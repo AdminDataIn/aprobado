@@ -1,4 +1,4 @@
-from decimal import Decimal, ConversionSyntax
+from decimal import Decimal, ConversionSyntax, InvalidOperation
 import logging
 import uuid
 import hashlib
@@ -6,10 +6,15 @@ from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
-from openai import OpenAI
+
+try:
+    from openai import OpenAI
+except ModuleNotFoundError:
+    OpenAI = None
 from configuraciones.models import ConfiguracionPeso
 from .models import Credito, HistorialEstado, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, HistorialPago, CuotaAmortizacion, Empresa, LotePagoEmpresa
 from .services.tasa_service import obtener_tasa_credito
+from .services import dashboard_metrics
 from .services.libranza_rules import (
     calcular_primera_fecha_pago_libranza,
     obtener_fecha_primera_cuota_credito,
@@ -17,6 +22,11 @@ from .services.libranza_rules import (
     obtener_plazo_credito_aplicado,
     obtener_tasa_credito_aplicada,
     sumar_meses_con_dia_ancla,
+)
+from .services.credit_lifecycle import saldar_credito_formalmente as _saldar_credito_formalmente
+from .services.dashboard_metrics import (
+    calcular_total_en_mora as _dashboard_calcular_total_en_mora,
+    get_admin_dashboard_context as _dashboard_get_admin_dashboard_context,
 )
 from django.db.models import Sum, Count, Case, When, F, DecimalField, Q, Avg, Value, ExpressionWrapper, Value, ExpressionWrapper
 from django.db.models.functions import TruncMonth, Coalesce
@@ -460,6 +470,8 @@ def evaluar_motivacion_credito(texto: str) -> int:
     """
     if not texto or len(texto) < 10:
         return 3
+    if OpenAI is None or not settings.OPENAI_API_KEY:
+        return 3
     try:
         client = OpenAI(api_key=settings.OPENAI_API_KEY)
         prompt = f'''Evalúa esta justificación para un crédito y asigna un puntaje del 1 al 5:
@@ -529,7 +541,22 @@ def filtrar_creditos(request, creditos_base):
             Q(detalle_emprendimiento__numero_cedula__icontains=search_text) |
             Q(detalle_libranza__nombres__icontains=search_text) |
             Q(detalle_libranza__apellidos__icontains=search_text) |
-            Q(detalle_libranza__cedula__icontains=search_text)
+            Q(detalle_libranza__cedula__icontains=search_text) |
+            Q(detalle_adelanto_nomina__vinculo_laboral__nombre_empleado__icontains=search_text) |
+            Q(detalle_adelanto_nomina__vinculo_laboral__documento_empleado__icontains=search_text)
+        )
+
+    empresa_filter = request.GET.get('empresa', '').strip()
+    if empresa_filter:
+        queryset = queryset.filter(
+            Q(
+                linea=Credito.LineaCredito.LIBRANZA,
+                detalle_libranza__empresa__nombre__iexact=empresa_filter,
+            ) |
+            Q(
+                linea=Credito.LineaCredito.ADELANTO_NOMINA,
+                detalle_adelanto_nomina__vinculo_laboral__empresa__nombre__iexact=empresa_filter,
+            )
         )
 
     # Filtro de línea
@@ -547,144 +574,12 @@ def filtrar_creditos(request, creditos_base):
 
 
 def calcular_total_en_mora(creditos=None):
-    """
-    Calcula el monto total vencido en mora basado en cuotas vencidas no pagadas.
-    """
-    today = timezone.now().date()
-
-    cuotas = CuotaAmortizacion.objects.filter(
-        pagada=False,
-        fecha_vencimiento__lt=today
-    )
-
-    if not getattr(settings, 'LIBRANZA_AUTO_MARK_MORA_ENABLED', True):
-        cuotas = cuotas.exclude(credito__linea=Credito.LineaCredito.LIBRANZA)
-
-    if creditos is not None:
-        cuotas = cuotas.filter(credito__in=creditos)
-    else:
-        cuotas = cuotas.filter(
-            credito__estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]
-        )
-
-    monto_expr = ExpressionWrapper(
-        F('valor_cuota') - Coalesce(F('monto_pagado'), Value(Decimal('0.00'))),
-        output_field=DecimalField(max_digits=12, decimal_places=2)
-    )
-
-    total = cuotas.aggregate(
-        total=Coalesce(Sum(monto_expr), Value(Decimal('0.00')))
-    )['total']
-
-    return total or Decimal('0.00')
+    return dashboard_metrics.calcular_total_en_mora(creditos)
 
 
 
-def get_admin_dashboard_context(user):
-    """
-    Obtiene todo el contexto necesario para el dashboard del administrador,
-    utilizando el modelo de Crédito centralizado y optimizando las consultas.
-    """
-    from datetime import date
-    from django.db.models.functions import TruncMonth
-
-    today = timezone.now().date()
-    proximos_15_dias = today + timedelta(days=15)
-
-    # --- Consultas Principales ---
-    creditos_activos = Credito.objects.filter(estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA])
-    
-    # --- KPIs Principales ---
-    kpis = creditos_activos.aggregate(
-        saldo_cartera_total=Coalesce(Sum('saldo_pendiente'), Decimal('0.00'))
-    )
-    monto_total_en_mora = calcular_total_en_mora()
-    total_creditos = creditos_activos.count()
-    proximos_vencer = creditos_activos.filter(fecha_proximo_pago__range=[today, proximos_15_dias]).count()
-
-    # --- Datos para Tablas ---
-    # Créditos por línea - solo creditos activos con saldo
-    creditos_por_linea_q = list(creditos_activos.values('linea').annotate(
-        count=Count('id'),
-        saldo_total=Coalesce(Sum('saldo_pendiente'), Decimal('0.00'))
-    ).order_by('-saldo_total'))
-
-    # Créditos por estado - todos los créditos
-    total_general_creditos = Credito.objects.count()
-    creditos_por_estado_q = Credito.objects.values('estado').annotate(
-        count=Count('id')
-    ).order_by('-count')
-
-    creditos_por_estado = []
-    for item in creditos_por_estado_q:
-        porcentaje = (item['count'] / total_general_creditos) * 100 if total_general_creditos > 0 else 0
-        creditos_por_estado.append({
-            'estado': item['estado'],
-            'count': item['count'],
-            'porcentaje': porcentaje
-        })
-
-    # --- Datos para Gráfico de Distribución (Doughnut) ---
-    distribution_labels = [item['linea'] for item in creditos_por_linea_q]
-    distribution_data = [item['count'] for item in creditos_por_linea_q]
-
-    # --- Datos para Gráfico de Evolución de Cartera (Líneas) ---
-    # Generar últimos 12 meses de labels
-    portfolio_labels = []
-    for i in range(11, -1, -1):
-        mes_fecha = today - relativedelta(months=i)
-        portfolio_labels.append(mes_fecha.strftime('%b %Y'))
-
-    # Calcular saldo de cartera por mes usando créditos activos
-    # Para cada mes, sumamos los saldos de créditos que estaban activos en ese momento
-    emprendimiento_data = []
-    libranza_data = []
-
-    for label in portfolio_labels:
-        # Convertir label a fecha (último día del mes)
-        mes_date = datetime.strptime(label, '%b %Y')
-        primer_dia_mes = mes_date.replace(day=1).date()
-        ultimo_dia_mes = (primer_dia_mes + relativedelta(months=1) - timedelta(days=1))
-
-        # Créditos que estaban activos en ese mes (desembolsados antes del fin del mes)
-        creditos_mes_emprendimiento = Credito.objects.filter(
-            linea='EMPRENDIMIENTO',
-            estado__in=['ACTIVO', 'EN_MORA', 'PAGADO'],
-            fecha_desembolso__date__lte=ultimo_dia_mes
-        ).aggregate(saldo=Coalesce(Sum('saldo_pendiente'), Decimal('0.00')))['saldo']
-
-        creditos_mes_libranza = Credito.objects.filter(
-            linea='LIBRANZA',
-            estado__in=['ACTIVO', 'EN_MORA', 'PAGADO'],
-            fecha_desembolso__date__lte=ultimo_dia_mes
-        ).aggregate(saldo=Coalesce(Sum('saldo_pendiente'), Decimal('0.00')))['saldo']
-
-        emprendimiento_data.append(float(creditos_mes_emprendimiento))
-        libranza_data.append(float(creditos_mes_libranza))
-
-    total_data = [e + l for e, l in zip(emprendimiento_data, libranza_data)]
-
-    return {
-        # KPIs
-        'saldo_cartera_total': kpis['saldo_cartera_total'],
-        'monto_total_en_mora': monto_total_en_mora,
-        'total_creditos': total_creditos,
-        'proximos_vencer': proximos_vencer,
-        
-        # Tablas
-        'creditos_por_linea': creditos_por_linea_q,
-        'creditos_por_estado': creditos_por_estado,
-        
-        # Gráfico de Distribución
-        'distribution_labels': json.dumps(distribution_labels),
-        'distribution_data': json.dumps(distribution_data),
-        
-        # Gráfico de Evolución de Cartera
-        'portfolio_labels': json.dumps(portfolio_labels),
-        'emprendimiento_data': json.dumps(emprendimiento_data),
-        'libranza_data': json.dumps(libranza_data),
-        'total_data': json.dumps(total_data),
-    }
+def get_admin_dashboard_context(user, request=None):
+    return _dashboard_get_admin_dashboard_context(user, request=request)
 
 def activar_credito(credito):
     """
@@ -1024,132 +919,8 @@ def _leer_csv_pagos(csv_file):
 
     return csv.DictReader(io.StringIO(cleaned), dialect=dialect)
 
-def validar_csv_pagos_masivos(csv_file, empresa):
-    """
-    Valida un archivo CSV de pagos masivos SIN aplicar los pagos.
-    Retorna los pagos válidos y errores encontrados.
-    """
-    pagos_validos = []
-    errores = []
-
-    try:
-        reader = _leer_csv_pagos(csv_file)
-
-        for i, row in enumerate(reader, start=2):
-            normalized = {k.strip().lower(): (v.strip() if isinstance(v, str) else v) for k, v in row.items() if k}
-            cedula_raw = (normalized.get('cedula') or '').strip()
-            monto_str = (normalized.get('monto_a_pagar') or '').strip()
-
-            if not cedula_raw or not monto_str:
-                errores.append(f"Fila {i}: Faltan datos de cédula o monto.")
-                continue
-
-            # Limpiar cédula (remover puntos, espacios, guiones)
-            cedula = cedula_raw.replace('.', '').replace(' ', '').replace('-', '')
-
-            if not cedula.isdigit():
-                errores.append(f"Fila {i}: La cédula '{cedula_raw}' contiene caracteres no numéricos. Use solo números sin puntos ni espacios.")
-                continue
-
-            # Limpiar y validar monto
-            try:
-                # Remover símbolos comunes: $, puntos de miles, espacios
-                monto_limpio = monto_str.replace('$', '').replace('.', '').replace(' ', '').replace(',', '')
-
-                if not monto_limpio.isdigit():
-                    raise ValueError("Contiene caracteres no numéricos")
-
-                monto_a_pagar = Decimal(monto_limpio)
-
-                if monto_a_pagar <= 0:
-                    raise ValueError("El monto debe ser mayor a cero")
-
-            except (ValueError, TypeError) as e:
-                errores.append(f"Fila {i} (Cédula {cedula}): Monto '{monto_str}' no es válido. Use solo números sin símbolos (Ejemplo: 50000).")
-                continue
-
-            credito = Credito.objects.filter(
-                linea=Credito.LineaCredito.LIBRANZA,
-                detalle_libranza__empresa=empresa,
-                detalle_libranza__cedula=cedula,
-                estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]
-            ).select_related('detalle_libranza').first()
-
-            if not credito:
-                errores.append(f"Fila {i}: No se encontró un crédito activo para la cédula {cedula}.")
-                continue
-
-            pagos_validos.append({
-                'credito_id': credito.id,
-                'cedula': cedula,
-                'nombre': credito.detalle_libranza.nombre_completo,
-                'monto': monto_a_pagar,
-                'fila': i
-            })
-
-    except Exception as e:
-        logger.error(f"Error al leer CSV: {str(e)}")
-        errores.append(f"Error al procesar el archivo: {str(e)}")
-
-    return pagos_validos, errores
 
 
-def procesar_pagos_masivos_csv(csv_file, empresa):
-    """
-    Procesa un archivo CSV de pagos masivos para los créditos de una empresa.
-    """
-    pagos_exitosos = 0
-    errores = []
-
-    try:
-        reader = _leer_csv_pagos(csv_file)
-
-        with transaction.atomic():
-            for i, row in enumerate(reader, start=2):
-                normalized = {k.strip().lower(): (v.strip() if isinstance(v, str) else v) for k, v in row.items() if k}
-                cedula = (normalized.get('cedula') or '').strip()
-                monto_str = (normalized.get('monto_a_pagar') or '').strip()
-
-                if not cedula or not monto_str:
-                    errores.append(f"Fila {i}: Faltan datos de cédula o monto.")
-                    continue
-
-                try:
-                    monto_limpio = monto_str.replace('$', '').replace('.', '').replace(' ', '').replace(',', '')
-                    monto_a_pagar = Decimal(monto_limpio)
-                    if monto_a_pagar <= 0:
-                        raise ValueError("El monto debe ser positivo.")
-                except (ValueError, TypeError, ConversionSyntax):
-                    errores.append(f"Fila {i} (Cédula {cedula}): Monto '{monto_str}' no es un número válido.")
-                    continue
-
-                credito = Credito.objects.filter(
-                    linea=Credito.LineaCredito.LIBRANZA,
-                    detalle_libranza__empresa=empresa,
-                    detalle_libranza__cedula=cedula,
-                    estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]
-                ).select_related('detalle_libranza').first()
-
-                if not credito:
-                    errores.append(f"Fila {i}: No se encontró un crédito activo para la cédula {cedula}.")
-                    continue
-
-                HistorialPago.objects.create(
-                    credito=credito,
-                    monto=monto_a_pagar,
-                    referencia_pago=f"MASIVO-{credito.id}-{timezone.now().strftime('%Y%m%d%H%M%S%f')}",
-                    estado=HistorialPago.EstadoPago.EXITOSO
-                )
-
-                actualizar_saldo_tras_pago(credito, monto_a_pagar)
-
-                pagos_exitosos += 1
-    
-    except Exception as e:
-        logger.error(f"Error al procesar pagos masivos: {e}")
-        errores.append(f"Error inesperado al procesar el archivo: {e}")
-
-    return pagos_exitosos, errores
 
 
 def _leer_archivo_pagos(uploaded_file):
@@ -1243,7 +1014,7 @@ def _parsear_monto_pago(value):
         normalized = normalized.replace(',', '.')
     try:
         monto = Decimal(normalized)
-    except (ValueError, TypeError, ConversionSyntax) as exc:
+    except (ValueError, TypeError, ConversionSyntax, InvalidOperation) as exc:
         raise ValueError(f"Monto '{raw}' no es valido.") from exc
     if monto <= 0:
         raise ValueError('El monto debe ser mayor a cero.')

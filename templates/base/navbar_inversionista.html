@@ -40,7 +40,7 @@
         position: absolute;
         right: 0;
         top: calc(100% + 0.65rem);
-        min-width: 210px;
+        min-width: 230px;
         padding: 0.45rem;
         background: #ffffff;
         border: 1px solid #dbe4ee;
@@ -86,13 +86,17 @@
         <div class="investor-user-menu" data-investor-user-menu>
             <button type="button" class="investor-user-toggle" data-investor-user-toggle aria-expanded="false">
                 <i class="bi bi-person-circle"></i>
-                <span>{{ request.user.first_name|default:request.user.username }}</span>
+                <span>{% firstof request.user.get_full_name request.user.first_name request.user.email request.user.username %}</span>
                 <i class="bi bi-chevron-down"></i>
             </button>
             <div class="investor-user-panel" data-investor-user-panel>
-                <a href="{% url 'inversionista:dashboard' %}#portafolio">
+                <a href="{% url 'inversionista:dashboard' %}">
                     <i class="bi bi-wallet2"></i>
                     <span>Mi portafolio</span>
+                </a>
+                <a href="{% url 'inversionista:password_change' %}">
+                    <i class="bi bi-key"></i>
+                    <span>Cambiar contraseña</span>
                 </a>
                 <form method="post" action="{% url 'inversionista:logout' %}" class="m-0">
                     {% csrf_token %}

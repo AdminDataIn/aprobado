@@ -3,23 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Cartera en Mora - Fintech Pro</title>
+    <title>Gestión de Cartera en Mora - Aprobado</title>
     {% load static %}
     {% load humanize %}
-    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-    <!-- Fintech Base Styles -->
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
 </head>
 <body class="theme-gestion theme-applications">
 {% include 'base/loader_global.html' %}
-    <!-- Header -->
     <header class="page-header">
         <div class="container-fluid" style="max-width: 1400px;">
             <div class="d-flex align-items-center justify-content-between">
-                {# NUEVA URL - Gestión #}
                 <a href="{% url 'gestion:dashboard' %}" class="logo">
                     <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;" />
                 </a>
@@ -41,13 +36,11 @@
     </header>
 
     <div class="container-fluid py-4" style="max-width: 1400px;">
-        <!-- Page Title & Breadcrumb -->
         <div class="d-flex align-items-center justify-content-between mb-4 px-4">
             <div>
                 <h1 class="page-title">Gestión de Cartera en Mora</h1>
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
-                        {# NUEVA URL - Gestión #}
                         <li class="breadcrumb-item"><a href="{% url 'gestion:dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
                         <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-exclamation-triangle"></i> Cartera en Mora</li>
                     </ol>
@@ -55,7 +48,6 @@
             </div>
         </div>
 
-        <!-- Quick Actions -->
         <div class="quick-actions">
             <a href="#" class="action-card">
                 <div class="action-icon" style="background-color: var(--danger);">
@@ -80,17 +72,16 @@
             </a>
         </div>
 
-        <!-- Filters Section -->
         <div class="filter-section">
             <h3 class="section-title">Filtros y Búsqueda</h3>
             <form method="get" class="row g-3 align-items-center">
-                <div class="col-md-5">
+                <div class="col-md-4">
                     <div class="input-group">
                         <span class="input-group-text"><i class="bi bi-search"></i></span>
                         <input type="text" name="search" class="form-control" placeholder="Buscar por cliente, cédula o N° de crédito..." value="{{ search }}">
                     </div>
                 </div>
-                <div class="col-md-5">
+                <div class="col-md-3">
                     <div class="input-group">
                         <label class="input-group-text" for="linea_filter"><i class="bi bi-filter"></i></label>
                         <select name="linea" id="linea_filter" class="form-select">
@@ -101,13 +92,23 @@
                         </select>
                     </div>
                 </div>
+                <div class="col-md-3">
+                    <div class="input-group">
+                        <label class="input-group-text" for="empresa_filter"><i class="bi bi-buildings"></i></label>
+                        <select name="empresa" id="empresa_filter" class="form-select">
+                            <option value="">Todas las empresas</option>
+                            {% for empresa in empresas_choices %}
+                                <option value="{{ empresa }}" {% if empresa_filter == empresa %}selected{% endif %}>{{ empresa }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
                 <div class="col-md-2 d-grid">
                     <button type="submit" class="btn btn-primary">Filtrar</button>
                 </div>
             </form>
         </div>
 
-        <!-- Credits Table -->
         <div class="table-container mt-4">
             <div class="table-header">
                 <h3 class="table-title">
@@ -118,13 +119,14 @@
                     <i class="bi bi-arrow-clockwise"></i>
                 </button>
             </div>
-            
+
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover table-stack-mobile">
                     <thead>
                         <tr>
                             <th>N° Crédito</th>
                             <th>Cliente</th>
+                            <th>Empresa</th>
                             <th>Línea</th>
                             <th class="text-end">Saldo Pendiente</th>
                             <th class="text-center">Días en Mora</th>
@@ -135,15 +137,14 @@
                     <tbody>
                         {% for credito in creditos %}
                         <tr>
-                            {# NUEVA URL - Gestión #}
-                            <td><a href="{% url 'gestion:credito_detalle' credito.id %}">{{ credito.numero_credito }}</a></td>
-                            <td>{{ credito.nombre_cliente }}</td>
-                            <td><span class="line-badge">{{ credito.get_linea_display }}</span></td>
-                            <td class="text-end">${{ credito.saldo_pendiente|intcomma }}</td>
-                            <td class="text-center text-danger fw-bold">{{ credito.dias_en_mora }}</td>
-                            <td class="text-center">{{ credito.fecha_proximo_pago|date:"d/m/Y" }}</td>
-                            <td class="text-center">
-                                {# NUEVA URL - Gestión #}
+                            <td data-label="N° crédito"><a href="{% url 'gestion:credito_detalle' credito.id %}">{{ credito.numero_credito }}</a></td>
+                            <td data-label="Cliente">{{ credito.nombre_cliente }}</td>
+                            <td data-label="Empresa">{{ credito.empresa_relacionada.nombre|default:"SIN EMPRESA" }}</td>
+                            <td data-label="Línea"><span class="line-badge">{{ credito.get_linea_display }}</span></td>
+                            <td data-label="Saldo pendiente" class="text-end">${{ credito.saldo_pendiente|intcomma }}</td>
+                            <td data-label="Días en mora" class="text-center text-danger fw-bold">{{ credito.dias_en_mora }}</td>
+                            <td data-label="Fecha vencimiento" class="text-center">{{ credito.fecha_proximo_pago|date:"d/m/Y" }}</td>
+                            <td data-label="Acciones" class="text-center">
                                 <a href="{% url 'gestion:credito_detalle' credito.id %}" class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-eye"></i> Ver Detalle
                                 </a>
@@ -151,10 +152,10 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7" class="text-center py-5">
+                            <td colspan="8" class="text-center py-5">
                                 <div class="empty-state">
                                     <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
-                                    <h4 class="mt-3">¡Excelente!</h4>
+                                    <h4 class="mt-3">Excelente</h4>
                                     <p>No hay créditos en mora actualmente.</p>
                                 </div>
                             </td>
@@ -165,7 +166,6 @@
             </div>
         </div>
 
-        <!-- Pagination -->
         {% if creditos.has_other_pages %}
         <div class="pagination-container">
             <nav aria-label="Page navigation">
@@ -174,11 +174,9 @@
                         <li class="page-item"><a class="page-link" href="?page=1&{{ request.GET.urlencode }}">&laquo; Primera</a></li>
                         <li class="page-item"><a class="page-link" href="?page={{ creditos.previous_page_number }}&{{ request.GET.urlencode }}">Anterior</a></li>
                     {% endif %}
-                    
                     <li class="page-item active" aria-current="page">
                         <span class="page-link">Página {{ creditos.number }} de {{ creditos.paginator.num_pages }}</span>
                     </li>
-                    
                     {% if creditos.has_next %}
                         <li class="page-item"><a class="page-link" href="?page={{ creditos.next_page_number }}&{{ request.GET.urlencode }}">Siguiente</a></li>
                         <li class="page-item"><a class="page-link" href="?page={{ creditos.paginator.num_pages }}&{{ request.GET.urlencode }}">Última &raquo;</a></li>
@@ -188,10 +186,8 @@
         </div>
         {% endif %}
     </div>
-    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
 <script src="{% static 'js/global_loader.js' %}"></script>
 </body>
 </html>
-

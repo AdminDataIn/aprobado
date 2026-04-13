@@ -146,6 +146,16 @@
                                 <span class="info-label">Fecha de Solicitud</span>
                                 <span class="info-value">{{ credito.fecha_solicitud|date:"d/m/Y H:i" }}</span>
                             </div>
+                            <div class="info-item">
+                                <span class="info-label">Fecha de Desembolso</span>
+                                <span class="info-value">
+                                    {% if credito.fecha_desembolso %}
+                                        {{ credito.fecha_desembolso|date:"d/m/Y H:i" }}
+                                    {% else %}
+                                        Pendiente
+                                    {% endif %}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -566,6 +576,35 @@
                                     data-loader-type="check" data-loader-text="Activando crédito...">
                                 <i class="bi bi-send-check me-2"></i>
                                 Activar Crédito
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if credito.estado == 'ACTIVO' or credito.estado == 'EN_MORA' %}
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div class="card-header bg-success text-white">
+                        <h2 class="card-title">
+                            <i class="bi bi-check2-square me-2"></i>
+                            Saldar Crédito
+                        </h2>
+                    </div>
+                    <div class="card-content">
+                        <p class="text-muted">Esta acción cierra formalmente el crédito, deja saldo pendiente en cero y marca las cuotas restantes como pagadas.</p>
+                        <form method="post" action="{% url 'gestion:credito_saldar' credito.id %}">
+                            {% csrf_token %}
+                            <div class="form-group">
+                                <label for="id_motivo_saldo" class="form-label">Motivo del cierre</label>
+                                <textarea name="motivo_saldo" id="id_motivo_saldo" class="form-control" rows="2" placeholder="Ej: Crédito cancelado por cierre administrativo controlado."></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="id_auth_key_saldo" class="form-label">Clave de Autorización</label>
+                                <input type="password" name="auth_key" id="id_auth_key_saldo" class="form-control" placeholder="Clave secreta" required>
+                            </div>
+                            <button type="submit" class="btn btn-success" style="width: 100%;">
+                                <i class="bi bi-check-circle me-2"></i>
+                                Saldar Crédito
                             </button>
                         </form>
                     </div>

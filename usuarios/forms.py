@@ -8,6 +8,7 @@ from django.contrib.auth.forms import (
     UserCreationForm,
 )
 
+from gestion_creditos.services.name_normalization import normalize_name_upper
 from .product_flow import get_flow_label, get_user_flow
 
 
@@ -40,18 +41,21 @@ class EmailAuthenticationForm(AuthenticationForm):
     )
 
     def clean(self):
+        self._normalize_email_username(
+            'Tu cuenta ya existe, pero aun no tiene una contrasena local. '
+            'Usa "Olvide mi contrasena" para activar tu acceso por correo o continua con Google.'
+        )
+        return AuthenticationForm.clean(self)
+
+    def _normalize_email_username(self, no_password_message):
         username = (self.cleaned_data.get('username') or '').strip()
         if username and '@' in username:
             User = get_user_model()
             user = User.objects.filter(email__iexact=username).first()
             if user:
                 if not user.has_usable_password():
-                    raise forms.ValidationError(
-                        'Tu cuenta ya existe, pero aun no tiene una contrasena local. '
-                        'Usa "Olvide mi contrasena" para activar tu acceso por correo o continua con Google.'
-                    )
+                    raise forms.ValidationError(no_password_message)
                 self.cleaned_data['username'] = user.get_username()
-        return super().clean()
 
 
 class ProductPasswordResetForm(PasswordResetForm):
@@ -99,6 +103,13 @@ class PagadorAuthenticationForm(EmailAuthenticationForm):
         ),
     )
 
+    def clean(self):
+        self._normalize_email_username(
+            'Tu cuenta ya existe, pero aun no tiene una contrasena local. '
+            'Usa "Recuperar acceso" para definir tu acceso por correo.'
+        )
+        return AuthenticationForm.clean(self)
+
 
 class InvestorAuthenticationForm(EmailAuthenticationForm):
     username = forms.EmailField(
@@ -111,6 +122,13 @@ class InvestorAuthenticationForm(EmailAuthenticationForm):
             }
         ),
     )
+
+    def clean(self):
+        self._normalize_email_username(
+            'Tu cuenta ya existe, pero aun no tiene una contrasena local. '
+            'Usa "Recuperar acceso" para definir tu acceso por correo.'
+        )
+        return AuthenticationForm.clean(self)
 
 
 class PagadorActivationForm(SetPasswordForm):
@@ -260,8 +278,8 @@ class ProductUserRegistrationForm(UserCreationForm):
         email = self.cleaned_data['email']
         user.email = email
         user.username = email
-        user.first_name = (self.cleaned_data.get('first_name') or '').strip()
-        user.last_name = (self.cleaned_data.get('last_name') or '').strip()
+        user.first_name = normalize_name_upper(self.cleaned_data.get('first_name', ''))[:150]
+        user.last_name = normalize_name_upper(self.cleaned_data.get('last_name', ''))[:150]
         if commit:
             user.save()
         return user

@@ -24,7 +24,7 @@
         </a>
         <div class="mp-header-meta">
             {% if es_admin_empresa %}
-            <a href="{% url 'marketplace:panel' %}" class="mp-btn ghost mp-btn-sm">Panel empresas</a>
+            <span class="mp-company-pill"><i class="bi bi-shield-lock"></i>Acceso administrativo</span>
             {% else %}
             <span class="mp-company-pill"><i class="bi bi-person-circle"></i>{{ marketplace_display_name }}</span>
             <a href="{% url 'marketplace:orders' %}" class="mp-btn ghost mp-btn-sm">Mis pedidos</a>
@@ -45,6 +45,8 @@
                     <div class="mp-readonly-box">
                         {% if pedido_producto and pedido_producto.imagen %}
                         <img src="{{ pedido_producto.imagen.url }}" alt="{{ pedido_producto.titulo }}">
+                        {% elif pedido_producto %}
+                        <img src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80" alt="{{ pedido_producto.titulo }}">
                         {% endif %}
                         <div>
                             <strong>{% if pedido_producto %}{{ pedido_producto.titulo }}{% else %}Pedido marketplace{% endif %}</strong>

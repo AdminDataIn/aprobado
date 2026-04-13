@@ -7,6 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from gestion_creditos.models import Empresa, VinculoLaboralEmpresa
+from gestion_creditos.services.name_normalization import normalize_name_upper
 from usuarios.product_flow import ProductAccessProfile, ProductFlowConflict, assign_user_flow, get_user_flow
 
 
@@ -45,7 +46,7 @@ class Command(BaseCommand):
         documento = ''.join(ch for ch in str(options['documento']) if ch.isdigit())
         telefono = ''.join(ch for ch in str(options['telefono']) if ch.isdigit())
         salario = options['salario']
-        nombre = (options['nombre'] or '').strip()
+        nombre = normalize_name_upper(options['nombre'])
 
         if not email:
             raise CommandError('Debes indicar --email.')
@@ -66,8 +67,8 @@ class Command(BaseCommand):
             user = User.objects.create(
                 username=email,
                 email=email,
-                first_name=nombre.split(' ')[0] if nombre else '',
-                last_name=' '.join(nombre.split(' ')[1:]) if len(nombre.split(' ')) > 1 else '',
+                first_name=normalize_name_upper(nombre.split(' ')[0] if nombre else ''),
+                last_name=normalize_name_upper(' '.join(nombre.split(' ')[1:]) if len(nombre.split(' ')) > 1 else ''),
             )
             user.set_unusable_password()
             user.save()
@@ -77,9 +78,9 @@ class Command(BaseCommand):
             if not user.username:
                 user.username = email
             if nombre and not user.first_name:
-                user.first_name = nombre.split(' ')[0]
+                user.first_name = normalize_name_upper(nombre.split(' ')[0])
             if nombre and not user.last_name and len(nombre.split(' ')) > 1:
-                user.last_name = ' '.join(nombre.split(' ')[1:])
+                user.last_name = normalize_name_upper(' '.join(nombre.split(' ')[1:]))
             user.save()
 
         try:

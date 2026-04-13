@@ -1,31 +1,20 @@
-
-<!--
-    Archivo: templates/gestion_creditos/admin_solicitudes.html
-    Descripción: Página para que los administradores gestionen y visualicen las solicitudes de crédito (puedan cambiar estados).
--->
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestionar Solicitudes de Crédito - Fintech Pro</title>
+    <title>Gestionar Solicitudes de Crédito - Aprobado</title>
     {% load static %}
     {% load humanize %}
-    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-    <!-- Fintech Base Styles -->
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
 </head>
 <body class="theme-gestion theme-applications">
 {% include 'base/loader_global.html' %}
-    <!-- Header -->
     <header class="page-header">
         <div class="container-fluid" style="max-width: 1400px;">
             <div class="d-flex align-items-center justify-content-between">
-                {# ✅ NUEVA URL - Gestión #}
                 <a href="{% url 'gestion:dashboard' %}" class="logo">
                     <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;" />
                 </a>
@@ -47,8 +36,7 @@
     </header>
 
     <div class="container-fluid py-4" style="max-width: 1400px;">
-        <!-- Page Title & Breadcrumb -->
-        <div class="d-flex align-items-center justify-content-between mb-4 px-4">
+        <div class="d-flex align-items-center justify-content-between mb-4 px-4 flex-wrap gap-3">
             <div>
                 <h1 class="page-title">{{ dashboard_title|default:"Solicitudes de Crédito" }}</h1>
                 {% if dashboard_subtitle %}
@@ -56,7 +44,6 @@
                 {% endif %}
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
-                        {# NUEVA URL - Gestión #}
                         <li class="breadcrumb-item"><a href="{% url 'gestion:dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
                         <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-journal-text me-1"></i>Solicitudes</li>
                     </ol>
@@ -66,18 +53,15 @@
                         Solicitudes generales
                     </a>
                     <a href="{% url 'gestion:adelantos_nomina' %}" class="btn btn-sm {% if solo_adelantos %}btn-primary{% else %}btn-outline-primary{% endif %}">
-                        Adelantos de nomina
+                        Adelantos de nómina
                     </a>
                 </div>
             </div>
-            {# NUEVA URL - Gestión #}
             <a href="{% url 'gestion:dashboard' %}" class="btn btn-outline-primary">
                 <i class="bi bi-arrow-left me-2"></i>Volver al Dashboard
             </a>
         </div>
 
-    <div class="container-fluid" style="max-width: 1400px;">
-        <!-- Filters Section -->
         <div class="filter-section">
             <h3 class="section-title">Filtros y Búsqueda</h3>
             <form method="get" id="filterForm">
@@ -86,8 +70,7 @@
                         <label for="search" class="form-label">
                             <i class="bi bi-search me-1"></i>Buscar Cliente
                         </label>
-                        <input type="text" name="search" id="search" value="{{ search }}" 
-                               class="form-control" placeholder="Nombre o documento...">
+                        <input type="text" name="search" id="search" value="{{ search }}" class="form-control" placeholder="Nombre o documento...">
                     </div>
                     <div class="form-group">
                         <label for="linea" class="form-label">
@@ -112,6 +95,17 @@
                         </select>
                     </div>
                     <div class="form-group">
+                        <label for="empresa" class="form-label">
+                            <i class="bi bi-buildings me-1"></i>Empresa
+                        </label>
+                        <select name="empresa" id="empresa" class="form-select">
+                            <option value="">Todas las empresas</option>
+                            {% for empresa in empresas_choices %}
+                            <option value="{{ empresa }}" {% if empresa_filter == empresa %}selected{% endif %}>{{ empresa }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary filter-btn">
                                 <i class="bi bi-funnel me-1"></i>Filtrar
@@ -123,36 +117,28 @@
                     </div>
                 </div>
             </form>
-            
-            <!-- Active Filters Display -->
-            {% if search or linea_filter or estado_filter %}
+
+            {% if search or linea_filter or estado_filter or empresa_filter %}
             <div class="mt-3">
                 <small class="text-secondary">Filtros activos:</small>
-                <div class="mt-2">
+                <div class="mt-2 d-flex gap-2 flex-wrap">
                     {% if search %}
-                    <span class="filter-chip">
-                        Búsqueda: "{{ search }}"
-                        <button type="button" class="remove-filter" onclick="removeFilter('search')">×</button>
-                    </span>
+                    <span class="filter-chip">Búsqueda: "{{ search }}" <button type="button" class="remove-filter" onclick="removeFilter('search')">×</button></span>
                     {% endif %}
                     {% if linea_filter %}
-                    <span class="filter-chip">
-                        Línea: {{ linea_filter }}
-                        <button type="button" class="remove-filter" onclick="removeFilter('linea')">×</button>
-                    </span>
+                    <span class="filter-chip">Línea: {{ linea_filter }} <button type="button" class="remove-filter" onclick="removeFilter('linea')">×</button></span>
                     {% endif %}
                     {% if estado_filter %}
-                    <span class="filter-chip">
-                        Estado: {{ estado_filter }}
-                        <button type="button" class="remove-filter" onclick="removeFilter('estado')">×</button>
-                    </span>
+                    <span class="filter-chip">Estado: {{ estado_filter }} <button type="button" class="remove-filter" onclick="removeFilter('estado')">×</button></span>
+                    {% endif %}
+                    {% if empresa_filter %}
+                    <span class="filter-chip">Empresa: {{ empresa_filter }} <button type="button" class="remove-filter" onclick="removeFilter('empresa')">×</button></span>
                     {% endif %}
                 </div>
             </div>
             {% endif %}
         </div>
 
-        <!-- Solicitudes Table -->
         <div class="table-container">
             <div class="table-header">
                 <h3 class="table-title">
@@ -161,16 +147,17 @@
                     <span class="badge bg-primary ms-2">{{ solicitudes.paginator.count }}</span>
                     {% endif %}
                 </h3>
-                <button class="btn btn-sm btn-outline-primary" onclick="refreshTable()">
+                <button class="btn btn-sm btn-outline-primary" onclick="location.reload()">
                     <i class="bi bi-arrow-clockwise"></i>
                 </button>
             </div>
-            
+
             <div class="table-responsive">
                 <table class="table table-stack-mobile">
                     <thead>
                         <tr>
                             <th>Solicitante</th>
+                            <th>Empresa</th>
                             <th>Línea de Crédito</th>
                             <th>Monto Solicitado</th>
                             <th>Estado</th>
@@ -191,8 +178,6 @@
                                                 {{ solicitud.usuario.get_full_name|slice:":1"|upper }}
                                             {% elif solicitud.usuario.username %}
                                                 {{ solicitud.usuario.username|slice:":1"|upper }}
-                                            {% elif solicitud.usuario.email %}
-                                                {{ solicitud.usuario.email|slice:":1"|upper }}
                                             {% else %}
                                                 S
                                             {% endif %}
@@ -225,12 +210,9 @@
                                     </div>
                                 </div>
                             </td>
-                            <td data-label="Línea de crédito">
-                                <span class="line-badge">{{ solicitud.get_linea_display }}</span>
-                            </td>
-                            <td data-label="Monto solicitado">
-                                <strong class="text-primary">${{ solicitud.monto_solicitado|intcomma }}</strong>
-                            </td>
+                            <td data-label="Empresa">{{ solicitud.empresa_relacionada.nombre|default:"SIN EMPRESA" }}</td>
+                            <td data-label="Línea de crédito"><span class="line-badge">{{ solicitud.get_linea_display }}</span></td>
+                            <td data-label="Monto solicitado"><strong class="text-primary">${{ solicitud.monto_solicitado|intcomma }}</strong></td>
                             <td data-label="Estado">
                                 <span class="status-badge 
                                     {% if solicitud.estado == 'EN_REVISION' %}status-review
@@ -242,21 +224,19 @@
                             </td>
                             <td data-label="Fecha">{{ solicitud.fecha_solicitud|date:"d/m/Y" }}</td>
                             <td data-label="Acciones" style="text-align: center;">
-                                {# NUEVA URL - Gestión #}
-                                <a href="{% url 'gestion:credito_detalle' solicitud.id %}"
-                                   class="btn btn-sm btn-outline-primary">
+                                <a href="{% url 'gestion:credito_detalle' solicitud.id %}" class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-eye me-1"></i>Ver/Procesar
                                 </a>
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="6">
+                            <td colspan="7">
                                 <div class="empty-state">
                                     <i class="bi bi-credit-card-2-front"></i>
                                     <h5>No se encontraron solicitudes</h5>
                                     <p>No hay solicitudes que coincidan con los filtros aplicados.</p>
-                                    {% if search or linea_filter or estado_filter %}
+                                    {% if search or linea_filter or estado_filter or empresa_filter %}
                                     <small>Intenta ajustar los criterios de búsqueda.</small>
                                     {% endif %}
                                 </div>
@@ -268,7 +248,6 @@
             </div>
         </div>
 
-        <!-- Pagination -->
         {% if solicitudes.has_other_pages %}
         <div class="pagination-container">
             <nav aria-label="Pagination">
@@ -280,11 +259,9 @@
                         </a>
                     </li>
                     {% endif %}
-                    
                     <li class="page-item active">
                         <span class="page-link">{{ solicitudes.number }} de {{ solicitudes.paginator.num_pages }}</span>
                     </li>
-                    
                     {% if solicitudes.has_next %}
                     <li class="page-item">
                         <a class="page-link" href="?page={{ solicitudes.next_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">
@@ -298,11 +275,8 @@
         {% endif %}
     </div>
 
-    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
     <script>
-        // Filter functionality
         function clearFilters() {
             document.querySelectorAll('#filterForm input, #filterForm select').forEach(input => {
                 if (input.type === 'select-one') {
@@ -314,51 +288,26 @@
             document.getElementById('filterForm').submit();
         }
 
-        // Función para remover filtros individuales
         function removeFilter(filterName) {
             const url = new URL(window.location);
             url.searchParams.delete(filterName);
-            url.searchParams.delete('page'); // Reset página al remover filtro
+            url.searchParams.delete('page');
             window.location.href = url.toString();
         }
-        
-        // Auto-submit del formulario cuando cambian los selects
+
         document.getElementById('linea').addEventListener('change', function() {
             this.form.submit();
         });
-        
         document.getElementById('estado').addEventListener('change', function() {
             this.form.submit();
         });
-        
-        // Búsqueda con Enter
+        document.getElementById('empresa').addEventListener('change', function() {
+            this.form.submit();
+        });
         document.getElementById('search').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 this.form.submit();
             }
-        });
-
-        // Refresh functionality
-        function refreshTable() {
-            const btn = event.target.closest('button');
-            const originalContent = btn.innerHTML;
-            btn.innerHTML = '<span class="loading"></span>';
-            btn.disabled = true;
-            
-            setTimeout(() => {
-                btn.innerHTML = originalContent;
-                btn.disabled = false;
-            }, 1000);
-        }
-
-        // Row hover effects
-        document.querySelectorAll('tbody tr').forEach(row => {
-            row.addEventListener('mouseenter', function() {
-                this.style.backgroundColor = 'rgba(16, 185, 129, 0.05)';
-            });
-            row.addEventListener('mouseleave', function() {
-                this.style.backgroundColor = '';
-            });
         });
     </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>

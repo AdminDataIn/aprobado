@@ -595,6 +595,145 @@ def enviar_resumen_pago_masivo_pagador(*, lote, pagos_aplicados, monto_total, pa
         )
         return False
 
+
+    dashboard_url = None
+    try:
+        dashboard_url = _build_absolute_url(reverse('pagador:dashboard'))
+    except Exception:
+        dashboard_url = None
+
+    referencia = f"CP-{lote.id:05d}"
+    context = {
+        'titulo': 'Carga de pagos confirmada',
+        'subtitulo': 'Tu archivo fue aplicado correctamente y este correo resume la confirmacion del pago masivo.',
+        'empresa_nombre': lote.empresa.nombre,
+        'referencia': referencia,
+        'fecha_aplicacion': timezone.localtime(lote.creado_en),
+        'usuario_nombre': pagador_nombre or 'Pagador',
+        'comprobante_nombre': _nombre_archivo(lote.comprobante),
+        'credito_url': dashboard_url,
+        'credito_numero': lote.nombre_original,
+        'cliente_nombre': 'Archivo de pagos',
+        'monto_total': monto_total,
+        'cantidad_registros': pagos_aplicados,
+        'metodo_pago': 'Transferencia directa',
+        'origen_label': 'Pago masivo offline',
+        'notas': lote.notas or '',
+    }
+
+    try:
+        html_content = render_to_string('emails/resumen_operativo_pago_offline.html', context)
+        email = EmailMultiAlternatives(
+            subject=f"Carga de pagos confirmada - {lote.empresa.nombre} ({pagos_aplicados} aplicados)",
+            body=(
+                f"Empresa: {lote.empresa.nombre}\n"
+                f"Referencia: {referencia}\n"
+                f"Archivo: {lote.nombre_original}\n"
+                f"Pagos aplicados: {pagos_aplicados}\n"
+                f"Total aplicado: ${monto_total:,.2f}\n"
+                f"Confirmado por: {context['usuario_nombre']}\n"
+                f"Fecha: {context['fecha_aplicacion']:%d/%m/%Y %H:%M}\n"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[pagador_email],
+        )
+        email.attach_alternative(html_content, "text/html")
+        email.send()
+        logger.info(
+            "Resumen de carga de pagos enviado al pagador para lote %s a %s",
+            lote.id,
+            pagador_email,
+        )
+        return True
+    except Exception as exc:
+        logger.error(
+            "Error al enviar resumen de la carga de pagos %s: %s",
+            lote.id,
+            exc,
+        )
+        return False
+
+
+def enviar_resumen_cuotas_pendientes_pagador(*, empresa, cuotas, fecha_corte):
+    from usuarios.models import PerfilPagador
+
+    if not cuotas:
+        return False
+
+    destinatarios = []
+    for perfil in PerfilPagador.objects.select_related('usuario').filter(empresa=empresa, es_pagador=True):
+        _agregar_destinatario(destinatarios, getattr(perfil.usuario, 'email', None))
+    _agregar_destinatario(destinatarios, empresa.correo_contacto)
+
+    if not destinatarios:
+        logger.warning("No hay destinatarios pagador para resumen mensual de cuotas de %s.", empresa.nombre)
+        return False
+
+    internos = list(getattr(settings, 'CREDIT_INTERNAL_NOTIFICATION_EMAILS', []))
+    items = []
+    total = Decimal('0.00')
+    for cuota in cuotas:
+        credito = cuota.credito
+        restante = (cuota.valor_cuota or Decimal('0.00')) - (cuota.monto_pagado or Decimal('0.00'))
+        total += restante
+        items.append({
+            'numero_credito': credito.numero_credito,
+            'nombre_cliente': credito.nombre_cliente,
+            'documento': credito.cliente_documento,
+            'fecha_vencimiento': cuota.fecha_vencimiento,
+            'monto': restante,
+        })
+
+    context = {
+        'empresa': empresa,
+        'fecha_corte': fecha_corte,
+        'items': items,
+        'total': total,
+    }
+    html_content = render_to_string('emails/pagador_resumen_cuotas_pendientes.html', context)
+    body = (
+        f"Empresa: {empresa.nombre}\n"
+        f"Fecha de corte: {fecha_corte:%d/%m/%Y}\n"
+        f"Cuotas incluidas: {len(items)}\n"
+        f"Total estimado: ${total:,.2f}\n"
+    )
+    try:
+        email = EmailMultiAlternatives(
+            subject=f"Resumen mensual de obligaciones - {empresa.nombre}",
+            body=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=destinatarios,
+            cc=internos,
+        )
+        email.attach_alternative(html_content, 'text/html')
+        email.send()
+        return True
+    except Exception as exc:
+        logger.error("Error al enviar resumen mensual de cuotas al pagador: %s", exc)
+        return False
+
+
+def enviar_alerta_obligacion_pendiente_usuario(*, credito, cuota, dias_atraso):
+    destinatario = credito.cliente_email or credito.usuario.email
+    if not destinatario:
+        logger.warning("No hay destinatario para alerta de atraso del credito %s.", credito.numero_credito)
+        return False
+
+    restante = (cuota.valor_cuota or Decimal('0.00')) - (cuota.monto_pagado or Decimal('0.00'))
+    context = {
+        'credito': credito,
+        'cuota': cuota,
+        'dias_atraso': dias_atraso,
+        'restante': restante,
+        'nombre_cliente': credito.nombre_cliente,
+    }
+    return enviar_email_html(
+        destinatario=destinatario,
+        asunto=f'Pon al dia tu cuota pendiente - {credito.numero_credito}',
+        template_html='emails/usuario_alerta_obligacion_pendiente.html',
+        context=context,
+    )
+
     dashboard_url = None
     try:
         dashboard_url = _build_absolute_url(reverse('pagador:dashboard'))
