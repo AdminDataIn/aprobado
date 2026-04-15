@@ -748,7 +748,6 @@ def pagador_decidir_solicitud_view(request, credito_id):
             credito = (
                 Credito.objects
                 .select_for_update()
-                .select_related('detalle_libranza', 'detalle_adelanto_nomina__vinculo_laboral__empresa')
                 .get(id=credito.id)
             )
 
