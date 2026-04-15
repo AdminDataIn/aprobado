@@ -1457,6 +1457,10 @@ MODIFICAR:
         const modal = document.getElementById("modalMensaje");
         const closeButton = document.getElementById("cerrarModal");
 
+        window.validateLibranzaField = validateLibranzaField;
+        window.mostrarError = mostrarError;
+        window.limpiarError = limpiarError;
+
         if (!formulario) {
             console.error('No se encontró el formulario con ID "formularioLibranza"');
             return;
