@@ -315,6 +315,10 @@ MODIFICAR:
             position: relative;
         }
 
+        .company-search-shell #empresa_busqueda {
+            padding-left: 3rem;
+        }
+
         .company-search-shell.is-loading #empresa_busqueda {
             border-color: #0ea5c6;
             box-shadow: 0 0 0 4px rgba(14, 165, 198, 0.08);
@@ -1063,6 +1067,12 @@ MODIFICAR:
             })
                 .then(response => response.json())
                 .then(data => {
+                    if (data.error) {
+                        setCompanyState('is-invalid', data.error);
+                        empresaResultados.innerHTML = `<div class="company-search-empty">${data.error}</div>`;
+                        empresaResultados.classList.add('visible');
+                        return;
+                    }
                     renderizarResultadosEmpresa(data.results || []);
                 })
                 .catch(() => {

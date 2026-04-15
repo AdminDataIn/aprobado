@@ -1,4 +1,5 @@
 from .common import *
+from .common import _rate_limit_simple
 
 
 @login_required(login_url='/libranza/login/')

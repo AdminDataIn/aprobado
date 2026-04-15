@@ -82,10 +82,13 @@ MARKETPLACE_COMPANY_LOGOS = {
 def _rate_limit_simple(request, scope, limit=8, window=60):
     ip = (request.META.get('HTTP_X_FORWARDED_FOR') or request.META.get('REMOTE_ADDR') or 'anon').split(',')[0].strip()
     cache_key = f"rate-limit:{scope}:{ip}"
-    hits = cache.get(cache_key, 0)
-    if hits >= limit:
-        return False
-    cache.set(cache_key, hits + 1, window)
+    try:
+        hits = cache.get(cache_key, 0)
+        if hits >= limit:
+            return False
+        cache.set(cache_key, hits + 1, window)
+    except Exception:
+        logger.warning("Rate limit cache unavailable for scope %s", scope, exc_info=True)
     return True
 
 
