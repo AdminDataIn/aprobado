@@ -34,6 +34,8 @@ MODIFICAR:
 <html lang="es">
 <head>
     {% load static %}
+    {% load humanize %}
+    {% load l10n %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aprobado</title>
@@ -456,6 +458,7 @@ MODIFICAR:
                             <div class="form-field">
                                 <label for="valor_credito" class="form-label required">Valor crédito solicitado:</label>
                                 <input type="text" id="valor_credito" name="valor_credito" class="form-input" required>
+                                <p class="form-helper-text">Tope actual de libranza: ${{ libranza_monto_maximo|floatformat:0|intcomma }}.</p>
                             </div>
                             
                             <div class="form-field">
@@ -845,7 +848,7 @@ MODIFICAR:
     document.addEventListener('DOMContentLoaded', function() {
         loadFormData();
 
-        const maxValorCredito = 2000000;
+        const maxValorCredito = parseInt('{{ libranza_monto_maximo|default:"3000000"|unlocalize }}', 10);
         const valorCreditoInput = document.getElementById('valor_credito');
         const ingresosMensualesInput = document.getElementById('ingresos_mensuales');
         const plazoSelect = document.getElementById('plazo');

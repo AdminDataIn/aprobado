@@ -6,7 +6,7 @@ Este simulador es exclusivo para el producto de Libranza.
 Utiliza el navbar y footer de Libranza (sin enlaces a emprendimiento).
 
 CARACTERÍSTICAS:
-- Monto: $500.000 - $2.000.000
+- Monto: $500.000 - $3.000.000
 - Plazo: 1 - 6 meses
 - Comisión: 10% + IVA (19%)
 - Tasa de interés: {{ libranza_tasa_mensual|default:"1.9" }}% EM (Efectiva Mensual)
@@ -22,6 +22,8 @@ MODIFICAR:
 <html lang="es">
 <head>
     {% load static %}
+    {% load humanize %}
+    {% load l10n %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Simulador de Crédito de Libranza - Aprobado</title>
@@ -57,14 +59,14 @@ MODIFICAR:
                                     <div class="simulador-range-container">
                                         <div class="simulador-range-progress" id="simulador-progress-1"></div>
                                         <!-- MODIFICAR: Monto mínimo, máximo y paso -->
-                                        <input type="range" min="500000" max="2000000" step="50000" value="2000000"
+                                        <input type="range" min="{{ libranza_monto_minimo_publico|unlocalize }}" max="{{ libranza_monto_maximo|unlocalize }}" step="50000" value="{{ libranza_monto_maximo|unlocalize }}"
                                                class="simulador-range-input" id="simulador-range-1">
-                                        <div class="simulador-range-tooltip" id="simulador-tooltip-1">$ 2.000.000</div>
+                                        <div class="simulador-range-tooltip" id="simulador-tooltip-1">$ {{ libranza_monto_maximo|floatformat:0|intcomma }}</div>
                                     </div>
                                     <div class="simulador-range-labels">
                                         <!-- MODIFICAR: Etiquetas de rango -->
                                         <span>$ 500.000</span>
-                                        <span>$ 2.000.000</span>
+                                        <span>$ {{ libranza_monto_maximo|floatformat:0|intcomma }}</span>
                                     </div>
                                 </div>
 
@@ -89,7 +91,7 @@ MODIFICAR:
                                 <div class="simulador-results-container">
                                     <div class="simulador-result-row">
                                         <label for="total-pr" class="simulador-result-label">Monto solicitado:</label>
-                                        <input type="text" id="total-pr" name="total-pr" value="$ 2.000.000,00"
+                                        <input type="text" id="total-pr" name="total-pr" value="$ {{ libranza_monto_maximo|floatformat:0|intcomma }},00"
                                                class="simulador-result-input" readonly>
                                     </div>
                                     <div class="simulador-result-row">

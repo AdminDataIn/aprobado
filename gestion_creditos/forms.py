@@ -22,6 +22,8 @@ from django.conf import settings
 from django.utils import timezone
 from django.utils.text import slugify
 from gestion_creditos.services.libranza_rules import (
+    LIBRANZA_MONTO_MAXIMO,
+    LIBRANZA_MONTO_MINIMO_SOLICITUD,
     obtener_creditos_libranza_bloqueantes,
     permitir_multiples_creditos_libranza_en_pruebas,
 )
@@ -226,11 +228,11 @@ class CreditoLibranzaForm(forms.ModelForm):
         if valor <= 0:
             raise forms.ValidationError('El valor del crédito debe ser mayor a 0.')
         
-        if valor < 100000:
+        if valor < LIBRANZA_MONTO_MINIMO_SOLICITUD:
             raise forms.ValidationError('El valor del crédito debe ser de al menos $100.000.')
 
-        if valor > 2000000:
-            raise forms.ValidationError('El valor del crédito no puede ser mayor a $2.000.000.')
+        if valor > LIBRANZA_MONTO_MAXIMO:
+            raise forms.ValidationError('El valor del crédito no puede ser mayor a $3.000.000.')
 
         return valor
 

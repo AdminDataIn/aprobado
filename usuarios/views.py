@@ -17,6 +17,7 @@ from django.utils import timezone
 from django.db import transaction
 
 from gestion_creditos.models import Credito
+from gestion_creditos.services.libranza_rules import LIBRANZA_MONTO_MAXIMO, LIBRANZA_MONTO_MINIMO_PUBLICO
 from gestion_creditos.services.tasa_service import obtener_tasa_credito
 from .forms import (
     EmailAuthenticationForm,
@@ -445,6 +446,8 @@ def libranza_landing(request):
         'libranza_tasa_mensual': tasa_libranza,
         'libranza_tasa_decimal': tasa_libranza_decimal,
         'libranza_tasa_decimal_js': format(tasa_libranza_decimal, 'f'),
+        'libranza_monto_minimo_publico': LIBRANZA_MONTO_MINIMO_PUBLICO,
+        'libranza_monto_maximo': LIBRANZA_MONTO_MAXIMO,
         'adelanto_tasa_mensual': obtener_tasa_credito(Credito.LineaCredito.ADELANTO_NOMINA),
         'adelanto_comision_percent': Decimal(str(getattr(settings, 'ADELANTO_NOMINA_COMISION_PERCENT', '10'))),
     }
@@ -458,7 +461,7 @@ def simulador_libranza(request):
 
     Esta página es pública y no requiere autenticación.
     Permite calcular:
-    - Monto solicitado: $500.000 - $2.000.000
+    - Monto solicitado: $500.000 - $3.000.000
     - Plazo: 1 - 6 meses
     - Comisión: 10% + IVA (19%)
     - Afianzadora: 4% + IVA (próximamente)
@@ -474,6 +477,8 @@ def simulador_libranza(request):
         'libranza_tasa_mensual': tasa_libranza,
         'libranza_tasa_decimal': tasa_libranza_decimal,
         'libranza_tasa_decimal_js': format(tasa_libranza_decimal, 'f'),
+        'libranza_monto_minimo_publico': LIBRANZA_MONTO_MINIMO_PUBLICO,
+        'libranza_monto_maximo': LIBRANZA_MONTO_MAXIMO,
     }
     return render(request, 'libranza/simulacion_libranza.html', context)
 

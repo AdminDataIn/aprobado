@@ -1,5 +1,6 @@
 from .common import *
 from .common import _rate_limit_simple
+from gestion_creditos.services.libranza_rules import LIBRANZA_MONTO_MAXIMO
 
 
 @login_required(login_url='/libranza/login/')
@@ -57,6 +58,7 @@ def solicitud_credito_libranza_view(request):
                     'libranza_tasa_mensual': tasa_libranza,
                     'libranza_tasa_decimal': tasa_libranza_decimal,
                     'libranza_tasa_decimal_js': format(tasa_libranza_decimal, 'f'),
+                    'libranza_monto_maximo': LIBRANZA_MONTO_MAXIMO,
                 })
 
             try:
@@ -130,6 +132,7 @@ def solicitud_credito_libranza_view(request):
         'libranza_tasa_mensual': tasa_libranza,
         'libranza_tasa_decimal': tasa_libranza_decimal,
         'libranza_tasa_decimal_js': format(tasa_libranza_decimal, 'f'),
+        'libranza_monto_maximo': LIBRANZA_MONTO_MAXIMO,
     })
 
 

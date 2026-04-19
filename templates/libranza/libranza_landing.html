@@ -79,6 +79,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
 <html lang="es">
 <head>
     {% load static %}
+    {% load humanize %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crédito de Libranza - Aprobado</title>
@@ -152,7 +153,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                 <div class="libranza-feature-card">
                     <div class="libranza-feature-icon"><i class="bi bi-bank"></i></div>
                     <h3>Montos competitivos</h3>
-                    <p>Desde $500.000 hasta $2.000.000. El monto que necesitas para tus proyectos.</p>
+                    <p>Desde $500.000 hasta ${{ libranza_monto_maximo|floatformat:0|intcomma }}. El monto que necesitas para tus proyectos.</p>
                 </div>
                 <!-- Beneficio 5 -->
                 <div class="libranza-feature-card">
@@ -329,7 +330,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                     <h3>Condiciones del crédito</h3>
                     <ul class="libranza-conditions-list">
                         <!-- MODIFICAR: Monto mínimo y máximo -->
-                        <li><strong>Monto:</strong> Desde $500.000 hasta $2.000.000</li>
+                        <li><strong>Monto:</strong> Desde $500.000 hasta ${{ libranza_monto_maximo|floatformat:0|intcomma }}</li>
                         <!-- MODIFICAR: Plazos disponibles -->
                         <li><strong>Plazo:</strong> De 1 a 6 meses</li>
                         <!-- MODIFICAR: Tipo de cuota -->
