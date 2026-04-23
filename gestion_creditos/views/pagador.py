@@ -1845,8 +1845,6 @@ def pago_wompi_callback_view(request):
                 empresa=credito.empresa_relacionada,
                 notas='Pago individual procesado por Wompi.',
             )
-            if created:
-                credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
             credito.refresh_from_db()
             _enviar_resumen_pago_pagador(request, credito, transaction_data)
             messages.success(request, f'Pago de ${monto_decimal:,.2f} procesado exitosamente.')

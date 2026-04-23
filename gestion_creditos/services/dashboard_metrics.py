@@ -9,6 +9,10 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from gestion_creditos.models import Credito, CuotaAmortizacion
+from gestion_creditos.services.accounting import (
+    get_accounting_summary_for_creditos,
+    get_platform_disbursed_creditos_queryset,
+)
 
 
 def calcular_total_en_mora(creditos=None):
@@ -61,6 +65,42 @@ def _base_admin_queryset():
     )
 
 
+def _build_accounting_metrics(creditos_qs):
+    creditos_contables_qs = get_platform_disbursed_creditos_queryset(
+        creditos_qs.filter(
+            estado__in=[
+                Credito.EstadoCredito.ACTIVO,
+                Credito.EstadoCredito.EN_MORA,
+                Credito.EstadoCredito.PAGADO,
+            ],
+        )
+    )
+    if not creditos_contables_qs.exists():
+        return {
+            'total_recaudado': Decimal('0.00'),
+            'capital_recuperado': Decimal('0.00'),
+            'interes_recuperado': Decimal('0.00'),
+            'comision_recuperada': Decimal('0.00'),
+            'iva_recuperado': Decimal('0.00'),
+            'rentabilidad_breakdown_supported': False,
+            'creditos_con_trazabilidad_contable': 0,
+            'pagos_con_trazabilidad_contable': 0,
+        }
+
+    summary = get_accounting_summary_for_creditos(creditos_contables_qs)
+
+    return {
+        'total_recaudado': summary['total_recaudado'],
+        'capital_recuperado': summary['capital_principal_aplicado'],
+        'interes_recuperado': summary['interes_aplicado'],
+        'comision_recuperada': summary['comision_aplicada'],
+        'iva_recuperado': summary['iva_aplicado'],
+        'rentabilidad_breakdown_supported': summary['supports_breakdown'],
+        'creditos_con_trazabilidad_contable': summary['creditos_con_trazabilidad'],
+        'pagos_con_trazabilidad_contable': summary['pagos_con_trazabilidad'],
+    }
+
+
 def get_admin_dashboard_context(user, request=None):
     today = timezone.now().date()
     proximos_15_dias = today + timedelta(days=15)
@@ -100,6 +140,7 @@ def get_admin_dashboard_context(user, request=None):
         total_general_creditos_qs = total_general_creditos_qs.filter(empresa_nombre=empresa_filter)
 
     total_general_creditos = total_general_creditos_qs.count()
+    accounting_metrics = _build_accounting_metrics(total_general_creditos_qs)
     creditos_por_estado_q = total_general_creditos_qs.values('estado').annotate(count=Count('id')).order_by('-count')
     creditos_por_estado = [
         {
@@ -180,4 +221,12 @@ def get_admin_dashboard_context(user, request=None):
         'total_data': json.dumps(total_data),
         'empresa_filter': empresa_filter,
         'empresas_choices': empresas_choices,
+        'total_recaudado': accounting_metrics['total_recaudado'],
+        'capital_recuperado': accounting_metrics['capital_recuperado'],
+        'interes_recuperado': accounting_metrics['interes_recuperado'],
+        'comision_recuperada': accounting_metrics['comision_recuperada'],
+        'iva_recuperado': accounting_metrics['iva_recuperado'],
+        'rentabilidad_breakdown_supported': accounting_metrics['rentabilidad_breakdown_supported'],
+        'creditos_con_trazabilidad_contable': accounting_metrics['creditos_con_trazabilidad_contable'],
+        'pagos_con_trazabilidad_contable': accounting_metrics['pagos_con_trazabilidad_contable'],
     }

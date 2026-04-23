@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -148,3 +149,17 @@ class PagadorDashboardTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Cuota 2')
         self.assertContains(response, 'value="100.00"', html=False)
+
+    @patch('gestion_creditos.views.pagador.credit_services.preparar_documento_para_firma')
+    @patch('gestion_creditos.views.pagador.credit_services.gestionar_cambio_estado_credito')
+    def test_decision_pagador_aprueba_solicitud_sin_error_de_bloqueo(self, cambio_estado_mock, preparar_mock):
+        credito = self._crear_credito_libranza('CR-PAG-DEC', estado=Credito.EstadoCredito.EN_REVISION)
+
+        response = self.client.post(
+            reverse('pagador:decidir_solicitud', args=[credito.id]),
+            {'action': 'approve', 'motivo': 'Aprobado en prueba'},
+        )
+
+        self.assertRedirects(response, reverse('pagador:dashboard'), fetch_redirect_response=False)
+        cambio_estado_mock.assert_called_once()
+        preparar_mock.assert_called_once()

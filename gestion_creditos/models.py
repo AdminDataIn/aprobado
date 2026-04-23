@@ -1354,6 +1354,82 @@ class CuotaAmortizacion(models.Model):
         return f"Cuota {self.numero_cuota}/{self.credito.plazo} - {self.credito.numero_credito} ({estado})"
 
 
+class DetalleContablePago(models.Model):
+    class MetodologiaCalculo(models.TextChoices):
+        CUOTA_INTERES_PRIMERO = 'CUOTA_INTERES_PRIMERO', 'Interes primero sobre cuota'
+        ABONO_CAPITAL_DIRECTO = 'ABONO_CAPITAL_DIRECTO', 'Abono directo a capital'
+
+    pago = models.ForeignKey(
+        HistorialPago,
+        on_delete=models.CASCADE,
+        related_name='detalles_contables',
+    )
+    credito = models.ForeignKey(
+        Credito,
+        on_delete=models.CASCADE,
+        related_name='detalles_contables_pago',
+    )
+    cuota = models.ForeignKey(
+        CuotaAmortizacion,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='detalles_contables_pago',
+    )
+    secuencia_aplicacion = models.PositiveIntegerField(default=1)
+    fecha_aplicacion = models.DateTimeField(default=timezone.now)
+    monto_total_aplicado = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    capital_aplicado = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text='Porcion del pago aplicada al capital financiado de la cuota.',
+    )
+    interes_aplicado = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text='Porcion del pago aplicada a intereses de la cuota.',
+    )
+    capital_principal_aplicado = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text='Porcion del capital aplicado atribuida al monto aprobado original.',
+    )
+    comision_aplicada = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text='Porcion del capital aplicado atribuida a la comision financiada.',
+    )
+    iva_aplicado = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text='Porcion del capital aplicado atribuida al IVA financiado.',
+    )
+    metodologia_calculo = models.CharField(
+        max_length=32,
+        choices=MetodologiaCalculo.choices,
+        default=MetodologiaCalculo.CUOTA_INTERES_PRIMERO,
+        help_text='Metodo usado para desglosar contablemente la aplicacion del pago.',
+    )
+
+    class Meta:
+        ordering = ['pago', 'secuencia_aplicacion', 'id']
+        verbose_name = 'Detalle contable de pago'
+        verbose_name_plural = 'Detalles contables de pago'
+        indexes = [
+            models.Index(fields=['pago', 'secuencia_aplicacion'], name='idx_detcont_pago_seq'),
+            models.Index(fields=['credito', 'fecha_aplicacion'], name='idx_detcont_cred_fecha'),
+        ]
+
+    def __str__(self):
+        cuota_label = f'Cuota {self.cuota.numero_cuota}' if self.cuota_id else 'Sin cuota'
+        return f'{self.pago.referencia_pago} - {cuota_label} - ${self.monto_total_aplicado}'
+
+
 #? ----- MODELOS DE BILLETERA DIGITAL -----
 
 class CuentaAhorro(models.Model):

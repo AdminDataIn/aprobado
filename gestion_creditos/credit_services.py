@@ -13,6 +13,7 @@ except ModuleNotFoundError:
     OpenAI = None
 from configuraciones.models import ConfiguracionPeso
 from .models import Credito, HistorialEstado, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, HistorialPago, CuotaAmortizacion, Empresa, LotePagoEmpresa
+from .services.accounting import registrar_detalle_contable_abono_capital, registrar_detalle_contable_pago
 from .services.tasa_service import obtener_tasa_credito
 from .services import dashboard_metrics
 from .services.libranza_rules import (
@@ -194,7 +195,7 @@ def iniciar_proceso_desembolso(credito):
 
 
 @transaction.atomic
-def actualizar_saldo_tras_pago(credito, monto_pagado):
+def actualizar_saldo_tras_pago(credito, monto_pagado, pago=None):
     """
     Actualiza el saldo del crédito después de recibir un pago.
 
@@ -355,7 +356,7 @@ def actualizar_saldo_tras_pago(credito, monto_pagado):
             credito.capital_pendiente = credito.capital_pendiente.quantize(Decimal('0.01'))
 
     # 5. Aplicar el pago a las cuotas pendientes (permite abonos parciales)
-    _aplicar_pago_a_cuotas(credito, monto_pagado)
+    _aplicar_pago_a_cuotas(credito, monto_pagado, pago=pago)
 
     # 6. Validar si el crédito está completamente pagado
     if credito.saldo_pendiente <= Decimal('0.01'):
@@ -420,7 +421,7 @@ def actualizar_saldo_tras_pago(credito, monto_pagado):
         logger.error(f"Error al enviar confirmación de pago por email para crédito {credito.numero_credito}: {e}")
 
 
-def _aplicar_pago_a_cuotas(credito, monto_pagado):
+def _aplicar_pago_a_cuotas(credito, monto_pagado, pago=None):
     """
     Aplica un pago a las cuotas pendientes, permitiendo abonos parciales.
 
@@ -431,12 +432,17 @@ def _aplicar_pago_a_cuotas(credito, monto_pagado):
     """
     monto_restante = Decimal(monto_pagado)
     cuotas_pendientes = credito.tabla_amortizacion.filter(pagada=False).order_by('numero_cuota')
+    aplicaciones_contables = []
 
     for cuota in cuotas_pendientes:
         ya_pagado = cuota.monto_pagado or Decimal('0.00')
         restante_cuota = cuota.valor_cuota - ya_pagado
 
         if restante_cuota <= Decimal('0.00'):
+            continue
+
+        monto_aplicado = min(monto_restante, restante_cuota)
+        if monto_aplicado <= Decimal('0.00'):
             continue
 
         if monto_restante >= restante_cuota:
@@ -450,8 +456,17 @@ def _aplicar_pago_a_cuotas(credito, monto_pagado):
             cuota.save(update_fields=['monto_pagado'])
             monto_restante = Decimal('0.00')
 
+        aplicaciones_contables.append({
+            'credito': credito,
+            'cuota': cuota,
+            'monto_aplicado': monto_aplicado,
+        })
+
         if monto_restante <= Decimal('0.00'):
             break
+
+    if pago is not None and aplicaciones_contables:
+        registrar_detalle_contable_pago(pago=pago, aplicaciones=aplicaciones_contables)
 
 
 def evaluar_motivacion_credito(texto: str) -> int:
@@ -1117,7 +1132,7 @@ def registrar_pago_credito(
         return pago, False
 
     if estado == HistorialPago.EstadoPago.EXITOSO:
-        actualizar_saldo_tras_pago(credito, monto)
+        actualizar_saldo_tras_pago(credito, monto, pago=pago)
         recalcular_credito_desde_tabla_amortizacion(credito, persist=True)
     return pago, True
 
@@ -1989,6 +2004,11 @@ def aplicar_abono_credito(credito, monto_abono, tipo_abono, usuario, referencia_
     # Actualizar tabla de amortización
     if tipo_abono == 'CAPITAL':
         # Abono a capital: recalcular todas las cuotas pendientes
+        registrar_detalle_contable_abono_capital(
+            pago=pago,
+            credito=credito,
+            monto_aplicado=monto_abono,
+        )
         _recalcular_amortizacion_por_capital(credito, analisis['plan_nuevo'])
     else:
         # Abono normal/mayor: marcar cuotas pagadas
@@ -2057,6 +2077,7 @@ def _marcar_cuotas_pagadas(credito, monto_abono, pago):
     """
     monto_restante = monto_abono
     cuotas_pendientes = credito.tabla_amortizacion.filter(pagada=False).order_by('numero_cuota')
+    aplicaciones_contables = []
 
     for cuota in cuotas_pendientes:
         if monto_restante >= cuota.valor_cuota:
@@ -2067,6 +2088,11 @@ def _marcar_cuotas_pagadas(credito, monto_abono, pago):
             cuota.save()
 
             monto_restante -= cuota.valor_cuota
+            aplicaciones_contables.append({
+                'credito': credito,
+                'cuota': cuota,
+                'monto_aplicado': cuota.valor_cuota,
+            })
 
             # Actualizar el desglose del pago
             if pago.capital_abonado is None:
@@ -2078,5 +2104,8 @@ def _marcar_cuotas_pagadas(credito, monto_abono, pago):
         else:
             break
 
-    pago.save()
+    if aplicaciones_contables:
+        registrar_detalle_contable_pago(pago=pago, aplicaciones=aplicaciones_contables)
+    else:
+        pago.save()
     logger.info(f"Cuotas marcadas como pagadas para crédito {credito.numero_credito}")

@@ -1,12 +1,12 @@
 from datetime import timedelta
 from decimal import Decimal
+import io
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from openpyxl import load_workbook
-import io
 
 from gestion_creditos.models import Credito, CreditoAdelantoNomina, Empresa, VinculoLaboralEmpresa
 
@@ -91,4 +91,13 @@ class AdminViewsSmokeTest(TestCase):
 
         workbook = load_workbook(io.BytesIO(response.content))
         self.assertIn('Resumen ejecutivo', workbook.sheetnames)
+        self.assertIn('Recaudo contable', workbook.sheetnames)
+        self.assertIn('Detalle contable', workbook.sheetnames)
         self.assertIn('Detalle operativo', workbook.sheetnames)
+
+    def test_dashboard_renderiza_indicadores_contables(self):
+        response = self.client.get(reverse('gestion:dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Total recaudado')
+        self.assertContains(response, 'Capital recuperado')

@@ -11,7 +11,7 @@ from django.test.utils import override_settings
 from django.utils import timezone
 
 from gestion_creditos import credit_services
-from gestion_creditos.models import Credito, CreditoLibranza, CuotaAmortizacion, Empresa, HistorialPago, LotePagoEmpresa
+from gestion_creditos.models import Credito, CreditoLibranza, CuotaAmortizacion, DetalleContablePago, Empresa, HistorialPago, LotePagoEmpresa
 
 
 User = get_user_model()
@@ -100,6 +100,116 @@ class PagosOfflineServiceTest(TestCase):
         self.assertEqual(credito.saldo_pendiente, Decimal('0.00'))
         self.assertEqual(pago.metodo_pago, HistorialPago.MetodoPago.TRANSFERENCIA_DIRECTA)
         self.assertEqual(pago.origen_registro, HistorialPago.OrigenRegistro.REGISTRO_MANUAL_ADMIN)
+
+    def test_registrar_pago_crea_detalle_contable_por_cuota(self):
+        credito = self._crear_credito_libranza(
+            numero='CR-TEST-0001A',
+            saldo='100.00',
+            cuota='100.00',
+            cuotas_pagadas=1,
+            cuotas_totales=2,
+        )
+
+        pago, created = credit_services.registrar_pago_credito(
+            credito=credito,
+            monto=Decimal('100.00'),
+            referencia_pago='OFFLINE-TEST-0001A',
+            metodo_pago=HistorialPago.MetodoPago.TRANSFERENCIA_DIRECTA,
+            origen_registro=HistorialPago.OrigenRegistro.REGISTRO_MANUAL_ADMIN,
+            usuario=self.user,
+            empresa=self.empresa,
+            notas='Pago final con detalle contable',
+        )
+
+        self.assertTrue(created)
+        detalles = list(DetalleContablePago.objects.filter(pago=pago).order_by('secuencia_aplicacion'))
+        self.assertEqual(len(detalles), 1)
+        self.assertEqual(detalles[0].monto_total_aplicado, Decimal('100.00'))
+        self.assertEqual(detalles[0].interes_aplicado, Decimal('20.00'))
+        self.assertEqual(detalles[0].capital_aplicado, Decimal('80.00'))
+        self.assertEqual(
+            detalles[0].capital_aplicado,
+            detalles[0].capital_principal_aplicado + detalles[0].comision_aplicada + detalles[0].iva_aplicado,
+        )
+        pago.refresh_from_db()
+        self.assertEqual(pago.capital_abonado, Decimal('80.00'))
+        self.assertEqual(pago.intereses_pagados, Decimal('20.00'))
+
+    def test_registrar_pago_que_cubre_varias_cuotas_crea_varios_detalles(self):
+        credito = self._crear_credito_libranza(
+            numero='CR-TEST-0001B',
+            saldo='200.00',
+            cuota='100.00',
+            cuotas_pagadas=0,
+            cuotas_totales=2,
+        )
+
+        pago, created = credit_services.registrar_pago_credito(
+            credito=credito,
+            monto=Decimal('200.00'),
+            referencia_pago='OFFLINE-TEST-0001B',
+            metodo_pago=HistorialPago.MetodoPago.TRANSFERENCIA_DIRECTA,
+            origen_registro=HistorialPago.OrigenRegistro.REGISTRO_MANUAL_ADMIN,
+            usuario=self.user,
+            empresa=self.empresa,
+            notas='Pago total con dos cuotas',
+        )
+
+        self.assertTrue(created)
+        detalles = list(DetalleContablePago.objects.filter(pago=pago).order_by('secuencia_aplicacion'))
+        self.assertEqual(len(detalles), 2)
+        self.assertEqual(detalles[0].cuota.numero_cuota, 1)
+        self.assertEqual(detalles[1].cuota.numero_cuota, 2)
+        self.assertEqual(sum((item.monto_total_aplicado for item in detalles), Decimal('0.00')), Decimal('200.00'))
+
+    def test_abono_normal_tambien_crea_detalle_contable(self):
+        credito = self._crear_credito_libranza(
+            numero='CR-TEST-0001C',
+            saldo='200.00',
+            cuota='100.00',
+            cuotas_pagadas=0,
+            cuotas_totales=2,
+        )
+
+        pago, reestructuracion = credit_services.aplicar_abono_credito(
+            credito=credito,
+            monto_abono=Decimal('100.00'),
+            tipo_abono='NORMAL',
+            usuario=self.user,
+            referencia_pago='ABONO-TEST-0001C',
+        )
+
+        self.assertIsNone(reestructuracion)
+        detalles = list(DetalleContablePago.objects.filter(pago=pago).order_by('secuencia_aplicacion'))
+        self.assertEqual(len(detalles), 1)
+        self.assertEqual(detalles[0].monto_total_aplicado, Decimal('100.00'))
+        self.assertEqual(detalles[0].capital_aplicado, Decimal('80.00'))
+        self.assertEqual(detalles[0].interes_aplicado, Decimal('20.00'))
+
+    def test_abono_a_capital_crea_detalle_contable_directo(self):
+        credito = self._crear_credito_libranza(
+            numero='CR-TEST-0001D',
+            saldo='200.00',
+            cuota='100.00',
+            cuotas_pagadas=0,
+            cuotas_totales=2,
+        )
+
+        pago, reestructuracion = credit_services.aplicar_abono_credito(
+            credito=credito,
+            monto_abono=Decimal('60.00'),
+            tipo_abono='CAPITAL',
+            usuario=self.user,
+            referencia_pago='ABONO-CAPITAL-0001D',
+        )
+
+        self.assertIsNotNone(reestructuracion)
+        detalles = list(DetalleContablePago.objects.filter(pago=pago))
+        self.assertEqual(len(detalles), 1)
+        self.assertIsNone(detalles[0].cuota)
+        self.assertEqual(detalles[0].monto_total_aplicado, Decimal('60.00'))
+        self.assertEqual(detalles[0].capital_aplicado, Decimal('60.00'))
+        self.assertEqual(detalles[0].interes_aplicado, Decimal('0.00'))
 
     def test_procesar_pagos_masivos_archivo_crea_lote_y_aplica_pago(self):
         credito = self._crear_credito_libranza(

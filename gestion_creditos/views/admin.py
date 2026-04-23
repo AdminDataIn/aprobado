@@ -1,5 +1,6 @@
 from .common import *
 from .common import _build_capacidad_descuento_context
+from gestion_creditos.models import DetalleContablePago
 
 
 def _admin_empresas_choices():
@@ -94,6 +95,16 @@ def admin_dashboard_export_view(request):
     )
     if empresa_filter:
         creditos_operativos = creditos_operativos.filter(empresa_nombre=empresa_filter)
+    creditos_contables = credit_services.dashboard_metrics.get_platform_disbursed_creditos_queryset(
+        credit_services.dashboard_metrics._base_admin_queryset()
+    )
+    if empresa_filter:
+        creditos_contables = creditos_contables.filter(empresa_nombre=empresa_filter)
+    detalle_contable_qs = (
+        DetalleContablePago.objects.filter(credito__in=creditos_contables)
+        .select_related('credito', 'cuota', 'pago')
+        .order_by('credito__numero_credito', 'fecha_aplicacion', 'secuencia_aplicacion')
+    )
 
     from openpyxl import Workbook
     from openpyxl.styles import Font
@@ -107,6 +118,13 @@ def admin_dashboard_export_view(request):
     resumen.append(['Total en mora', context['monto_total_en_mora']])
     resumen.append(['Total de créditos operativos', context['total_creditos']])
     resumen.append(['Próximos a vencer (15 días)', context['proximos_vencer']])
+    resumen.append(['Total recaudado', context['total_recaudado']])
+    resumen.append(['Capital recuperado', context['capital_recuperado']])
+    resumen.append(['Interes recuperado', context['interes_recuperado']])
+    resumen.append(['Comision recuperada', context['comision_recuperada']])
+    resumen.append(['IVA recuperado', context['iva_recuperado']])
+    resumen.append(['Creditos con trazabilidad contable', context['creditos_con_trazabilidad_contable']])
+    resumen.append(['Pagos con trazabilidad contable', context['pagos_con_trazabilidad_contable']])
     resumen.append(['Fecha de corte', timezone.now().strftime('%d/%m/%Y %H:%M')])
 
     cartera_linea = workbook.create_sheet('Cartera por linea')
@@ -123,6 +141,58 @@ def admin_dashboard_export_view(request):
     empresas.append(['Empresa', 'Creditos'])
     for item in context['creditos_por_empresa']:
         empresas.append([item['empresa_nombre'], item['count']])
+
+    recaudo = workbook.create_sheet('Recaudo contable')
+    recaudo.append([
+        'Numero credito', 'Empresa', 'Linea', 'Total recaudado',
+        'Capital recuperado', 'Interes recuperado', 'Comision recuperada', 'IVA recuperado',
+    ])
+    empresa_por_credito = {credito.id: credito.empresa_nombre for credito in creditos_contables}
+    creditos_contables_agregados = (
+        detalle_contable_qs.values(
+            'credito_id',
+            'credito__numero_credito',
+            'credito__linea',
+        )
+        .annotate(
+            total_recaudado=Coalesce(Sum('monto_total_aplicado'), Decimal('0.00')),
+            capital_recuperado=Coalesce(Sum('capital_principal_aplicado'), Decimal('0.00')),
+            interes_recuperado=Coalesce(Sum('interes_aplicado'), Decimal('0.00')),
+            comision_recuperada=Coalesce(Sum('comision_aplicada'), Decimal('0.00')),
+            iva_recuperado=Coalesce(Sum('iva_aplicado'), Decimal('0.00')),
+        )
+        .order_by('credito__numero_credito')
+    )
+    for item in creditos_contables_agregados:
+        recaudo.append([
+            item['credito__numero_credito'],
+            empresa_por_credito.get(item['credito_id'], 'SIN EMPRESA'),
+            item['credito__linea'],
+            item['total_recaudado'],
+            item['capital_recuperado'],
+            item['interes_recuperado'],
+            item['comision_recuperada'],
+            item['iva_recuperado'],
+        ])
+
+    detalle_contable = workbook.create_sheet('Detalle contable')
+    detalle_contable.append([
+        'Numero credito', 'Referencia pago', 'Fecha aplicacion', 'Cuota', 'Secuencia',
+        'Monto total', 'Capital recuperado', 'Interes recuperado', 'Comision recuperada', 'IVA recuperado',
+    ])
+    for detalle_pago in detalle_contable_qs:
+        detalle_contable.append([
+            detalle_pago.credito.numero_credito,
+            detalle_pago.pago.referencia_pago,
+            timezone.localtime(detalle_pago.fecha_aplicacion).strftime('%d/%m/%Y %H:%M'),
+            detalle_pago.cuota.numero_cuota if detalle_pago.cuota_id else '',
+            detalle_pago.secuencia_aplicacion,
+            detalle_pago.monto_total_aplicado,
+            detalle_pago.capital_principal_aplicado,
+            detalle_pago.interes_aplicado,
+            detalle_pago.comision_aplicada,
+            detalle_pago.iva_aplicado,
+        ])
 
     detalle = workbook.create_sheet('Detalle operativo')
     detalle.append([
@@ -553,7 +623,7 @@ def agregar_pago_manual_view(request, credito_id):
             raise ValueError("El monto debe ser positivo.")
 
         with transaction.atomic():
-            HistorialPago.objects.create(
+            pago = HistorialPago.objects.create(
                 credito=credito,
                 monto=monto_decimal,
                 referencia_pago=f"MANUAL-{credito.id}-{timezone.now().strftime('%Y%m%d%H%M%S%f')}",
@@ -564,7 +634,7 @@ def agregar_pago_manual_view(request, credito_id):
 
             if detalle:
                 #? Actualizar saldo y estado usando el helper
-                credit_services.actualizar_saldo_tras_pago(credito, monto_decimal)
+                credit_services.actualizar_saldo_tras_pago(credito, monto_decimal, pago=pago)
             
             messages.success(request, f"Abono de ${monto_decimal:,.2f} registrado exitosamente.")
 

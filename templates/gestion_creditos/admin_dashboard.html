@@ -47,6 +47,109 @@
             margin-bottom: 0.25rem;
             font-weight: 600;
         }
+        .accounting-section-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        .accounting-section-head p {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        .accounting-card .metric-value {
+            font-size: 1.18rem;
+        }
+        .accounting-card .metric-label {
+            font-size: 0.74rem;
+        }
+        .accounting-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 0.6rem;
+            margin-bottom: 0.75rem;
+        }
+        .accounting-cards-grid .accounting-card {
+            margin: 0;
+        }
+        .accounting-note {
+            margin-top: 0;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+        .dashboard-top-grid {
+            margin-bottom: 1rem;
+        }
+        .compact-metric {
+            padding: 0.85rem 0.9rem 0.8rem;
+            min-height: auto;
+        }
+        .compact-metric .metric-icon {
+            width: 2.35rem;
+            height: 2.35rem;
+            margin-bottom: 0.55rem;
+        }
+        .compact-metric .metric-value {
+            font-size: 1.2rem;
+            line-height: 1.1;
+            margin-bottom: 0.15rem;
+        }
+        .compact-metric .metric-label {
+            font-size: 0.74rem;
+            letter-spacing: 0.01em;
+        }
+        .compact-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 1.25rem;
+        }
+        .compact-actions .action-card {
+            padding: 0.85rem 1rem;
+            min-height: auto;
+            border-radius: 0.9rem;
+        }
+        .compact-actions .action-icon {
+            width: 2.4rem;
+            height: 2.4rem;
+            margin-bottom: 0.65rem;
+        }
+        .compact-actions h3 {
+            font-size: 0.92rem !important;
+            margin-bottom: 0.2rem !important;
+        }
+        .compact-actions p {
+            font-size: 0.78rem !important;
+            line-height: 1.35;
+        }
+        .chart-card-compact .card-body {
+            padding-top: 0.9rem;
+        }
+        .chart-card-compact .chart-container {
+            min-height: 290px;
+        }
+        @media (max-width: 991px) {
+            .accounting-cards-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .compact-actions {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+        @media (max-width: 767px) {
+            .accounting-cards-grid {
+                grid-template-columns: 1fr;
+            }
+            .compact-actions {
+                grid-template-columns: 1fr;
+            }
+            .chart-card-compact .chart-container {
+                min-height: 240px;
+            }
+        }
     </style>
 </head>
 <body class="theme-gestion theme-dashboard">
@@ -108,7 +211,7 @@
             </form>
         </div>
 
-        <div class="quick-actions">
+        <div class="quick-actions compact-actions">
             <a href="{% url 'gestion:solicitudes' %}" class="action-card">
                 <div class="action-icon" style="background-color: var(--accent-blue);">
                     <i class="bi bi-clipboard-check"></i>
@@ -146,9 +249,9 @@
             </a>
         </div>
 
-        <div class="row g-4 mb-4">
+        <div class="row g-3 dashboard-top-grid">
             <div class="col-12 col-md-6 col-xl-3">
-                <div class="card metric-card">
+                <div class="card metric-card compact-metric">
                     <div class="metric-icon" style="background-color: var(--accent-blue);">
                         <i class="bi bi-wallet2"></i>
                     </div>
@@ -157,7 +260,7 @@
                 </div>
             </div>
             <div class="col-12 col-md-6 col-xl-3">
-                <div class="card metric-card">
+                <div class="card metric-card compact-metric">
                     <div class="metric-icon" style="background-color: var(--danger);">
                         <i class="bi bi-exclamation-triangle"></i>
                     </div>
@@ -166,7 +269,7 @@
                 </div>
             </div>
             <div class="col-12 col-md-6 col-xl-3">
-                <div class="card metric-card">
+                <div class="card metric-card compact-metric">
                     <div class="metric-icon" style="background-color: var(--success);">
                         <i class="bi bi-credit-card-2-front"></i>
                     </div>
@@ -175,7 +278,7 @@
                 </div>
             </div>
             <div class="col-12 col-md-6 col-xl-3">
-                <div class="card metric-card">
+                <div class="card metric-card compact-metric">
                     <div class="metric-icon" style="background-color: var(--warning);">
                         <i class="bi bi-clock-history"></i>
                     </div>
@@ -185,9 +288,71 @@
             </div>
         </div>
 
-        <div class="row g-4 mb-4">
+        <div class="accounting-section-head">
+            <div>
+                <h2 class="section-title mb-1">Recaudo consolidado</h2>
+                <p>Métrica agregada sobre créditos desembolsados{% if empresa_filter %} para {{ empresa_filter }}{% endif %}.</p>
+            </div>
+        </div>
+
+        <div class="accounting-cards-grid">
+            <div>
+                <div class="card metric-card accounting-card compact-metric">
+                    <div class="metric-icon" style="background-color: #0f766e;">
+                        <i class="bi bi-cash-coin"></i>
+                    </div>
+                    <div class="metric-value">${{ total_recaudado|floatformat:2|intcomma }}</div>
+                    <div class="metric-label">Total recaudado</div>
+                </div>
+            </div>
+            <div>
+                <div class="card metric-card accounting-card compact-metric">
+                    <div class="metric-icon" style="background-color: #2563eb;">
+                        <i class="bi bi-bank"></i>
+                    </div>
+                    <div class="metric-value">${{ capital_recuperado|floatformat:2|intcomma }}</div>
+                    <div class="metric-label">Capital recuperado</div>
+                </div>
+            </div>
+            <div>
+                <div class="card metric-card accounting-card compact-metric">
+                    <div class="metric-icon" style="background-color: #7c3aed;">
+                        <i class="bi bi-percent"></i>
+                    </div>
+                    <div class="metric-value">${{ interes_recuperado|floatformat:2|intcomma }}</div>
+                    <div class="metric-label">Interes recuperado</div>
+                </div>
+            </div>
+            <div>
+                <div class="card metric-card accounting-card compact-metric">
+                    <div class="metric-icon" style="background-color: #f59e0b;">
+                        <i class="bi bi-receipt"></i>
+                    </div>
+                    <div class="metric-value">${{ comision_recuperada|floatformat:2|intcomma }}</div>
+                    <div class="metric-label">Comision recuperada</div>
+                </div>
+            </div>
+            <div>
+                <div class="card metric-card accounting-card compact-metric">
+                    <div class="metric-icon" style="background-color: #dc2626;">
+                        <i class="bi bi-calculator"></i>
+                    </div>
+                    <div class="metric-value">${{ iva_recuperado|floatformat:2|intcomma }}</div>
+                    <div class="metric-label">IVA recuperado</div>
+                </div>
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <div class="accounting-note">
+                    Cobertura actual: {{ creditos_con_trazabilidad_contable }} creditos y {{ pagos_con_trazabilidad_contable }} pagos con detalle contable registrado o backfilleado.<br>
+                    El desglose contable visible sale de DetalleContablePago para pagos nuevos y para el historico backfilleado de creditos desembolsados por plataforma.
+                    Se muestra únicamente el total recuperado porque la estructura actual no separa de forma trazable comisión, IVA e interés recuperado por pago o por cuota.
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3">
             <div class="col-12 col-lg-8">
-                <div class="card">
+                <div class="card chart-card-compact">
                     <div class="table-header">
                         <h3 class="section-title">Evolución de Cartera (Saldo Mensual)</h3>
                     </div>
@@ -199,7 +364,7 @@
                 </div>
             </div>
             <div class="col-12 col-lg-4">
-                <div class="card h-100">
+                <div class="card h-100 chart-card-compact">
                     <div class="table-header">
                         <h3 class="section-title">Distribución por Empresas</h3>
                     </div>
@@ -212,7 +377,7 @@
             </div>
         </div>
 
-        <div class="row g-4">
+        <div class="row g-3">
             <div class="col-12 col-lg-6">
                 <div class="table-container">
                     <div class="table-header">

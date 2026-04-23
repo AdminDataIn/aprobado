@@ -364,7 +364,51 @@ MODIFICAR:
             font-weight: 600;
         }
 
+        .simulation-return-bar {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 1rem;
+        }
+
+        .simulation-return-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.7rem 1rem;
+            border-radius: 999px;
+            border: 1px solid #d9e2ec;
+            background: #f8fbff;
+            color: #0f3557;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .simulation-return-link::before {
+            content: "\2190";
+            font-size: 15px;
+            line-height: 1;
+        }
+
+        .simulation-return-link [aria-hidden="true"] {
+            display: none;
+        }
+
+        .simulation-return-link:hover {
+            background: #eef6ff;
+            color: #0b2740;
+        }
+
         @media (max-width: 768px) {
+            .simulation-return-bar {
+                justify-content: stretch;
+            }
+
+            .simulation-return-link {
+                width: 100%;
+                justify-content: center;
+            }
+
             .document-upload-actions {
                 flex-direction: column;
             }
@@ -446,6 +490,12 @@ MODIFICAR:
             <div class="form-main">
                 <div class="form-main-grid">
                     <div class="form-steps-column">
+                        <div class="simulation-return-bar">
+                            <a href="{% url 'libranza:simulacion' %}" id="volver-simulador-link" class="simulation-return-link">
+                                <span aria-hidden="true">←</span>
+                                <span>Volver al simulador</span>
+                            </a>
+                        </div>
                         {# NUEVA URL - Libranza #}
                 <form id="formularioLibranza" method="POST" enctype="multipart/form-data" action="{% url 'libranza:solicitar' %}" data-loader="ajax" data-loader-text="Enviando solicitud...">
                             {% csrf_token %}
@@ -872,6 +922,8 @@ MODIFICAR:
         const cancelCameraButton = document.getElementById('cancelCameraButton');
         let lockedMonto = null;
         let lockedPlazo = null;
+        const simuladorBaseUrl = "{% url 'libranza:simulacion' %}";
+        const volverSimuladorLink = document.getElementById('volver-simulador-link');
         let activeCameraInput = null;
         let activeCameraLabel = '';
         let currentCameraStream = null;
@@ -1241,6 +1293,19 @@ MODIFICAR:
             return parseInt(plazoSelect.value, 10);
         }
 
+        function actualizarVolverSimuladorLink() {
+            if (!volverSimuladorLink) {
+                return;
+            }
+            const montoSolicitado = obtenerMontoActual();
+            const meses = obtenerPlazoActual();
+            if (!montoSolicitado || !meses) {
+                volverSimuladorLink.href = simuladorBaseUrl;
+                return;
+            }
+            volverSimuladorLink.href = `${simuladorBaseUrl}?monto=${montoSolicitado}&plazo=${meses}`;
+        }
+
         function actualizarResumenCredito() {
             if (!resumenMonto) {
                 return;
@@ -1250,6 +1315,7 @@ MODIFICAR:
 
             if (!montoSolicitado || !meses) {
                 limpiarResumen();
+                actualizarVolverSimuladorLink();
                 return;
             }
 
@@ -1268,6 +1334,7 @@ MODIFICAR:
             resumenIntereses.textContent = formatCurrency(totalIntereses);
             resumenTotal.textContent = formatCurrency(totalAPagar);
             resumenCuota.textContent = formatCurrency(cuotaMensual);
+            actualizarVolverSimuladorLink();
         }
 
         function aplicarDatosSimulador() {
