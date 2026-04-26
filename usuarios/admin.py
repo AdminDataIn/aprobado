@@ -6,7 +6,7 @@ from django.contrib.auth.models import User
 from django.contrib.admin.sites import NotRegistered
 from django.conf import settings
 
-from .models import PerfilPagador, PerfilEmpresaMarketing, PagadorAccessToken, ProductAccessProfile
+from .models import ExecutiveAccessToken, PerfilPagador, PerfilEmpresaMarketing, PagadorAccessToken, ProductAccessProfile
 from .pagador_activation_service import enviar_invitacion_activacion_pagador
 
 
@@ -18,6 +18,7 @@ class UserRoleFilter(SimpleListFilter):
         return (
             ('staff', 'Administradores'),
             ('pagador', 'Pagadores'),
+            ('ejecutivo', 'Ejecutivos'),
             ('inversionista', 'Inversionistas'),
             ('marketplace_admin', 'Admins marketplace'),
             ('libranza', 'Clientes libranza'),
@@ -32,6 +33,8 @@ class UserRoleFilter(SimpleListFilter):
             return queryset.filter(is_staff=True)
         if value == 'pagador':
             return queryset.filter(perfil_pagador__isnull=False)
+        if value == 'ejecutivo':
+            return queryset.filter(asesor_comercial__isnull=False)
         if value == 'inversionista':
             return queryset.filter(investor_account__isnull=False)
         if value == 'marketplace_admin':
@@ -120,6 +123,8 @@ class UserAdmin(DjangoUserAdmin):
             roles.append('Admin')
         if hasattr(obj, 'perfil_pagador'):
             roles.append('Pagador')
+        if hasattr(obj, 'asesor_comercial'):
+            roles.append('Ejecutivo')
         if hasattr(obj, 'perfil_marketing'):
             roles.append('Marketplace admin')
         if hasattr(obj, 'investor_account'):
@@ -243,6 +248,34 @@ class PagadorAccessTokenAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         # Queda como bitacora auditable. No se edita manualmente.
+        if request.method in ('GET', 'HEAD', 'OPTIONS'):
+            return True
+        return False
+
+
+@admin.register(ExecutiveAccessToken)
+class ExecutiveAccessTokenAdmin(admin.ModelAdmin):
+    list_display = ('usuario', 'asesor', 'tipo', 'email_destino', 'created_at', 'expires_at', 'used_at', 'invalidated_at')
+    list_filter = ('tipo', 'created_at', 'expires_at', 'used_at', 'invalidated_at')
+    search_fields = ('usuario__username', 'usuario__email', 'asesor__nombre', 'asesor__cedula', 'token_hint')
+    readonly_fields = (
+        'usuario',
+        'asesor',
+        'tipo',
+        'email_destino',
+        'expires_at',
+        'created_by',
+        'token_hash',
+        'token_hint',
+        'created_at',
+        'used_at',
+        'invalidated_at',
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
         if request.method in ('GET', 'HEAD', 'OPTIONS'):
             return True
         return False

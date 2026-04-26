@@ -360,6 +360,47 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         </div>
     </section>
 
+    <section class="libranza-trusted-section" id="empresas-confian">
+        <div class="libranza-container">
+            <div class="libranza-trusted-head">
+                <span class="libranza-eyebrow">Empresas que confían en nosotros</span>
+                <h2 class="libranza-section-title">Convenios y aliados que ya operan con <span class="highlight-cyan">Aprobado</span></h2>
+                <p class="libranza-section-description" style="margin-bottom:0;max-width:760px;">Una franja limpia para mostrar organizaciones que ya confían en nuestro flujo digital, sin convertir la landing en una vitrina cargada.</p>
+            </div>
+            <div class="libranza-trusted-marquee-shell" aria-label="Empresas que confían en Aprobado">
+                <div class="libranza-trusted-marquee-track">
+                    {% for company in landing_trusted_companies %}
+                    <div class="libranza-trusted-logo-card">
+                        <img src="{{ company.logo_url }}" alt="{{ company.nombre }}" class="libranza-trusted-logo{% if company.nombre == 'DataIn' %} is-datain{% endif %}" loading="lazy">
+                    </div>
+                    {% endfor %}
+                    {% for company in landing_trusted_companies %}
+                    <div class="libranza-trusted-logo-card" aria-hidden="true">
+                        <img src="{{ company.logo_url }}" alt="" class="libranza-trusted-logo{% if company.nombre == 'DataIn' %} is-datain{% endif %}" loading="lazy">
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="libranza-testimonials-section" id="testimonios">
+        <div class="libranza-container">
+            <div class="libranza-testimonials-shell">
+                <div>
+                    <span class="libranza-eyebrow">Testimonios</span>
+                    <h2 class="libranza-section-title" style="text-align:left;margin-bottom:0.75rem;">Historias reales, sección lista para activarse</h2>
+                    <p class="libranza-section-description" style="text-align:left;max-width:none;">Dejamos preparada la estructura para publicar testimonios validados de clientes y empresas, sin inventar contenido ni forzar prueba social antes de tiempo.</p>
+                </div>
+                <div class="libranza-testimonials-placeholder">
+                    <i class="bi bi-chat-quote"></i>
+                    <strong>Espacio reservado para testimonios</strong>
+                    <span>Cuando tengamos casos validados, aquí se mostrarán relatos breves con nombre, empresa y resultado.</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- ============================================
          SECCIÓN 6: PREGUNTAS FRECUENTES (FAQ)
          Modificar: Agregar/eliminar preguntas, cambiar respuestas
@@ -486,6 +527,15 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                             {{ whatsapp_support_display }}
                         </a>
                     </p>
+                    <p class="libranza-social-intro">Conecta con Aprobado en nuestras redes</p>
+                    <div class="libranza-social-links" aria-label="Redes sociales de Aprobado">
+                        {% for social in landing_social_links %}
+                        <a href="{{ social.url }}" target="_blank" rel="noopener" class="libranza-social-link">
+                            <i class="bi {{ social.icon }}"></i>
+                            <span>{{ social.label }}</span>
+                        </a>
+                        {% endfor %}
+                    </div>
                 </div>
             </div>
         </div>
@@ -570,6 +620,183 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         color: #d1d5db;
         margin-bottom: 2rem;
         line-height: 1.6;
+    }
+
+    .libranza-trusted-section,
+    .libranza-testimonials-section {
+        padding: 4.5rem 0;
+        background: #f8fafc;
+    }
+
+    .libranza-trusted-head {
+        margin-bottom: 2rem;
+    }
+
+    .libranza-testimonials-placeholder {
+        background: #ffffff;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 1.25rem;
+        padding: 1.4rem;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.05);
+    }
+
+    .libranza-trusted-marquee-shell {
+        position: relative;
+        overflow: hidden;
+        margin-top: 2rem;
+        padding: 1rem 0;
+        border-radius: 1.25rem;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.05);
+    }
+
+    .libranza-trusted-marquee-shell::before,
+    .libranza-trusted-marquee-shell::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 5rem;
+        z-index: 1;
+        pointer-events: none;
+    }
+
+    .libranza-trusted-marquee-shell::before {
+        left: 0;
+        background: linear-gradient(90deg, #ffffff 0%, rgba(255,255,255,0) 100%);
+    }
+
+    .libranza-trusted-marquee-shell::after {
+        right: 0;
+        background: linear-gradient(270deg, #ffffff 0%, rgba(255,255,255,0) 100%);
+    }
+
+    .libranza-trusted-marquee-track {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        width: max-content;
+        animation: trustedLogosMarquee 26s linear infinite;
+    }
+
+    .libranza-trusted-logo-card {
+        width: 230px;
+        height: 96px;
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem 1.2rem;
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    .libranza-trusted-logo {
+        max-width: 170px;
+        max-height: 44px;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        filter: saturate(0.96);
+    }
+
+    .libranza-trusted-logo.is-datain {
+        max-width: 208px;
+        max-height: 58px;
+    }
+
+    .libranza-testimonials-shell {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 1.25rem;
+        align-items: stretch;
+    }
+
+    .libranza-testimonials-placeholder {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 0.6rem;
+        color: #475569;
+    }
+
+    .libranza-testimonials-placeholder i {
+        font-size: 1.6rem;
+        color: #0891b2;
+    }
+
+    .libranza-social-links {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-top: 1.25rem;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .libranza-social-intro {
+        margin: 1.75rem 0 0;
+        color: #d7e0ea;
+        font-size: 0.96rem;
+        font-weight: 600;
+    }
+
+    .libranza-social-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.7rem 1rem;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.09);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        color: #fff;
+        text-decoration: none;
+        transition: transform 0.2s ease, background-color 0.2s ease;
+    }
+
+    .libranza-social-link:hover {
+        transform: translateY(-1px);
+        background: rgba(255, 255, 255, 0.18);
+    }
+
+    @keyframes trustedLogosMarquee {
+        from { transform: translateX(0); }
+        to { transform: translateX(calc(-50% - 0.5rem)); }
+    }
+
+    @media (max-width: 960px) {
+        .libranza-testimonials-shell {
+            grid-template-columns: 1fr;
+        }
+
+        .libranza-trusted-logo-card {
+            width: 190px;
+            height: 84px;
+        }
+
+        .libranza-trusted-logo {
+            max-width: 148px;
+            max-height: 40px;
+        }
+
+        .libranza-trusted-logo.is-datain {
+            max-width: 176px;
+            max-height: 50px;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .libranza-trusted-marquee-shell {
+            overflow-x: auto;
+            scrollbar-width: thin;
+        }
+
+        .libranza-trusted-marquee-track {
+            animation: none;
+            padding-inline: 1rem;
+        }
     }
 
     .libranza-hero-buttons {

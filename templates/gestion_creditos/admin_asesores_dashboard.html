@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gestión de Ejecutivos - Aprobado</title>
+    {% load static humanize %}
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" />
+    <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+    <style>
+        .page-shell { max-width: 1400px; }
+        .summary-card {
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 1rem;
+            padding: 1rem 1.1rem;
+            background: #fff;
+            height: 100%;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+        }
+        .summary-card small {
+            color: var(--text-secondary);
+            display: block;
+            margin-bottom: 0.3rem;
+            font-weight: 600;
+        }
+        .summary-card strong {
+            font-size: 1.35rem;
+            color: var(--text-primary);
+        }
+        .summary-card-emphasis {
+            background: linear-gradient(180deg, #0f2035 0%, #14344c 100%);
+            border-color: transparent;
+        }
+        .summary-card-emphasis small,
+        .summary-card-emphasis strong {
+            color: #fff;
+        }
+        .table thead th {
+            font-size: 0.78rem;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            color: #475569;
+        }
+        .table tbody td { vertical-align: middle; }
+    </style>
+</head>
+<body class="theme-gestion theme-dashboard">
+{% include 'base/loader_global.html' %}
+<header class="page-header">
+    <div class="container-fluid page-shell">
+        <div class="d-flex align-items-center justify-content-between">
+            <a href="{% url 'gestion:dashboard' %}" class="logo">
+                <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;" />
+            </a>
+            <div class="d-flex align-items-center gap-3">
+                <a href="{% url 'gestion:dashboard' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i>Volver al dashboard
+                </a>
+                <div class="user-info">
+                    <div class="user-avatar">AU</div>
+                    <div class="user-details d-none d-md-block">
+                        <h6>Admin User</h6>
+                        <small>Administrador</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<div class="container-fluid py-4 page-shell">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+        <div>
+            <h1 class="page-title mb-1">Gestión de Ejecutivos</h1>
+            <p class="text-muted mb-0">Seguimiento comercial consolidado sobre empresas vinculadas, colocación y comisión generada.</p>
+        </div>
+    </div>
+
+    <form method="get" class="card border-0 shadow-sm mb-4">
+        <div class="card-body d-flex gap-3 align-items-end flex-wrap">
+            <div style="min-width: 280px;">
+                <label for="asesor" class="form-label small text-muted mb-1">Ejecutivo</label>
+                <select id="asesor" name="asesor" class="form-select">
+                    <option value="">Todos los ejecutivos</option>
+                    {% for asesor in asesores %}
+                    <option value="{{ asesor.id }}" {% if asesor_filter == asesor.id|stringformat:"s" %}selected{% endif %}>{{ asesor.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Aplicar filtro</button>
+                {% if asesor_filter %}
+                <a href="{% url 'gestion:asesores' %}" class="btn btn-outline-secondary">Limpiar</a>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-md-6 col-xl"><div class="summary-card"><small>Ejecutivos activos</small><strong>{{ resumen_general.total_asesores }}</strong></div></div>
+        <div class="col-12 col-md-6 col-xl"><div class="summary-card"><small>Empresas vinculadas</small><strong>{{ resumen_general.total_empresas_referidas }}</strong></div></div>
+        <div class="col-12 col-md-6 col-xl"><div class="summary-card"><small>Créditos activos</small><strong>{{ resumen_general.total_creditos_activos }}</strong></div></div>
+        <div class="col-12 col-md-6 col-xl"><div class="summary-card"><small>Créditos pagados</small><strong>{{ resumen_general.total_creditos_pagados }}</strong></div></div>
+        <div class="col-12 col-md-6 col-xl"><div class="summary-card"><small>Monto colocado</small><strong>${{ resumen_general.monto_total_colocado|floatformat:0|intcomma }}</strong></div></div>
+        <div class="col-12 col-md-6 col-xl"><div class="summary-card summary-card-emphasis"><small>Comisión generada</small><strong>${{ resumen_general.comision_total_generada|floatformat:0|intcomma }}</strong></div></div>
+    </div>
+
+    {% if selected_asesor_summary %}
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                <div>
+                    <h2 class="h4 mb-1">{{ selected_asesor_summary.asesor.nombre }}</h2>
+                    <div class="text-muted">Cédula {{ selected_asesor_summary.asesor.cedula }}</div>
+                </div>
+                <div class="text-muted small">
+                    {% if selected_asesor_summary.asesor.email %}<div>{{ selected_asesor_summary.asesor.email }}</div>{% endif %}
+                    {% if selected_asesor_summary.asesor.telefono %}<div>{{ selected_asesor_summary.asesor.telefono }}</div>{% endif %}
+                </div>
+            </div>
+            <div class="row g-3">
+                <div class="col-6 col-lg-2"><div class="summary-card"><small>Empresas</small><strong>{{ selected_asesor_summary.empresas_count }}</strong></div></div>
+                <div class="col-6 col-lg-2"><div class="summary-card"><small>Créditos activos</small><strong>{{ selected_asesor_summary.creditos_activos }}</strong></div></div>
+                <div class="col-6 col-lg-2"><div class="summary-card"><small>Créditos pagados</small><strong>{{ selected_asesor_summary.creditos_pagados }}</strong></div></div>
+                <div class="col-6 col-lg-3"><div class="summary-card"><small>Monto colocado</small><strong>${{ selected_asesor_summary.monto_colocado|floatformat:0|intcomma }}</strong></div></div>
+                <div class="col-6 col-lg-3"><div class="summary-card summary-card-emphasis"><small>Comisión acumulada</small><strong>${{ selected_asesor_summary.comision_acumulada|floatformat:0|intcomma }}</strong></div></div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <h2 class="h5 mb-0">Rendimiento por ejecutivo</h2>
+                <span class="text-muted small">La tabla se concentra en créditos ya colocados: activos y pagados.</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Ejecutivo</th>
+                            <th>Empresas</th>
+                            <th>Créditos activos</th>
+                            <th>Créditos pagados</th>
+                            <th>Monto colocado</th>
+                            <th>Comisión</th>
+                            <th>Saldo cartera</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in asesores_summary %}
+                        <tr>
+                            <td>
+                                <strong>{{ item.asesor.nombre }}</strong>
+                                <div class="small text-muted">{{ item.asesor.cedula }}</div>
+                            </td>
+                            <td>{{ item.empresas_count }}</td>
+                            <td>{{ item.creditos_activos }}</td>
+                            <td>{{ item.creditos_pagados }}</td>
+                            <td>${{ item.monto_colocado|floatformat:0|intcomma }}</td>
+                            <td>${{ item.comision_acumulada|floatformat:0|intcomma }}</td>
+                            <td>${{ item.saldo_cartera|floatformat:0|intcomma }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-center text-muted py-4">Aún no hay ejecutivos registrados.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

@@ -1,7 +1,9 @@
 from pathlib import Path
 import importlib.util
 import os
+import socket
 import sys
+from urllib.parse import urlparse
 
 try:
     import dj_database_url
@@ -52,6 +54,28 @@ def env_bool(name, default=False):
 def _split_env_list(name, default=''):
     value = os.environ.get(name, default)
     return [item.strip() for item in value.split(',') if item.strip()]
+
+
+def _is_local_redis_url(redis_url):
+    if not redis_url:
+        return False
+    parsed = urlparse(redis_url)
+    return (parsed.hostname or '').lower() in {'localhost', '127.0.0.1'}
+
+
+def _can_open_redis_socket(redis_url, timeout=0.15):
+    if not redis_url:
+        return False
+    parsed = urlparse(redis_url)
+    host = parsed.hostname
+    port = parsed.port or 6379
+    if not host:
+        return False
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
 
 PRIMARY_DOMAIN_HOST = os.environ.get('PRIMARY_DOMAIN_HOST', 'aprobado.com.co')
 EMPRENDER_SUBDOMAIN_HOST = os.environ.get('EMPRENDER_SUBDOMAIN_HOST', 'emprender.aprobado.com.co')
@@ -339,7 +363,9 @@ X_FRAME_OPTIONS = 'SAMEORIGIN'
 
 # Cache (usar Redis si esta disponible)
 REDIS_URL = os.environ.get('REDIS_URL', '')
-if REDIS_URL:
+ALLOW_LOCAL_REDIS_FALLBACK = env_bool('ALLOW_LOCAL_REDIS_FALLBACK', True)
+USE_LOCAL_REDIS_FALLBACK = ALLOW_LOCAL_REDIS_FALLBACK and _is_local_redis_url(REDIS_URL) and not _can_open_redis_socket(REDIS_URL)
+if REDIS_URL and not USE_LOCAL_REDIS_FALLBACK:
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.redis.RedisCache',

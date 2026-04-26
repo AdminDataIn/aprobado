@@ -8,11 +8,12 @@ from django.db.models import Case, CharField, Count, DecimalField, F, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from gestion_creditos.models import Credito, CuotaAmortizacion
+from gestion_creditos.models import AsesorComercial, Credito, CuotaAmortizacion
 from gestion_creditos.services.accounting import (
     get_accounting_summary_for_creditos,
     get_platform_disbursed_creditos_queryset,
 )
+from gestion_creditos.services.advisors import filter_creditos_by_asesor
 
 
 def calcular_total_en_mora(creditos=None):
@@ -105,10 +106,15 @@ def get_admin_dashboard_context(user, request=None):
     today = timezone.now().date()
     proximos_15_dias = today + timedelta(days=15)
     empresa_filter = (request.GET.get('empresa', '').strip() if request else '')
+    asesor_filter = (request.GET.get('asesor', '').strip() if request else '')
+    selected_asesor = None
+    if asesor_filter.isdigit():
+        selected_asesor = AsesorComercial.objects.filter(pk=int(asesor_filter), activo=True).first()
 
     creditos_activos = _base_admin_queryset().filter(
         estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]
     )
+    creditos_activos = filter_creditos_by_asesor(creditos_activos, selected_asesor)
     if empresa_filter:
         creditos_activos = creditos_activos.filter(empresa_nombre=empresa_filter)
 
@@ -136,6 +142,7 @@ def get_admin_dashboard_context(user, request=None):
     )
 
     total_general_creditos_qs = _base_admin_queryset()
+    total_general_creditos_qs = filter_creditos_by_asesor(total_general_creditos_qs, selected_asesor)
     if empresa_filter:
         total_general_creditos_qs = total_general_creditos_qs.filter(empresa_nombre=empresa_filter)
 
@@ -168,6 +175,7 @@ def get_admin_dashboard_context(user, request=None):
     libranza_data = []
     adelanto_data = []
     base_historica = _base_admin_queryset()
+    base_historica = filter_creditos_by_asesor(base_historica, selected_asesor)
     if empresa_filter:
         base_historica = base_historica.filter(empresa_nombre=empresa_filter)
 
@@ -198,10 +206,15 @@ def get_admin_dashboard_context(user, request=None):
 
     empresas_choices = sorted(
         set(
-            _base_admin_queryset()
+            filter_creditos_by_asesor(_base_admin_queryset(), selected_asesor)
             .exclude(empresa_nombre='SIN EMPRESA')
             .values_list('empresa_nombre', flat=True)
         )
+    )
+    asesores_choices = list(
+        AsesorComercial.objects.filter(activo=True)
+        .order_by('nombre')
+        .values('id', 'nombre')
     )
 
     return {
@@ -220,7 +233,10 @@ def get_admin_dashboard_context(user, request=None):
         'adelanto_data': json.dumps(adelanto_data),
         'total_data': json.dumps(total_data),
         'empresa_filter': empresa_filter,
+        'asesor_filter': asesor_filter,
         'empresas_choices': empresas_choices,
+        'asesores_choices': asesores_choices,
+        'selected_asesor': selected_asesor,
         'total_recaudado': accounting_metrics['total_recaudado'],
         'capital_recuperado': accounting_metrics['capital_recuperado'],
         'interes_recuperado': accounting_metrics['interes_recuperado'],

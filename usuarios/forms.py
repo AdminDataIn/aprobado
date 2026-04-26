@@ -131,6 +131,26 @@ class InvestorAuthenticationForm(EmailAuthenticationForm):
         return AuthenticationForm.clean(self)
 
 
+class ExecutiveAuthenticationForm(EmailAuthenticationForm):
+    username = forms.EmailField(
+        label='Correo',
+        widget=forms.EmailInput(
+            attrs={
+                'class': 'form-control',
+                'placeholder': 'correo@dominio.com',
+                'autocomplete': 'email',
+            }
+        ),
+    )
+
+    def clean(self):
+        self._normalize_email_username(
+            'Tu cuenta ejecutiva aun no tiene una contraseña local. '
+            'Usa el enlace de activación enviado por correo o solicita al administrador un reenvío.'
+        )
+        return AuthenticationForm.clean(self)
+
+
 class PagadorActivationForm(SetPasswordForm):
     new_password1 = forms.CharField(
         label='Nueva contrasena',

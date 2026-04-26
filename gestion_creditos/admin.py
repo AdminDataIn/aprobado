@@ -1,12 +1,13 @@
-from django.contrib import admin, messages
+﻿from django.contrib import admin, messages
 from django import forms
+from django.conf import settings
 from django.urls import path, reverse
 from django.shortcuts import redirect, get_object_or_404
 from django.utils.html import format_html
 from django.template.response import TemplateResponse
 from django.core.exceptions import ValidationError
 from .models import (
-    Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago, WompiIntent, LotePagoEmpresa,
+    AsesorComercial, Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago, WompiIntent, LotePagoEmpresa,
     CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, ImagenNegocio, Notificacion,
     Pagare, ZapSignWebhookLog, MarketplaceItem, MarketplaceItemHistorialEstado,
     MarketplacePedido, MarketplacePedidoItem, MarketplacePago, MarketplaceDireccionEntrega,
@@ -15,6 +16,8 @@ from .models import (
 )
 from django.utils import timezone
 from datetime import timedelta
+from gestion_creditos.services.advisors import get_asesor_performance_snapshot
+from usuarios.executive_activation_service import enviar_invitacion_activacion_ejecutivo
 from .services.marketplace_service import (
     cambiar_estado_publicacion,
     es_transicion_estado_valida,
@@ -25,12 +28,12 @@ from usuarios.investor_activation_service import enviar_invitacion_inversionista
 
 # Hotfix de etiquetas con tildes para el index de admin.
 # Evita tocar masivamente cadenas en modelos por ahora.
-Credito._meta.verbose_name = 'Crédito'
-Credito._meta.verbose_name_plural = 'Créditos'
-Pagare._meta.verbose_name = 'Pagaré'
-Pagare._meta.verbose_name_plural = 'Pagarés'
+Credito._meta.verbose_name = 'CrÃ©dito'
+Credito._meta.verbose_name_plural = 'CrÃ©ditos'
+Pagare._meta.verbose_name = 'PagarÃ©'
+Pagare._meta.verbose_name_plural = 'PagarÃ©s'
 
-#? --------- INLINE PARA IMÁGENES DEL NEGOCIO ------------
+#? --------- INLINE PARA IMÃGENES DEL NEGOCIO ------------
 class ImagenNegocioInline(admin.TabularInline):
     model = ImagenNegocio
     extra = 0
@@ -52,7 +55,7 @@ class CreditoEmprendimientoInline(admin.StackedInline):
     fk_name = 'credito'
     #! Hacemos los campos de solicitud readonly una vez creados (excepto numero_cedula y celular_wh para correcciones)
     readonly_fields = ('nombre', 'fecha_nac', 'direccion', 'estado_civil', 'numero_personas_cargo', 'nombre_negocio', 'ubicacion_negocio', 'tiempo_operando', 'dias_trabajados_sem', 'prod_serv_ofrec', 'ingresos_prom_mes', 'cli_aten_day', 'inventario', 'nomb_ref_per1', 'cel_ref_per1', 'rel_ref_per1', 'nomb_ref_cl1', 'cel_ref_cl1', 'rel_ref_cl1', 'ref_conoc_lid_com', 'foto_negocio', 'desc_fotos_neg', 'tipo_cta_mno', 'ahorro_tand_alc', 'depend_h', 'desc_cred_nec', 'redes_soc', 'fotos_prod', 'puntaje', 'puntaje_imagenes', 'datos_scoring_imagenes')
-    # Agregar el inline de imágenes dentro del inline de emprendimiento
+    # Agregar el inline de imÃ¡genes dentro del inline de emprendimiento
     inlines = [ImagenNegocioInline]
 
 #? --------- ADMINISTRACION DE CREDITOS ------------
@@ -75,12 +78,12 @@ class CreditoAdmin(admin.ModelAdmin):
     list_filter = ('linea', 'estado', 'fecha_solicitud')
     search_fields = ('usuario__username', 'numero_credito')
     readonly_fields = ('numero_credito', 'fecha_solicitud', 'fecha_actualizacion', 'linea', 'usuario')
-    inlines = [] #! Inlines se determinan dinámicamente
+    inlines = [] #! Inlines se determinan dinÃ¡micamente
 
     def get_readonly_fields(self, request, obj=None):
         # Inicia con los campos de solo lectura definidos en la clase
         readonly_fields = list(super().get_readonly_fields(request, obj))
-        # Si el objeto existe y su estado es ACTIVO, añade 'estado' a la lista
+        # Si el objeto existe y su estado es ACTIVO, aÃ±ade 'estado' a la lista
         if obj and obj.estado == Credito.EstadoCredito.ACTIVO:
             readonly_fields.append('estado')
         return readonly_fields
@@ -97,31 +100,31 @@ class CreditoAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         """
-        Lógica de negocio al aprobar un crédito de emprendimiento.
+        LÃ³gica de negocio al aprobar un crÃ©dito de emprendimiento.
         """
         #! Guardar el objeto principal (Credito) primero
         super().save_model(request, obj, form, change)
 
-        #! Comprobar si el estado se ha cambiado a APROBADO y si es un crédito de emprendimiento
+        #! Comprobar si el estado se ha cambiado a APROBADO y si es un crÃ©dito de emprendimiento
         if ('estado' in form.changed_data and
                 obj.estado == Credito.EstadoCredito.APROBADO and
                 obj.linea == Credito.LineaCredito.EMPRENDIMIENTO):
             
             detalle = getattr(obj, 'detalle_emprendimiento', None)
             
-            #? Asegurarse de que este proceso solo se ejecute una vez (cuando monto_aprobado no está seteado)
+            #? Asegurarse de que este proceso solo se ejecute una vez (cuando monto_aprobado no estÃ¡ seteado)
             if detalle and detalle.monto_aprobado is None:
                 
-                #? Lógica de negocio para calcular el valor de la cuota.
+                #? LÃ³gica de negocio para calcular el valor de la cuota.
                 if detalle.plazo > 0:
                     valor_cuota_calculado = detalle.valor_credito / detalle.plazo
                 else:
                     valor_cuota_calculado = detalle.valor_credito
 
-                #? Calcula la fecha del primer pago (ej: 30 días desde hoy)
+                #? Calcula la fecha del primer pago (ej: 30 dÃ­as desde hoy)
                 fecha_primer_pago = timezone.now().date() + timedelta(days=30)
 
-                #? Actualizar el detalle del crédito de emprendimiento
+                #? Actualizar el detalle del crÃ©dito de emprendimiento
                 detalle.monto_aprobado = detalle.valor_credito
                 detalle.saldo_pendiente = detalle.valor_credito
                 detalle.valor_cuota = valor_cuota_calculado
@@ -131,7 +134,7 @@ class CreditoAdmin(admin.ModelAdmin):
 @admin.register(CreditoEmprendimiento)
 class CreditoEmprendimientoAdmin(admin.ModelAdmin):
     """
-    Admin dedicado para corregir datos erróneos en CreditoEmprendimiento.
+    Admin dedicado para corregir datos errÃ³neos en CreditoEmprendimiento.
     Permite modificar campos como numero_cedula y celular_wh directamente.
     """
     list_display = ('credito_numero', 'nombre', 'numero_cedula', 'celular_wh', 'nombre_negocio', 'fecha_solicitud')
@@ -140,14 +143,14 @@ class CreditoEmprendimientoAdmin(admin.ModelAdmin):
     readonly_fields = ('credito', 'fecha_nac', 'puntaje', 'puntaje_imagenes', 'datos_scoring_imagenes')
 
     fieldsets = (
-        ('Información del Crédito', {
+        ('InformaciÃ³n del CrÃ©dito', {
             'fields': ('credito',)
         }),
         ('Datos Personales (Editable para Correcciones)', {
             'fields': ('nombre', 'numero_cedula', 'celular_wh', 'fecha_nac', 'direccion', 'estado_civil', 'numero_personas_cargo'),
-            'description': 'Estos campos pueden ser editados para corregir datos erróneos ingresados por error.'
+            'description': 'Estos campos pueden ser editados para corregir datos errÃ³neos ingresados por error.'
         }),
-        ('Información del Negocio', {
+        ('InformaciÃ³n del Negocio', {
             'fields': ('nombre_negocio', 'ubicacion_negocio', 'tiempo_operando', 'dias_trabajados_sem',
                       'prod_serv_ofrec', 'ingresos_prom_mes', 'cli_aten_day', 'inventario'),
             'classes': ('collapse',)
@@ -157,12 +160,12 @@ class CreditoEmprendimientoAdmin(admin.ModelAdmin):
                       'nomb_ref_cl1', 'cel_ref_cl1', 'rel_ref_cl1', 'ref_conoc_lid_com'),
             'classes': ('collapse',)
         }),
-        ('Información Adicional', {
+        ('InformaciÃ³n Adicional', {
             'fields': ('tipo_cta_mno', 'ahorro_tand_alc', 'depend_h', 'desc_cred_nec',
                       'redes_soc', 'fotos_prod', 'desc_fotos_neg'),
             'classes': ('collapse',)
         }),
-        ('Evaluación y Scoring', {
+        ('EvaluaciÃ³n y Scoring', {
             'fields': ('puntaje', 'observaciones_analista', 'puntaje_imagenes', 'datos_scoring_imagenes'),
             'classes': ('collapse',)
         }),
@@ -170,7 +173,7 @@ class CreditoEmprendimientoAdmin(admin.ModelAdmin):
 
     def credito_numero(self, obj):
         return obj.credito.numero_credito
-    credito_numero.short_description = 'Número de Crédito'
+    credito_numero.short_description = 'NÃºmero de CrÃ©dito'
     credito_numero.admin_order_field = 'credito__numero_credito'
 
     def fecha_solicitud(self, obj):
@@ -183,32 +186,299 @@ class CreditoEmprendimientoAdmin(admin.ModelAdmin):
 
     actions = ['detectar_cedulas_invalidas']
 
-    @admin.action(description='Detectar cédulas con datos no numéricos')
+    @admin.action(description='Detectar cÃ©dulas con datos no numÃ©ricos')
     def detectar_cedulas_invalidas(self, request, queryset):
         """
-        Detecta y muestra los registros con cédulas que contienen datos no numéricos.
+        Detecta y muestra los registros con cÃ©dulas que contienen datos no numÃ©ricos.
         """
         invalidos = []
         for obj in queryset:
-            # Verificar si numero_cedula contiene caracteres no numéricos
+            # Verificar si numero_cedula contiene caracteres no numÃ©ricos
             if not obj.numero_cedula.isdigit():
-                invalidos.append(f"{obj.credito.numero_credito}: '{obj.nombre}' tiene cédula inválida '{obj.numero_cedula}'")
+                invalidos.append(f"{obj.credito.numero_credito}: '{obj.nombre}' tiene cÃ©dula invÃ¡lida '{obj.numero_cedula}'")
 
         if invalidos:
             self.message_user(
                 request,
-                f"Se encontraron {len(invalidos)} registros con cédulas inválidas:\n" + "\n".join(invalidos),
+                f"Se encontraron {len(invalidos)} registros con cÃ©dulas invÃ¡lidas:\n" + "\n".join(invalidos),
                 level='warning'
             )
         else:
-            self.message_user(request, "No se encontraron cédulas inválidas en la selección.", level='success')
+            self.message_user(request, "No se encontraron cÃ©dulas invÃ¡lidas en la selecciÃ³n.", level='success')
+
+
+class EmpresaReferidaFilter(admin.SimpleListFilter):
+    title = 'referido'
+    parameter_name = 'referido'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('si', 'Referidas'),
+            ('no', 'No referidas'),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value() == 'si':
+            return queryset.filter(asesor_comercial__isnull=False)
+        if self.value() == 'no':
+            return queryset.filter(asesor_comercial__isnull=True)
+        return queryset
+
+
+class EmpresaAdminForm(forms.ModelForm):
+    fue_referida = forms.BooleanField(required=False, label='¿Fue referido?')
+    asesor_comercial = forms.ModelChoiceField(
+        queryset=AsesorComercial.objects.filter(activo=True).order_by('nombre'),
+        required=False,
+        label='Ejecutivo',
+        help_text='Selecciona un ejecutivo ya creado. Este es el vínculo real de la empresa.',
+    )
+    asesor_nombre = forms.CharField(
+        required=False,
+        label='Nombre del ejecutivo (captura inicial)',
+        help_text='Úsalo solo si el ejecutivo aún no existe en el sistema.',
+    )
+    asesor_cedula = forms.CharField(
+        required=False,
+        label='Cédula del ejecutivo (captura inicial)',
+        help_text='Si no seleccionas un ejecutivo existente, estos datos crearán uno nuevo.',
+    )
+
+    class Meta:
+        model = Empresa
+        fields = '__all__'
+
+    class Media:
+        js = ('admin/js/empresa_referrals_admin.js',)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        asesor = getattr(self.instance, 'asesor_comercial', None)
+        if asesor:
+            self.fields['fue_referida'].initial = True
+            self.fields['asesor_comercial'].initial = asesor
+            self.fields['asesor_nombre'].initial = asesor.nombre
+            self.fields['asesor_cedula'].initial = asesor.cedula
+
+    def clean(self):
+        cleaned_data = super().clean()
+        fue_referida = cleaned_data.get('fue_referida')
+        asesor_existente = cleaned_data.get('asesor_comercial')
+        asesor_nombre = (cleaned_data.get('asesor_nombre') or '').strip()
+        asesor_cedula = (cleaned_data.get('asesor_cedula') or '').strip()
+
+        if fue_referida and not asesor_existente and (not asesor_nombre or not asesor_cedula):
+            raise ValidationError('Selecciona un ejecutivo existente o ingresa nombre y cédula para crearlo.')
+        if not fue_referida:
+            cleaned_data['asesor_comercial'] = None
+            cleaned_data['asesor_nombre'] = ''
+            cleaned_data['asesor_cedula'] = ''
+        return cleaned_data
+
+    def save(self, commit=True):
+        empresa = super().save(commit=False)
+        if self.cleaned_data.get('fue_referida'):
+            asesor = self.cleaned_data.get('asesor_comercial')
+            if not asesor:
+                asesor, _ = AsesorComercial.objects.get_or_create(
+                    cedula=self.cleaned_data['asesor_cedula'].strip(),
+                    defaults={'nombre': self.cleaned_data['asesor_nombre'].strip()},
+                )
+                asesor.nombre = self.cleaned_data['asesor_nombre'].strip()
+                asesor.activo = True
+                asesor.save(update_fields=['nombre', 'activo'])
+            empresa.asesor_comercial = asesor
+        else:
+            empresa.asesor_comercial = None
+        if commit:
+            empresa.save()
+            self.save_m2m()
+        return empresa
+
 
 
 @admin.register(Empresa)
 class EmpresaAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'slug', 'tipo_empresa', 'convenio_activo', 'correo_contacto', 'telefono_contacto', 'marketplace_fee_percent', 'pagos_habilitados')
+    form = EmpresaAdminForm
+    list_display = (
+        'nombre',
+        'slug',
+        'tipo_empresa',
+        'referido_display',
+        'asesor_display',
+        'convenio_activo',
+        'correo_contacto',
+        'telefono_contacto',
+        'marketplace_fee_percent',
+        'pagos_habilitados',
+    )
     search_fields = ('nombre', 'slug', 'nit', 'correo_contacto')
-    list_filter = ('tipo_empresa', 'convenio_activo', 'pagos_habilitados',)
+    list_filter = ('tipo_empresa', 'convenio_activo', 'pagos_habilitados', EmpresaReferidaFilter, 'asesor_comercial')
+    readonly_fields = ('asesor_actual_resumen',)
+    fieldsets = (
+        ('Informacion base', {
+            'fields': (
+                'nombre', 'slug', 'razon_social', 'nit', 'representante_legal',
+                'tipo_empresa', 'convenio_activo',
+            )
+        }),
+        ('Origen comercial', {
+            'fields': ('fue_referida', 'asesor_comercial', 'asesor_nombre', 'asesor_cedula', 'asesor_actual_resumen'),
+            'description': 'Flujo recomendado: crear primero el Ejecutivo y luego vincularlo desde aquí. '
+                           'La captura manual queda solo como respaldo inicial cuando el ejecutivo aún no existe.',
+        }),
+        ('Marketplace y contacto', {
+            'fields': (
+                'descripcion_marketplace', 'whatsapp_contacto', 'logo',
+                'correo_contacto', 'telefono_contacto',
+                'mp_user_id', 'mp_access_token', 'marketplace_fee_percent', 'pagos_habilitados',
+            )
+        }),
+    )
+
+    def referido_display(self, obj):
+        return obj.fue_referida
+    referido_display.boolean = True
+    referido_display.short_description = '¿Fue referido?'
+
+    def asesor_display(self, obj):
+        return obj.asesor_comercial.nombre if obj.asesor_comercial_id else 'Sin ejecutivo'
+    asesor_display.short_description = 'Ejecutivo'
+
+    def asesor_actual_resumen(self, obj):
+        if not obj or not obj.asesor_comercial_id:
+            return 'Sin ejecutivo vinculado'
+        asesor = obj.asesor_comercial
+        return format_html(
+            '<strong>{}</strong><br><span style="color:#64748b;">Cédula: {}</span>',
+            asesor.nombre,
+            asesor.cedula,
+        )
+    asesor_actual_resumen.short_description = 'Ejecutivo vinculado'
+
+
+@admin.register(AsesorComercial)
+class AsesorComercialAdmin(admin.ModelAdmin):
+    list_display = (
+        'nombre',
+        'cedula',
+        'email',
+        'telefono',
+        'activo',
+        'empresas_count',
+        'creditos_count',
+        'monto_referido_display',
+    )
+    search_fields = ('nombre', 'cedula', 'email', 'telefono')
+    list_filter = ('activo',)
+    readonly_fields = ('creado_en', 'actualizado_en', 'performance_summary')
+    autocomplete_fields = ('usuario',)
+    actions = ['reenviar_invitacion_activacion']
+    fieldsets = (
+        ('Identidad', {
+            'fields': ('nombre', 'cedula', 'usuario', 'activo')
+        }),
+        ('Contacto', {
+            'fields': ('email', 'telefono', 'observaciones')
+        }),
+        ('Seguimiento', {
+            'fields': ('performance_summary', 'creado_en', 'actualizado_en')
+        }),
+    )
+
+    def save_model(self, request, obj, form, change):
+        if obj.usuario and not obj.email:
+            obj.email = obj.usuario.email
+        super().save_model(request, obj, form, change)
+
+        if not change:
+            if not getattr(settings, 'EXECUTIVE_AUTO_SEND_ACTIVATION_ON_CREATE', True):
+                self.message_user(
+                    request,
+                    'El ejecutivo fue creado sin envío automático. Usa la acción de reenvío cuando quieras habilitar el acceso.',
+                    level=messages.INFO
+                )
+                return
+            if not obj.email:
+                self.message_user(
+                    request,
+                    f'El ejecutivo {obj.nombre} fue creado sin correo. No se pudo enviar la activación automáticamente.',
+                    level=messages.WARNING
+                )
+                return
+            try:
+                enviar_invitacion_activacion_ejecutivo(obj, created_by=request.user)
+                self.message_user(
+                    request,
+                    f'Se envió automáticamente la invitación de activación a {obj.email}.',
+                    level=messages.SUCCESS
+                )
+            except Exception as exc:
+                self.message_user(
+                    request,
+                    f'El ejecutivo se creó, pero no se pudo enviar la invitación: {exc}',
+                    level=messages.ERROR
+                )
+
+    def empresas_count(self, obj):
+        return obj.empresas_referidas.count()
+    empresas_count.short_description = 'Empresas'
+
+    def creditos_count(self, obj):
+        return get_asesor_performance_snapshot(obj)['total_creditos']
+    creditos_count.short_description = 'Créditos colocados'
+
+    def monto_referido_display(self, obj):
+        return get_asesor_performance_snapshot(obj)['monto_colocado']
+    monto_referido_display.short_description = 'Monto colocado'
+
+    def performance_summary(self, obj):
+        summary = get_asesor_performance_snapshot(obj)
+        return format_html(
+            '<strong>Empresas:</strong> {}<br>'
+            '<strong>Créditos activos:</strong> {}<br>'
+            '<strong>Pagados:</strong> {}<br>'
+            '<strong>Monto colocado:</strong> ${:,.0f}<br>'
+            '<strong>Comisión acumulada:</strong> ${:,.0f}<br>'
+            '<strong>Saldo de cartera:</strong> ${:,.0f}',
+            summary['empresas_count'],
+            summary['creditos_activos'],
+            summary['creditos_pagados'],
+            summary['monto_colocado'],
+            summary['comision_acumulada'],
+            summary['saldo_cartera'],
+        )
+    performance_summary.short_description = 'Resumen comercial'
+
+    @admin.action(description='Enviar o reenviar invitación de activación')
+    def reenviar_invitacion_activacion(self, request, queryset):
+        enviados = 0
+        errores = 0
+
+        for asesor in queryset:
+            try:
+                enviar_invitacion_activacion_ejecutivo(asesor, created_by=request.user)
+                enviados += 1
+            except Exception as exc:
+                errores += 1
+                self.message_user(
+                    request,
+                    f'No se pudo enviar la invitación a {asesor.nombre}: {exc}',
+                    level=messages.ERROR
+                )
+
+        if enviados:
+            self.message_user(
+                request,
+                f'Se enviaron {enviados} invitaciones de activación.',
+                level=messages.SUCCESS
+            )
+        if errores:
+            self.message_user(
+                request,
+                f'Hubo {errores} errores durante el envío.',
+                level=messages.WARNING
+            )
 
 
 @admin.register(VinculoLaboralEmpresa)
@@ -546,15 +816,15 @@ class NotificacionAdmin(admin.ModelAdmin):
     list_per_page = 25
 
     fieldsets = (
-        ('Información General', {
+        ('InformaciÃ³n General', {
             'fields': ('usuario', 'tipo', 'titulo', 'mensaje')
         }),
         ('Estado', {
             'fields': ('leida', 'fecha_creacion', 'fecha_leida')
         }),
-        ('Acción', {
+        ('AcciÃ³n', {
             'fields': ('url',),
-            'description': 'URL a la que redirige cuando el usuario hace clic en la notificación'
+            'description': 'URL a la que redirige cuando el usuario hace clic en la notificaciÃ³n'
         }),
     )
 
@@ -562,7 +832,7 @@ class NotificacionAdmin(admin.ModelAdmin):
         return super().get_queryset(request).select_related('usuario')
 
 
-#? ----- ADMINISTRACIÓN DE PAGARÉS (ZapSign) -----
+#? ----- ADMINISTRACIÃ“N DE PAGARÃ‰S (ZapSign) -----
 @admin.register(Pagare)
 class PagareAdmin(admin.ModelAdmin):
     list_display = ('numero_pagare', 'credito', 'estado', 'fecha_creacion', 'fecha_firma', 'creado_por')
@@ -575,17 +845,17 @@ class PagareAdmin(admin.ModelAdmin):
     )
 
     fieldsets = (
-        ('Información del Pagaré', {
+        ('InformaciÃ³n del PagarÃ©', {
             'fields': ('numero_pagare', 'credito', 'estado', 'version_plantilla')
         }),
         ('Archivos PDF', {
             'fields': ('archivo_pdf', 'archivo_pdf_firmado', 'hash_pdf')
         }),
-        ('Integración ZapSign', {
+        ('IntegraciÃ³n ZapSign', {
             'fields': ('zapsign_doc_token', 'zapsign_sign_url', 'zapsign_signed_file_url', 'zapsign_status'),
             'classes': ('collapse',)
         }),
-        ('Fechas y Auditoría', {
+        ('Fechas y AuditorÃ­a', {
             'fields': ('fecha_creacion', 'fecha_envio', 'fecha_firma', 'fecha_rechazo', 'creado_por')
         }),
         ('Evidencia Forense', {
@@ -608,16 +878,16 @@ class ZapSignWebhookLogAdmin(admin.ModelAdmin):
     list_per_page = 50
 
     fieldsets = (
-        ('Información del Evento', {
+        ('InformaciÃ³n del Evento', {
             'fields': ('doc_token', 'event', 'received_at', 'ip_address')
         }),
-        ('Validación', {
+        ('ValidaciÃ³n', {
             'fields': ('signature_valid', 'processed', 'error_message')
         }),
         ('Payload Completo', {
             'fields': ('payload', 'headers'),
             'classes': ('collapse',),
-            'description': 'Datos completos del webhook para auditoría'
+            'description': 'Datos completos del webhook para auditorÃ­a'
         }),
     )
 
@@ -628,3 +898,4 @@ class ZapSignWebhookLogAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         # Solo lectura
         return False
+

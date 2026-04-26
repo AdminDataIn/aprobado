@@ -5,8 +5,9 @@ from django.urls import reverse
 
 from django.utils import timezone
 
-from gestion_creditos.models import Empresa
-from .models import InvestorAccessToken, PerfilPagador, PagadorAccessToken
+from gestion_creditos.models import AsesorComercial, Empresa
+from .executive_activation_service import crear_token_ejecutivo, enviar_invitacion_activacion_ejecutivo
+from .models import ExecutiveAccessToken, InvestorAccessToken, PerfilPagador, PagadorAccessToken
 from .investor_activation_service import enviar_invitacion_inversionista
 from .pagador_activation_service import (
     crear_token_pagador,
@@ -194,6 +195,84 @@ class InvestorActivationFlowTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('/inversionista/activar/', mail.outbox[0].body)
         self.assertIsNone(token.invalidated_at)
+
+
+@override_settings(
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    DEFAULT_FROM_EMAIL='no-reply@aprobado.test',
+    PRIMARY_DOMAIN_HOST='aprobado.test',
+)
+class ExecutiveActivationFlowTests(TestCase):
+    def setUp(self):
+        self.asesor = AsesorComercial.objects.create(
+            nombre='Ejecutivo Demo',
+            cedula='11224455',
+            email='ejecutivo@test.com',
+            telefono='3001234567',
+        )
+
+    def test_envio_invitacion_crea_usuario_sin_password_y_manda_correo(self):
+        enviar_invitacion_activacion_ejecutivo(self.asesor)
+        self.asesor.refresh_from_db()
+        token = ExecutiveAccessToken.objects.get(asesor=self.asesor)
+
+        self.assertIsNotNone(self.asesor.usuario)
+        self.assertFalse(self.asesor.usuario.is_active)
+        self.assertFalse(self.asesor.usuario.has_usable_password())
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('/asesores/activar/', mail.outbox[0].body)
+        self.assertIsNone(token.invalidated_at)
+
+    def test_reenvio_reutiliza_token_activo(self):
+        enviar_invitacion_activacion_ejecutivo(self.asesor)
+        enviar_invitacion_activacion_ejecutivo(self.asesor)
+
+        self.assertEqual(ExecutiveAccessToken.objects.filter(asesor=self.asesor).count(), 1)
+        self.assertEqual(len(mail.outbox), 2)
+
+    def test_activacion_define_password_y_permite_ingreso(self):
+        enviar_invitacion_activacion_ejecutivo(self.asesor)
+        self.asesor.refresh_from_db()
+        _, public_token = crear_token_ejecutivo(self.asesor)
+
+        response = self.client.post(
+            reverse('asesores:activar_cuenta', kwargs={'token': public_token}),
+            data={
+                'new_password1': 'EjecutivoPass2026!Segura',
+                'new_password2': 'EjecutivoPass2026!Segura',
+            },
+            follow=True,
+            secure=True,
+        )
+
+        self.asesor.refresh_from_db()
+        token = ExecutiveAccessToken.objects.get(asesor=self.asesor)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(self.asesor.usuario.is_active)
+        self.assertTrue(self.asesor.usuario.check_password('EjecutivoPass2026!Segura'))
+        self.assertIsNotNone(token.used_at)
+        self.assertTrue(self.client.login(username=self.asesor.usuario.username, password='EjecutivoPass2026!Segura'))
+        dashboard = self.client.get(reverse('asesores:dashboard'))
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertContains(dashboard, 'Panel del Ejecutivo')
+
+    def test_enlace_invalido_permite_reenvio(self):
+        enviar_invitacion_activacion_ejecutivo(self.asesor)
+        _, public_token = crear_token_ejecutivo(self.asesor)
+        ExecutiveAccessToken.objects.filter(asesor=self.asesor).update(invalidated_at=timezone.now())
+
+        response = self.client.post(
+            reverse('asesores:activar_cuenta', kwargs={'token': public_token}),
+            data={'action': 'resend_activation'},
+            follow=True,
+            secure=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Enviamos un nuevo enlace de activación')
+        self.assertEqual(ExecutiveAccessToken.objects.filter(asesor=self.asesor).count(), 2)
+        self.assertEqual(len(mail.outbox), 2)
 
 
 @override_settings(

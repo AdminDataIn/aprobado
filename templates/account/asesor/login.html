@@ -1,0 +1,51 @@
+{% extends "account/pagador/_base.html" %}
+
+{% block title %}Acceso Ejecutivo{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <span class="badge rounded-pill border">Acceso ejecutivo</span>
+</div>
+<h1>Ingresa al panel de ejecutivos</h1>
+<p class="auth-desc">Usa tu correo y tu contraseña para consultar empresas vinculadas, colocación real y comisión acumulada.</p>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-danger{% elif message.tags == 'warning' %}alert-warning{% else %}alert-info{% endif %}">
+            {{ message }}
+        </div>
+    {% endfor %}
+{% endif %}
+
+{% if form.non_field_errors %}
+<div class="alert alert-danger py-2">{{ form.non_field_errors }}</div>
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+    {% if next_url %}
+    <input type="hidden" name="next" value="{{ next_url }}">
+    {% endif %}
+
+    <div class="auth-field">
+        <label class="form-label" for="{{ form.username.id_for_label }}">Correo o usuario</label>
+        {{ form.username }}
+    </div>
+
+    <div class="auth-field">
+        <label class="form-label" for="{{ form.password.id_for_label }}">Contraseña</label>
+        <div class="auth-password-wrap">
+            {{ form.password }}
+            <button type="button" class="auth-password-toggle" data-password-toggle="{{ form.password.id_for_label }}" aria-label="Mostrar u ocultar contraseña">
+                <i class="bi bi-eye"></i>
+            </button>
+        </div>
+    </div>
+
+    <button type="submit" class="btn-account">Continuar</button>
+</form>
+
+<div class="auth-footer-links is-centered">
+    <a href="{{ back_url|default:'/' }}">&larr; Volver al inicio</a>
+</div>
+{% endblock %}

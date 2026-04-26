@@ -1,6 +1,6 @@
 from django.db import models
 from django.conf import settings
-from gestion_creditos.models import Empresa
+from gestion_creditos.models import AsesorComercial, Empresa
 from django.contrib.auth.models import User
 from django.utils import timezone
 
@@ -143,6 +143,51 @@ class InvestorAccessToken(models.Model):
         indexes = [
             models.Index(fields=['usuario', 'tipo'], name='inv_token_user_tipo_idx'),
             models.Index(fields=['expires_at'], name='inv_token_exp_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.usuario.username} - {self.tipo} - {self.email_destino}"
+
+    @property
+    def esta_vigente(self):
+        return not self.used_at and not self.invalidated_at and self.expires_at > timezone.now()
+
+
+class ExecutiveAccessToken(models.Model):
+    class TipoToken(models.TextChoices):
+        ACTIVACION = 'activacion', 'Activacion'
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='executive_access_tokens'
+    )
+    asesor = models.ForeignKey(
+        AsesorComercial,
+        on_delete=models.CASCADE,
+        related_name='access_tokens'
+    )
+    tipo = models.CharField(max_length=30, choices=TipoToken.choices, default=TipoToken.ACTIVACION)
+    token_hash = models.CharField(max_length=64, unique=True)
+    token_hint = models.CharField(max_length=12, blank=True)
+    email_destino = models.EmailField()
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    used_at = models.DateTimeField(null=True, blank=True)
+    invalidated_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='executive_tokens_creados'
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['usuario', 'tipo'], name='exec_token_user_tipo_idx'),
+            models.Index(fields=['expires_at'], name='exec_token_exp_idx'),
         ]
 
     def __str__(self):

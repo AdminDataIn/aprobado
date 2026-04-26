@@ -9,6 +9,40 @@ import uuid
 
 from gestion_creditos.services.name_normalization import build_full_name_upper, normalize_name_upper
 
+class AsesorComercial(models.Model):
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='asesor_comercial',
+    )
+    nombre = models.CharField(max_length=160)
+    cedula = models.CharField(max_length=20, unique=True)
+    email = models.EmailField(blank=True)
+    telefono = models.CharField(max_length=20, blank=True)
+    activo = models.BooleanField(default=True)
+    observaciones = models.TextField(blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['nombre']
+        verbose_name = 'Ejecutivo'
+        verbose_name_plural = 'Ejecutivos'
+        indexes = [
+            models.Index(fields=['activo', 'nombre'], name='asesor_activo_nombre_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.nombre} ({self.cedula})"
+
+    def save(self, *args, **kwargs):
+        self.nombre = normalize_name_upper(self.nombre)
+        self.cedula = (self.cedula or '').strip()
+        super().save(*args, **kwargs)
+
+
 #? Modelo movido de credito_libranza (la idea es crear las empresas directamente desde el admin)
 class Empresa(models.Model):
     class TipoEmpresa(models.TextChoices):
@@ -37,6 +71,13 @@ class Empresa(models.Model):
     representante_legal = models.CharField(max_length=160, blank=True)
     correo_contacto = models.EmailField(blank=True)
     telefono_contacto = models.CharField(max_length=20, blank=True)
+    asesor_comercial = models.ForeignKey(
+        AsesorComercial,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='empresas_referidas'
+    )
     mp_user_id = models.CharField(max_length=80, blank=True)
     mp_access_token = models.CharField(max_length=255, blank=True)
     marketplace_fee_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('10.00'))
@@ -85,6 +126,10 @@ class Empresa(models.Model):
 
     def __str__(self):
         return self.nombre
+
+    @property
+    def fue_referida(self):
+        return self.asesor_comercial_id is not None
 
     @property
     def permite_libranza(self):

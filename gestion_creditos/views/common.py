@@ -50,6 +50,7 @@ from ..forms import (
     PagoObligacionesSeleccionadasForm,
 )
 from ..models import (
+    AsesorComercial,
     Credito,
     CreditoAdelantoNomina,
     CuentaAhorro,

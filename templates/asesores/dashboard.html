@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Panel del Ejecutivo - Aprobado</title>
+    {% load static humanize %}
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" />
+    <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+    <style>
+        body { background: #f4f7fb; color: #0f172a; }
+        .page-shell { max-width: 1400px; }
+        .metric {
+            background: #fff;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 1.1rem;
+            padding: 1rem 1.05rem;
+            height: 100%;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+        }
+        .metric small {
+            color: #64748b;
+            display: block;
+            margin-bottom: 0.25rem;
+            font-weight: 600;
+        }
+        .metric strong {
+            display: block;
+            font-size: 1.45rem;
+            line-height: 1.1;
+        }
+        .metric-emphasis {
+            background: linear-gradient(180deg, #13253b 0%, #193552 100%);
+            color: #fff;
+            border-color: transparent;
+        }
+        .metric-emphasis small { color: rgba(255,255,255,0.72); }
+        .company-filter,
+        .section-card {
+            background: #fff;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 1rem;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+        }
+        .section-card .card-body {
+            padding: 1.25rem;
+        }
+        .company-filter {
+            padding: 1rem 1.1rem;
+        }
+        .company-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.65rem;
+            border-radius: 999px;
+            background: rgba(8, 145, 178, 0.1);
+            color: #0f766e;
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+        .empty-note {
+            border: 1px dashed rgba(100, 116, 139, 0.35);
+            border-radius: 1rem;
+            padding: 1rem;
+            color: #64748b;
+            background: #f8fafc;
+        }
+    </style>
+</head>
+<body class="theme-dashboard">
+{% include 'base/loader_global.html' %}
+<header class="page-header">
+    <div class="container-fluid page-shell">
+        <div class="d-flex align-items-center justify-content-between">
+            <a href="{% url 'asesores:dashboard' %}" class="logo">
+                <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;" />
+            </a>
+            <div class="d-flex align-items-center gap-3">
+                <div class="user-info">
+                    <div class="user-details d-none d-md-block">
+                        <h6 class="mb-0">{{ asesor.nombre }}</h6>
+                        <small>Ejecutivo</small>
+                    </div>
+                    <div class="user-avatar">{{ asesor.nombre|slice:":1"|upper }}</div>
+                </div>
+                <form method="post" action="{% url 'libranza:logout' %}" class="m-0">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline">
+                        <i class="bi bi-box-arrow-right"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</header>
+
+<div class="container-fluid py-4 page-shell">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+        <div>
+            <h1 class="page-title">Panel del Ejecutivo</h1>
+            <p class="text-muted mb-2">Consulta tus empresas vinculadas, la colocación consolidada y la comisión generada sobre créditos activos y pagados.</p>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-house-door"></i> Dashboard</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-md-6 col-xl"><div class="metric metric-emphasis"><small>Comisión acumulada</small><strong>${{ summary.comision_acumulada|floatformat:0|intcomma }}</strong></div></div>
+        <div class="col-12 col-md-6 col-xl"><div class="metric"><small>Monto colocado</small><strong>${{ summary.monto_colocado|floatformat:0|intcomma }}</strong></div></div>
+        <div class="col-6 col-md-4 col-xl"><div class="metric"><small>Empresas vinculadas</small><strong>{{ summary.empresas_count }}</strong></div></div>
+        <div class="col-6 col-md-4 col-xl"><div class="metric"><small>Créditos activos</small><strong>{{ summary.creditos_activos }}</strong></div></div>
+        <div class="col-6 col-md-4 col-xl"><div class="metric"><small>Créditos pagados</small><strong>{{ summary.creditos_pagados }}</strong></div></div>
+    </div>
+
+    <form method="get" class="company-filter mb-4">
+        <div class="d-flex justify-content-between align-items-end gap-3 flex-wrap">
+            <div>
+                <div class="small text-muted mb-1">Filtra la cartera visible por empresa referida</div>
+                {% if selected_empresa %}
+                <span class="company-chip">{{ selected_empresa.nombre }}</span>
+                {% endif %}
+            </div>
+            <div class="d-flex gap-2 align-items-end flex-wrap">
+                <div style="min-width: 260px;">
+                    <label for="empresa" class="form-label small text-muted mb-1">Empresa</label>
+                    <select id="empresa" name="empresa" class="form-select">
+                        <option value="">Todas las empresas</option>
+                        {% for empresa in empresas %}
+                        <option value="{{ empresa.id }}" {% if empresa_filter == empresa.id|stringformat:"s" %}selected{% endif %}>{{ empresa.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Aplicar</button>
+                {% if empresa_filter %}
+                <a href="{% url 'asesores:dashboard' %}" class="btn btn-outline-secondary">Limpiar</a>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+
+    <div class="row g-4">
+        <div class="col-12 col-lg-4">
+            <div class="section-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2 class="h5 mb-0">Empresas vinculadas</h2>
+                        <span class="small text-muted">{{ summary.empresas_count }} registradas</span>
+                    </div>
+                    <div class="list-group list-group-flush">
+                        {% for empresa in empresas %}
+                        <div class="list-group-item px-0">
+                            <strong>{{ empresa.nombre }}</strong>
+                            <div class="small text-muted">{{ empresa.razon_social|default:"Sin razón social" }}</div>
+                        </div>
+                        {% empty %}
+                        <div class="empty-note">Aún no tienes empresas vinculadas.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-8">
+            <div class="section-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <div>
+                            <h2 class="h5 mb-1">Créditos colocados</h2>
+                            <div class="small text-muted">Solo se muestran créditos activos o pagados.</div>
+                        </div>
+                        <span class="small text-muted">Saldo vigente: ${{ summary.saldo_cartera|floatformat:0|intcomma }}</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Crédito</th>
+                                    <th>Empresa</th>
+                                    <th>Estado</th>
+                                    <th>Monto colocado</th>
+                                    <th>Saldo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for credito in creditos_recientes %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ credito.numero_credito }}</strong>
+                                        <div class="small text-muted">{{ credito.nombre_cliente }}</div>
+                                    </td>
+                                    <td>{{ credito.empresa_relacionada.nombre|default:"Sin empresa" }}</td>
+                                    <td>{{ credito.get_estado_display }}</td>
+                                    <td>${{ credito.monto_aprobado|default:credito.monto_solicitado|floatformat:0|intcomma }}</td>
+                                    <td>${{ credito.saldo_pendiente|default:0|floatformat:0|intcomma }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="5" class="text-center text-muted py-4">Aún no hay créditos activos o pagados asociados a tus empresas.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

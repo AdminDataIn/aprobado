@@ -16,11 +16,12 @@ from decimal import Decimal
 from django.utils import timezone
 from django.db import transaction
 
-from gestion_creditos.models import Credito
+from gestion_creditos.models import AsesorComercial, Credito
 from gestion_creditos.services.libranza_rules import LIBRANZA_MONTO_MAXIMO, LIBRANZA_MONTO_MINIMO_PUBLICO
 from gestion_creditos.services.tasa_service import obtener_tasa_credito
 from .forms import (
     EmailAuthenticationForm,
+    ExecutiveAuthenticationForm,
     InvestorAuthenticationForm,
     InvestorActivationForm,
     MarketplaceBuyerRegistrationForm,
@@ -28,6 +29,11 @@ from .forms import (
     PagadorActivationForm,
     PagadorPasswordResetRequestForm,
     ProductUserRegistrationForm,
+)
+from .executive_activation_service import (
+    buscar_token_ejecutivo,
+    enviar_invitacion_activacion_ejecutivo,
+    marcar_token_ejecutivo_como_usado,
 )
 from .models import InvestorAccessToken, PagadorAccessToken, PerfilEmpresaMarketing, ProductAccessProfile
 from .product_flow import (
@@ -214,6 +220,95 @@ class EmpresaLoginView(LoginView):
         context['forgot_password_url'] = reverse('pagador:password_reset_request')
         context['back_url'] = reverse('home')
         return context
+
+
+class AsesorLoginView(LoginView):
+    template_name = 'account/asesor/login.html'
+    form_class = ExecutiveAuthenticationForm
+    redirect_authenticated_user = False
+
+    def get(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            asesor = getattr(request.user, 'asesor_comercial', None)
+            if asesor and asesor.activo:
+                return redirect(reverse('asesores:dashboard'))
+            messages.warning(request, 'Su cuenta actual no tiene permisos de ejecutivo.')
+            return redirect(reverse('libranza:landing'))
+        return super().get(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        user = form.get_user()
+        asesor = getattr(user, 'asesor_comercial', None)
+        if asesor and asesor.activo:
+            return super().form_valid(form)
+        logout(self.request)
+        messages.error(self.request, 'Este usuario no tiene permisos para acceder como ejecutivo.')
+        return self.form_invalid(form)
+
+    def get_success_url(self):
+        return self.get_redirect_url() or reverse('asesores:dashboard')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['next_url'] = _get_safe_next_url(self.request, reverse('asesores:dashboard'))
+        context['back_url'] = reverse('libranza:landing')
+        return context
+
+
+def executive_activate_account_view(request, token):
+    access_token = buscar_token_ejecutivo(token)
+    if not access_token:
+        return render(request, 'account/asesor/activate_account.html', {
+            'token_valido': False,
+            'expirado': True,
+            'form': None,
+            'invalid_reason': 'not_found',
+            'permite_reenvio': False,
+        })
+
+    expirado = access_token.expires_at <= timezone.now() or access_token.used_at or access_token.invalidated_at
+    if expirado:
+        if request.method == 'POST' and request.POST.get('action') == 'resend_activation':
+            try:
+                enviar_invitacion_activacion_ejecutivo(access_token.asesor, force_new=False)
+                messages.success(
+                    request,
+                    f'Enviamos un nuevo enlace de activación a {access_token.email_destino}. Usa solo el correo más reciente.'
+                )
+                return redirect('asesores:login')
+            except Exception as exc:
+                messages.error(request, f'No se pudo reenviar el enlace de activación: {exc}')
+        return render(request, 'account/asesor/activate_account.html', {
+            'token_valido': False,
+            'expirado': True,
+            'form': None,
+            'usuario_email': access_token.email_destino,
+            'invalid_reason': _get_token_invalid_reason(access_token),
+            'permite_reenvio': True,
+            'asesor': access_token.asesor,
+        })
+
+    user = access_token.usuario
+    if request.method == 'POST':
+        form = PagadorActivationForm(user, request.POST)
+        if form.is_valid():
+            form.save()
+            user.is_active = True
+            user.save(update_fields=['is_active', 'password'])
+            marcar_token_ejecutivo_como_usado(access_token)
+            messages.success(request, 'Tu acceso como ejecutivo fue activado correctamente. Ya puedes iniciar sesión.')
+            return redirect('asesores:login')
+    else:
+        form = PagadorActivationForm(user)
+
+    return render(request, 'account/asesor/activate_account.html', {
+        'token_valido': True,
+        'expirado': False,
+        'form': form,
+        'usuario_email': access_token.email_destino,
+        'asesor': access_token.asesor,
+        'permite_reenvio': False,
+    })
 
 
 def pagador_activate_account_view(request, token):
@@ -450,6 +545,37 @@ def libranza_landing(request):
         'libranza_monto_maximo': LIBRANZA_MONTO_MAXIMO,
         'adelanto_tasa_mensual': obtener_tasa_credito(Credito.LineaCredito.ADELANTO_NOMINA),
         'adelanto_comision_percent': Decimal(str(getattr(settings, 'ADELANTO_NOMINA_COMISION_PERCENT', '10'))),
+        'landing_social_links': [
+            {
+                'label': 'Instagram',
+                'icon': 'bi-instagram',
+                'url': 'https://www.instagram.com/_aprobado.co?igsh=emY4NWJ1Z2JzZGM5',
+            },
+            {
+                'label': 'Facebook',
+                'icon': 'bi-facebook',
+                'url': 'https://www.facebook.com/share/1AdTG9Qbim/?mibextid=wwXIfr',
+            },
+        ],
+        'landing_trusted_companies': [
+            {
+                'nombre': 'DataIn',
+                'logo_url': 'https://datain.pro/wp-content/uploads/2025/08/Logo-Datain.png',
+            },
+            {
+                'nombre': 'Cluster Orinoco TIC',
+                'logo_url': 'https://digitalpress.fra1.cdn.digitaloceanspaces.com/v38i30u/2023/06/orinocotic-h-3.svg',
+            },
+            {
+                'nombre': 'Soll Ortodoncia',
+                'logo_url': 'https://sollortodoncia.com/wp-content/uploads/2017/12/soll-ortodoncia-logo.png',
+            },
+            {
+                'nombre': 'Llano al Mundo',
+                'logo_url': 'https://llanoalmundo.com/wp-content/uploads/logo-llanoalmundo.png',
+            },
+        ],
+        'landing_testimonials_enabled': False,
     }
     return render(request, 'libranza/libranza_landing.html', context)
 

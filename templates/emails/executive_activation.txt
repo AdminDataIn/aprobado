@@ -1,0 +1,12 @@
+Hola,
+
+Se habilitó un acceso como ejecutivo en Aprobado.
+
+Ejecutivo: {{ asesor.nombre }}
+Correo: {{ usuario.email }}
+Vigencia del enlace: {{ expiration_hours }} horas
+
+Activa tu acceso aquí:
+{{ activation_url }}
+
+Si no solicitaste este acceso o el enlace expira, contacta al administrador interno para solicitar un reenvío.

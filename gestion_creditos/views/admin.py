@@ -1,6 +1,7 @@
 from .common import *
 from .common import _build_capacidad_descuento_context
 from gestion_creditos.models import DetalleContablePago
+from gestion_creditos.services.advisors import filter_creditos_by_asesor
 
 
 def _admin_empresas_choices():
@@ -88,16 +89,19 @@ def admin_dashboard_view(request):
 def admin_dashboard_export_view(request):
     context = credit_services.dashboard_metrics.get_admin_dashboard_context(request.user, request=request)
     empresa_filter = context.get('empresa_filter') or ''
+    selected_asesor = context.get('selected_asesor')
     creditos_operativos = (
         credit_services.dashboard_metrics
         ._base_admin_queryset()
         .filter(estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA])
     )
+    creditos_operativos = filter_creditos_by_asesor(creditos_operativos, selected_asesor)
     if empresa_filter:
         creditos_operativos = creditos_operativos.filter(empresa_nombre=empresa_filter)
     creditos_contables = credit_services.dashboard_metrics.get_platform_disbursed_creditos_queryset(
         credit_services.dashboard_metrics._base_admin_queryset()
     )
+    creditos_contables = filter_creditos_by_asesor(creditos_contables, selected_asesor)
     if empresa_filter:
         creditos_contables = creditos_contables.filter(empresa_nombre=empresa_filter)
     detalle_contable_qs = (
@@ -114,6 +118,7 @@ def admin_dashboard_export_view(request):
     resumen.title = 'Resumen ejecutivo'
     resumen.append(['Concepto', 'Valor'])
     resumen.append(['Empresa filtrada', empresa_filter or 'Todas'])
+    resumen.append(['Asesor filtrado', selected_asesor.nombre if selected_asesor else 'Todos'])
     resumen.append(['Saldo total de cartera', context['saldo_cartera_total']])
     resumen.append(['Total en mora', context['monto_total_en_mora']])
     resumen.append(['Total de créditos operativos', context['total_creditos']])

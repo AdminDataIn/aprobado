@@ -1,0 +1,45 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Activa tu acceso como ejecutivo{% endblock %}
+
+{% block email_content %}
+<div class="email-header">
+    <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" class="logo">
+</div>
+
+<div class="status-badge badge-blue">Acceso ejecutivo</div>
+
+<div class="email-content">
+    <h1 class="greeting">Activa tu cuenta</h1>
+    <p class="subtitle">
+        Se habilitó un acceso para gestionar empresas referidas y hacer seguimiento a la colocación comercial desde Aprobado.
+    </p>
+
+    <div class="info-card">
+        <table class="info-table">
+            <tr>
+                <td class="label">Ejecutivo</td>
+                <td class="value">{{ asesor.nombre }}</td>
+            </tr>
+            <tr>
+                <td class="label">Correo</td>
+                <td class="value">{{ usuario.email }}</td>
+            </tr>
+            <tr>
+                <td class="label">Vigencia del enlace</td>
+                <td class="value">{{ expiration_hours }} horas</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="cta-box blue">
+        <p class="cta-title">Define tu contraseña inicial</p>
+        <p class="cta-subtitle">El enlace es de un solo uso y expirará automáticamente.</p>
+        <a href="{{ activation_url }}" class="cta-button">Activar acceso</a>
+    </div>
+
+    <p class="subtitle" style="margin-top: 24px;">
+        Si no solicitaste este acceso o el enlace expira, contacta al administrador interno para solicitar un reenvío.
+    </p>
+</div>
+{% endblock %}
