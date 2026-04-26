@@ -520,25 +520,16 @@ class MarketplaceAdminLoginView(MarketingLoginView):
 
 # Vista para la Landing Page de Crédito de Libranza
 def _build_landing_trusted_companies():
-    ordered_names = [
-        'DataIn',
-        'Cluster Orinoco TIC',
-        'Soll Ortodoncia',
-        'Llano al Mundo',
-    ]
     companies = (
         Empresa.objects
-        .filter(nombre__in=ordered_names)
+        .filter(convenio_activo=True)
         .exclude(logo='')
         .exclude(logo__isnull=True)
-        .only('nombre', 'logo')
+        .only('nombre', 'logo', 'slug')
+        .order_by('nombre')
     )
-    companies_by_name = {company.nombre.lower(): company for company in companies}
     trusted_companies = []
-    for name in ordered_names:
-        company = companies_by_name.get(name.lower())
-        if not company:
-            continue
+    for company in companies:
         try:
             logo_url = company.logo.url
         except Exception:
@@ -548,6 +539,7 @@ def _build_landing_trusted_companies():
         trusted_companies.append({
             'nombre': company.nombre,
             'logo_url': logo_url,
+            'slug': company.slug,
         })
     return trusted_companies
 

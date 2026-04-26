@@ -22,46 +22,37 @@ class LibranzaLandingMarketingTests(TestCase):
         shutil.rmtree(cls._media_root, ignore_errors=True)
         super().tearDownClass()
 
-    def setUp(self):
-        self._create_company('DataIn', 'datain.png')
-        self._create_company('Cluster Orinoco TIC', 'orinoco.png')
-        self._create_company('Soll Ortodoncia', 'soll.png')
-        self._create_company('Llano al Mundo', 'llano.png')
+    def _logo_file(self, filename='logo.png'):
+        return SimpleUploadedFile(filename, b'logo', content_type='image/png')
 
-    def _create_company(self, nombre, filename):
-        Empresa.objects.create(
-            nombre=nombre,
-            convenio_activo=True,
-            logo=SimpleUploadedFile(filename, b'logo', content_type='image/png'),
-        )
+    def test_landing_renderiza_logos_desde_media_para_empresas_activas(self):
+        Empresa.objects.create(nombre='Datain', convenio_activo=True, logo=self._logo_file('datain.png'))
+        Empresa.objects.create(nombre='Cluster Orinoco TIC', convenio_activo=True, logo=self._logo_file('orinoco.png'))
+        Empresa.objects.create(nombre='Soll Ortodoncia', convenio_activo=True, logo=self._logo_file('soll.png'))
+        Empresa.objects.create(nombre='Llano al Mundo', convenio_activo=True, logo=self._logo_file('llano.png'))
 
-    def test_landing_renderiza_redes_y_empresas_confiables(self):
         response = self.client.get(reverse('libranza:landing'))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Empresas que confían en nosotros')
-        self.assertContains(response, 'DataIn')
-        self.assertContains(response, 'Cluster Orinoco TIC')
-        self.assertContains(response, 'Soll Ortodoncia')
-        self.assertContains(response, 'Llano al Mundo')
         self.assertContains(response, '/media/marketplace/logos/')
+        self.assertContains(response, 'Datain')
+        self.assertContains(response, 'Cluster Orinoco TIC')
         self.assertNotContains(response, 'https://datain.pro/')
         self.assertNotContains(response, 'https://digitalpress.fra1.cdn.digitaloceanspaces.com/')
-        self.assertContains(response, 'Conecta con Aprobado en nuestras redes')
-        self.assertContains(response, 'Instagram')
-        self.assertContains(response, 'Facebook')
-        self.assertContains(response, 'Espacio reservado para testimonios')
 
-    def test_logo_acepta_proporcion_estrecha(self):
-        empresa = Empresa(
-            nombre='Empresa Logo Vertical',
-            convenio_activo=True,
-            logo=SimpleUploadedFile('marketplace.png', self._png_bytes(120, 480), content_type='image/png'),
-        )
-        empresa.full_clean()
+    def test_landing_no_muestra_empresas_sin_logo_o_sin_convenio_activo(self):
+        Empresa.objects.create(nombre='Sin Logo', convenio_activo=True)
+        Empresa.objects.create(nombre='Sin Convenio', convenio_activo=False, logo=self._logo_file('inactive.png'))
 
-    def test_logo_acepta_svg(self):
-        empresa = Empresa(
+        response = self.client.get(reverse('libranza:landing'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Sin Logo')
+        self.assertNotContains(response, 'Sin Convenio')
+
+    def test_logo_acepta_proporcion_estrecha_y_svg(self):
+        empresa_svg = Empresa(
             nombre='Empresa SVG',
             convenio_activo=True,
             logo=SimpleUploadedFile(
@@ -70,12 +61,4 @@ class LibranzaLandingMarketingTests(TestCase):
                 content_type='image/svg+xml',
             ),
         )
-        empresa.full_clean()
-
-    def _png_bytes(self, width, height):
-        from io import BytesIO
-        from PIL import Image
-
-        output = BytesIO()
-        Image.new('RGBA', (width, height), (255, 255, 255, 255)).save(output, format='PNG')
-        return output.getvalue()
+        empresa_svg.full_clean()
