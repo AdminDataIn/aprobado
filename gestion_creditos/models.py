@@ -56,7 +56,7 @@ class Empresa(models.Model):
     whatsapp_contacto = models.CharField(max_length=20, blank=True)
     logo = models.ImageField(
         upload_to='marketplace/logos/',
-        validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'webp'])],
+        validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'webp', 'svg'])],
         blank=True,
         null=True
     )
@@ -96,30 +96,33 @@ class Empresa(models.Model):
 
     def clean(self):
         super().clean()
-        if not self.logo:
+        self._validate_logo_field(self.logo, 'logo')
+
+    def _validate_logo_field(self, field, field_name):
+        if not field:
             return
 
         max_logo_bytes = 2 * 1024 * 1024
-        if self.logo.size > max_logo_bytes:
-            raise ValidationError({'logo': 'El logo no debe superar 2 MB.'})
+        if field.size > max_logo_bytes:
+            raise ValidationError({field_name: 'El logo no debe superar 2 MB.'})
+
+        filename = (getattr(field, 'name', '') or '').lower()
+        if filename.endswith('.svg'):
+            return
 
         try:
             from PIL import Image
 
-            image = Image.open(self.logo)
+            image = Image.open(field)
             width, height = image.size
-            self.logo.seek(0)
+            field.seek(0)
         except Exception as exc:
-            raise ValidationError({'logo': 'No pudimos procesar el logo. Usa una imagen valida.'}) from exc
+            raise ValidationError({field_name: 'No pudimos procesar el logo. Usa una imagen valida.'}) from exc
 
         if width < 120 or height < 120:
-            raise ValidationError({'logo': 'El logo debe tener al menos 120x120 px.'})
+            raise ValidationError({field_name: 'El logo debe tener al menos 120x120 px.'})
         if width > 2400 or height > 2400:
-            raise ValidationError({'logo': 'El logo no debe superar 2400x2400 px.'})
-
-        ratio = width / float(height)
-        if ratio < 1 or ratio > 3:
-            raise ValidationError({'logo': 'El logo debe estar entre proporcion 1:1 y 3:1.'})
+            raise ValidationError({field_name: 'El logo no debe superar 2400x2400 px.'})
 
     class Meta:
         ordering = ['nombre']

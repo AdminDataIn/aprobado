@@ -126,6 +126,7 @@ body.marketplace {
     background: rgba(255, 255, 255, 0.92);
     border: 1px solid var(--mp-border);
     box-shadow: var(--mp-shadow-soft);
+    overflow: hidden;
 }
 
 .mp-company-hero-logo img {
@@ -754,6 +755,7 @@ body.marketplace {
     background: #fff;
     border: 1px solid rgba(148, 163, 184, 0.22);
     padding: 3px;
+    overflow: hidden;
 }
 
 .mp-company-mini-logo img {
@@ -978,6 +980,7 @@ body.marketplace {
     font-weight: 800;
     flex-shrink: 0;
     letter-spacing: 0.04em;
+    overflow: hidden;
 }
 
 .mp-ally-logo-badge.is-logo {

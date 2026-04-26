@@ -543,6 +543,8 @@ def _build_landing_trusted_companies():
             logo_url = company.logo.url
         except Exception:
             continue
+        if not logo_url:
+            continue
         trusted_companies.append({
             'nombre': company.nombre,
             'logo_url': logo_url,

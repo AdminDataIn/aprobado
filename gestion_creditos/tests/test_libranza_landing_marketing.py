@@ -51,3 +51,31 @@ class LibranzaLandingMarketingTests(TestCase):
         self.assertContains(response, 'Instagram')
         self.assertContains(response, 'Facebook')
         self.assertContains(response, 'Espacio reservado para testimonios')
+
+    def test_logo_acepta_proporcion_estrecha(self):
+        empresa = Empresa(
+            nombre='Empresa Logo Vertical',
+            convenio_activo=True,
+            logo=SimpleUploadedFile('marketplace.png', self._png_bytes(120, 480), content_type='image/png'),
+        )
+        empresa.full_clean()
+
+    def test_logo_acepta_svg(self):
+        empresa = Empresa(
+            nombre='Empresa SVG',
+            convenio_activo=True,
+            logo=SimpleUploadedFile(
+                'marketplace.svg',
+                b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 40"></svg>',
+                content_type='image/svg+xml',
+            ),
+        )
+        empresa.full_clean()
+
+    def _png_bytes(self, width, height):
+        from io import BytesIO
+        from PIL import Image
+
+        output = BytesIO()
+        Image.new('RGBA', (width, height), (255, 255, 255, 255)).save(output, format='PNG')
+        return output.getvalue()

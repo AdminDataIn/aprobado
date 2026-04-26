@@ -332,7 +332,9 @@ class EmpresaAdmin(admin.ModelAdmin):
                 'descripcion_marketplace', 'whatsapp_contacto', 'logo',
                 'correo_contacto', 'telefono_contacto',
                 'mp_user_id', 'mp_access_token', 'marketplace_fee_percent', 'pagos_habilitados',
-            )
+            ),
+            'description': 'Usa "Logo" como fuente única para marketplace y para la sección de empresas que confían '
+                           'en nosotros. La presentación se controla desde frontend.',
         }),
     )
 
