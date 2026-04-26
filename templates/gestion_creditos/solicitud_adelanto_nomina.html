@@ -5,7 +5,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Adelanto de nomina - Aprobado</title>
+    <title>Adelanto de nómina - Aprobado</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
     <style>
@@ -183,10 +183,17 @@
             }
             .adelanto-kpis,
             .adelanto-breakdown {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 0.85rem;
             }
             .adelanto-hero-title {
                 font-size: 2rem;
+            }
+        }
+        @media (max-width: 480px) {
+            .adelanto-kpis,
+            .adelanto-breakdown {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -198,10 +205,10 @@
     <main class="adelanto-shell">
         <section class="adelanto-card">
             <span class="adelanto-badge">Producto de libranza</span>
-            <h1 class="adelanto-hero-title">Adelanto de nomina por 5 dias</h1>
+            <h1 class="adelanto-hero-title">Adelanto de nómina por 5 días</h1>
             <p class="adelanto-hero-copy">
-                Este flujo se gestiona por separado del credito tradicional. Primero calculamos tu estimado, luego validamos
-                elegibilidad, pasa a revision del pagador y finalmente a firma y desembolso.
+                Este flujo se gestiona por separado del crédito tradicional. Primero calculamos tu estimado, luego validamos
+                elegibilidad, pasa a revisión del pagador y finalmente a firma y desembolso.
             </p>
 
             {% if not eligibility.eligible %}
@@ -212,7 +219,7 @@
 
             {% if adelanto_actual %}
             <div class="adelanto-alert info">
-                <strong>Ultima solicitud registrada:</strong> {{ adelanto_actual.numero_credito }} en estado
+                <strong>Última solicitud registrada:</strong> {{ adelanto_actual.numero_credito }} en estado
                 <strong>{{ adelanto_actual.get_estado_display }}</strong>.
             </div>
             {% endif %}
@@ -245,7 +252,7 @@
                 <div class="adelanto-field">
                     <label for="{{ form.monto_solicitado.id_for_label }}">{{ form.monto_solicitado.label }}</label>
                     {{ form.monto_solicitado }}
-                    <small id="adelanto-monto-helper">Maximo disponible: ${{ simulacion.monto_bruto_adelanto|floatformat:0|intcomma }}</small>
+                    <small id="adelanto-monto-helper">Máximo disponible: ${{ simulacion.monto_bruto_adelanto|floatformat:0|intcomma }}</small>
                     {% if form.monto_solicitado.errors %}{{ form.monto_solicitado.errors }}{% endif %}
                 </div>
                 <div class="adelanto-field">
@@ -276,28 +283,28 @@
                     <strong>${{ simulacion.valor_diario_estimado|floatformat:0|intcomma }}</strong>
                 </div>
                 <div class="adelanto-breakdown-item">
-                    <span>Comision</span>
+                    <span>Costo de originación</span>
                     <strong>${{ simulacion.comision|floatformat:0|intcomma }}</strong>
                 </div>
                 <div class="adelanto-breakdown-item">
-                    <span>IVA comision</span>
+                    <span>IVA sobre costo de originación</span>
                     <strong>${{ simulacion.iva_comision|floatformat:0|intcomma }}</strong>
                 </div>
                 <div class="adelanto-breakdown-item">
-                    <span>Interes NM {{ simulacion.tasa_mensual|floatformat:1 }}</span>
+                    <span>Interés NM {{ simulacion.tasa_mensual|floatformat:1 }}</span>
                     <strong>${{ simulacion.interes|floatformat:0|intcomma }}</strong>
                 </div>
                 <div class="adelanto-breakdown-item">
-                    <span>Descuento estimado por nomina</span>
+                    <span>Descuento estimado por nómina</span>
                     <strong>${{ simulacion.descuento_nomina_estimado|floatformat:0|intcomma }}</strong>
                 </div>
             </div>
 
             <hr style="border-color:rgba(255,255,255,0.12);margin:1.4rem 0;">
-            <h3 style="margin-top:0;">Como funciona</h3>
+            <h3 style="margin-top:0;">Cómo funciona</h3>
             <ul class="adelanto-side-list">
-                <li>Confirmamos que tu empresa tenga convenio activo y que tu vinculo haya sido cargado por el pagador.</li>
-                <li>Validamos minimo 30 dias desde tu alta en Aprobado.</li>
+                <li>Confirmamos que tu empresa tenga convenio activo y que tu vínculo haya sido cargado por el pagador.</li>
+                <li>Validamos mínimo 30 días desde tu alta en Aprobado.</li>
                 <li>El pagador revisa capacidad de descuento, monto solicitado y soportes del empleado.</li>
                 <li>Si aprueba, el flujo pasa a firma y luego a transferencia.</li>
             </ul>
@@ -316,7 +323,7 @@
 
         function parseMoney(value) {
             const digits = String(value || '').replace(/\D/g, '');
-            return digits  parseInt(digits, 10) : 0;
+            return digits ? parseInt(digits, 10) : 0;
         }
 
         function formatMoney(value) {
@@ -331,8 +338,8 @@
             moneyInput.classList.toggle('is-invalid', exceeds);
             if (helper) {
                 helper.textContent = exceeds
-                     `El monto no puede superar ${maxAmount.toLocaleString('es-CO')}.`
-                    : `Maximo disponible: ${{ simulacion.monto_bruto_adelanto|floatformat:0|intcomma }}`;
+                    ? `El monto no puede superar ${maxAmount.toLocaleString('es-CO')}.`
+                    : `Máximo disponible: ${{ simulacion.monto_bruto_adelanto|floatformat:0|intcomma }}`;
                 helper.classList.toggle('is-error', exceeds);
             }
             return !exceeds;

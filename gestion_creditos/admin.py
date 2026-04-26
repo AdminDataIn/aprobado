@@ -28,10 +28,10 @@ from usuarios.investor_activation_service import enviar_invitacion_inversionista
 
 # Hotfix de etiquetas con tildes para el index de admin.
 # Evita tocar masivamente cadenas en modelos por ahora.
-Credito._meta.verbose_name = 'CrÃ©dito'
-Credito._meta.verbose_name_plural = 'CrÃ©ditos'
-Pagare._meta.verbose_name = 'PagarÃ©'
-Pagare._meta.verbose_name_plural = 'PagarÃ©s'
+Credito._meta.verbose_name = 'Crédito'
+Credito._meta.verbose_name_plural = 'Créditos'
+Pagare._meta.verbose_name = 'Pagaré'
+Pagare._meta.verbose_name_plural = 'Pagarés'
 
 #? --------- INLINE PARA IMÃGENES DEL NEGOCIO ------------
 class ImagenNegocioInline(admin.TabularInline):
@@ -55,7 +55,7 @@ class CreditoEmprendimientoInline(admin.StackedInline):
     fk_name = 'credito'
     #! Hacemos los campos de solicitud readonly una vez creados (excepto numero_cedula y celular_wh para correcciones)
     readonly_fields = ('nombre', 'fecha_nac', 'direccion', 'estado_civil', 'numero_personas_cargo', 'nombre_negocio', 'ubicacion_negocio', 'tiempo_operando', 'dias_trabajados_sem', 'prod_serv_ofrec', 'ingresos_prom_mes', 'cli_aten_day', 'inventario', 'nomb_ref_per1', 'cel_ref_per1', 'rel_ref_per1', 'nomb_ref_cl1', 'cel_ref_cl1', 'rel_ref_cl1', 'ref_conoc_lid_com', 'foto_negocio', 'desc_fotos_neg', 'tipo_cta_mno', 'ahorro_tand_alc', 'depend_h', 'desc_cred_nec', 'redes_soc', 'fotos_prod', 'puntaje', 'puntaje_imagenes', 'datos_scoring_imagenes')
-    # Agregar el inline de imÃ¡genes dentro del inline de emprendimiento
+    # Agregar el inline de imágenes dentro del inline de emprendimiento
     inlines = [ImagenNegocioInline]
 
 #? --------- ADMINISTRACION DE CREDITOS ------------
@@ -78,7 +78,7 @@ class CreditoAdmin(admin.ModelAdmin):
     list_filter = ('linea', 'estado', 'fecha_solicitud')
     search_fields = ('usuario__username', 'numero_credito')
     readonly_fields = ('numero_credito', 'fecha_solicitud', 'fecha_actualizacion', 'linea', 'usuario')
-    inlines = [] #! Inlines se determinan dinÃ¡micamente
+    inlines = [] #! Inlines se determinan dinámicamente
 
     def get_readonly_fields(self, request, obj=None):
         # Inicia con los campos de solo lectura definidos en la clase
@@ -100,31 +100,31 @@ class CreditoAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         """
-        LÃ³gica de negocio al aprobar un crÃ©dito de emprendimiento.
+        Lógica de negocio al aprobar un crédito de emprendimiento.
         """
         #! Guardar el objeto principal (Credito) primero
         super().save_model(request, obj, form, change)
 
-        #! Comprobar si el estado se ha cambiado a APROBADO y si es un crÃ©dito de emprendimiento
+        #! Comprobar si el estado se ha cambiado a APROBADO y si es un crédito de emprendimiento
         if ('estado' in form.changed_data and
                 obj.estado == Credito.EstadoCredito.APROBADO and
                 obj.linea == Credito.LineaCredito.EMPRENDIMIENTO):
             
             detalle = getattr(obj, 'detalle_emprendimiento', None)
             
-            #? Asegurarse de que este proceso solo se ejecute una vez (cuando monto_aprobado no estÃ¡ seteado)
+            #? Asegurarse de que este proceso solo se ejecute una vez (cuando monto_aprobado no está seteado)
             if detalle and detalle.monto_aprobado is None:
                 
-                #? LÃ³gica de negocio para calcular el valor de la cuota.
+                #? Lógica de negocio para calcular el valor de la cuota.
                 if detalle.plazo > 0:
                     valor_cuota_calculado = detalle.valor_credito / detalle.plazo
                 else:
                     valor_cuota_calculado = detalle.valor_credito
 
-                #? Calcula la fecha del primer pago (ej: 30 dÃ­as desde hoy)
+                #? Calcula la fecha del primer pago (ej: 30 días desde hoy)
                 fecha_primer_pago = timezone.now().date() + timedelta(days=30)
 
-                #? Actualizar el detalle del crÃ©dito de emprendimiento
+                #? Actualizar el detalle del crédito de emprendimiento
                 detalle.monto_aprobado = detalle.valor_credito
                 detalle.saldo_pendiente = detalle.valor_credito
                 detalle.valor_cuota = valor_cuota_calculado
@@ -134,7 +134,7 @@ class CreditoAdmin(admin.ModelAdmin):
 @admin.register(CreditoEmprendimiento)
 class CreditoEmprendimientoAdmin(admin.ModelAdmin):
     """
-    Admin dedicado para corregir datos errÃ³neos en CreditoEmprendimiento.
+    Admin dedicado para corregir datos erróneos en CreditoEmprendimiento.
     Permite modificar campos como numero_cedula y celular_wh directamente.
     """
     list_display = ('credito_numero', 'nombre', 'numero_cedula', 'celular_wh', 'nombre_negocio', 'fecha_solicitud')
@@ -143,14 +143,14 @@ class CreditoEmprendimientoAdmin(admin.ModelAdmin):
     readonly_fields = ('credito', 'fecha_nac', 'puntaje', 'puntaje_imagenes', 'datos_scoring_imagenes')
 
     fieldsets = (
-        ('InformaciÃ³n del CrÃ©dito', {
+        ('Información del Crédito', {
             'fields': ('credito',)
         }),
         ('Datos Personales (Editable para Correcciones)', {
             'fields': ('nombre', 'numero_cedula', 'celular_wh', 'fecha_nac', 'direccion', 'estado_civil', 'numero_personas_cargo'),
-            'description': 'Estos campos pueden ser editados para corregir datos errÃ³neos ingresados por error.'
+            'description': 'Estos campos pueden ser editados para corregir datos erróneos ingresados por error.'
         }),
-        ('InformaciÃ³n del Negocio', {
+        ('Información del Negocio', {
             'fields': ('nombre_negocio', 'ubicacion_negocio', 'tiempo_operando', 'dias_trabajados_sem',
                       'prod_serv_ofrec', 'ingresos_prom_mes', 'cli_aten_day', 'inventario'),
             'classes': ('collapse',)
@@ -160,12 +160,12 @@ class CreditoEmprendimientoAdmin(admin.ModelAdmin):
                       'nomb_ref_cl1', 'cel_ref_cl1', 'rel_ref_cl1', 'ref_conoc_lid_com'),
             'classes': ('collapse',)
         }),
-        ('InformaciÃ³n Adicional', {
+        ('Información Adicional', {
             'fields': ('tipo_cta_mno', 'ahorro_tand_alc', 'depend_h', 'desc_cred_nec',
                       'redes_soc', 'fotos_prod', 'desc_fotos_neg'),
             'classes': ('collapse',)
         }),
-        ('EvaluaciÃ³n y Scoring', {
+        ('Evaluación y Scoring', {
             'fields': ('puntaje', 'observaciones_analista', 'puntaje_imagenes', 'datos_scoring_imagenes'),
             'classes': ('collapse',)
         }),
@@ -173,7 +173,7 @@ class CreditoEmprendimientoAdmin(admin.ModelAdmin):
 
     def credito_numero(self, obj):
         return obj.credito.numero_credito
-    credito_numero.short_description = 'NÃºmero de CrÃ©dito'
+    credito_numero.short_description = 'Número de Crédito'
     credito_numero.admin_order_field = 'credito__numero_credito'
 
     def fecha_solicitud(self, obj):
@@ -186,25 +186,25 @@ class CreditoEmprendimientoAdmin(admin.ModelAdmin):
 
     actions = ['detectar_cedulas_invalidas']
 
-    @admin.action(description='Detectar cÃ©dulas con datos no numÃ©ricos')
+    @admin.action(description='Detectar cédulas con datos no numéricos')
     def detectar_cedulas_invalidas(self, request, queryset):
         """
-        Detecta y muestra los registros con cÃ©dulas que contienen datos no numÃ©ricos.
+        Detecta y muestra los registros con cédulas que contienen datos no numéricos.
         """
         invalidos = []
         for obj in queryset:
-            # Verificar si numero_cedula contiene caracteres no numÃ©ricos
+            # Verificar si numero_cedula contiene caracteres no numéricos
             if not obj.numero_cedula.isdigit():
-                invalidos.append(f"{obj.credito.numero_credito}: '{obj.nombre}' tiene cÃ©dula invÃ¡lida '{obj.numero_cedula}'")
+                invalidos.append(f"{obj.credito.numero_credito}: '{obj.nombre}' tiene cédula inválida '{obj.numero_cedula}'")
 
         if invalidos:
             self.message_user(
                 request,
-                f"Se encontraron {len(invalidos)} registros con cÃ©dulas invÃ¡lidas:\n" + "\n".join(invalidos),
+                f"Se encontraron {len(invalidos)} registros con cédulas inválidas:\n" + "\n".join(invalidos),
                 level='warning'
             )
         else:
-            self.message_user(request, "No se encontraron cÃ©dulas invÃ¡lidas en la selecciÃ³n.", level='success')
+            self.message_user(request, "No se encontraron cédulas inválidas en la selección.", level='success')
 
 
 class EmpresaReferidaFilter(admin.SimpleListFilter):
@@ -816,15 +816,15 @@ class NotificacionAdmin(admin.ModelAdmin):
     list_per_page = 25
 
     fieldsets = (
-        ('InformaciÃ³n General', {
+        ('Información General', {
             'fields': ('usuario', 'tipo', 'titulo', 'mensaje')
         }),
         ('Estado', {
             'fields': ('leida', 'fecha_creacion', 'fecha_leida')
         }),
-        ('AcciÃ³n', {
+        ('Acción', {
             'fields': ('url',),
-            'description': 'URL a la que redirige cuando el usuario hace clic en la notificaciÃ³n'
+            'description': 'URL a la que redirige cuando el usuario hace clic en la notificación'
         }),
     )
 
@@ -845,17 +845,17 @@ class PagareAdmin(admin.ModelAdmin):
     )
 
     fieldsets = (
-        ('InformaciÃ³n del PagarÃ©', {
+        ('Información del Pagaré', {
             'fields': ('numero_pagare', 'credito', 'estado', 'version_plantilla')
         }),
         ('Archivos PDF', {
             'fields': ('archivo_pdf', 'archivo_pdf_firmado', 'hash_pdf')
         }),
-        ('IntegraciÃ³n ZapSign', {
+        ('Integración ZapSign', {
             'fields': ('zapsign_doc_token', 'zapsign_sign_url', 'zapsign_signed_file_url', 'zapsign_status'),
             'classes': ('collapse',)
         }),
-        ('Fechas y AuditorÃ­a', {
+        ('Fechas y Auditoría', {
             'fields': ('fecha_creacion', 'fecha_envio', 'fecha_firma', 'fecha_rechazo', 'creado_por')
         }),
         ('Evidencia Forense', {
@@ -878,16 +878,16 @@ class ZapSignWebhookLogAdmin(admin.ModelAdmin):
     list_per_page = 50
 
     fieldsets = (
-        ('InformaciÃ³n del Evento', {
+        ('Información del Evento', {
             'fields': ('doc_token', 'event', 'received_at', 'ip_address')
         }),
-        ('ValidaciÃ³n', {
+        ('Validación', {
             'fields': ('signature_valid', 'processed', 'error_message')
         }),
         ('Payload Completo', {
             'fields': ('payload', 'headers'),
             'classes': ('collapse',),
-            'description': 'Datos completos del webhook para auditorÃ­a'
+            'description': 'Datos completos del webhook para auditoría'
         }),
     )
 
@@ -898,4 +898,5 @@ class ZapSignWebhookLogAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         # Solo lectura
         return False
+
 

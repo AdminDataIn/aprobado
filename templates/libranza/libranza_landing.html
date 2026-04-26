@@ -203,7 +203,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                     <div class="libranza-adelanto-benefits">
                         <div class="libranza-adelanto-benefit">
                             <strong>Simulación clara</strong>
-                            <span>Mostramos bruto, comisión, IVA, interés NM {{ adelanto_tasa_mensual }} y neto final.</span>
+                            <span>Mostramos bruto, costo de originación, IVA, interés NM {{ adelanto_tasa_mensual }} y neto final.</span>
                         </div>
                         <div class="libranza-adelanto-benefit">
                             <strong>Decisión controlada</strong>
@@ -260,8 +260,8 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                             <div class="libranza-adelanto-result-grid">
                                 <div><span>Monto bruto</span><strong id="adelanto-bruto">$0</strong></div>
                                 <div><span>Valor diario</span><strong id="adelanto-diario">$0</strong></div>
-                                <div><span>Comisión {{ adelanto_comision_percent }}%</span><strong id="adelanto-comision">$0</strong></div>
-                                <div><span>IVA comisión</span><strong id="adelanto-iva">$0</strong></div>
+                                <div><span>Costo de originación {{ adelanto_comision_percent }}%</span><strong id="adelanto-comision">$0</strong></div>
+                                <div><span>IVA sobre costo de originación</span><strong id="adelanto-iva">$0</strong></div>
                                 <div><span>Interés NM {{ adelanto_tasa_mensual }}</span><strong id="adelanto-interes">$0</strong></div>
                                 <div><span>Descuento estimado nómina</span><strong id="adelanto-descuento">$0</strong></div>
                             </div>
@@ -335,13 +335,13 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                         <li><strong>Plazo:</strong> De 1 a 6 meses</li>
                         <!-- MODIFICAR: Tipo de cuota -->
                         <li><strong>Cuota:</strong> Fija mensual descontada de nómina</li>
-                        <!-- MODIFICAR: Comisión -->
-                        <li><strong>Comisión:</strong> 10% + IVA (19%) sobre el monto</li>
+                        <!-- MODIFICAR: Costo de originación -->
+                        <li><strong>Costo de originación:</strong> 10% + IVA (19%) sobre el monto</li>
                         <!-- MODIFICAR: Tasa de interés si aplica -->
                         <li><strong>Tasa de interés:</strong> {{ libranza_tasa_mensual|default:"1.9" }}% efectiva mensual (EM)</li>
                     </ul>
                     <p class="libranza-note" style="margin-top: 1rem; background-color: #dbeafe; border-left: 4px solid #06b6d4;">
-                        <strong>💡 Transparencia total:</strong> En nuestro simulador verás el desglose completo: monto, comisión, IVA, intereses totales, y cuota mensual. Sin sorpresas, sin letra pequeña.
+                        <strong>💡 Transparencia total:</strong> En nuestro simulador verás el desglose completo: monto, costo de originación, IVA, intereses totales y cuota mensual. Sin sorpresas, sin letra pequeña.
                     </p>
                 </div>
 
@@ -360,6 +360,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         </div>
     </section>
 
+    {% if landing_trusted_companies %}
     <section class="libranza-trusted-section" id="empresas-confian">
         <div class="libranza-container">
             <div class="libranza-trusted-head">
@@ -383,6 +384,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
             </div>
         </div>
     </section>
+    {% endif %}
 
     <section class="libranza-testimonials-section" id="testimonios">
         <div class="libranza-container">
@@ -476,8 +478,8 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                     <div class="libranza-faq-answer">
                         <p><strong>Costos totales del crédito de libranza:</strong></p>
                         <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
-                            <li><strong>Comisión:</strong> 10% del monto solicitado (única vez)</li>
-                            <li><strong>IVA sobre comisión:</strong> 19% de la comisión</li>
+                            <li><strong>Costo de originación:</strong> 10% del monto solicitado (única vez)</li>
+                            <li><strong>IVA sobre costo de originación:</strong> 19% del costo de originación</li>
                             <li><strong>Intereses:</strong> {{ libranza_tasa_mensual|default:"1.9" }}% efectivo mensual sobre el capital financiado</li>
                         </ul>
                         <p style="margin-top: 0.75rem;"><strong>Ejemplo:</strong> Si solicitas $1.000.000 a 3 meses, pagarás aproximadamente $45.000 de intereses en total. Usa nuestro simulador para ver el desglose exacto de tu crédito.</p>
@@ -1133,6 +1135,13 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
             grid-template-columns: 1fr;
         }
 
+        .libranza-adelanto-fields,
+        .libranza-adelanto-result-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 480px) {
         .libranza-adelanto-fields,
         .libranza-adelanto-result-grid {
             grid-template-columns: 1fr;

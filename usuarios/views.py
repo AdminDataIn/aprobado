@@ -1,4 +1,4 @@
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+﻿from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from django.shortcuts import render, redirect
 from django.conf import settings
@@ -16,7 +16,7 @@ from decimal import Decimal
 from django.utils import timezone
 from django.db import transaction
 
-from gestion_creditos.models import AsesorComercial, Credito
+from gestion_creditos.models import AsesorComercial, Credito, Empresa
 from gestion_creditos.services.libranza_rules import LIBRANZA_MONTO_MAXIMO, LIBRANZA_MONTO_MINIMO_PUBLICO
 from gestion_creditos.services.tasa_service import obtener_tasa_credito
 from .forms import (
@@ -519,6 +519,37 @@ class MarketplaceAdminLoginView(MarketingLoginView):
 
 
 # Vista para la Landing Page de Crédito de Libranza
+def _build_landing_trusted_companies():
+    ordered_names = [
+        'DataIn',
+        'Cluster Orinoco TIC',
+        'Soll Ortodoncia',
+        'Llano al Mundo',
+    ]
+    companies = (
+        Empresa.objects
+        .filter(nombre__in=ordered_names)
+        .exclude(logo='')
+        .exclude(logo__isnull=True)
+        .only('nombre', 'logo')
+    )
+    companies_by_name = {company.nombre.lower(): company for company in companies}
+    trusted_companies = []
+    for name in ordered_names:
+        company = companies_by_name.get(name.lower())
+        if not company:
+            continue
+        try:
+            logo_url = company.logo.url
+        except Exception:
+            continue
+        trusted_companies.append({
+            'nombre': company.nombre,
+            'logo_url': logo_url,
+        })
+    return trusted_companies
+
+
 def libranza_landing(request):
     """
     Vista para mostrar la landing page del producto de Crédito de Libranza.
@@ -557,24 +588,7 @@ def libranza_landing(request):
                 'url': 'https://www.facebook.com/share/1AdTG9Qbim/?mibextid=wwXIfr',
             },
         ],
-        'landing_trusted_companies': [
-            {
-                'nombre': 'DataIn',
-                'logo_url': 'https://datain.pro/wp-content/uploads/2025/08/Logo-Datain.png',
-            },
-            {
-                'nombre': 'Cluster Orinoco TIC',
-                'logo_url': 'https://digitalpress.fra1.cdn.digitaloceanspaces.com/v38i30u/2023/06/orinocotic-h-3.svg',
-            },
-            {
-                'nombre': 'Soll Ortodoncia',
-                'logo_url': 'https://sollortodoncia.com/wp-content/uploads/2017/12/soll-ortodoncia-logo.png',
-            },
-            {
-                'nombre': 'Llano al Mundo',
-                'logo_url': 'https://llanoalmundo.com/wp-content/uploads/logo-llanoalmundo.png',
-            },
-        ],
+        'landing_trusted_companies': _build_landing_trusted_companies(),
         'landing_testimonials_enabled': False,
     }
     return render(request, 'libranza/libranza_landing.html', context)
@@ -914,3 +928,4 @@ class CustomLogoutView(LogoutView):
         request.session.pop('authenticated_product_flow', None)
         request.session.pop('producto_actual', None)
         return redirect(next_page)
+

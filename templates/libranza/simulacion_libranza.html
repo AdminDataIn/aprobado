@@ -1,21 +1,21 @@
 ﻿{% comment %}
 =============================================================================
-SIMULADOR EXCLUSIVO DE CRÃ‰DITO DE LIBRANZA
+SIMULADOR EXCLUSIVO DE CRÉDITO DE LIBRANZA
 =============================================================================
 Este simulador es exclusivo para el producto de Libranza.
 Utiliza el navbar y footer de Libranza (sin enlaces a emprendimiento).
 
-CARACTERÃSTICAS:
+CARACTERÍSTICAS:
 - Monto: $500.000 - $3.000.000
 - Plazo: 1 - 6 meses
-- ComisiÃ³n: 10% + IVA (19%)
-- Tasa de interÃ©s: {{ libranza_tasa_mensual|default:"1.9" }}% EM (Efectiva Mensual)
+- Costo de originación: 10% + IVA (19%)
+- Tasa de interés: {{ libranza_tasa_mensual|default:"1.9" }}% EM (Efectiva Mensual)
 
 MODIFICAR:
-- Rangos de monto: LÃ­neas 58-60
-- Rangos de plazo: LÃ­neas 75-77
-- Tasa de interÃ©s: LÃ­nea 182 (tasaMensual dinÃ¡mico desde configuraciÃ³n)
-- CÃ¡lculos (comisiÃ³n, IVA, etc.): LÃ­neas 167-201
+- Rangos de monto: Líneas 58-60
+- Rangos de plazo: Líneas 75-77
+- Tasa de interés: Línea 182 (tasaMensual dinámico desde configuración)
+- Cálculos (costo de originación, IVA, etc.): Líneas 167-201
 {% endcomment %}
 
 <!DOCTYPE html>
@@ -79,7 +79,7 @@ MODIFICAR:
                                     <div class="simulador-slider-title">¿Cuánto necesitas?</div>
                                     <div class="simulador-range-container">
                                         <div class="simulador-range-progress" id="simulador-progress-1"></div>
-                                        <!-- MODIFICAR: Monto mÃ­nimo, mÃ¡ximo y paso -->
+                                        <!-- MODIFICAR: Monto mínimo, máximo y paso -->
                                         <input type="range" min="{{ libranza_monto_minimo_publico|unlocalize }}" max="{{ libranza_monto_maximo|unlocalize }}" step="50000" value="{{ libranza_monto_maximo|unlocalize }}"
                                                class="simulador-range-input" id="simulador-range-1">
                                         <div class="simulador-range-tooltip" id="simulador-tooltip-1">$ {{ libranza_monto_maximo|floatformat:0|intcomma }}</div>
@@ -96,7 +96,7 @@ MODIFICAR:
                                     <div class="simulador-slider-title">¿En cuántos meses deseas pagarlo?</div>
                                     <div class="simulador-range-container">
                                         <div class="simulador-range-progress" id="simulador-progress-2"></div>
-                                        <!-- MODIFICAR: Plazo mÃ­nimo, mÃ¡ximo -->
+                                        <!-- MODIFICAR: Plazo mínimo, máximo -->
                                         <input type="range" min="1" max="6" step="1" value="6"
                                                class="simulador-range-input" id="simulador-range-2">
                                         <div class="simulador-range-tooltip" id="simulador-tooltip-2">6 meses</div>
@@ -108,7 +108,7 @@ MODIFICAR:
                                     </div>
                                 </div>
 
-                                <!-- Resultados del cÃ¡lculo - LIBRANZA -->
+                                <!-- Resultados del cálculo - LIBRANZA -->
                                 <div class="simulador-results-container">
                                     <div class="simulador-result-row">
                                         <label for="total-pr" class="simulador-result-label">Monto solicitado:</label>
@@ -176,8 +176,8 @@ MODIFICAR:
         );
 
         /**
-         * Calcula la cuota usando la fÃ³rmula de anualidad (amortizaciÃ³n francesa)
-         * MODIFICAR: Si cambias la tasa de interÃ©s, ajusta tasaMensual
+         * Calcula la cuota usando la fórmula de anualidad (amortización francesa)
+         * MODIFICAR: Si cambias la tasa de interés, ajusta tasaMensual
          */
         function calcularCuotaAnualidad(monto, tasaMensual, meses) {
             if (tasaMensual === 0) {
@@ -189,20 +189,20 @@ MODIFICAR:
         }
 
         /**
-         * Actualiza todos los cÃ¡lculos del simulador
+         * Actualiza todos los cálculos del simulador
          */
         function actualizarCalculosLibranza() {
             const montoSolicitado = parseFloat(slider1.value);
             const meses = parseFloat(slider2.value);
 
-            // MODIFICAR: Porcentajes aquÃ­
-            const comision = montoSolicitado * 0.10;           // 10% de comisiÃ³n
-            const ivaComision = comision * 0.19;                // 19% de IVA sobre comisiÃ³n
+            // MODIFICAR: Porcentajes aquí
+            const comision = montoSolicitado * 0.10;           // 10% de comisión
+            const ivaComision = comision * 0.19;                // 19% de IVA sobre costo de originación
 
-            // Capital financiado = monto + comisiÃ³n + IVA (esto es lo que se financia en cuotas)
+            // Capital financiado = monto + comisión + IVA (esto es lo que se financia en cuotas)
             const capitalFinanciado = montoSolicitado + comision + ivaComision;
 
-            // Tasa de interÃ©s mensual parametrizable para Libranza
+            // Tasa de interés mensual parametrizable para Libranza
             const tasaMensual = parseFloat('{{ libranza_tasa_decimal_js|default:"0.019" }}');
 
             // Calcular cuota mensual sobre el capital financiado
@@ -225,7 +225,7 @@ ivaComisionInput.value = formatColombianNumber(ivaComision);
             actualizarAplicarLink();
         }
 
-        // ConfiguraciÃ³n de sliders
+        // Configuración de sliders
         const slider1 = document.getElementById("simulador-range-1");
         const tooltip1 = document.getElementById("simulador-tooltip-1");
         const progress1 = document.getElementById("simulador-progress-1");
@@ -235,7 +235,7 @@ ivaComisionInput.value = formatColombianNumber(ivaComision);
         const progress2 = document.getElementById("simulador-progress-2");
 
         /**
-         * Formatea nÃºmeros en formato colombiano ($ 1.000.000,00)
+         * Formatea números en formato colombiano ($ 1.000.000,00)
          */
         function formatColombianNumber(num) {
             return new Intl.NumberFormat('es-CO', {
@@ -305,7 +305,7 @@ ivaComisionInput.value = formatColombianNumber(ivaComision);
         slider1.addEventListener("change", updateSlider1);
         slider2.addEventListener("change", updateSlider2);
 
-        // Inicializar sliders y cÃ¡lculos
+        // Inicializar sliders y cálculos
         updateSlider1();
         updateSlider2();
     });
@@ -315,4 +315,6 @@ ivaComisionInput.value = formatColombianNumber(ivaComision);
 <script src="{% static 'js/global_loader.js' %}"></script>
 </body>
 </html>
+
+
 
