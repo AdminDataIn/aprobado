@@ -25,3 +25,8 @@ class LibranzaFormJavaScriptTests(SimpleTestCase):
         self.assertIn("window.mostrarError = mostrarError;", source)
         self.assertIn("window.limpiarError = limpiarError;", source)
 
+    def test_form_uses_url_name_simulador_no_legacy_simulacion(self):
+        source = self._template_source()
+
+        self.assertIn("libranza:simulador", source)
+        self.assertNotIn("libranza:simulacion", source)

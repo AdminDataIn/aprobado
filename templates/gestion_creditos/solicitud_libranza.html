@@ -491,7 +491,7 @@ MODIFICAR:
                 <div class="form-main-grid">
                     <div class="form-steps-column">
                         <div class="simulation-return-bar">
-                            <a href="{% url 'libranza:simulacion' %}" id="volver-simulador-link" class="simulation-return-link">
+                            <a href="{% url 'libranza:simulador' %}" id="volver-simulador-link" class="simulation-return-link">
                                 <span aria-hidden="true">←</span>
                                 <span>Volver al simulador</span>
                             </a>
@@ -922,7 +922,7 @@ MODIFICAR:
         const cancelCameraButton = document.getElementById('cancelCameraButton');
         let lockedMonto = null;
         let lockedPlazo = null;
-        const simuladorBaseUrl = "{% url 'libranza:simulacion' %}";
+        const simuladorBaseUrl = "{% url 'libranza:simulador' %}";
         const volverSimuladorLink = document.getElementById('volver-simulador-link');
         let activeCameraInput = null;
         let activeCameraLabel = '';
