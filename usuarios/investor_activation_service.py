@@ -153,8 +153,8 @@ def enviar_invitacion_inversionista(usuario, created_by=None, force_new=False):
         'expiration_hours': expiration_hours,
         'expires_at': token.expires_at,
     }
-    html_content = render_to_string('emails/investor_activation.html', context)
-    text_content = render_to_string('emails/investor_activation.txt', context)
+    html_content = render_to_string('emails/inversionistas/investor_activation.html', context)
+    text_content = render_to_string('emails/inversionistas/investor_activation.txt', context)
     email = EmailMultiAlternatives(
         subject='Activa tu acceso como inversionista - Aprobado',
         body=text_content,

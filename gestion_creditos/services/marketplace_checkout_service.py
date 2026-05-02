@@ -187,8 +187,8 @@ def enviar_notificaciones_pedido_marketplace(pedido):
     }
 
     if pedido.empresa.correo_contacto:
-        body = render_to_string('emails/marketplace_order_company.txt', context)
-        html_body = render_to_string('emails/marketplace_order_company.html', context)
+        body = render_to_string('emails/marketplace/marketplace_order_company.txt', context)
+        html_body = render_to_string('emails/marketplace/marketplace_order_company.html', context)
         email = EmailMultiAlternatives(
             subject=f"Nuevo pedido marketplace {pedido.numero_pedido}",
             body=body,
@@ -199,8 +199,8 @@ def enviar_notificaciones_pedido_marketplace(pedido):
         email.send(fail_silently=True)
 
     if pedido.comprador_email:
-        body = render_to_string('emails/marketplace_order_customer.txt', context)
-        html_body = render_to_string('emails/marketplace_order_customer.html', context)
+        body = render_to_string('emails/marketplace/marketplace_order_customer.txt', context)
+        html_body = render_to_string('emails/marketplace/marketplace_order_customer.html', context)
         email = EmailMultiAlternatives(
             subject=f"Confirmacion de pedido {pedido.numero_pedido}",
             body=body,

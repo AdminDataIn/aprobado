@@ -1,0 +1,60 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Nuevo pedido recibido en marketplace{% endblock %}
+
+{% block email_content %}
+<div class="email-header">
+    <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" class="logo">
+</div>
+
+<div class="status-badge badge-blue">Marketplace</div>
+
+<div class="email-content">
+    <h1 class="greeting">Nuevo pedido recibido</h1>
+    <p class="subtitle">
+        Se registró una nueva solicitud desde el marketplace para <strong>{{ empresa.nombre }}</strong>.
+    </p>
+
+    <div class="info-card">
+        <table class="info-table">
+            <tr>
+                <td class="label">Pedido</td>
+                <td class="value">{{ pedido.numero_pedido }}</td>
+            </tr>
+            <tr>
+                <td class="label">Cliente</td>
+                <td class="value">{{ pedido.comprador_nombre }}</td>
+            </tr>
+            <tr>
+                <td class="label">Correo</td>
+                <td class="value">{{ pedido.comprador_email }}</td>
+            </tr>
+            <tr>
+                <td class="label">Teléfono</td>
+                <td class="value">{{ pedido.comprador_telefono }}</td>
+            </tr>
+            <tr>
+                <td class="label">Dirección</td>
+                <td class="value">{{ direccion_texto|default:"Pendiente de confirmar" }}</td>
+            </tr>
+            <tr>
+                <td class="label">Estado del pago</td>
+                <td class="value">{{ estado_pago }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="saldo-box" style="text-align:left;">
+        <p class="saldo-label">Detalle del pedido</p>
+        <table class="info-table" style="margin-top:8px;">
+            {% for line in items %}
+            <tr>
+                <td class="label">{{ line.titulo_snapshot }}<br><span style="font-size:12px; color:#94A3B8;">Cantidad: {{ line.cantidad }}</span></td>
+                <td class="value">${{ line.total_linea }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        <p style="margin:16px 0 0; font-size:14px; color:#111827;"><strong>Total comprador:</strong> ${{ pedido.total }}</p>
+    </div>
+</div>
+{% endblock %}

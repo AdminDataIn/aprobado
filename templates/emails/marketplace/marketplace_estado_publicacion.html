@@ -1,0 +1,47 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Actualización de publicación marketplace{% endblock %}
+
+{% block email_content %}
+<div class="email-header">
+    <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" class="logo">
+</div>
+
+<div class="status-badge badge-blue">Marketplace</div>
+
+<div class="email-content">
+    <h1 class="greeting">Actualización de publicación</h1>
+    <p class="subtitle">
+        Hola {{ usuario.get_username }}, la publicación <strong>{{ item.titulo }}</strong> cambió de estado.
+    </p>
+
+    <div class="info-card">
+        <table class="info-table">
+            <tr>
+                <td class="label">Empresa</td>
+                <td class="value">{{ empresa.nombre }}</td>
+            </tr>
+            <tr>
+                <td class="label">Tipo</td>
+                <td class="value">{{ item.get_tipo_display }}</td>
+            </tr>
+            <tr>
+                <td class="label">Estado</td>
+                <td class="value">{{ estado_nuevo_display }}</td>
+            </tr>
+            {% if comentario %}
+            <tr>
+                <td class="label">Motivo</td>
+                <td class="value">{{ comentario }}</td>
+            </tr>
+            {% endif %}
+        </table>
+    </div>
+
+    <div class="cta-box blue">
+        <p class="cta-title">Revisa tu panel marketplace</p>
+        <p class="cta-subtitle">Ingresa para validar el detalle de la publicación y continuar con la gestión.</p>
+        <a href="https://market.aprobado.com.co/marketplace/panel/" class="cta-button">Abrir panel</a>
+    </div>
+</div>
+{% endblock %}

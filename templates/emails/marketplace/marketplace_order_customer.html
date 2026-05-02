@@ -1,0 +1,54 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Confirmación de pedido marketplace{% endblock %}
+
+{% block email_content %}
+<div class="email-header">
+    <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" class="logo">
+</div>
+
+<div class="status-badge badge-blue">Marketplace</div>
+
+<div class="email-content">
+    <h1 class="greeting">Recibimos tu pedido</h1>
+    <p class="subtitle">
+        Tu solicitud ya quedó registrada y pronto te contactaremos con el siguiente paso.
+    </p>
+
+    <div class="info-card">
+        <table class="info-table">
+            <tr>
+                <td class="label">Pedido</td>
+                <td class="value">{{ pedido.numero_pedido }}</td>
+            </tr>
+            <tr>
+                <td class="label">Empresa</td>
+                <td class="value">{{ empresa.nombre }}</td>
+            </tr>
+            <tr>
+                <td class="label">Estado del pago</td>
+                <td class="value">{{ estado_pago }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="saldo-box" style="text-align:left;">
+        <p class="saldo-label">Detalle del pedido</p>
+        <table class="info-table" style="margin-top:8px;">
+            {% for line in items %}
+            <tr>
+                <td class="label">{{ line.titulo_snapshot }}<br><span style="font-size:12px; color:#94A3B8;">Cantidad: {{ line.cantidad }}</span></td>
+                <td class="value">${{ line.total_linea }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        <p style="margin:16px 0 0; font-size:14px; color:#111827;"><strong>Total:</strong> ${{ pedido.total }}</p>
+    </div>
+
+    <div class="cta-box blue">
+        <p class="cta-title">Sigue tu pedido</p>
+        <p class="cta-subtitle">Puedes volver al marketplace para revisar disponibilidad y próximos pasos.</p>
+        <a href="https://market.aprobado.com.co/marketplace/mis-pedidos/" class="cta-button">Ver mis pedidos</a>
+    </div>
+</div>
+{% endblock %}

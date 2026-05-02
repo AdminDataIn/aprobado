@@ -65,8 +65,8 @@ def _send_marketplace_welcome_email(user):
         'user': user,
         'display_name': user.first_name or user.get_full_name() or user.email,
     }
-    body = render_to_string('emails/marketplace_welcome.txt', context)
-    html_body = render_to_string('emails/marketplace_welcome.html', context)
+    body = render_to_string('emails/marketplace/marketplace_welcome.txt', context)
+    html_body = render_to_string('emails/marketplace/marketplace_welcome.html', context)
     email = EmailMultiAlternatives(
         subject='Bienvenido al marketplace de Aprobado',
         body=body,

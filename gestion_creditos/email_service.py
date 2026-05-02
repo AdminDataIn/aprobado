@@ -13,6 +13,7 @@ Configuración:
 """
 import logging
 import io
+from decimal import Decimal
 from django.core.mail import send_mail, EmailMultiAlternatives
 from django.template.loader import render_to_string, get_template
 from django.conf import settings
@@ -113,7 +114,7 @@ def enviar_notificacion_interna_nueva_solicitud(credito):
     }
 
     try:
-        html_content = render_to_string('emails/notificacion_interna_nueva_solicitud.html', context)
+        html_content = render_to_string('emails/internos/notificacion_interna_nueva_solicitud.html', context)
         email = EmailMultiAlternatives(
             subject=f"Nueva solicitud de crédito - {credito.get_linea_display()} - {credito.numero_credito}",
             body=(
@@ -191,23 +192,23 @@ def enviar_notificacion_cambio_estado(credito, nuevo_estado, motivo=""):
     configuraciones = {
         Credito.EstadoCredito.EN_REVISION: {
             'asunto': 'Tu solicitud de crédito ha sido recibida',
-            'template': 'emails/credito_en_revision.html',
+            'template': 'emails/usuarios/credito_en_revision.html',
         },
         Credito.EstadoCredito.RECHAZADO: {
             'asunto': 'Actualización sobre tu solicitud de crédito',
-            'template': 'emails/credito_rechazado.html',
+            'template': 'emails/usuarios/credito_rechazado.html',
         },
         Credito.EstadoCredito.ACTIVO: {
             'asunto': '¡Tu crédito ha sido desembolsado!',
-            'template': 'emails/credito_desembolsado.html',
+            'template': 'emails/usuarios/credito_desembolsado.html',
         },
         Credito.EstadoCredito.EN_MORA: {
             'asunto': 'Alerta: Tu crédito está en mora',
-            'template': 'emails/credito_en_mora.html',
+            'template': 'emails/usuarios/credito_en_mora.html',
         },
         Credito.EstadoCredito.PAGADO: {
             'asunto': '¡Felicitaciones! Has completado tu crédito',
-            'template': 'emails/credito_pagado.html',
+            'template': 'emails/usuarios/credito_pagado.html',
         },
     }
 
@@ -313,7 +314,7 @@ def enviar_recordatorio_pago(credito, dias_restantes):
     return enviar_email_html(
         destinatario=credito.usuario.email,
         asunto=asunto,
-        template_html='emails/recordatorio_pago.html',
+        template_html='emails/usuarios/recordatorio_pago.html',
         context=context
     )
 
@@ -359,7 +360,7 @@ def enviar_confirmacion_pago(
     return enviar_email_html(
         destinatario=destinatario or credito.usuario.email,
         asunto=asunto,
-        template_html='emails/confirmacion_pago.html',
+        template_html='emails/usuarios/confirmacion_pago.html',
         context=context
     )
 
@@ -386,7 +387,7 @@ def enviar_alerta_mora(credito, dias_mora):
     return enviar_email_html(
         destinatario=credito.usuario.email,
         asunto=asunto,
-        template_html='emails/alerta_mora.html',
+        template_html='emails/usuarios/alerta_mora.html',
         context=context
     )
 
@@ -437,7 +438,7 @@ def enviar_notificacion_solicitud_libranza_empresa(destinatario, empresa, credit
     return enviar_email_html(
         destinatario=destinatario,
         asunto=asunto,
-        template_html='emails/notificacion_solicitud_libranza_empresa.html',
+        template_html='emails/pagadores/notificacion_solicitud_libranza_empresa.html',
         context=context
     )
 
@@ -484,7 +485,7 @@ def enviar_resumen_operativo_pago_offline(*, credito, pago, usuario=None):
     }
 
     try:
-        html_content = render_to_string('emails/resumen_operativo_pago_offline.html', context)
+        html_content = render_to_string('emails/operacion/resumen_operativo_pago_offline.html', context)
         email = EmailMultiAlternatives(
             subject=f"Pago offline aplicado - {credito.numero_credito}",
             body=(
@@ -555,7 +556,7 @@ def enviar_resumen_operativo_carga_pagos(*, lote, pagos_aplicados, monto_total, 
     }
 
     try:
-        html_content = render_to_string('emails/resumen_operativo_pago_offline.html', context)
+        html_content = render_to_string('emails/operacion/resumen_operativo_pago_offline.html', context)
         email = EmailMultiAlternatives(
             subject=f"Carga de pagos confirmada - {lote.empresa.nombre} ({pagos_aplicados} aplicados)",
             body=(
@@ -622,7 +623,7 @@ def enviar_resumen_pago_masivo_pagador(*, lote, pagos_aplicados, monto_total, pa
     }
 
     try:
-        html_content = render_to_string('emails/resumen_operativo_pago_offline.html', context)
+        html_content = render_to_string('emails/operacion/resumen_operativo_pago_offline.html', context)
         email = EmailMultiAlternatives(
             subject=f"Carga de pagos confirmada - {lote.empresa.nombre} ({pagos_aplicados} aplicados)",
             body=(
@@ -654,20 +655,24 @@ def enviar_resumen_pago_masivo_pagador(*, lote, pagos_aplicados, monto_total, pa
         return False
 
 
-def enviar_resumen_cuotas_pendientes_pagador(*, empresa, cuotas, fecha_corte):
+def preparar_resumen_cuotas_pendientes_pagador(*, empresa, cuotas, fecha_corte):
     from usuarios.models import PerfilPagador
 
     if not cuotas:
-        return False
+        return {
+            'empresa': empresa,
+            'cuotas': [],
+            'destinatarios': [],
+            'internos': [],
+            'items': [],
+            'total': Decimal('0.00'),
+            'fecha_corte': fecha_corte,
+        }
 
     destinatarios = []
     for perfil in PerfilPagador.objects.select_related('usuario').filter(empresa=empresa, es_pagador=True):
         _agregar_destinatario(destinatarios, getattr(perfil.usuario, 'email', None))
     _agregar_destinatario(destinatarios, empresa.correo_contacto)
-
-    if not destinatarios:
-        logger.warning("No hay destinatarios pagador para resumen mensual de cuotas de %s.", empresa.nombre)
-        return False
 
     internos = list(getattr(settings, 'CREDIT_INTERNAL_NOTIFICATION_EMAILS', []))
     items = []
@@ -690,12 +695,55 @@ def enviar_resumen_cuotas_pendientes_pagador(*, empresa, cuotas, fecha_corte):
         'items': items,
         'total': total,
     }
-    html_content = render_to_string('emails/pagador_resumen_cuotas_pendientes.html', context)
+    try:
+        context['dashboard_url'] = _build_absolute_url(reverse('pagador:dashboard'))
+    except Exception:
+        context['dashboard_url'] = None
+    return {
+        'empresa': empresa,
+        'cuotas': list(cuotas),
+        'destinatarios': destinatarios,
+        'internos': internos,
+        'items': items,
+        'total': total,
+        'fecha_corte': fecha_corte,
+        'context': context,
+    }
+
+
+def enviar_resumen_cuotas_pendientes_pagador(
+    *,
+    empresa,
+    cuotas,
+    fecha_corte,
+    destinatarios_override=None,
+    cc_override=None,
+):
+    payload = preparar_resumen_cuotas_pendientes_pagador(
+        empresa=empresa,
+        cuotas=cuotas,
+        fecha_corte=fecha_corte,
+    )
+    destinatarios = (
+        list(destinatarios_override)
+        if destinatarios_override is not None
+        else payload['destinatarios']
+    )
+    internos = list(cc_override) if cc_override is not None else payload['internos']
+
+    if not destinatarios:
+        logger.warning("No hay destinatarios pagador para resumen mensual de cuotas de %s.", empresa.nombre)
+        return False
+
+    html_content = render_to_string(
+        'emails/pagadores/pagador_resumen_cuotas_pendientes.html',
+        payload['context'],
+    )
     body = (
         f"Empresa: {empresa.nombre}\n"
         f"Fecha de corte: {fecha_corte:%d/%m/%Y}\n"
-        f"Cuotas incluidas: {len(items)}\n"
-        f"Total estimado: ${total:,.2f}\n"
+        f"Cuotas incluidas: {len(payload['items'])}\n"
+        f"Total estimado: ${payload['total']:,.2f}\n"
     )
     try:
         email = EmailMultiAlternatives(
@@ -707,6 +755,14 @@ def enviar_resumen_cuotas_pendientes_pagador(*, empresa, cuotas, fecha_corte):
         )
         email.attach_alternative(html_content, 'text/html')
         email.send()
+        logger.info(
+            "Resumen mensual al pagador enviado | empresa=%s destinatarios=%s cc=%s cuotas=%s total=%s",
+            empresa.nombre,
+            destinatarios,
+            internos,
+            len(payload['items']),
+            payload['total'],
+        )
         return True
     except Exception as exc:
         logger.error("Error al enviar resumen mensual de cuotas al pagador: %s", exc)
@@ -730,7 +786,7 @@ def enviar_alerta_obligacion_pendiente_usuario(*, credito, cuota, dias_atraso):
     return enviar_email_html(
         destinatario=destinatario,
         asunto=f'Pon al dia tu cuota pendiente - {credito.numero_credito}',
-        template_html='emails/usuario_alerta_obligacion_pendiente.html',
+        template_html='emails/usuarios/usuario_alerta_obligacion_pendiente.html',
         context=context,
     )
 
@@ -760,7 +816,7 @@ def enviar_alerta_obligacion_pendiente_usuario(*, credito, cuota, dias_atraso):
     }
 
     try:
-        html_content = render_to_string('emails/resumen_operativo_pago_offline.html', context)
+        html_content = render_to_string('emails/operacion/resumen_operativo_pago_offline.html', context)
         email = EmailMultiAlternatives(
             subject=f"Carga de pagos confirmada - {lote.empresa.nombre} ({pagos_aplicados} aplicados)",
             body=(

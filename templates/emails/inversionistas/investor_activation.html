@@ -1,0 +1,41 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Activa tu acceso como inversionista{% endblock %}
+
+{% block email_content %}
+<div class="email-header">
+    <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" class="logo">
+</div>
+
+<div class="status-badge badge-blue">Acceso inversionista</div>
+
+<div class="email-content">
+    <h1 class="greeting">Activa tu cuenta</h1>
+    <p class="subtitle">
+        Dejamos listo tu acceso como inversionista. Define tu contraseña inicial desde el siguiente enlace seguro.
+    </p>
+
+    <div class="info-card">
+        <table class="info-table">
+            <tr>
+                <td class="label">Usuario</td>
+                <td class="value">{{ usuario.email }}</td>
+            </tr>
+            <tr>
+                <td class="label">Vigencia del enlace</td>
+                <td class="value">{{ expiration_hours }} horas</td>
+            </tr>
+            <tr>
+                <td class="label">Expira</td>
+                <td class="value">{{ expires_at|date:"d/m/Y H:i" }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="cta-box blue">
+        <p class="cta-title">Activa tu acceso</p>
+        <p class="cta-subtitle">El enlace es de un solo uso y quedará inactivo cuando definas tu contraseña.</p>
+        <a href="{{ activation_url }}" class="cta-button">Activar cuenta</a>
+    </div>
+</div>
+{% endblock %}

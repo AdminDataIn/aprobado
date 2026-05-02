@@ -69,7 +69,7 @@ def _enviar_notificacion_email_empresa(item, estado_nuevo, comentario=''):
             'comentario': comentario,
             'usuario': perfil.usuario,
         }
-        html_content = render_to_string('emails/marketplace_estado_publicacion.html', context)
+        html_content = render_to_string('emails/marketplace/marketplace_estado_publicacion.html', context)
         text_content = (
             f"Hola {perfil.usuario.get_username()},\n\n"
             f"Tu publicacion '{item.titulo}' cambio a estado: {item.get_estado_display()}.\n"

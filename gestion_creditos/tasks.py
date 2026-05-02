@@ -20,8 +20,8 @@ from .email_service import (
     enviar_recordatorio_pago,
     enviar_alerta_mora,
     enviar_notificacion_cambio_estado,
-    enviar_resumen_cuotas_pendientes_pagador,
 )
+from .services.pagador_notifications import enviar_resumenes_pagador
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +38,6 @@ def _usa_flujo_pagador_mensual(credito):
         Credito.LineaCredito.LIBRANZA,
         Credito.LineaCredito.ADELANTO_NOMINA,
     }
-
-
-def _es_ultimo_dia_del_mes(fecha):
-    return (fecha + timedelta(days=1)).month != fecha.month
 
 
 @shared_task(name='gestion_creditos.tasks.marcar_creditos_en_mora_task')
@@ -330,54 +326,14 @@ def generar_reporte_cartera_mensual():
 
 @shared_task(name='gestion_creditos.tasks.enviar_resumen_mensual_pagador_task')
 def enviar_resumen_mensual_pagador_task():
-    hoy = timezone.now().date()
-    if not getattr(settings, 'PAGADOR_MONTHLY_PENDING_NOTIFICATIONS_ENABLED', True):
-        return {'status': 'skipped', 'reason': 'disabled'}
-    if not _es_ultimo_dia_del_mes(hoy):
-        return {'status': 'skipped', 'reason': 'not_month_end'}
-
-    cuotas = (
-        CuotaAmortizacion.objects.filter(
-            pagada=False,
-            fecha_vencimiento__lte=hoy,
-            credito__linea__in=[
-                Credito.LineaCredito.LIBRANZA,
-                Credito.LineaCredito.ADELANTO_NOMINA,
-            ],
-            credito__estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA],
-        )
-        .select_related(
-            'credito__detalle_libranza__empresa',
-            'credito__detalle_adelanto_nomina__vinculo_laboral__empresa',
-            'credito__usuario',
-        )
-        .order_by('fecha_vencimiento', 'credito__numero_credito')
+    resultado = enviar_resumenes_pagador(
+        fecha_referencia=timezone.localdate(),
+        exigir_ventana_mensual=True,
+        include_internal_cc=True,
+        marcar_enviado=True,
     )
-
-    cuotas_por_empresa = {}
-    for cuota in cuotas:
-        ultima = cuota.fecha_ultimo_recordatorio_pagador
-        if ultima:
-            ultima_fecha = timezone.localtime(ultima).date()
-            if ultima_fecha.month == hoy.month and ultima_fecha.year == hoy.year:
-                continue
-        empresa = cuota.credito.empresa_relacionada
-        if not empresa:
-            continue
-        cuotas_por_empresa.setdefault(empresa.id, {'empresa': empresa, 'cuotas': []})
-        cuotas_por_empresa[empresa.id]['cuotas'].append(cuota)
-
-    enviados = 0
-    for data in cuotas_por_empresa.values():
-        empresa = data['empresa']
-        cuotas_empresa = data['cuotas']
-        if enviar_resumen_cuotas_pendientes_pagador(empresa=empresa, cuotas=cuotas_empresa, fecha_corte=hoy):
-            enviados += 1
-            CuotaAmortizacion.objects.filter(
-                pk__in=[cuota.pk for cuota in cuotas_empresa]
-            ).update(fecha_ultimo_recordatorio_pagador=timezone.now())
-
-    return {'status': 'success', 'empresas_notificadas': enviados, 'timestamp': timezone.now().isoformat()}
+    resultado['timestamp'] = timezone.now().isoformat()
+    return resultado
 
 
 @shared_task(name='gestion_creditos.tasks.enviar_alertas_usuario_cuota_pendiente_task')

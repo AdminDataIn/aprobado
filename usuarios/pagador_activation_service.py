@@ -173,8 +173,8 @@ def enviar_invitacion_activacion_pagador(perfil_pagador, created_by=None, force_
         'expires_at': token.expires_at,
     }
 
-    html_content = render_to_string('emails/pagador_activacion_cuenta.html', context)
-    text_content = render_to_string('emails/pagador_activacion_cuenta.txt', context)
+    html_content = render_to_string('emails/pagadores/pagador_activacion_cuenta.html', context)
+    text_content = render_to_string('emails/pagadores/pagador_activacion_cuenta.txt', context)
     email = EmailMultiAlternatives(
         subject=f"Activa tu acceso como pagador - {perfil_pagador.empresa.nombre}",
         body=text_content,
@@ -230,8 +230,8 @@ def enviar_reset_password_pagador(perfil_pagador, created_by=None, force_new=Fal
         'expires_at': token.expires_at,
     }
 
-    html_content = render_to_string('emails/pagador_reset_password.html', context)
-    text_content = render_to_string('emails/pagador_reset_password.txt', context)
+    html_content = render_to_string('emails/pagadores/pagador_reset_password.html', context)
+    text_content = render_to_string('emails/pagadores/pagador_reset_password.txt', context)
     email = EmailMultiAlternatives(
         subject=f"Restablece tu acceso como pagador - {perfil_pagador.empresa.nombre}",
         body=text_content,

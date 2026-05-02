@@ -198,8 +198,8 @@ def enviar_invitacion_activacion_ejecutivo(asesor, created_by=None, force_new=Fa
         'expiration_hours': expiration_hours,
         'expires_at': token.expires_at,
     }
-    html_content = render_to_string('emails/executive_activation.html', context)
-    text_content = render_to_string('emails/executive_activation.txt', context)
+    html_content = render_to_string('emails/ejecutivos/executive_activation.html', context)
+    text_content = render_to_string('emails/ejecutivos/executive_activation.txt', context)
     email = EmailMultiAlternatives(
         subject='Activa tu acceso como ejecutivo - Aprobado',
         body=text_content,
