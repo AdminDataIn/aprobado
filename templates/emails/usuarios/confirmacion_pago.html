@@ -1,0 +1,86 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Confirmación de pago - Aprobado{% endblock %}
+
+{% block email_content %}
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 24px 32px;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                    <td align="left" valign="top">
+                        <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" style="height: 32px; width: auto;">
+                    </td>
+                    <td align="right" valign="top">
+                        <div style="width: 40px; height: 40px; background-color: #D1FAE5; border-radius: 8px; display: inline-block; text-align: center; line-height: 40px;">
+                            <span style="color: #059669; font-size: 18px;">&#10003;</span>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 0 32px 16px 32px;">
+            <span style="display: inline-block; padding: 6px 12px; background-color: #D1FAE5; color: #059669; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Pago confirmado</span>
+        </td>
+    </tr>
+</table>
+
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 0 32px 32px 32px;">
+            <h1 style="font-size: 28px; font-weight: 700; color: #111827; margin: 0 0 8px 0; line-height: 1.2;">Gracias, {{ nombre_cliente }}</h1>
+            <p style="font-size: 15px; color: #6B7280; margin: 0 0 24px 0; line-height: 1.5;">Tu pago fue recibido y procesado correctamente.</p>
+
+            <div style="background-color: #F9FAFB; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                {% if referencia_pago %}
+                <p style="font-size: 12px; color: #6B7280; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.3px;">Referencia {{ referencia_pago }}</p>
+                {% else %}
+                <p style="font-size: 12px; color: #6B7280; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.3px;">Referencia PAY-{{ credito.id }}-{{ fecha_pago|date:"YmdHis"|default:"000000" }}</p>
+                {% endif %}
+                <p style="font-size: 32px; font-weight: 700; color: #059669; margin: 0 0 4px 0;">{{ monto_pagado }}</p>
+
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-top: 16px;">
+                    <tr>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #6B7280;">Crédito</td>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ numero_credito }}</td>
+                    </tr>
+                    {% if metodo_pago %}
+                    <tr>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #6B7280;">Método</td>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ metodo_pago }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if banco %}
+                    <tr>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #6B7280;">Banco</td>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ banco }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <td style="padding: 12px 0; font-size: 14px; color: #6B7280;">Fecha de pago</td>
+                        <td style="padding: 12px 0; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ fecha_pago|date:"d \\d\\e F \\d\\e Y"|default:"Hoy" }}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div style="background-color: #F9FAFB; border-radius: 12px; padding: 20px; text-align: center; margin: 24px 0;">
+                <p style="font-size: 12px; color: #6B7280; margin: 0 0 4px 0;">Saldo restante</p>
+                <p style="font-size: 28px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">{{ nuevo_saldo }}</p>
+                {% if fecha_proximo_pago %}
+                <p style="font-size: 12px; color: #9CA3AF; margin: 0;">Próxima cuota: {{ fecha_proximo_pago|date:"d \\d\\e F \\d\\e Y" }}</p>
+                {% endif %}
+            </div>
+
+            <div style="text-align: center; margin: 24px 0;">
+                <a href="{{ cta_url|default:'https://aprobado.com.co/libranza/login/' }}" style="display: inline-block; padding: 12px 32px; background-color: #111827; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600;">{{ cta_label|default:'Ver estado de cuenta' }}</a>
+                <p style="font-size: 12px; color: #6B7280; text-align: center; margin-top: 12px;">Guarda este correo como comprobante de pago.</p>
+            </div>
+        </td>
+    </tr>
+</table>
+{% endblock %}

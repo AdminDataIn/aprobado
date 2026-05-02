@@ -1,0 +1,53 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Solicitud no aprobada - Aprobado{% endblock %}
+
+{% block email_content %}
+<div class="email-header">
+    <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" class="logo">
+    <div class="header-icon" style="background-color: #FEE2E2; color: #DC2626;">
+        <span style="font-size: 18px;">&#10005;</span>
+    </div>
+</div>
+
+<div class="status-badge badge-gray">Solicitud no aprobada</div>
+
+<div class="email-content">
+    <h1 class="greeting">Hola {{ nombre_cliente }}</h1>
+    <p class="subtitle">
+        Revisamos tu solicitud y en este momento no fue posible aprobarla. Esto no bloquea futuras solicitudes si más
+        adelante cumples nuevamente los criterios de evaluación.
+    </p>
+
+    <div class="info-card">
+        <p class="info-label">Solicitud {{ numero_credito }}</p>
+        <table class="info-table" style="margin-top: 12px;">
+            <tr>
+                <td class="label">Estado</td>
+                <td class="value">No aprobada</td>
+            </tr>
+            <tr>
+                <td class="label">Motivo registrado</td>
+                <td class="value" style="text-align: left;">{{ motivo|default:"Documentación incompleta o criterios no cumplidos" }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="saldo-box" style="text-align: left;">
+        <p class="saldo-label">Qué puedes hacer ahora</p>
+        <p style="margin: 8px 0 0 0; color: #111827; font-size: 14px; line-height: 1.6;">
+            1. Verifica que tu información y documentos estén completos.<br>
+            2. Si tus condiciones cambian, podrás volver a solicitar el crédito más adelante.<br>
+            3. Conserva este correo como referencia del resultado de tu solicitud.
+        </p>
+    </div>
+
+    <div class="cta-box gray">
+        <p class="cta-title">Consulta el estado de tu solicitud</p>
+        <p class="cta-subtitle">Ingresa a tu panel para revisar el detalle asociado a esta solicitud.</p>
+        <a href="{{ cta_url|default:'https://aprobado.com.co/libranza/login/?next=/libranza/mi-credito/' }}" class="cta-button">
+            {{ cta_label|default:'Consultar estado' }}
+        </a>
+    </div>
+</div>
+{% endblock %}

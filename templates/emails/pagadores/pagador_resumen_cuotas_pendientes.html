@@ -1,0 +1,68 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Resumen mensual de obligaciones - Aprobado{% endblock %}
+
+{% block email_content %}
+<div class="email-header">
+    <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" class="logo">
+    <div class="header-icon" style="background-color: #DBEAFE; color: #2563EB;">
+        <span style="font-size: 18px;">&#9679;</span>
+    </div>
+</div>
+
+<div class="status-badge badge-blue">Resumen pagador</div>
+
+<div class="email-content">
+    <h1 class="greeting">Resumen mensual de obligaciones</h1>
+    <p class="subtitle">
+        Empresa: <strong>{{ empresa.nombre }}</strong><br>
+        Fecha de corte: <strong>{{ fecha_corte|date:"d/m/Y" }}</strong>
+    </p>
+
+    <div class="info-card">
+        <p class="info-label">Total estimado a gestionar</p>
+        <p class="info-amount">${{ total|floatformat:2 }}</p>
+        <p class="info-sublabel">{{ items|length }} cuotas pendientes incluidas en este corte.</p>
+    </div>
+
+    <p class="subtitle" style="margin-bottom: 20px;">
+        Revisa el detalle de cuotas pendientes y gestiona el pago correspondiente desde tu panel.
+    </p>
+
+    <table class="info-table" style="margin-top: 0; margin-bottom: 24px;">
+        <thead>
+            <tr>
+                <td class="label" style="font-weight: 700; padding-top: 0;">Cr&eacute;dito</td>
+                <td class="label" style="font-weight: 700; padding-top: 0;">Persona</td>
+                <td class="label" style="font-weight: 700; padding-top: 0;">Vencimiento</td>
+                <td class="value" style="font-weight: 700; padding-top: 0;">Monto</td>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td class="value" style="text-align: left; font-weight: 600;">{{ item.numero_credito }}</td>
+                <td class="label" style="color: #111827;">
+                    {{ item.nombre_cliente }}<br>
+                    <span style="color:#64748B; font-size: 12px;">{{ item.documento }}</span>
+                </td>
+                <td class="label">{{ item.fecha_vencimiento|date:"d/m/Y" }}</td>
+                <td class="value">${{ item.monto|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if dashboard_url %}
+    <div class="cta-box blue">
+        <p class="cta-title">Gestiona el pago desde tu panel</p>
+        <p class="cta-subtitle">Ingresa para revisar el detalle completo y continuar con la operaci&oacute;n.</p>
+        <a href="{{ dashboard_url }}" class="cta-button">Ir al panel del pagador</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block email_footer %}
+    {% include "emails/partials/footer_compact.html" %}
+{% endblock %}

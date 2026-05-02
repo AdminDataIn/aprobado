@@ -1,0 +1,38 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Cuota pendiente por regularizar{% endblock %}
+
+{% block email_content %}
+<div class="email-header">
+    <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" class="logo">
+</div>
+
+<div class="status-badge badge-yellow">Cuota pendiente</div>
+
+<div class="email-content">
+    <h1 class="greeting">Tienes una cuota pendiente por regularizar</h1>
+    <p class="subtitle">
+        Hola {{ nombre_cliente }}, han pasado <strong>10 d&iacute;as</strong> desde el cierre mensual informado a la empresa
+        y tu obligaci&oacute;n <strong>{{ credito.numero_credito }}</strong> sigue pendiente por regularizar.
+    </p>
+
+    <div class="info-card">
+        <table class="info-table">
+            <tr>
+                <td class="label">Fecha de vencimiento</td>
+                <td class="value">{{ cuota.fecha_vencimiento|date:"d/m/Y" }}</td>
+            </tr>
+            <tr>
+                <td class="label">Valor pendiente</td>
+                <td class="value">${{ restante|floatformat:2 }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="cta-box yellow">
+        <p class="cta-title">Revisa el estado de tu obligaci&oacute;n</p>
+        <p class="cta-subtitle">Valida con tu empresa el estado de este pago o ingresa a tu panel para revisar el detalle.</p>
+        <a href="https://aprobado.com.co/libranza/login/?next=/libranza/mi-credito/" class="cta-button">Consultar mi cr&eacute;dito</a>
+    </div>
+</div>
+{% endblock %}

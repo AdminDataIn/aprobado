@@ -1,0 +1,77 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Crédito desembolsado - Aprobado{% endblock %}
+
+{% block email_content %}
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 24px 32px;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                    <td align="left" valign="top">
+                        <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" style="height: 32px; width: auto;">
+                    </td>
+                    <td align="right" valign="top">
+                        <div style="width: 40px; height: 40px; background-color: #D1FAE5; border-radius: 8px; display: inline-block; text-align: center; line-height: 40px;">
+                            <span style="color: #059669; font-size: 18px;">&#10003;</span>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 0 32px 16px 32px;">
+            <span style="display: inline-block; padding: 6px 12px; background-color: #D1FAE5; color: #059669; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Crédito desembolsado</span>
+        </td>
+    </tr>
+</table>
+
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 0 32px 32px 32px;">
+            <h1 style="font-size: 28px; font-weight: 700; color: #111827; margin: 0 0 8px 0; line-height: 1.2;">Felicitaciones, {{ nombre_cliente }}</h1>
+            <p style="font-size: 15px; color: #6B7280; margin: 0 0 24px 0; line-height: 1.5;">Tu dinero está en camino. En las próximas horas hábiles verás reflejado el monto en tu cuenta.</p>
+
+            <div style="background-color: #F9FAFB; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                <p style="font-size: 12px; color: #6B7280; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.3px;">Crédito {{ numero_credito }}</p>
+                <p style="font-size: 32px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">${{ credito.monto_aprobado|floatformat:0|default:"0" }}</p>
+
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-top: 16px;">
+                    <tr>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #6B7280;">Fecha de desembolso</td>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ credito.fecha_desembolso|date:"d \\d\\e F \\d\\e Y"|default:"Pendiente" }}</td>
+                    </tr>
+                    {% if cuenta_destino_resumen %}
+                    <tr>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #6B7280;">Cuenta destino</td>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ cuenta_destino_resumen }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #6B7280;">Plazo</td>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ credito.plazo }} meses</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #6B7280;">Tasa de interés</td>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ credito.tasa_interes }}% M.V.</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 12px 0; font-size: 14px; color: #6B7280;">Primera cuota</td>
+                        <td style="padding: 12px 0; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ credito.fecha_proximo_pago|date:"d \\d\\e F \\d\\e Y"|default:"Por definir" }}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div style="background-color: #059669; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;">
+                <h3 style="font-size: 16px; font-weight: 700; color: #ffffff; margin: 0 0 8px 0;">Ya tienes tu crédito</h3>
+                <p style="font-size: 13px; color: rgba(255, 255, 255, 0.85); margin: 0 0 16px 0; line-height: 1.4;">Consulta tu plan de pagos y realiza tus pagos desde nuestra plataforma.</p>
+                <a href="https://aprobado.com.co/libranza/login/" style="display: inline-block; padding: 12px 32px; background-color: #ffffff; color: #111827; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600;">Ver plan de pagos</a>
+            </div>
+        </td>
+    </tr>
+</table>
+{% endblock %}

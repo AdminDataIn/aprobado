@@ -362,7 +362,10 @@
             <tr>
                 <td align="center">
                     <div class="email-container">
-                        {% block email_content %}{% endblock %}
+                        {% block email_content %}{% block content %}{% endblock %}{% endblock %}
+                        {% block email_footer %}
+                            {% include "emails/partials/footer_full.html" %}
+                        {% endblock %}
                     </div>
                 </td>
             </tr>

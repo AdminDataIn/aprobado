@@ -1,0 +1,27 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Bienvenido al marketplace de Aprobado{% endblock %}
+
+{% block email_content %}
+<div class="email-header">
+    <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" class="logo">
+    <div class="header-icon" style="background-color: #DBEAFE; color: #2563EB;">
+        <span style="font-size: 18px;">&#9679;</span>
+    </div>
+</div>
+
+<div class="status-badge badge-blue">Marketplace</div>
+
+<div class="email-content">
+    <h1 class="greeting">Tu cuenta ya est&aacute; lista</h1>
+    <p class="subtitle">
+        Hola {{ display_name }}, ya puedes comprar, registrar pedidos y seguir su estado desde el marketplace de Aprobado.
+    </p>
+
+    <div class="cta-box blue">
+        <p class="cta-title">Ingresa al marketplace</p>
+        <p class="cta-subtitle">Explora productos disponibles y gestiona tus pedidos desde una sola vista.</p>
+        <a href="https://market.aprobado.com.co/" class="cta-button">Ir al marketplace</a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,110 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Solicitud recibida - Aprobado{% endblock %}
+
+{% block email_content %}
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 24px 32px;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                    <td align="left" valign="top">
+                        <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" style="height: 32px; width: auto;">
+                    </td>
+                    <td align="right" valign="top">
+                        <div style="width: 40px; height: 40px; background-color: #DBEAFE; border-radius: 8px; display: inline-block; text-align: center; line-height: 40px;">
+                            <span style="color: #2563EB; font-size: 16px;">&#9679;</span>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 0 32px 16px 32px;">
+            <span style="display: inline-block; padding: 6px 12px; background-color: #DBEAFE; color: #2563EB; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Solicitud recibida</span>
+        </td>
+    </tr>
+</table>
+
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+        <td style="padding: 0 32px 32px 32px;">
+            <h1 style="font-size: 28px; font-weight: 700; color: #111827; margin: 0 0 8px 0; line-height: 1.2;">Hola {{ nombre_cliente }}</h1>
+            <p style="font-size: 15px; color: #6B7280; margin: 0 0 24px 0; line-height: 1.5;">Hemos recibido tu solicitud de crédito. Nuestro equipo la está evaluando.</p>
+
+            <div style="background-color: #F9FAFB; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                <p style="font-size: 12px; color: #6B7280; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.3px;">Solicitud {{ numero_credito }}</p>
+                <p style="font-size: 32px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">${{ credito.monto_solicitado|floatformat:0|default:"0" }}</p>
+                <p style="font-size: 13px; color: #9CA3AF; margin: 0;">{{ credito.fecha_solicitud|date:"d \\d\\e F \\d\\e Y"|default:"Hoy" }}</p>
+
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-top: 16px;">
+                    <tr>
+                        <td style="padding: 12px 0; font-size: 14px; color: #6B7280;">Cédula</td>
+                        <td style="padding: 12px 0; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ cedula_solicitante|default:"No registrada" }}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 12px 0; font-size: 14px; color: #6B7280;">Plazo solicitado</td>
+                        <td style="padding: 12px 0; font-size: 14px; color: #111827; font-weight: 600; text-align: right;">{{ plazo_solicitado_email|default:"-" }} meses</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div style="margin: 24px 0;">
+                <p style="font-size: 14px; font-weight: 600; color: #111827; margin: 0 0 16px 0;">Próximos pasos</p>
+
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 16px;">
+                    <tr>
+                        <td width="44" valign="top">
+                            <div style="width: 32px; height: 32px; background-color: #D1FAE5; border-radius: 50%; text-align: center; line-height: 32px;">
+                                <span style="color: #059669; font-size: 14px;">&#10003;</span>
+                            </div>
+                        </td>
+                        <td valign="top">
+                            <p style="font-size: 14px; font-weight: 600; color: #111827; margin: 0 0 2px 0;">Solicitud recibida</p>
+                            <p style="font-size: 12px; color: #6B7280; margin: 0;">Tu información está siendo procesada.</p>
+                        </td>
+                    </tr>
+                </table>
+
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 16px;">
+                    <tr>
+                        <td width="44" valign="top">
+                            <div style="width: 32px; height: 32px; background-color: #DBEAFE; border-radius: 50%; text-align: center; line-height: 32px;">
+                                <span style="color: #2563EB; font-size: 14px;">&#9711;</span>
+                            </div>
+                        </td>
+                        <td valign="top">
+                            <p style="font-size: 14px; font-weight: 600; color: #111827; margin: 0 0 2px 0;">En evaluación</p>
+                            <p style="font-size: 12px; color: #6B7280; margin: 0;">Respuesta estimada dentro de 24 horas.</p>
+                        </td>
+                    </tr>
+                </table>
+
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                    <tr>
+                        <td width="44" valign="top">
+                            <div style="width: 32px; height: 32px; background-color: #F3F4F6; border-radius: 50%; text-align: center; line-height: 32px;">
+                                <span style="color: #9CA3AF; font-size: 14px;">&#9744;</span>
+                            </div>
+                        </td>
+                        <td valign="top">
+                            <p style="font-size: 14px; font-weight: 600; color: #111827; margin: 0 0 2px 0;">Desembolso</p>
+                            <p style="font-size: 12px; color: #6B7280; margin: 0;">Si la solicitud es aprobada.</p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div style="background-color: #374151; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;">
+                <h3 style="font-size: 16px; font-weight: 700; color: #ffffff; margin: 0 0 8px 0;">Te mantendremos informado</h3>
+                <p style="font-size: 13px; color: rgba(255, 255, 255, 0.85); margin: 0 0 16px 0; line-height: 1.4;">Recibirás una notificación cuando tengamos una respuesta.</p>
+                <a href="{{ cta_url|default:'https://aprobado.com.co/libranza/login/?next=/libranza/mi-credito/' }}" style="display: inline-block; padding: 12px 32px; background-color: #ffffff; color: #111827; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600;">{{ cta_label|default:'Consultar estado' }}</a>
+            </div>
+        </td>
+    </tr>
+</table>
+{% endblock %}
