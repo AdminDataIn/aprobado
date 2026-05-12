@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce
 
-from gestion_creditos.models import AsesorComercial, Credito, Empresa
+from gestion_creditos.models import AsesorComercial, Credito, Empresa, PagoComisionEjecutivo
 
 
 EXECUTIVE_VISIBLE_STATES = {
@@ -71,6 +71,32 @@ def calculate_asesor_commission(monto_colocado):
     return (monto_colocado or Decimal('0.00')) * EXECUTIVE_COMMISSION_RATE
 
 
+def _sumar_pagos_comision(asesor):
+    return PagoComisionEjecutivo.objects.filter(asesor=asesor).aggregate(
+        total=Coalesce(Sum('monto'), Decimal('0.00')),
+    )['total'] or Decimal('0.00')
+
+
+def _max_decimal(value, floor=Decimal('0.00')):
+    return value if value > floor else floor
+
+
+def get_asesor_commission_account(asesor):
+    creditos_qs = get_asesor_creditos_queryset(asesor)
+    visible_creditos_qs = creditos_qs.filter(estado__in=EXECUTIVE_VISIBLE_STATES)
+    monto_colocado = visible_creditos_qs.aggregate(
+        total=Coalesce(Sum(Coalesce('monto_aprobado', 'monto_solicitado')), Decimal('0.00')),
+    )['total'] or Decimal('0.00')
+    comision_generada = calculate_asesor_commission(monto_colocado)
+    comision_pagada = _sumar_pagos_comision(asesor)
+    return {
+        'monto_colocado': monto_colocado,
+        'comision_generada': comision_generada,
+        'comision_pagada': comision_pagada,
+        'comision_pendiente': _max_decimal(comision_generada - comision_pagada),
+    }
+
+
 def get_asesor_performance_snapshot(asesor, empresa=None):
     creditos_qs = get_asesor_creditos_queryset(asesor, empresa=empresa)
     empresas_qs = get_asesor_empresas_queryset(asesor)
@@ -100,6 +126,7 @@ def get_asesor_performance_snapshot(asesor, empresa=None):
     )
     monto_colocado = aggregates['monto_colocado'] or Decimal('0.00')
     comision_acumulada = calculate_asesor_commission(monto_colocado)
+    commission_account = get_asesor_commission_account(asesor)
 
     return {
         'asesor': asesor,
@@ -113,6 +140,10 @@ def get_asesor_performance_snapshot(asesor, empresa=None):
         'creditos_pagados': aggregates['creditos_pagados'] or 0,
         'monto_colocado': monto_colocado,
         'comision_acumulada': comision_acumulada,
+        'comision_generada': commission_account['comision_generada'],
+        'comision_pagada': commission_account['comision_pagada'],
+        'comision_pendiente': commission_account['comision_pendiente'],
+        'commission_account': commission_account,
         'saldo_cartera': cartera['saldo_cartera'] or Decimal('0.00'),
     }
 
@@ -125,21 +156,6 @@ def build_admin_asesores_context(selected_asesor=None):
     )
     summaries = [get_asesor_performance_snapshot(asesor) for asesor in asesores]
 
-    resumen_general = {
-        'total_asesores': len(summaries),
-        'total_empresas_referidas': sum(item['empresas_count'] for item in summaries),
-        'total_creditos_activos': sum(item['creditos_activos'] for item in summaries),
-        'total_creditos_pagados': sum(item['creditos_pagados'] for item in summaries),
-        'monto_total_colocado': sum(
-            (item['monto_colocado'] for item in summaries),
-            Decimal('0.00'),
-        ),
-        'comision_total_generada': sum(
-            (item['comision_acumulada'] for item in summaries),
-            Decimal('0.00'),
-        ),
-    }
-
     selected_summary = None
     if selected_asesor:
         selected_summary = next(
@@ -147,9 +163,38 @@ def build_admin_asesores_context(selected_asesor=None):
             get_asesor_performance_snapshot(selected_asesor),
         )
 
+    visible_summaries = [selected_summary] if selected_summary else summaries
+
+    resumen_general = {
+        'total_asesores': len(visible_summaries),
+        'total_empresas_referidas': sum(item['empresas_count'] for item in visible_summaries),
+        'total_creditos_activos': sum(item['creditos_activos'] for item in visible_summaries),
+        'total_creditos_pagados': sum(item['creditos_pagados'] for item in visible_summaries),
+        'monto_total_colocado': sum(
+            (item['monto_colocado'] for item in visible_summaries),
+            Decimal('0.00'),
+        ),
+        'comision_total_generada': sum(
+            (item['comision_generada'] for item in visible_summaries),
+            Decimal('0.00'),
+        ),
+        'comision_total_pagada': sum(
+            (item['comision_pagada'] for item in visible_summaries),
+            Decimal('0.00'),
+        ),
+        'comision_total_pendiente': sum(
+            (item['comision_pendiente'] for item in visible_summaries),
+            Decimal('0.00'),
+        ),
+        'ejecutivos_con_comision_pendiente': sum(
+            1 for item in visible_summaries if item['comision_pendiente'] > Decimal('0.00')
+        ),
+    }
+
     return {
         'asesores': asesores,
-        'asesores_summary': summaries,
+        'asesores_summary': visible_summaries,
+        'all_asesores_summary': summaries,
         'selected_asesor': selected_asesor,
         'selected_asesor_summary': selected_summary,
         'resumen_general': resumen_general,

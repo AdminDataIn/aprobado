@@ -188,7 +188,7 @@ def enviar_invitacion_activacion_ejecutivo(asesor, created_by=None, force_new=Fa
         created_by=created_by,
         force_new=force_new,
     )
-    activation_url = _build_executive_url(public_token, 'asesores:activar_cuenta')
+    activation_url = _build_executive_url(public_token, 'ejecutivos:activar_cuenta')
     expiration_hours = int(getattr(settings, 'EXECUTIVE_ACTIVATION_EXPIRATION_HOURS', 24) or 24)
 
     context = {

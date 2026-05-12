@@ -4,6 +4,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.forms import HiddenInput
 from .models import (
+    AsesorComercial,
     CreditoLibranza,
     HistorialPago,
     Empresa,
@@ -11,6 +12,7 @@ from .models import (
     LotePagoEmpresa,
     MovimientoAhorro,
     MarketplaceItem,
+    PagoComisionEjecutivo,
     VinculoLaboralEmpresa,
 )
 from decimal import Decimal
@@ -791,6 +793,69 @@ class PagoMasivoEmpresaConfirmForm(forms.ModelForm):
         comprobante = self.cleaned_data.get('comprobante')
         if comprobante and comprobante.size > 8 * 1024 * 1024:
             raise forms.ValidationError('El comprobante no debe superar 8MB.')
+        return comprobante
+
+
+class PagoComisionEjecutivoForm(forms.ModelForm):
+    monto = forms.CharField(
+        label='Monto pagado',
+        widget=forms.TextInput(attrs={
+            'class': 'form-control money-input',
+            'inputmode': 'numeric',
+            'autocomplete': 'off',
+            'placeholder': '$80.000',
+            'data-money-input': 'cop',
+        }),
+    )
+
+    class Meta:
+        model = PagoComisionEjecutivo
+        fields = ['asesor', 'monto', 'fecha_pago', 'observacion', 'comprobante']
+        widgets = {
+            'asesor': forms.Select(attrs={'class': 'form-select'}),
+            'fecha_pago': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'observacion': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Detalle breve del pago de comision',
+            }),
+            'comprobante': forms.FileInput(attrs={
+                'class': 'form-control',
+                'accept': '.pdf,.jpg,.jpeg,.png,.webp',
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['asesor'].queryset = AsesorComercial.objects.filter(activo=True).order_by('nombre')
+        self.fields['asesor'].label = 'Ejecutivo'
+        self.fields['fecha_pago'].label = 'Fecha de pago'
+        self.fields['fecha_pago'].initial = timezone.localdate
+        self.fields['observacion'].required = False
+        self.fields['comprobante'].required = False
+        self.fields['comprobante'].help_text = 'PDF o imagen del soporte. Maximo 8 MB.'
+
+    def clean_monto(self):
+        raw_value = str(self.cleaned_data.get('monto') or '').strip()
+        normalized = raw_value.replace('$', '').replace(' ', '')
+        if ',' in normalized:
+            normalized = normalized.replace('.', '').replace(',', '.')
+        elif normalized.count('.') == 1 and len(normalized.rsplit('.', 1)[1]) <= 2:
+            normalized = normalized
+        else:
+            normalized = normalized.replace('.', '')
+        try:
+            amount = Decimal(normalized)
+        except Exception as exc:
+            raise forms.ValidationError('Ingresa un monto valido.') from exc
+        if amount <= Decimal('0'):
+            raise forms.ValidationError('El monto debe ser mayor a cero.')
+        return amount
+
+    def clean_comprobante(self):
+        comprobante = self.cleaned_data.get('comprobante')
+        if comprobante and comprobante.size > 8 * 1024 * 1024:
+            raise forms.ValidationError('El comprobante no debe superar 8 MB.')
         return comprobante
 
 

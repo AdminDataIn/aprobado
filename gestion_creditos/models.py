@@ -43,6 +43,48 @@ class AsesorComercial(models.Model):
         super().save(*args, **kwargs)
 
 
+class PagoComisionEjecutivo(models.Model):
+    asesor = models.ForeignKey(
+        AsesorComercial,
+        on_delete=models.PROTECT,
+        related_name='pagos_comision',
+    )
+    monto = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    fecha_pago = models.DateField(default=timezone.localdate)
+    referencia = models.CharField(max_length=120, blank=True)
+    observacion = models.TextField(blank=True)
+    comprobante = models.FileField(
+        upload_to='comisiones_ejecutivos/%Y/%m/',
+        validators=[FileExtensionValidator(['pdf', 'jpg', 'jpeg', 'png', 'webp'])],
+        blank=True,
+        null=True,
+    )
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pagos_comision_ejecutivo_creados',
+    )
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-fecha_pago', '-creado_en']
+        verbose_name = 'Pago de comision de ejecutivo'
+        verbose_name_plural = 'Pagos de comision de ejecutivos'
+        indexes = [
+            models.Index(fields=['asesor', '-fecha_pago'], name='pago_com_eje_asesor_fecha_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.asesor.nombre} - ${self.monto:,.2f} ({self.fecha_pago})"
+
+
 #? Modelo movido de credito_libranza (la idea es crear las empresas directamente desde el admin)
 class Empresa(models.Model):
     class TipoEmpresa(models.TextChoices):

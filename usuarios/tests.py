@@ -220,7 +220,7 @@ class ExecutiveActivationFlowTests(TestCase):
         self.assertFalse(self.asesor.usuario.is_active)
         self.assertFalse(self.asesor.usuario.has_usable_password())
         self.assertEqual(len(mail.outbox), 1)
-        self.assertIn('/asesores/activar/', mail.outbox[0].body)
+        self.assertIn('/ejecutivos/activar/', mail.outbox[0].body)
         self.assertIsNone(token.invalidated_at)
 
     def test_reenvio_reutiliza_token_activo(self):
@@ -236,7 +236,7 @@ class ExecutiveActivationFlowTests(TestCase):
         _, public_token = crear_token_ejecutivo(self.asesor)
 
         response = self.client.post(
-            reverse('asesores:activar_cuenta', kwargs={'token': public_token}),
+            reverse('ejecutivos:activar_cuenta', kwargs={'token': public_token}),
             data={
                 'new_password1': 'EjecutivoPass2026!Segura',
                 'new_password2': 'EjecutivoPass2026!Segura',
@@ -253,7 +253,7 @@ class ExecutiveActivationFlowTests(TestCase):
         self.assertTrue(self.asesor.usuario.check_password('EjecutivoPass2026!Segura'))
         self.assertIsNotNone(token.used_at)
         self.assertTrue(self.client.login(username=self.asesor.usuario.username, password='EjecutivoPass2026!Segura'))
-        dashboard = self.client.get(reverse('asesores:dashboard'))
+        dashboard = self.client.get(reverse('ejecutivos:dashboard'))
         self.assertEqual(dashboard.status_code, 200)
         self.assertContains(dashboard, 'Panel del Ejecutivo')
 
@@ -263,7 +263,7 @@ class ExecutiveActivationFlowTests(TestCase):
         ExecutiveAccessToken.objects.filter(asesor=self.asesor).update(invalidated_at=timezone.now())
 
         response = self.client.post(
-            reverse('asesores:activar_cuenta', kwargs={'token': public_token}),
+            reverse('ejecutivos:activar_cuenta', kwargs={'token': public_token}),
             data={'action': 'resend_activation'},
             follow=True,
             secure=True,

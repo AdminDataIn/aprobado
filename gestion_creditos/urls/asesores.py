@@ -1,12 +1,10 @@
 from django.urls import path
-
-from .. import views
-from usuarios import views as usuarios_views
+from django.views.generic import RedirectView
 
 app_name = 'asesores'
 
 urlpatterns = [
-    path('login/', usuarios_views.AsesorLoginView.as_view(), name='login'),
-    path('activar/<str:token>/', usuarios_views.executive_activate_account_view, name='activar_cuenta'),
-    path('panel/', views.asesor_dashboard_view, name='dashboard'),
+    path('login/', RedirectView.as_view(pattern_name='ejecutivos:login', permanent=False), name='login'),
+    path('activar/<str:token>/', RedirectView.as_view(pattern_name='ejecutivos:activar_cuenta', permanent=False), name='activar_cuenta'),
+    path('panel/', RedirectView.as_view(pattern_name='ejecutivos:dashboard', permanent=False), name='dashboard'),
 ]

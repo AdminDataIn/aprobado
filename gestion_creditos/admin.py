@@ -12,7 +12,8 @@ from .models import (
     Pagare, ZapSignWebhookLog, MarketplaceItem, MarketplaceItemHistorialEstado,
     MarketplacePedido, MarketplacePedidoItem, MarketplacePago, MarketplaceDireccionEntrega,
     MarketplaceLiquidacionEmpresa, InvestorAccount, InvestmentPosition, InvestmentCashflow,
-    InvestmentReturnSnapshot, InvestmentEvent, VinculoLaboralEmpresa, CreditoAdelantoNomina
+    InvestmentReturnSnapshot, InvestmentEvent, VinculoLaboralEmpresa, CreditoAdelantoNomina,
+    PagoComisionEjecutivo,
 )
 from django.utils import timezone
 from datetime import timedelta
@@ -441,13 +442,17 @@ class AsesorComercialAdmin(admin.ModelAdmin):
             '<strong>Créditos activos:</strong> {}<br>'
             '<strong>Pagados:</strong> {}<br>'
             '<strong>Monto colocado:</strong> ${:,.0f}<br>'
-            '<strong>Comisión acumulada:</strong> ${:,.0f}<br>'
+            '<strong>Comisión generada:</strong> ${:,.0f}<br>'
+            '<strong>Comisión pagada:</strong> ${:,.0f}<br>'
+            '<strong>Comisión pendiente:</strong> ${:,.0f}<br>'
             '<strong>Saldo de cartera:</strong> ${:,.0f}',
             summary['empresas_count'],
             summary['creditos_activos'],
             summary['creditos_pagados'],
             summary['monto_colocado'],
-            summary['comision_acumulada'],
+            summary['comision_generada'],
+            summary['comision_pagada'],
+            summary['comision_pendiente'],
             summary['saldo_cartera'],
         )
     performance_summary.short_description = 'Resumen comercial'
@@ -481,6 +486,20 @@ class AsesorComercialAdmin(admin.ModelAdmin):
                 f'Hubo {errores} errores durante el envío.',
                 level=messages.WARNING
             )
+
+
+@admin.register(PagoComisionEjecutivo)
+class PagoComisionEjecutivoAdmin(admin.ModelAdmin):
+    list_display = ('asesor', 'monto', 'fecha_pago', 'referencia', 'creado_por', 'creado_en')
+    list_filter = ('fecha_pago', 'asesor')
+    search_fields = ('asesor__nombre', 'asesor__cedula', 'referencia', 'observacion')
+    readonly_fields = ('creado_en', 'actualizado_en', 'creado_por')
+    autocomplete_fields = ('asesor',)
+
+    def save_model(self, request, obj, form, change):
+        if not obj.creado_por_id:
+            obj.creado_por = request.user
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(VinculoLaboralEmpresa)

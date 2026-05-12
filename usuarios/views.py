@@ -231,7 +231,7 @@ class AsesorLoginView(LoginView):
         if request.user.is_authenticated:
             asesor = getattr(request.user, 'asesor_comercial', None)
             if asesor and asesor.activo:
-                return redirect(reverse('asesores:dashboard'))
+                return redirect(reverse('ejecutivos:dashboard'))
             messages.warning(request, 'Su cuenta actual no tiene permisos de ejecutivo.')
             return redirect(reverse('libranza:landing'))
         return super().get(request, *args, **kwargs)
@@ -246,11 +246,11 @@ class AsesorLoginView(LoginView):
         return self.form_invalid(form)
 
     def get_success_url(self):
-        return self.get_redirect_url() or reverse('asesores:dashboard')
+        return self.get_redirect_url() or reverse('ejecutivos:dashboard')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['next_url'] = _get_safe_next_url(self.request, reverse('asesores:dashboard'))
+        context['next_url'] = _get_safe_next_url(self.request, reverse('ejecutivos:dashboard'))
         context['back_url'] = reverse('libranza:landing')
         return context
 
@@ -275,7 +275,7 @@ def executive_activate_account_view(request, token):
                     request,
                     f'Enviamos un nuevo enlace de activación a {access_token.email_destino}. Usa solo el correo más reciente.'
                 )
-                return redirect('asesores:login')
+                return redirect('ejecutivos:login')
             except Exception as exc:
                 messages.error(request, f'No se pudo reenviar el enlace de activación: {exc}')
         return render(request, 'account/asesor/activate_account.html', {
@@ -297,7 +297,7 @@ def executive_activate_account_view(request, token):
             user.save(update_fields=['is_active', 'password'])
             marcar_token_ejecutivo_como_usado(access_token)
             messages.success(request, 'Tu acceso como ejecutivo fue activado correctamente. Ya puedes iniciar sesión.')
-            return redirect('asesores:login')
+            return redirect('ejecutivos:login')
     else:
         form = PagadorActivationForm(user)
 

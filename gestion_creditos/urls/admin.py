@@ -5,6 +5,7 @@ Prefijo: /gestion/
 Rol: Staff members que aprueban/rechazan créditos
 """
 from django.urls import path
+from django.views.generic import RedirectView
 from .. import views
 
 app_name = 'gestion'
@@ -15,7 +16,8 @@ urlpatterns = [
     # ========================================
     path('', views.admin_dashboard_view, name='dashboard'),
     path('exportar-reporte/', views.admin_dashboard_export_view, name='dashboard_export'),
-    path('asesores/', views.admin_asesores_dashboard_view, name='asesores'),
+    path('ejecutivos/', views.admin_asesores_dashboard_view, name='ejecutivos'),
+    path('asesores/', RedirectView.as_view(pattern_name='gestion:ejecutivos', permanent=False), name='asesores'),
     path('solicitudes/', views.admin_solicitudes_view, name='solicitudes'),
     path('adelantos-nomina/', views.admin_adelantos_nomina_view, name='adelantos_nomina'),
     path('creditos/', views.admin_creditos_activos_view, name='creditos_activos'),

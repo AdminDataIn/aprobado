@@ -3,39 +3,73 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Gestión de Ejecutivos - Aprobado</title>
+    <title>Gesti&oacute;n de Ejecutivos - Aprobado</title>
     {% load static humanize %}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" />
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
     <style>
         .page-shell { max-width: 1400px; }
+        .page-title { margin-bottom: .15rem; }
+        .compact-filter {
+            display: flex;
+            align-items: end;
+            gap: .55rem;
+            flex-wrap: wrap;
+        }
+        .compact-filter .form-select { min-width: 260px; }
+        .compact-admin-filter {
+            padding: 1rem 1.25rem;
+            margin-bottom: 1.5rem;
+        }
         .summary-card {
             border: 1px solid rgba(15, 23, 42, 0.08);
             border-radius: 1rem;
             padding: 1rem 1.1rem;
             background: #fff;
             height: 100%;
-            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.045);
         }
         .summary-card small {
             color: var(--text-secondary);
             display: block;
             margin-bottom: 0.3rem;
-            font-weight: 600;
+            font-weight: 700;
         }
         .summary-card strong {
             font-size: 1.35rem;
             color: var(--text-primary);
         }
-        .summary-card-emphasis {
-            background: linear-gradient(180deg, #0f2035 0%, #14344c 100%);
-            border-color: transparent;
-        }
+        .summary-card-blue { background: #eaf6ff; border-color: #cdeafe; }
+        .summary-card-green { background: #eafaf1; border-color: #c9f0d8; }
+        .summary-card-emphasis { background: #12304b; border-color: #12304b; }
         .summary-card-emphasis small,
-        .summary-card-emphasis strong {
-            color: #fff;
+        .summary-card-emphasis strong { color: #fff; }
+        .module-card {
+            background: #fff;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 1rem;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.045);
+            overflow: hidden;
         }
+        .module-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: .75rem;
+            flex-wrap: wrap;
+            background: #f3f7fb;
+            border-bottom: 1px solid rgba(15, 23, 42, .08);
+            padding: 1rem 1.15rem;
+        }
+        .module-card-title {
+            color: #0f2742;
+            font-size: 1.08rem;
+            font-weight: 600;
+            margin: 0;
+        }
+        .module-card-title i { margin-right: .45rem; }
+        .module-card-body { padding: 1.15rem; }
         .table thead th {
             font-size: 0.78rem;
             letter-spacing: 0.02em;
@@ -43,6 +77,117 @@
             color: #475569;
         }
         .table tbody td { vertical-align: middle; }
+        .form-help { color: #64748b; font-size: 0.82rem; }
+        .money-input { font-weight: 700; }
+        #id_observacion {
+            min-height: 88px;
+            max-height: 136px;
+            resize: vertical;
+        }
+        .toast-stack {
+            position: fixed;
+            top: 92px;
+            right: 24px;
+            z-index: 1080;
+            display: grid;
+            gap: .75rem;
+            width: min(420px, calc(100vw - 32px));
+        }
+        .app-toast {
+            border: 1px solid rgba(15, 23, 42, .1);
+            border-left: 5px solid #2563eb;
+            border-radius: .95rem;
+            background: #fff;
+            box-shadow: 0 18px 45px rgba(15, 23, 42, .18);
+            padding: .95rem 1rem;
+            animation: toastIn .22s ease-out;
+        }
+        .app-toast.success { border-left-color: #16a34a; }
+        .app-toast.error,
+        .app-toast.danger { border-left-color: #dc2626; }
+        .app-toast.warning { border-left-color: #f59e0b; }
+        .app-toast-title {
+            color: #0f172a;
+            font-weight: 800;
+            margin-bottom: .15rem;
+        }
+        .app-toast-message { color: #475569; font-size: .92rem; }
+        .advisor-due-panel {
+            display: none;
+            border: 1px solid #bfdbfe;
+            border-radius: .9rem;
+            background: #eff6ff;
+            padding: .9rem;
+        }
+        .advisor-due-panel.is-visible { display: block; }
+        .due-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: .7rem;
+        }
+        .due-item small {
+            color: #53657f;
+            display: block;
+            font-weight: 700;
+            margin-bottom: .2rem;
+        }
+        .due-item strong { font-size: 1.1rem; }
+        .due-item.pending strong { color: #12304b; }
+        .linked-companies-panel {
+            border: 1px solid rgba(15, 23, 42, .08);
+            border-radius: .9rem;
+            background: #f8fbff;
+            padding: 1rem;
+        }
+        .linked-companies-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: .65rem;
+        }
+        .linked-company-item {
+            border: 1px solid rgba(15, 23, 42, .08);
+            border-radius: .75rem;
+            background: #fff;
+            padding: .75rem .85rem;
+        }
+        .linked-company-item strong {
+            display: block;
+            color: #0f172a;
+        }
+        .linked-company-item span {
+            color: #64748b;
+            font-size: .84rem;
+        }
+        .company-details summary {
+            cursor: pointer;
+            color: #2563eb;
+            font-weight: 700;
+            list-style-position: outside;
+        }
+        .company-details-list {
+            display: grid;
+            gap: .3rem;
+            margin-top: .45rem;
+            min-width: 180px;
+        }
+        .company-details-list span {
+            color: #475569;
+            font-size: .84rem;
+        }
+        .empty-note {
+            border: 1px dashed rgba(100, 116, 139, .35);
+            border-radius: .75rem;
+            background: #fff;
+            color: #64748b;
+            padding: .75rem .85rem;
+        }
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @media (max-width: 640px) {
+            .due-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body class="theme-gestion theme-dashboard">
@@ -54,9 +199,10 @@
                 <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;" />
             </a>
             <div class="d-flex align-items-center gap-3">
-                <a href="{% url 'gestion:dashboard' %}" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-arrow-left me-1"></i>Volver al dashboard
-                </a>
+                <button class="btn btn-sm btn-outline-primary position-relative" type="button">
+                    <i class="bi bi-bell"></i>
+                    <div class="notification-badge"></div>
+                </button>
                 <div class="user-info">
                     <div class="user-avatar">AU</div>
                     <div class="user-details d-none d-md-block">
@@ -69,50 +215,195 @@
     </div>
 </header>
 
-<div class="container-fluid py-4 page-shell">
-    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
-        <div>
-            <h1 class="page-title mb-1">Gestión de Ejecutivos</h1>
-            <p class="text-muted mb-0">Seguimiento comercial consolidado sobre empresas vinculadas, colocación y comisión generada.</p>
+<main class="container-fluid py-4 page-shell">
+    {% if messages %}
+    <div class="toast-stack" aria-live="polite" aria-atomic="true">
+        {% for message in messages %}
+        <div class="app-toast {{ message.tags|default:'info' }}" data-toast>
+            <div class="app-toast-title">{% if 'success' in message.tags %}Acci&oacute;n completada{% elif 'error' in message.tags or 'danger' in message.tags %}Revisa la informaci&oacute;n{% else %}Aviso{% endif %}</div>
+            <div class="app-toast-message">{{ message }}</div>
         </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="d-flex align-items-center justify-content-between mb-4 px-4 flex-wrap gap-3">
+        <div>
+            <h1 class="page-title">Pago de comisiones</h1>
+            <p class="text-secondary mb-2">Consolidado al 1% del monto colocado en cr&eacute;ditos activos y pagados.</p>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'gestion:dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+                    <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-person-badge me-1"></i>Ejecutivos</li>
+                </ol>
+            </nav>
+        </div>
+        <a href="{% url 'gestion:dashboard' %}" class="btn btn-outline-primary">
+            <i class="bi bi-arrow-left me-2"></i>Volver al Dashboard
+        </a>
     </div>
 
-    <form method="get" class="card border-0 shadow-sm mb-4">
-        <div class="card-body d-flex gap-3 align-items-end flex-wrap">
-            <div style="min-width: 280px;">
+    <div class="filter-section compact-admin-filter">
+        <form method="get" class="compact-filter">
+            <div>
                 <label for="asesor" class="form-label small text-muted mb-1">Ejecutivo</label>
                 <select id="asesor" name="asesor" class="form-select">
-                    <option value="">Todos los ejecutivos</option>
+                    <option value="">Todos</option>
                     {% for asesor in asesores %}
                     <option value="{{ asesor.id }}" {% if asesor_filter == asesor.id|stringformat:"s" %}selected{% endif %}>{{ asesor.nombre }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary">Aplicar filtro</button>
-                {% if asesor_filter %}
-                <a href="{% url 'gestion:asesores' %}" class="btn btn-outline-secondary">Limpiar</a>
-                {% endif %}
+            <button type="submit" class="btn btn-primary">Aplicar</button>
+            {% if asesor_filter %}
+            <a href="{% url 'gestion:ejecutivos' %}" class="btn btn-outline-secondary">Limpiar</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <section class="mb-4">
+        <div class="row g-3">
+            <div class="col-12 col-md-6 col-xl-3"><div class="summary-card summary-card-blue"><small>Comisiones generadas</small><strong>${{ resumen_general.comision_total_generada|floatformat:0|intcomma }}</strong></div></div>
+            <div class="col-12 col-md-6 col-xl-3"><div class="summary-card summary-card-green"><small>Comisiones pagadas</small><strong>${{ resumen_general.comision_total_pagada|floatformat:0|intcomma }}</strong></div></div>
+            <div class="col-12 col-md-6 col-xl-3"><div class="summary-card summary-card-emphasis"><small>Pendiente por pagar</small><strong>${{ resumen_general.comision_total_pendiente|floatformat:0|intcomma }}</strong></div></div>
+            <div class="col-12 col-md-6 col-xl-3"><div class="summary-card"><small>Ejecutivos con pendiente</small><strong>{{ resumen_general.ejecutivos_con_comision_pendiente }}</strong></div></div>
+        </div>
+    </section>
+
+    <div class="row g-4 mb-4">
+        <div class="col-12 col-xl-7">
+            <div class="module-card h-100">
+                <div class="module-card-header">
+                    <h2 class="module-card-title"><i class="bi bi-cash-coin"></i>Registrar pago de comisi&oacute;n</h2>
+                </div>
+                <div class="module-card-body">
+                    <form method="post" enctype="multipart/form-data" class="row g-3" id="commissionPaymentForm">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="registrar_pago_comision">
+                        {% if pago_comision_form.non_field_errors %}
+                        <div class="col-12">
+                            <div class="alert alert-danger">{{ pago_comision_form.non_field_errors }}</div>
+                        </div>
+                        {% endif %}
+                        <div class="col-12 col-md-6">
+                            <label class="form-label" for="{{ pago_comision_form.asesor.id_for_label }}">Ejecutivo</label>
+                            {{ pago_comision_form.asesor }}
+                            {{ pago_comision_form.asesor.errors }}
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label" for="{{ pago_comision_form.monto.id_for_label }}">Monto pagado</label>
+                            {{ pago_comision_form.monto }}
+                            {{ pago_comision_form.monto.errors }}
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label" for="{{ pago_comision_form.fecha_pago.id_for_label }}">Fecha de pago</label>
+                            {{ pago_comision_form.fecha_pago }}
+                            {{ pago_comision_form.fecha_pago.errors }}
+                        </div>
+                        <div class="col-12">
+                            <div class="advisor-due-panel" id="advisorDuePanel">
+                                <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
+                                    <div>
+                                        <strong id="advisorDueName">Selecciona un ejecutivo</strong>
+                                        <div class="small text-muted">El monto sugerido se precarga con la comisi&oacute;n pendiente. Puedes editarlo para pagos parciales.</div>
+                                    </div>
+                                </div>
+                                <div class="due-grid">
+                                    <div class="due-item">
+                                        <small>Comisi&oacute;n generada</small>
+                                        <strong id="advisorGenerated">$0</strong>
+                                    </div>
+                                    <div class="due-item">
+                                        <small>Comisi&oacute;n pagada</small>
+                                        <strong id="advisorPaid">$0</strong>
+                                    </div>
+                                    <div class="due-item pending">
+                                        <small>Pendiente por pagar</small>
+                                        <strong id="advisorPending">$0</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label" for="{{ pago_comision_form.comprobante.id_for_label }}">Comprobante</label>
+                            {{ pago_comision_form.comprobante }}
+                            <div class="form-help">{{ pago_comision_form.comprobante.help_text }}</div>
+                            {{ pago_comision_form.comprobante.errors }}
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label" for="{{ pago_comision_form.observacion.id_for_label }}">Observaci&oacute;n</label>
+                            {{ pago_comision_form.observacion }}
+                            {{ pago_comision_form.observacion.errors }}
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary">Registrar pago</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
-    </form>
+        <div class="col-12 col-xl-5">
+            <div class="module-card h-100">
+                <div class="module-card-header">
+                    <h2 class="module-card-title"><i class="bi bi-receipt"></i>Pagos recientes</h2>
+                </div>
+                <div class="module-card-body">
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Ejecutivo</th>
+                                    <th>Monto</th>
+                                    <th>Fecha</th>
+                                    <th>Soporte</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for pago in pagos_comision_recientes %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ pago.asesor.nombre }}</strong>
+                                        <div class="small text-muted">{{ pago.observacion|default:"Sin observacion"|truncatechars:42 }}</div>
+                                    </td>
+                                    <td>${{ pago.monto|floatformat:0|intcomma }}</td>
+                                    <td>{{ pago.fecha_pago|date:"d/m/Y" }}</td>
+                                    <td>
+                                        {% if pago.comprobante %}
+                                        <a href="{{ pago.comprobante.url }}" target="_blank" rel="noopener">Ver</a>
+                                        {% else %}
+                                        <span class="text-muted">Sin soporte</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="4" class="text-center text-muted py-4">A&uacute;n no hay pagos registrados.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="row g-3 mb-4">
         <div class="col-12 col-md-6 col-xl"><div class="summary-card"><small>Ejecutivos activos</small><strong>{{ resumen_general.total_asesores }}</strong></div></div>
         <div class="col-12 col-md-6 col-xl"><div class="summary-card"><small>Empresas vinculadas</small><strong>{{ resumen_general.total_empresas_referidas }}</strong></div></div>
-        <div class="col-12 col-md-6 col-xl"><div class="summary-card"><small>Créditos activos</small><strong>{{ resumen_general.total_creditos_activos }}</strong></div></div>
-        <div class="col-12 col-md-6 col-xl"><div class="summary-card"><small>Créditos pagados</small><strong>{{ resumen_general.total_creditos_pagados }}</strong></div></div>
+        <div class="col-12 col-md-6 col-xl"><div class="summary-card"><small>Cr&eacute;ditos activos</small><strong>{{ resumen_general.total_creditos_activos }}</strong></div></div>
+        <div class="col-12 col-md-6 col-xl"><div class="summary-card"><small>Cr&eacute;ditos pagados</small><strong>{{ resumen_general.total_creditos_pagados }}</strong></div></div>
         <div class="col-12 col-md-6 col-xl"><div class="summary-card"><small>Monto colocado</small><strong>${{ resumen_general.monto_total_colocado|floatformat:0|intcomma }}</strong></div></div>
-        <div class="col-12 col-md-6 col-xl"><div class="summary-card summary-card-emphasis"><small>Comisión generada</small><strong>${{ resumen_general.comision_total_generada|floatformat:0|intcomma }}</strong></div></div>
     </div>
 
     {% if selected_asesor_summary %}
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-body">
+    <div class="module-card mb-4">
+        <div class="module-card-header">
+            <h2 class="module-card-title"><i class="bi bi-person-badge"></i>Detalle del ejecutivo</h2>
+        </div>
+        <div class="module-card-body">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
                 <div>
                     <h2 class="h4 mb-1">{{ selected_asesor_summary.asesor.nombre }}</h2>
-                    <div class="text-muted">Cédula {{ selected_asesor_summary.asesor.cedula }}</div>
+                    <div class="text-muted">C&eacute;dula {{ selected_asesor_summary.asesor.cedula }}</div>
                 </div>
                 <div class="text-muted small">
                     {% if selected_asesor_summary.asesor.email %}<div>{{ selected_asesor_summary.asesor.email }}</div>{% endif %}
@@ -121,31 +412,50 @@
             </div>
             <div class="row g-3">
                 <div class="col-6 col-lg-2"><div class="summary-card"><small>Empresas</small><strong>{{ selected_asesor_summary.empresas_count }}</strong></div></div>
-                <div class="col-6 col-lg-2"><div class="summary-card"><small>Créditos activos</small><strong>{{ selected_asesor_summary.creditos_activos }}</strong></div></div>
-                <div class="col-6 col-lg-2"><div class="summary-card"><small>Créditos pagados</small><strong>{{ selected_asesor_summary.creditos_pagados }}</strong></div></div>
-                <div class="col-6 col-lg-3"><div class="summary-card"><small>Monto colocado</small><strong>${{ selected_asesor_summary.monto_colocado|floatformat:0|intcomma }}</strong></div></div>
-                <div class="col-6 col-lg-3"><div class="summary-card summary-card-emphasis"><small>Comisión acumulada</small><strong>${{ selected_asesor_summary.comision_acumulada|floatformat:0|intcomma }}</strong></div></div>
+                <div class="col-6 col-lg-2"><div class="summary-card"><small>Cr&eacute;ditos activos</small><strong>{{ selected_asesor_summary.creditos_activos }}</strong></div></div>
+                <div class="col-6 col-lg-2"><div class="summary-card"><small>Cr&eacute;ditos pagados</small><strong>{{ selected_asesor_summary.creditos_pagados }}</strong></div></div>
+                <div class="col-6 col-lg-2"><div class="summary-card summary-card-blue"><small>Generada</small><strong>${{ selected_asesor_summary.comision_generada|floatformat:0|intcomma }}</strong></div></div>
+                <div class="col-6 col-lg-2"><div class="summary-card summary-card-green"><small>Pagada</small><strong>${{ selected_asesor_summary.comision_pagada|floatformat:0|intcomma }}</strong></div></div>
+                <div class="col-6 col-lg-2"><div class="summary-card summary-card-emphasis"><small>Pendiente</small><strong>${{ selected_asesor_summary.comision_pendiente|floatformat:0|intcomma }}</strong></div></div>
+            </div>
+            <div class="linked-companies-panel mt-3">
+                <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+                    <strong>Empresas referidas</strong>
+                    <span class="small text-muted">{{ selected_asesor_summary.empresas_count }} vinculadas</span>
+                </div>
+                <div class="linked-companies-grid">
+                    {% for empresa in selected_asesor_summary.empresas_qs %}
+                    <div class="linked-company-item">
+                        <strong>{{ empresa.nombre }}</strong>
+                        <span>{{ empresa.razon_social|default:"Sin razon social" }}</span>
+                    </div>
+                    {% empty %}
+                    <div class="empty-note">Este ejecutivo a&uacute;n no tiene empresas vinculadas.</div>
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </div>
     {% endif %}
 
-    <div class="card border-0 shadow-sm">
-        <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                <h2 class="h5 mb-0">Rendimiento por ejecutivo</h2>
-                <span class="text-muted small">La tabla se concentra en créditos ya colocados: activos y pagados.</span>
-            </div>
+    <div class="module-card">
+        <div class="module-card-header">
+            <h2 class="module-card-title"><i class="bi bi-bar-chart-line"></i>Rendimiento por ejecutivo</h2>
+            <span class="text-muted small">Cr&eacute;ditos colocados: activos y pagados.</span>
+        </div>
+        <div class="module-card-body">
             <div class="table-responsive">
                 <table class="table table-hover align-middle">
                     <thead>
                         <tr>
                             <th>Ejecutivo</th>
                             <th>Empresas</th>
-                            <th>Créditos activos</th>
-                            <th>Créditos pagados</th>
+                            <th>Cr&eacute;ditos activos</th>
+                            <th>Cr&eacute;ditos pagados</th>
                             <th>Monto colocado</th>
-                            <th>Comisión</th>
+                            <th>Generada</th>
+                            <th>Pagada</th>
+                            <th>Pendiente</th>
                             <th>Saldo cartera</th>
                         </tr>
                     </thead>
@@ -156,21 +466,95 @@
                                 <strong>{{ item.asesor.nombre }}</strong>
                                 <div class="small text-muted">{{ item.asesor.cedula }}</div>
                             </td>
-                            <td>{{ item.empresas_count }}</td>
+                            <td>
+                                <details class="company-details">
+                                    <summary>{{ item.empresas_count }} vinculadas</summary>
+                                    <div class="company-details-list">
+                                        {% for empresa in item.empresas_qs %}
+                                        <span>{{ empresa.nombre }}</span>
+                                        {% empty %}
+                                        <span>Sin empresas vinculadas</span>
+                                        {% endfor %}
+                                    </div>
+                                </details>
+                            </td>
                             <td>{{ item.creditos_activos }}</td>
                             <td>{{ item.creditos_pagados }}</td>
                             <td>${{ item.monto_colocado|floatformat:0|intcomma }}</td>
-                            <td>${{ item.comision_acumulada|floatformat:0|intcomma }}</td>
+                            <td>${{ item.comision_generada|floatformat:0|intcomma }}</td>
+                            <td>${{ item.comision_pagada|floatformat:0|intcomma }}</td>
+                            <td><strong>${{ item.comision_pendiente|floatformat:0|intcomma }}</strong></td>
                             <td>${{ item.saldo_cartera|floatformat:0|intcomma }}</td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="7" class="text-center text-muted py-4">Aún no hay ejecutivos registrados.</td></tr>
+                        <tr><td colspan="9" class="text-center text-muted py-4">A&uacute;n no hay ejecutivos registrados.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
-</div>
+</main>
+
+{{ commission_summaries|json_script:"commission-summaries" }}
+<script>
+(() => {
+    const formatter = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 });
+    const normalizeDigits = (value) => value.replace(/\D/g, '');
+    const formatValue = (value) => `$${formatter.format(Math.round(Number(value || 0)))}`;
+    const formatMoney = (input) => {
+        const digits = normalizeDigits(input.value);
+        input.value = digits ? formatValue(digits) : '';
+    };
+
+    const moneyInput = document.querySelector('[data-money-input="cop"]');
+    if (moneyInput) {
+        if (moneyInput.value) formatMoney(moneyInput);
+        moneyInput.addEventListener('input', () => formatMoney(moneyInput));
+    }
+
+    const select = document.querySelector('#id_asesor');
+    const panel = document.querySelector('#advisorDuePanel');
+    const summariesEl = document.querySelector('#commission-summaries');
+    const summaries = summariesEl ? JSON.parse(summariesEl.textContent) : [];
+    const byAdvisor = new Map(summaries.map((item) => [String(item.id), item]));
+
+    const updateAdvisorSummary = () => {
+        if (!select || !panel) return;
+        const item = byAdvisor.get(String(select.value));
+        panel.classList.toggle('is-visible', Boolean(item));
+        if (!item) return;
+
+        document.querySelector('#advisorDueName').textContent = item.nombre;
+        document.querySelector('#advisorGenerated').textContent = formatValue(item.comision_generada);
+        document.querySelector('#advisorPaid').textContent = formatValue(item.comision_pagada);
+        document.querySelector('#advisorPending').textContent = formatValue(item.comision_pendiente);
+
+        if (moneyInput && !moneyInput.dataset.userEdited) {
+            moneyInput.value = formatValue(item.comision_pendiente);
+        }
+    };
+
+    if (moneyInput) {
+        moneyInput.addEventListener('input', () => { moneyInput.dataset.userEdited = 'true'; });
+    }
+    if (select) {
+        select.addEventListener('change', () => {
+            if (moneyInput) delete moneyInput.dataset.userEdited;
+            updateAdvisorSummary();
+        });
+        updateAdvisorSummary();
+    }
+
+    document.querySelectorAll('[data-toast]').forEach((toast) => {
+        window.setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(-8px)';
+            toast.style.transition = 'opacity .2s ease, transform .2s ease';
+            window.setTimeout(() => toast.remove(), 220);
+        }, 4500);
+    });
+})();
+</script>
 </body>
 </html>

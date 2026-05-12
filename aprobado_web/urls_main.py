@@ -19,6 +19,7 @@ urlpatterns = [
     # Roles administrativos internos
     path("gestion/", include("gestion_creditos.urls_gestion")),
     path("pagador/", include("gestion_creditos.urls_pagador")),
+    path("ejecutivos/", include("gestion_creditos.urls_ejecutivos")),
     path("asesores/", include("gestion_creditos.urls_asesores")),
 
     # Billetera

@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic import RedirectView
 
 from .. import views
 from usuarios import views as usuarios_views
@@ -9,7 +10,8 @@ urlpatterns = [
     path('solicitar/libranza/', views.solicitud_credito_libranza_view, name='solicitud_libranza'),
     path('solicitar/emprendimiento/', views.solicitud_credito_emprendimiento_view, name='solicitud_emprendimiento'),
     path('admin/dashboard/', views.admin_dashboard_view, name='admin_dashboard'),
-    path('admin/asesores/', views.admin_asesores_dashboard_view, name='admin_asesores'),
+    path('admin/ejecutivos/', views.admin_asesores_dashboard_view, name='admin_ejecutivos'),
+    path('admin/asesores/', RedirectView.as_view(pattern_name='gestion_creditos:admin_ejecutivos', permanent=False), name='admin_asesores'),
     path('admin/solicitudes/', views.admin_solicitudes_view, name='admin_solicitudes'),
     path('admin/adelantos-nomina/', views.admin_adelantos_nomina_view, name='admin_adelantos_nomina'),
     path('admin/creditos/', views.admin_creditos_activos_view, name='admin_creditos_activos'),
@@ -23,9 +25,12 @@ urlpatterns = [
     path('pagador/adelantos/', views.pagador_adelantos_dashboard_view, name='pagador_adelantos_dashboard'),
     path('pagador/credito/<int:credito_id>/', views.pagador_detalle_credito_view, name='pagador_detalle_credito'),
     path('pagador/procesar-pagos/', views.pagador_procesar_pagos_view, name='pagador_procesar_pagos'),
-    path('asesores/login/', usuarios_views.AsesorLoginView.as_view(), name='asesor_login'),
-    path('asesores/activar/<str:token>/', usuarios_views.executive_activate_account_view, name='asesor_activar_cuenta'),
-    path('asesores/panel/', views.asesor_dashboard_view, name='asesor_dashboard'),
+    path('ejecutivos/login/', usuarios_views.AsesorLoginView.as_view(), name='ejecutivo_login'),
+    path('ejecutivos/activar/<str:token>/', usuarios_views.executive_activate_account_view, name='ejecutivo_activar_cuenta'),
+    path('ejecutivos/panel/', views.asesor_dashboard_view, name='ejecutivo_dashboard'),
+    path('asesores/login/', RedirectView.as_view(pattern_name='gestion_creditos:ejecutivo_login', permanent=False), name='asesor_login'),
+    path('asesores/activar/<str:token>/', RedirectView.as_view(pattern_name='gestion_creditos:ejecutivo_activar_cuenta', permanent=False), name='asesor_activar_cuenta'),
+    path('asesores/panel/', RedirectView.as_view(pattern_name='gestion_creditos:ejecutivo_dashboard', permanent=False), name='asesor_dashboard'),
     path('pago/iniciar/<int:credito_id>/', views.iniciar_pago_view, name='iniciar_pago'),
     path('pago/callback/', views.procesar_pago_callback_view, name='pago_callback'),
     path('billetera/', views.billetera_digital_view, name='billetera_digital'),
