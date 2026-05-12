@@ -7,8 +7,7 @@
     <title>{% block title %}Acceso Libranza{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-    <link rel="icon" href="{% static 'images/favicon.ico' %}" sizes="any">
-    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+    {% include 'base/favicon.html' %}
     {% block extra_head %}{% endblock %}
     <style>
         .auth-flow-shell .hero-section-account {

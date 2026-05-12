@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Aprobado{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+    {% include 'base/favicon.html' %}
     {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}auth-body{% endblock %}">
