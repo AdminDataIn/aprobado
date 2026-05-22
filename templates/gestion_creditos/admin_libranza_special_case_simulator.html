@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Casos especiales de libranza - Aprobado</title>
+    {% load static %}
+    {% load humanize %}
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+    {% include 'base/favicon.html' %}
+</head>
+<body class="theme-gestion">
+{% include 'base/loader_global.html' %}
+<header class="page-header">
+    <div class="container-fluid" style="max-width: 1200px;">
+        <div class="d-flex align-items-center justify-content-between">
+            <a href="{% url 'gestion:dashboard' %}" class="logo">
+                <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;">
+            </a>
+            <a href="{% url 'gestion:dashboard' %}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i>Dashboard
+            </a>
+        </div>
+    </div>
+</header>
+
+<main class="container-fluid py-4" style="max-width: 1200px;">
+    <div class="mb-4">
+        <h1 class="page-title">Simulador de casos especiales de libranza</h1>
+        <p class="text-secondary mb-0">Herramienta interna de simulacion. No origina creditos ni modifica workflows.</p>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h2 class="h5 mb-3">Condiciones especiales</h2>
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                        {% endif %}
+                        {% for field in form %}
+                            <div class="mb-3">
+                                <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                {{ field }}
+                                {% if field.errors %}
+                                    <div class="text-danger small mt-1">{{ field.errors|join:", " }}</div>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-calculator me-1"></i>Simular y auditar
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            {% if result %}
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
+                            <div>
+                                <h2 class="h5 mb-1">Resultado de simulacion</h2>
+                                <p class="text-secondary mb-0">Auditoria generada: <strong>#{{ audit.id }}</strong></p>
+                            </div>
+                            <span class="badge text-bg-success">Auditado</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <tbody>
+                                    <tr>
+                                        <th>Monto solicitado</th>
+                                        <td>${{ result.requested_amount|floatformat:2|intcomma }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Plazo</th>
+                                        <td>{{ result.term_months }} meses</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Tasa mensual</th>
+                                        <td>{{ result.monthly_rate }}%</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Comision</th>
+                                        <td>${{ result.commission_amount|floatformat:2|intcomma }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>IVA</th>
+                                        <td>${{ result.vat_amount|floatformat:2|intcomma }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Cuota estimada</th>
+                                        <td><strong>${{ result.monthly_payment|floatformat:2|intcomma }}</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Total estimado</th>
+                                        <td>${{ result.total_to_pay|floatformat:2|intcomma }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Intereses estimados</th>
+                                        <td>${{ result.estimated_interest|floatformat:2|intcomma }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <a href="{% url 'gestion:libranza_special_case_originate' audit.id %}" class="btn btn-outline-primary w-100 mt-3">
+                            <i class="bi bi-file-earmark-plus me-1"></i>Originar credito desde esta simulacion
+                        </a>
+                    </div>
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    Completa el formulario para generar una simulacion auditada. No se crea ningun credito.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</main>
+</body>
+</html>

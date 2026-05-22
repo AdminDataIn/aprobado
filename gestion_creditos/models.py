@@ -478,7 +478,7 @@ class Credito(models.Model):
     
     # --- Campos financieros (ÚNICA FUENTE DE VERDAD) ---
     monto_solicitado = models.DecimalField(
-        max_digits=10, 
+        max_digits=14, 
         decimal_places=2, 
         help_text="Monto solicitado por el cliente"
     )
@@ -486,7 +486,7 @@ class Credito(models.Model):
         help_text="Plazo solicitado en meses"
     )
     monto_aprobado = models.DecimalField(
-        max_digits=10, 
+        max_digits=14, 
         decimal_places=2, 
         null=True, 
         blank=True,
@@ -505,14 +505,14 @@ class Credito(models.Model):
         help_text="Tasa de interés mensual (%)"
     )
     comision = models.DecimalField(
-        max_digits=10, 
+        max_digits=14, 
         decimal_places=2, 
         null=True, 
         blank=True,
         help_text="Comisión de estudio del crédito"
     )
     iva_comision = models.DecimalField(
-        max_digits=10, 
+        max_digits=14, 
         decimal_places=2, 
         null=True, 
         blank=True,
@@ -540,7 +540,7 @@ class Credito(models.Model):
         help_text="Capital pendiente por amortizar (sin intereses)"
     )
     valor_cuota = models.DecimalField(
-        max_digits=10, 
+        max_digits=14, 
         decimal_places=2, 
         null=True, 
         blank=True,
@@ -637,6 +637,12 @@ class Credito(models.Model):
 
     class Meta:
         ordering = ['-fecha_solicitud']
+        permissions = [
+            (
+                'can_originate_special_libranza',
+                'Puede simular y originar casos especiales de libranza',
+            ),
+        ]
         verbose_name = 'Crédito'
         verbose_name_plural = 'Créditos'
         indexes = [
@@ -2197,4 +2203,156 @@ class ZapSignWebhookLog(models.Model):
     def __str__(self):
         status = "OK" if self.processed else "ERROR"
         return f"{status} {self.event} - {self.doc_token} ({self.received_at})"
+
+
+class WhatsAppInternalApplication(models.Model):
+    class ProductType(models.TextChoices):
+        PAYROLL_LOAN = 'payroll_loan', 'Libranza'
+        WHATSAPP_CREDIT = 'whatsapp_credit', 'Credito WhatsApp'
+
+    class Status(models.TextChoices):
+        RECEIVED = 'received', 'Recibida'
+        PENDING_PAYROLL_VALIDATION = 'pending_payroll_validation', 'Pendiente validacion convenio'
+        PENDING_FORM_COMPLETION = 'pending_form_completion', 'Pendiente completar formulario'
+        REJECTED = 'rejected', 'Rechazada'
+
+    product_type = models.CharField(max_length=32, choices=ProductType.choices)
+    source = models.CharField(max_length=32, default='whatsapp')
+    status = models.CharField(max_length=40, choices=Status.choices, default=Status.RECEIVED)
+
+    tipo_documento = models.CharField(max_length=10)
+    numero_documento = models.CharField(max_length=30, db_index=True)
+    nombres = models.CharField(max_length=120)
+    apellidos = models.CharField(max_length=120)
+    celular = models.CharField(max_length=30)
+    correo = models.EmailField(blank=True)
+    ciudad = models.CharField(max_length=120, blank=True)
+    ocupacion = models.CharField(max_length=120, blank=True)
+    ingresos_mensuales = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    monto_solicitado = models.DecimalField(max_digits=12, decimal_places=2)
+    plazo_meses = models.PositiveSmallIntegerField()
+
+    empresa = models.ForeignKey(Empresa, on_delete=models.SET_NULL, null=True, blank=True)
+    convenio_validado = models.BooleanField(default=False)
+    vinculo_laboral_validado = models.BooleanField(default=False)
+
+    autorizacion_tratamiento_datos = models.BooleanField(default=False)
+    autorizacion_validacion_informacion = models.BooleanField(default=False)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['product_type', 'numero_documento', '-created_at'], name='wa_app_product_doc_idx'),
+            models.Index(fields=['status', '-created_at'], name='wa_app_status_created_idx'),
+        ]
+        verbose_name = 'Solicitud interna WhatsApp'
+        verbose_name_plural = 'Solicitudes internas WhatsApp'
+
+    def __str__(self):
+        return f"{self.product_type} {self.numero_documento} ({self.status})"
+
+
+class CreditoReglaEspecialAudit(models.Model):
+    credito = models.ForeignKey(
+        Credito,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reglas_especiales_audit',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reglas_especiales_libranza_creadas',
+    )
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    term_months = models.PositiveSmallIntegerField()
+    monthly_rate = models.DecimalField(max_digits=7, decimal_places=4)
+    commission_rate = models.DecimalField(max_digits=7, decimal_places=4, null=True, blank=True)
+    commission_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    vat_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    estimated_monthly_payment = models.DecimalField(max_digits=14, decimal_places=2)
+    estimated_total_payment = models.DecimalField(max_digits=14, decimal_places=2)
+    estimated_interest = models.DecimalField(max_digits=14, decimal_places=2)
+    simulation_payload = models.JSONField(default=dict, blank=True)
+    business_reason = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=512, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at'], name='special_audit_created_idx'),
+            models.Index(fields=['credito', '-created_at'], name='special_audit_credit_idx'),
+        ]
+        verbose_name = 'Auditoria regla especial libranza'
+        verbose_name_plural = 'Auditorias reglas especiales libranza'
+
+    def __str__(self):
+        credito_ref = self.credito.numero_credito if self.credito_id else 'sin credito'
+        return f"Regla especial {credito_ref} - ${self.amount} / {self.term_months} meses"
+
+
+class WhatsAppInternalConsent(models.Model):
+    class ProductType(models.TextChoices):
+        PAYROLL_LOAN = 'payroll_loan', 'Libranza'
+        WHATSAPP_CREDIT = 'whatsapp_credit', 'Credito WhatsApp'
+
+    product_type = models.CharField(max_length=32, choices=ProductType.choices)
+    source = models.CharField(max_length=32, default='whatsapp')
+    document_number = models.CharField(max_length=30, db_index=True)
+    phone = models.CharField(max_length=30, blank=True)
+    consent_type = models.CharField(max_length=80)
+    accepted = models.BooleanField(default=False)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True)
+    evidence = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['product_type', 'document_number', 'consent_type'], name='wa_consent_product_doc_idx'),
+            models.Index(fields=['-created_at'], name='wa_consent_created_idx'),
+        ]
+        verbose_name = 'Consentimiento interno WhatsApp'
+        verbose_name_plural = 'Consentimientos internos WhatsApp'
+
+    def __str__(self):
+        return f"{self.product_type} {self.consent_type} ({self.accepted})"
+
+
+class WhatsAppInternalAPIAuditLog(models.Model):
+    action = models.CharField(max_length=80)
+    product_type = models.CharField(max_length=32, blank=True)
+    request_id = models.CharField(max_length=80, blank=True)
+    correlation_id = models.CharField(max_length=80, blank=True)
+    document_number_hash = models.CharField(max_length=64, blank=True, db_index=True)
+    document_number_masked = models.CharField(max_length=20, blank=True)
+    phone_masked = models.CharField(max_length=20, blank=True)
+    method = models.CharField(max_length=8)
+    path = models.CharField(max_length=255)
+    status_code = models.PositiveSmallIntegerField()
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['action', '-created_at'], name='wa_audit_action_created_idx'),
+            models.Index(fields=['document_number_hash'], name='wa_audit_doc_hash_idx'),
+        ]
+        verbose_name = 'Auditoria API interna WhatsApp'
+        verbose_name_plural = 'Auditoria API interna WhatsApp'
+
+    def __str__(self):
+        return f"{self.action} {self.status_code} ({self.created_at})"
 

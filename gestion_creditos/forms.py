@@ -30,6 +30,12 @@ from gestion_creditos.services.libranza_rules import (
     permitir_multiples_creditos_libranza_en_pruebas,
 )
 from gestion_creditos.services.name_normalization import normalize_name_upper
+from libranza.services.special_cases import (
+    MAX_REASONABLE_COMMISSION_RATE,
+    MAX_SPECIAL_CASE_AMOUNT,
+    MAX_SPECIAL_CASE_MONTHLY_RATE,
+    MAX_SPECIAL_CASE_TERM_MONTHS,
+)
 
 
 NAME_ALLOWED_RE = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ' -]+$")
@@ -944,3 +950,188 @@ class AbonoManualAdminForm(forms.Form):
             'placeholder': 'Nota interna sobre este abono...'
         })
     )
+
+
+class SpecialCaseLibranzaSimulationForm(forms.Form):
+    amount = forms.DecimalField(
+        label='Monto solicitado',
+        min_value=Decimal('0.01'),
+        max_value=MAX_SPECIAL_CASE_AMOUNT,
+        max_digits=14,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'step': '0.01',
+            'placeholder': '10000000',
+        }),
+    )
+    term_months = forms.IntegerField(
+        label='Plazo en meses',
+        min_value=1,
+        max_value=MAX_SPECIAL_CASE_TERM_MONTHS,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'min': '1',
+            'max': str(MAX_SPECIAL_CASE_TERM_MONTHS),
+        }),
+    )
+    monthly_rate = forms.DecimalField(
+        label='Tasa mensual',
+        min_value=Decimal('0.00'),
+        max_value=MAX_SPECIAL_CASE_MONTHLY_RATE,
+        max_digits=5,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'step': '0.01',
+            'placeholder': '1.90',
+        }),
+    )
+    commission_rate = forms.DecimalField(
+        label='Comision porcentual',
+        required=False,
+        min_value=Decimal('0.00'),
+        max_value=MAX_REASONABLE_COMMISSION_RATE,
+        max_digits=7,
+        decimal_places=4,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'step': '0.0001',
+            'placeholder': '5.0000',
+        }),
+    )
+    commission_amount = forms.DecimalField(
+        label='Comision fija',
+        required=False,
+        min_value=Decimal('0.00'),
+        max_digits=14,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'step': '0.01',
+            'placeholder': '500000',
+        }),
+    )
+    vat_rate = forms.DecimalField(
+        label='IVA sobre comision',
+        min_value=Decimal('0.00'),
+        initial=Decimal('19.00'),
+        max_digits=7,
+        decimal_places=4,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'step': '0.0001',
+            'placeholder': '19.0000',
+        }),
+    )
+    business_reason = forms.CharField(
+        label='Motivo del caso especial',
+        min_length=10,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 4,
+            'placeholder': 'Describe la justificacion comercial, operativa o de riesgo del caso especial.',
+        }),
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        commission_rate = cleaned_data.get('commission_rate')
+        commission_amount = cleaned_data.get('commission_amount')
+        if commission_rate is not None and commission_amount is not None:
+            raise forms.ValidationError(
+                'Usa comision porcentual o comision fija, no ambas simultaneamente.'
+            )
+        return cleaned_data
+
+
+class SpecialCaseLibranzaOriginationForm(forms.Form):
+    tipo_documento = forms.ChoiceField(
+        label='Tipo de documento',
+        choices=[('CC', 'Cedula de ciudadania'), ('CE', 'Cedula de extranjeria'), ('NIT', 'NIT')],
+        initial='CC',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    numero_documento = forms.CharField(
+        label='Numero de documento',
+        max_length=20,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '123456789'}),
+    )
+    nombres = forms.CharField(
+        label='Nombres',
+        max_length=100,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    apellidos = forms.CharField(
+        label='Apellidos',
+        max_length=100,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    celular = forms.CharField(
+        label='Celular',
+        max_length=20,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '3001234567'}),
+    )
+    correo = forms.EmailField(
+        label='Correo',
+        widget=forms.EmailInput(attrs={'class': 'form-control'}),
+    )
+    direccion = forms.CharField(
+        label='Direccion',
+        max_length=255,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    empresa = forms.ModelChoiceField(
+        label='Empresa / pagador',
+        queryset=Empresa.objects.filter(convenio_activo=True).exclude(
+            tipo_empresa=Empresa.TipoEmpresa.MARKETPLACE_EXTERNA
+        ),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    ingresos_mensuales = forms.DecimalField(
+        label='Ingresos mensuales',
+        required=False,
+        min_value=Decimal('0.00'),
+        max_digits=12,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+    )
+    cedula_frontal = forms.FileField(
+        label='Cedula frontal',
+        validators=[FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png', 'webp'])],
+        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.jpg,.jpeg,.png,.webp'}),
+    )
+    cedula_trasera = forms.FileField(
+        label='Cedula trasera',
+        validators=[FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png', 'webp'])],
+        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.jpg,.jpeg,.png,.webp'}),
+    )
+    certificado_laboral = forms.FileField(
+        label='Certificado laboral',
+        required=False,
+        validators=[FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'webp'])],
+        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.pdf,.jpg,.jpeg,.png,.webp'}),
+    )
+    desprendible_nomina = forms.FileField(
+        label='Desprendible de nomina',
+        required=False,
+        validators=[FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'webp'])],
+        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.pdf,.jpg,.jpeg,.png,.webp'}),
+    )
+    certificado_bancario = forms.FileField(
+        label='Certificado bancario',
+        validators=[FileExtensionValidator(allowed_extensions=['pdf'])],
+        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.pdf'}),
+    )
+
+    def clean_numero_documento(self):
+        value = (self.cleaned_data.get('numero_documento') or '').strip()
+        if len(value) < 6:
+            raise forms.ValidationError('El documento debe tener al menos 6 caracteres.')
+        return value
+
+    def clean_celular(self):
+        value = ''.join(filter(str.isdigit, self.cleaned_data.get('celular') or ''))
+        if len(value) != 10:
+            raise forms.ValidationError('El celular debe contener exactamente 10 numeros.')
+        return value

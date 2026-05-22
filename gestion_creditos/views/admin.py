@@ -2,6 +2,9 @@ from .common import *
 from .common import _build_capacidad_descuento_context
 from gestion_creditos.models import DetalleContablePago
 from gestion_creditos.services.advisors import filter_creditos_by_asesor
+from libranza.services.special_case_audit import create_special_case_audit
+from libranza.services.special_case_originator import SpecialCaseOriginationError, originate_special_case_libranza
+from libranza.services.special_cases import SpecialCaseSimulationInput, SpecialCaseSimulationError, simulate_special_case_libranza
 
 
 def _admin_empresas_choices():
@@ -13,6 +16,13 @@ def _admin_empresas_choices():
             .values_list('empresa_nombre', flat=True)
         )
     )
+
+
+def _request_ip_address(request):
+    forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if forwarded_for:
+        return forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR')
 
 
 def _build_admin_solicitudes_queryset(request, forced_linea=None):
@@ -400,6 +410,90 @@ def admin_cartera_view(request):
     }
     
     return render(request, 'gestion_creditos/admin_cartera.html', context)
+
+
+@staff_member_required
+@permission_required('gestion_creditos.can_originate_special_libranza', raise_exception=True)
+def admin_libranza_special_case_simulator_view(request):
+    result = None
+    audit = None
+
+    if request.method == 'POST':
+        form = SpecialCaseLibranzaSimulationForm(request.POST)
+        if form.is_valid():
+            try:
+                result = simulate_special_case_libranza(
+                    SpecialCaseSimulationInput(
+                        amount=form.cleaned_data['amount'],
+                        term_months=form.cleaned_data['term_months'],
+                        monthly_rate=form.cleaned_data['monthly_rate'],
+                        commission_rate=form.cleaned_data.get('commission_rate'),
+                        commission_amount=form.cleaned_data.get('commission_amount'),
+                        vat_rate=form.cleaned_data['vat_rate'],
+                    )
+                )
+                audit = create_special_case_audit(
+                    simulation_result=result,
+                    created_by=request.user,
+                    business_reason=form.cleaned_data['business_reason'],
+                    ip_address=_request_ip_address(request),
+                    user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                )
+                messages.success(request, f'Simulacion auditada con ID {audit.id}.')
+            except SpecialCaseSimulationError as exc:
+                form.add_error(None, str(exc))
+    else:
+        form = SpecialCaseLibranzaSimulationForm()
+
+    return render(
+        request,
+        'gestion_creditos/admin_libranza_special_case_simulator.html',
+        {
+            'form': form,
+            'result': result,
+            'audit': audit,
+        },
+    )
+
+
+@staff_member_required
+@permission_required('gestion_creditos.can_originate_special_libranza', raise_exception=True)
+def admin_libranza_special_case_originate_view(request, audit_id):
+    audit = get_object_or_404(CreditoReglaEspecialAudit, pk=audit_id)
+    if audit.credito_id:
+        messages.error(request, 'Esta simulacion ya fue originada.')
+        return render(
+            request,
+            'gestion_creditos/admin_libranza_special_case_originate.html',
+            {'audit': audit, 'form': None, 'already_originated': True},
+            status=400,
+        )
+
+    if request.method == 'POST':
+        form = SpecialCaseLibranzaOriginationForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                result = originate_special_case_libranza(
+                    audit_id=audit.id,
+                    applicant_data=form.cleaned_data,
+                    files=request.FILES,
+                    originated_by=request.user,
+                )
+                messages.success(
+                    request,
+                    f'Credito especial {result.credito.numero_credito} creado en revision.',
+                )
+                return redirect('gestion:credito_detalle', credito_id=result.credito.id)
+            except SpecialCaseOriginationError as exc:
+                form.add_error(None, str(exc))
+    else:
+        form = SpecialCaseLibranzaOriginationForm()
+
+    return render(
+        request,
+        'gestion_creditos/admin_libranza_special_case_originate.html',
+        {'audit': audit, 'form': form, 'already_originated': False},
+    )
 
 
 @staff_member_required

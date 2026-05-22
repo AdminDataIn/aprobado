@@ -14,7 +14,7 @@ import decimal
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.core.exceptions import SuspiciousFileOperation, ValidationError
@@ -48,11 +48,14 @@ from ..forms import (
     PagoMasivoEmpresaConfirmForm,
     PagoMasivoEmpresaUploadForm,
     PagoObligacionesSeleccionadasForm,
+    SpecialCaseLibranzaOriginationForm,
+    SpecialCaseLibranzaSimulationForm,
 )
 from ..models import (
     AsesorComercial,
     Credito,
     CreditoAdelantoNomina,
+    CreditoReglaEspecialAudit,
     CuentaAhorro,
     Empresa,
     HistorialEstado,

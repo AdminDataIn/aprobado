@@ -22,6 +22,8 @@ urlpatterns = [
     path('adelantos-nomina/', views.admin_adelantos_nomina_view, name='adelantos_nomina'),
     path('creditos/', views.admin_creditos_activos_view, name='creditos_activos'),
     path('cartera/', views.admin_cartera_view, name='cartera_mora'),
+    path('libranza/casos-especiales/simular/', views.admin_libranza_special_case_simulator_view, name='libranza_special_case_simulator'),
+    path('libranza/casos-especiales/<int:audit_id>/originar/', views.admin_libranza_special_case_originate_view, name='libranza_special_case_originate'),
 
     # ========================================
     # DETALLE Y GESTIÓN DE CRÉDITOS
