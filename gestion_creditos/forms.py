@@ -1034,17 +1034,6 @@ class SpecialCaseLibranzaSimulationForm(forms.Form):
         }),
     )
 
-    def clean(self):
-        cleaned_data = super().clean()
-        commission_rate = cleaned_data.get('commission_rate')
-        commission_amount = cleaned_data.get('commission_amount')
-        if commission_rate is not None and commission_amount is not None:
-            raise forms.ValidationError(
-                'Usa comision porcentual o comision fija, no ambas simultaneamente.'
-            )
-        return cleaned_data
-
-
 class SpecialCaseLibranzaOriginationForm(forms.Form):
     tipo_documento = forms.ChoiceField(
         label='Tipo de documento',

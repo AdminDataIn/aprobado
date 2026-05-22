@@ -12,7 +12,7 @@ from typing import Any
 
 TWOPLACES = Decimal('0.01')
 MAX_SPECIAL_CASE_AMOUNT = Decimal('100000000.00')
-MAX_SPECIAL_CASE_TERM_MONTHS = 24
+MAX_SPECIAL_CASE_TERM_MONTHS = 48
 MAX_SPECIAL_CASE_MONTHLY_RATE = Decimal('10.00')
 MAX_REASONABLE_COMMISSION_RATE = Decimal('100.00')
 
@@ -159,11 +159,11 @@ def _validate_inputs(*, amount, term_months, monthly_rate, commission_rate, comm
 
 
 def _resolve_commission_amount(*, amount, commission_rate, commission_amount) -> Decimal:
-    if commission_amount is not None:
-        return commission_amount
-    if commission_rate is None:
-        return Decimal('0.00')
-    return _money(amount * commission_rate / Decimal('100'))
+    percentage_commission = Decimal('0.00')
+    fixed_commission = commission_amount or Decimal('0.00')
+    if commission_rate is not None:
+        percentage_commission = _money(amount * commission_rate / Decimal('100'))
+    return _money(percentage_commission + fixed_commission)
 
 
 def _calculate_monthly_payment(*, principal_financed, monthly_rate, term_months) -> Decimal:

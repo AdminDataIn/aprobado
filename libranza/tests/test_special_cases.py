@@ -25,7 +25,7 @@ class SpecialCaseSimulationTests(SimpleTestCase):
         result = simulate_special_case_libranza(
             SpecialCaseSimulationInput(
                 amount=Decimal('10000000.00'),
-                term_months=24,
+                term_months=MAX_SPECIAL_CASE_TERM_MONTHS,
                 monthly_rate=Decimal('1.90'),
                 commission_rate=Decimal('5.00'),
                 vat_rate=Decimal('19.00'),
@@ -37,7 +37,7 @@ class SpecialCaseSimulationTests(SimpleTestCase):
         self.assertEqual(result.vat_amount, Decimal('95000.00'))
         self.assertEqual(result.principal_financed, Decimal('10595000.00'))
         self.assertEqual(result.monthly_rate, Decimal('1.90'))
-        self.assertEqual(result.term_months, 24)
+        self.assertEqual(result.term_months, 48)
         self.assertTrue(result.monthly_payment > Decimal('0.00'))
         self.assertTrue(result.total_to_pay > result.principal_financed)
         self.assertTrue(result.estimated_interest > Decimal('0.00'))
@@ -61,6 +61,21 @@ class SpecialCaseSimulationTests(SimpleTestCase):
         self.assertEqual(result.total_to_pay, Decimal('5297499.96'))
         self.assertEqual(result.estimated_interest, Decimal('0.00'))
 
+    def test_valid_simulation_sums_percentage_and_fixed_commission(self):
+        result = simulate_special_case_libranza(
+            _input(
+                amount=Decimal('1000000.00'),
+                monthly_rate=Decimal('0.00'),
+                commission_rate=Decimal('5.00'),
+                commission_amount=Decimal('100000.00'),
+                vat_rate=Decimal('19.00'),
+            )
+        )
+
+        self.assertEqual(result.commission_amount, Decimal('150000.00'))
+        self.assertEqual(result.vat_amount, Decimal('28500.00'))
+        self.assertEqual(result.principal_financed, Decimal('1178500.00'))
+
     def test_rejects_amount_over_100m(self):
         with self.assertRaises(SpecialCaseSimulationError) as ctx:
             simulate_special_case_libranza(
@@ -69,7 +84,7 @@ class SpecialCaseSimulationTests(SimpleTestCase):
 
         self.assertEqual(ctx.exception.reason, REASON_AMOUNT_EXCEEDS_LIMIT)
 
-    def test_rejects_term_over_24(self):
+    def test_rejects_term_over_special_case_limit(self):
         with self.assertRaises(SpecialCaseSimulationError) as ctx:
             simulate_special_case_libranza(
                 _input(term_months=MAX_SPECIAL_CASE_TERM_MONTHS + 1)

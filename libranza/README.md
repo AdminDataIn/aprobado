@@ -73,9 +73,9 @@ vistas, formularios, originacion ni pagaré.
 Limites especiales:
 
 - monto maximo: `100000000`
-- plazo maximo: `24` meses
+- plazo maximo: `48` meses
 - tasa mensual editable, no negativa, maximo `10.00` y con maximo 2 decimales
-- comision editable por porcentaje o valor fijo
+- comision editable por porcentaje, valor fijo o la suma de ambos
 - IVA opcional sobre comision
 
 DTO principal:

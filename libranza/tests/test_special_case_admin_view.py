@@ -111,7 +111,7 @@ class SpecialCaseAdminViewTests(TestCase):
         self.assertContains(response, 'Total estimado')
         self.assertContains(response, '#1')
 
-    def test_invalid_post_does_not_create_audit(self):
+    def test_post_with_percentage_and_fixed_commission_sums_both(self):
         self.grant_special_case_permission()
         self.client.login(username='special-staff', password='123456')
 
@@ -121,8 +121,10 @@ class SpecialCaseAdminViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'no ambas simultaneamente')
-        self.assertEqual(CreditoReglaEspecialAudit.objects.count(), 0)
+        self.assertEqual(CreditoReglaEspecialAudit.objects.count(), 1)
+        audit = CreditoReglaEspecialAudit.objects.get()
+        self.assertEqual(audit.commission_rate, Decimal('5.0000'))
+        self.assertEqual(audit.commission_amount, Decimal('600000.00'))
 
     def test_post_does_not_create_credit_or_libranza_detail(self):
         self.grant_special_case_permission()
