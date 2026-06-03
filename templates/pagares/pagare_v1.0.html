@@ -86,6 +86,21 @@
       min-width: 140px;
     }
 
+    .linea-dia {
+      min-width: 24px;
+      text-align: center;
+    }
+
+    .linea-mes {
+      min-width: 52px;
+      text-align: center;
+    }
+
+    .linea-anio {
+      min-width: 38px;
+      text-align: center;
+    }
+
     .linea-larga {
       min-width: 300px;
     }
@@ -167,7 +182,7 @@
     <p>
       Yo, <span class="linea linea-larga negrita">{{ deudor_nombres|default:"" }}</span>
       mayor de edad, con domicilio en la ciudad de
-      <span class="linea linea-media negrita">{{ ciudad_domicilio_visible|default:"________________" }}</span>,
+      <span class="linea linea-media negrita">{{ ciudad_domicilio|default:"" }}</span>,
       identificado como aparece al pie de mi firma,
       obrando en mi propio nombre, o en la condición indicada al pie de mi firma,
       declaro:
@@ -217,9 +232,9 @@
     </p>
 
     <p>
-      El día (<span class="linea linea-corta">{{ dia_firma|default:"" }}</span>) del mes de
-      <span class="linea linea-media">{{ mes_firma|default:"" }}</span> del año
-      <span class="linea linea-corta">{{ anio_firma|default:"" }}</span>.
+      El día (<span class="linea linea-dia">{{ dia_firma|default:"" }}</span>) del mes de
+      <span class="linea linea-mes">{{ mes_firma|default:"" }}</span> del año
+      <span class="linea linea-anio">{{ anio_firma|default:"" }}</span>.
     </p>
 
     <p>
@@ -332,9 +347,9 @@
 
     <p>
       Para constancia se firma en la ciudad de <span class="negrita">{{ ciudad_firma_visible|default:"________________" }}</span>,
-      en un (1) original, el día (<span class="linea linea-corta">{{ dia_firma|default:"" }}</span>) del mes de
-      <span class="linea linea-media">{{ mes_firma|default:"" }}</span> del año
-      <span class="linea linea-corta">{{ anio_firma|default:"" }}</span>.
+      en un (1) original, el día (<span class="linea linea-dia">{{ dia_firma|default:"" }}</span>) del mes de
+      <span class="linea linea-mes">{{ mes_firma|default:"" }}</span> del año
+      <span class="linea linea-anio">{{ anio_firma|default:"" }}</span>.
     </p>
   </div>
 
