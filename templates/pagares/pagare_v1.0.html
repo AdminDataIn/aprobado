@@ -154,7 +154,7 @@
     <div class="header-info">
       <strong>APROBADO SOLUCIONES DIGITALES SAS</strong><br>
       NIT 901949137-2<br>
-      Villavicencio, Meta, Colombia
+      Colombia
     </div>
   </div>
 
@@ -165,15 +165,15 @@
   <!-- Contenido del Pagaré -->
   <div class="contenido">
     <p>
-      Yo (Nosotros), <span class="linea linea-larga negrita">{{ deudor_nombres|default:"" }}</span>
-      mayor(es) de edad, con domicilio en la ciudad de
-      <span class="linea linea-media negrita">{{ ciudad_domicilio|default:"" }}</span>,
-      identificado(s) como aparece(mos) al pie de mi(nuestras) firma(s),
-      obrando en mi (nuestro) propio nombre, o en la condición indicada al pie de mi(nuestras) firma(s),
-      declaro(amos):
-      <span class="negrita">PRIMERO:</span> Que he(mos) recibido de APROBADO SOLUCIONES DIGITALES SAS
+      Yo, <span class="linea linea-larga negrita">{{ deudor_nombres|default:"" }}</span>
+      mayor de edad, con domicilio en la ciudad de
+      <span class="linea linea-media negrita">{{ ciudad_domicilio_visible|default:"________________" }}</span>,
+      identificado como aparece al pie de mi firma,
+      obrando en mi propio nombre, o en la condición indicada al pie de mi firma,
+      declaro:
+      <span class="negrita">PRIMERO:</span> Que he recibido de APROBADO SOLUCIONES DIGITALES SAS
       (NIT 901949137-2), en adelante <span class="negrita">EL ACREEDOR</span>, un desembolso de crédito
-      efectuado el día 1 de junio de 2026, y en virtud de dicha obligación me (nos) obligo(amos)
+      efectuado el día {{ fecha_firma_texto|default:"" }}, y en virtud de dicha obligación me obligo
       a pagar solidaria, indivisible, irrevocable e incondicionalmente a su orden, o a quien represente
       sus derechos, las sumas de dinero correspondientes al capital desembolsado, los intereses
       remuneratorios y moratorios que se causen, los gastos, costos, comisiones, impuestos, seguros
@@ -199,20 +199,20 @@
     </div>
 
     <p>
-      <span class="negrita">SEGUNDO:</span> Que pagare(mos) intereses moratorios a la tasa máxima legalmente autorizada sobre la suma de
-      capital insoluto. <span class="negrita">TERCERO:</span> Que acepto(amos) expresamente cualquier endoso o cesión que de este pagaré
-      haga EL ACREEDOR y reconozco(emos) desde ya al endosatario o cesionario dentro de cualquier proceso judicial.
-      <span class="negrita">CUARTO:</span> Como estoy(amos) renunciando(amos) expresamente a cualquier requerimiento para ser
-      constituido(s) en mora en los casos de Ley. <span class="negrita">QUINTO:</span> EL ACREEDOR se podrá acoger a los términos del
+      <span class="negrita">SEGUNDO:</span> Que pagaré intereses moratorios a la tasa máxima legalmente autorizada sobre la suma de
+      capital insoluto. <span class="negrita">TERCERO:</span> Que acepto expresamente cualquier endoso o cesión que de este pagaré
+      haga EL ACREEDOR y reconozco desde ya al endosatario o cesionario dentro de cualquier proceso judicial.
+      <span class="negrita">CUARTO:</span> Renuncio expresamente a cualquier requerimiento para ser
+      constituido en mora en los casos de Ley. <span class="negrita">QUINTO:</span> EL ACREEDOR se podrá acoger a los términos del
       artículo 886 del Código de Comercio para el cobro de intereses. El presente pagaré no está sujeto a la presentación para su pago,
       ni aviso de rechazo, ni el proceso de notificaciones e instrucciones previstas en los artículos 621 a 625 y demás efectos legales
-      y se suscribe para ser llenado por EL ACREEDOR o su representante según las instrucciones impartidas por mí(nosotros),
+      y se suscribe para ser llenado por EL ACREEDOR o su representante según las instrucciones impartidas por mí,
       las cuales están en la carta de autorizaciones e instrucciones adjunta al presente documento, todo de conformidad con lo dispuesto
       en el artículo 622 del Código de Comercio.
     </p>
 
     <p>
-      Para constancia se firma en la ciudad de <span class="negrita">{{ ciudad_firma|default:"Villavicencio" }}</span>,
+      Para constancia se firma en la ciudad de <span class="negrita">{{ ciudad_firma_visible|default:"________________" }}</span>,
       en un (1) original, con destino a {{ acreedor_nombre|default:"ACREEDOR" }} {{ acreedor_detalle|default:"" }}.
     </p>
 
@@ -248,7 +248,7 @@
 
   <!-- Footer -->
   <div class="footer">
-    APROBADO SOLUCIONES DIGITALES SAS - NIT 901949137-2 - Villavicencio, Meta, Colombia
+    APROBADO SOLUCIONES DIGITALES SAS - NIT 901949137-2 - Colombia
   </div>
 
   <!-- SEGUNDA PÁGINA: CARTA DE INSTRUCCIONES -->
@@ -260,7 +260,7 @@
     <div class="header-info">
       <strong>APROBADO SOLUCIONES DIGITALES SAS</strong><br>
       NIT 901949137-2<br>
-      Villavicencio, Meta, Colombia
+      Colombia
     </div>
   </div>
 
@@ -270,34 +270,34 @@
   <!-- Contenido de instrucciones -->
   <div class="contenido">
     <p>
-      Yo (Nosotros), <span class="linea linea-larga negrita">{{ deudor_nombres|default:"" }}</span>
-      identificado(s) como aparece(mos) al pie de mi(nuestras) firma(s), obrando en mi (nuestro) propio
-      nombre, o en la condición indicada al pie de mi(nuestras) firma(s), declaro(amos) que por medio de
-      la presente carta autorizo(amos) e instruyo(imos) irrevocablemente a <span class="negrita">{{ acreedor_nombre|default:"ACREEDOR" }}</span>
+      Yo, <span class="linea linea-larga negrita">{{ deudor_nombres|default:"" }}</span>
+      identificado como aparece al pie de mi firma, obrando en mi propio
+      nombre, o en la condición indicada al pie de mi firma, declaro que por medio de
+      la presente carta autorizo e instruyo irrevocablemente a <span class="negrita">{{ acreedor_nombre|default:"ACREEDOR" }}</span>
       <span class="negrita">{{ acreedor_detalle|default:"" }}</span> en adelante <span class="negrita">EL ACREEDOR</span>,
-      su representante legal o apoderado, para que en mi(nuestro) nombre y representación llene el Pagaré
-      No. <span class="negrita">{{ numero_pagare|default:"___________" }}</span> que he(mos) suscrito
+      su representante legal o apoderado, para que en mi nombre y representación llene el Pagaré
+      No. <span class="negrita">{{ numero_pagare|default:"___________" }}</span> que he suscrito
       simultáneamente con la presente carta, con sujeción a las siguientes instrucciones:
     </p>
 
     <p>
       <span class="negrita">1.</span> Que EL ACREEDOR podrá diligenciar el pagaré por una suma igual al
-      capital insoluto que en mi(nuestro) cargo aparezca en libros de contabilidad de EL ACREEDOR, más
-      los intereses causados y no pagados, y demás sumas que yo(nosotros) adeude(mos), con el fin de
-      obtener el pago de las sumas que yo(nosotros) adeude(mos), en virtud de cualquiera de las
-      obligaciones que tenga(mos) con EL ACREEDOR.
+      capital insoluto que a mi cargo aparezca en libros de contabilidad de EL ACREEDOR, más
+      los intereses causados y no pagados, y demás sumas que yo adeude, con el fin de
+      obtener el pago de las sumas que yo adeude, en virtud de cualquiera de las
+      obligaciones que tenga con EL ACREEDOR.
     </p>
 
     <p>
       <span class="negrita">2.</span> La fecha de pago del pagaré será cualquiera que escoja EL ACREEDOR,
-      pero no anterior a la fecha en que efectivamente incurra(mos) en mora con EL ACREEDOR, ni posterior
-      al plazo de prescripción de la(s) obligación(es) que con el pagaré se respalda(n).
+      pero no anterior a la fecha en que efectivamente incurra en mora con EL ACREEDOR, ni posterior
+      al plazo de prescripción de la obligación que con el pagaré se respalda.
     </p>
 
     <p>
       <span class="negrita">3.</span> Los espacios en blanco que hayan quedado en el pagaré podrán llenarse
       por EL ACREEDOR con sujeción a lo pactado en esta carta de instrucciones, sin perjuicio de la validez
-      del pagaré que en ningún caso requerirá de nueva firma de mi(nuestra) parte.
+      del pagaré que en ningún caso requerirá de nueva firma de mi parte.
     </p>
 
     <p>
@@ -307,7 +307,7 @@
     </p>
 
     <p>
-      <span class="negrita">5.</span> Acepto(amos) que el pagaré no requiere presentación para pago ni aviso
+      <span class="negrita">5.</span> Acepto que el pagaré no requiere presentación para pago ni aviso
       de rechazo, ni el proceso de notificaciones e instrucciones previstas en los artículos 621 a 625 del
       Código de Comercio.
     </p>
@@ -319,9 +319,9 @@
     </p>
 
     <p>
-      <span class="negrita">7.</span> Declaro(amos) expresamente que renuncio(amos) a exigir la presentación
+      <span class="negrita">7.</span> Declaro expresamente que renuncio a exigir la presentación
       del pagaré para su pago y a cualquier otro requisito formal que exija la ley para el cobro del mismo,
-      y me(nos) obligo(amos) a pagar los gastos en que incurra EL ACREEDOR con motivo del cobro del pagaré,
+      y me obligo a pagar los gastos en que incurra EL ACREEDOR con motivo del cobro del pagaré,
       incluyendo pero sin limitarse a honorarios de abogados, gastos de cobranza judicial y extrajudicial.
     </p>
 
@@ -331,7 +331,7 @@
     </p>
 
     <p>
-      Para constancia se firma en la ciudad de <span class="negrita">{{ ciudad_firma|default:"Villavicencio" }}</span>,
+      Para constancia se firma en la ciudad de <span class="negrita">{{ ciudad_firma_visible|default:"________________" }}</span>,
       en un (1) original, el día (<span class="linea linea-corta">{{ dia_firma|default:"" }}</span>) del mes de
       <span class="linea linea-media">{{ mes_firma|default:"" }}</span> del año
       <span class="linea linea-corta">{{ anio_firma|default:"" }}</span>.

@@ -4,6 +4,7 @@ from django.urls import reverse
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth.models import User
+from django.template.loader import render_to_string
 from django.utils import timezone
 from decimal import Decimal
 import json
@@ -17,6 +18,10 @@ from gestion_creditos.models import (
     ZapSignWebhookLog,
 )
 from gestion_creditos.services import filtrar_creditos, get_billetera_context, procesar_pagos_masivos_csv
+from gestion_creditos.services.pagare_service import (
+    _get_pagare_template_name,
+    _preparar_contexto_pagare,
+)
 import io
 from datetime import date
 
@@ -373,4 +378,90 @@ class ZapSignWebhookViewTest(TestCase):
         response = self._post(payload, secret=self.secret)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json().get('status'), 'document_not_found_ignored')
+
+
+class PagareTemplateVersionTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='deudor_pagare',
+            password='123',
+            first_name='Ana',
+            last_name='Torres',
+            email='ana@example.com',
+        )
+        self.empresa = Empresa.objects.create(nombre='Empresa Sin Ubicacion')
+        self.credito = Credito.objects.create(
+            usuario=self.user,
+            linea=Credito.LineaCredito.LIBRANZA,
+            estado=Credito.EstadoCredito.APROBADO,
+            monto_solicitado=Decimal('1200000.00'),
+            monto_aprobado=Decimal('1200000.00'),
+            plazo_solicitado=6,
+            plazo=6,
+            tasa_interes=Decimal('2.10'),
+            comision=Decimal('0.00'),
+            iva_comision=Decimal('0.00'),
+            valor_cuota=Decimal('220000.00'),
+            fecha_proximo_pago=timezone.localdate(),
+        )
+        self.detalle = CreditoLibranza.objects.create(
+            credito=self.credito,
+            nombres='Ana',
+            apellidos='Torres',
+            cedula='123456789',
+            direccion='Calle 10 # 20-30',
+            telefono='3001234567',
+            correo_electronico='ana@example.com',
+            empresa=self.empresa,
+            ingresos_mensuales=Decimal('2500000.00'),
+            cedula_frontal=pdf_upload('cedula_frontal_pagare.pdf'),
+            cedula_trasera=pdf_upload('cedula_trasera_pagare.pdf'),
+            certificado_bancario=pdf_upload('certificado_bancario_pagare.pdf'),
+        )
+
+    def _contexto(self, version='1.0'):
+        return _preparar_contexto_pagare(
+            self.credito,
+            self.detalle,
+            'PAG-TEST-001',
+            version_plantilla=version,
+        )
+
+    def test_pagare_actual_no_contiene_pluralizaciones_ni_fecha_hardcodeada(self):
+        html = render_to_string('pagares/pagare_v1.0.html', self._contexto('1.0'))
+
+        self.assertNotIn('he(mos)', html)
+        self.assertNotIn('obligo(amos)', html)
+        self.assertNotIn('Yo (Nosotros)', html)
+        self.assertNotIn('1 de junio de 2026', html)
+
+    def test_ciudad_firma_no_usa_villavicencio_por_defecto(self):
+        contexto = self._contexto('1.0')
+        html = render_to_string('pagares/pagare_v1.0.html', contexto)
+
+        self.assertEqual(contexto['ciudad_firma'], '')
+        self.assertIn('________________', html)
+        self.assertNotIn('Villavicencio', html)
+
+    def test_fecha_firma_sale_del_backend(self):
+        contexto = self._contexto('1.0')
+        fecha_actual = timezone.localdate()
+
+        self.assertEqual(contexto['dia_firma'], str(fecha_actual.day))
+        self.assertEqual(contexto['anio_firma'], str(fecha_actual.year))
+        self.assertIn(str(fecha_actual.year), contexto['fecha_firma_texto'])
+
+    def test_selector_de_template_permite_version_dos_sin_romper_default(self):
+        self.assertEqual(_get_pagare_template_name('2.0'), 'pagares/pagare_v2.0.html')
+        self.assertEqual(_get_pagare_template_name('version-invalida'), 'pagares/pagare_v1.0.html')
+
+    def test_pagare_version_dos_renderiza_con_datos_minimos(self):
+        html = render_to_string('pagares/pagare_v2.0.html', self._contexto('2.0'))
+
+        self.assertIn('PAGARÉ EN BLANCO', html)
+        self.assertIn('CARTA DE INSTRUCCIONES', html)
+        self.assertIn('ANA TORRES', html)
+        self.assertIn('123456789', html)
+        self.assertIn('APROBADO SOLUCIONES DIGITALES SAS', html)
+        self.assertIn('Descuento por libranza', html)
 

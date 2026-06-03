@@ -1,0 +1,382 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pagaré Aprobado v2 - {{ numero_pagare|default:"" }}</title>
+  <style>
+    @page {
+      size: Letter;
+      margin: 0;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 8.7pt;
+      color: #1a1f24;
+      line-height: 1.34;
+    }
+
+    .membrete {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: -1;
+    }
+
+    .page {
+      min-height: 27.94cm;
+      padding: 2.8cm 1.85cm 2.35cm;
+      page-break-after: always;
+    }
+
+    .page:last-child {
+      page-break-after: auto;
+    }
+
+    .content {
+      background: rgba(255, 255, 255, 0.96);
+      border-radius: 10px;
+      padding: 0.35cm 0.45cm;
+    }
+
+    h1 {
+      margin: 0 0 0.22cm;
+      color: #0b4f7a;
+      font-size: 15pt;
+      text-align: center;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0.25cm 0 0.12cm;
+      color: #0b4f7a;
+      font-size: 10pt;
+      border-bottom: 1px solid #8ccbd7;
+      padding-bottom: 0.06cm;
+    }
+
+    h3 {
+      margin: 0.2cm 0 0.08cm;
+      color: #12445f;
+      font-size: 9pt;
+    }
+
+    p {
+      margin: 0 0 0.14cm;
+      text-align: justify;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.1cm 0 0.18cm;
+    }
+
+    th,
+    td {
+      border: 1px solid #b9d7de;
+      padding: 0.08cm 0.12cm;
+      vertical-align: top;
+    }
+
+    th {
+      background: #e9f7fa;
+      color: #0b4f7a;
+      text-align: left;
+      font-weight: 700;
+    }
+
+    .meta {
+      display: table;
+      width: 100%;
+      margin-bottom: 0.16cm;
+    }
+
+    .meta-item {
+      display: table-cell;
+      width: 33.33%;
+      border: 1px solid #b9d7de;
+      padding: 0.09cm 0.12cm;
+      background: #f7fcfd;
+    }
+
+    .label {
+      display: block;
+      color: #0b4f7a;
+      font-size: 7.4pt;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .value {
+      font-weight: 700;
+    }
+
+    .small {
+      font-size: 7.8pt;
+    }
+
+    .signature {
+      margin-top: 0.45cm;
+      page-break-inside: avoid;
+    }
+
+    .line {
+      border-top: 1px solid #1a1f24;
+      width: 7.2cm;
+      padding-top: 0.08cm;
+      margin-top: 0.65cm;
+    }
+  </style>
+</head>
+<body>
+  {% if membrete_url %}
+    <img class="membrete" src="{{ membrete_url }}" alt="Membrete Aprobado">
+  {% endif %}
+
+  <section class="page">
+    <div class="content">
+      <h1>PAGARÉ EN BLANCO</h1>
+
+      <div class="meta">
+        <div class="meta-item">
+          <span class="label">Pagaré No.</span>
+          <span class="value">{{ numero_pagare|default:"___________" }}</span>
+        </div>
+        <div class="meta-item">
+          <span class="label">Ciudad de firma</span>
+          <span class="value">{{ ciudad_firma_visible|default:"________________" }}</span>
+        </div>
+        <div class="meta-item">
+          <span class="label">Fecha de firma</span>
+          <span class="value">{{ fecha_firma_texto|default:"________________" }}</span>
+        </div>
+      </div>
+
+      <h2>I. Datos del deudor suscriptor</h2>
+      <table>
+        <tr>
+          <th>Nombre completo</th>
+          <td>{{ deudor_nombres|default:"________________" }}</td>
+          <th>Documento</th>
+          <td>{{ tipo_documento_deudor|default:"C.C." }} {{ cedula_deudor|default:"________________" }}</td>
+        </tr>
+        <tr>
+          <th>Dirección</th>
+          <td>{{ direccion_deudor|default:"________________" }}</td>
+          <th>Ciudad</th>
+          <td>{{ ciudad_domicilio_visible|default:"________________" }}</td>
+        </tr>
+        <tr>
+          <th>Teléfono</th>
+          <td>{{ telefono_deudor|default:"________________" }}</td>
+          <th>Correo</th>
+          <td>{{ email_deudor|default:"________________" }}</td>
+        </tr>
+      </table>
+
+      <h2>II. Datos de la entidad beneficiaria</h2>
+      <table>
+        <tr>
+          <th>Razón social</th>
+          <td>{{ beneficiario_razon_social|default:"APROBADO SOLUCIONES DIGITALES SAS" }}</td>
+          <th>NIT</th>
+          <td>{{ beneficiario_nit|default:"901949137-2" }}</td>
+        </tr>
+        <tr>
+          <th>Representante legal</th>
+          <td>{{ beneficiario_representante_legal|default:"Representante legal" }}</td>
+          <th>Domicilio</th>
+          <td>{{ beneficiario_domicilio|default:"________________" }}</td>
+        </tr>
+      </table>
+
+      <h2>III. Texto del pagaré</h2>
+      <p>
+        Yo, <strong>{{ deudor_nombres|default:"________________" }}</strong>, identificado con
+        {{ tipo_documento_deudor|default:"C.C." }} No. <strong>{{ cedula_deudor|default:"________________" }}</strong>,
+        declaro que he recibido de <strong>{{ beneficiario_razon_social|default:"APROBADO SOLUCIONES DIGITALES SAS" }}</strong>
+        (NIT {{ beneficiario_nit|default:"901949137-2" }}), en adelante <strong>EL ACREEDOR</strong>,
+        un desembolso de crédito efectuado el día <strong>{{ fecha_firma_texto|default:"________________" }}</strong>.
+        En virtud de dicha obligación me obligo a pagar solidaria, indivisible, irrevocable e
+        incondicionalmente a su orden, o a quien represente sus derechos, las sumas correspondientes al
+        capital desembolsado, intereses remuneratorios y moratorios, gastos, costos, comisiones,
+        impuestos, seguros y demás conceptos derivados o relacionados con la obligación respaldada por
+        el presente pagaré.
+      </p>
+
+      <table>
+        <tr>
+          <th>Monto aprobado / colocado</th>
+          <td>{{ monto_numeros|default:"$0" }} ({{ monto_letras|default:"cero pesos" }})</td>
+          <th>Tasa</th>
+          <td>{{ tasa_interes|default:"0.00" }}% M.V.</td>
+        </tr>
+        <tr>
+          <th>Plazo</th>
+          <td>{{ plazo_cuotas|default:"0" }} cuotas {{ periodicidad|default:"mensuales" }}</td>
+          <th>Valor cuota</th>
+          <td>{{ valor_cuota|default:"$0" }}</td>
+        </tr>
+        <tr>
+          <th>Fecha primer pago</th>
+          <td>{{ fecha_primer_pago|default:"________________" }}</td>
+          <th>Fecha último pago</th>
+          <td>{{ fecha_ultimo_pago|default:"________________" }}</td>
+        </tr>
+        <tr>
+          <th>Modalidad de descuento</th>
+          <td colspan="3">{{ modalidad_descuento|default:"________________" }}</td>
+        </tr>
+      </table>
+
+      <h2>IV. Cláusulas de garantía y disposiciones especiales</h2>
+      <p>
+        Me obligo a pagar intereses moratorios a la tasa máxima legalmente autorizada sobre las sumas
+        vencidas. Acepto cualquier endoso o cesión que EL ACREEDOR haga del presente pagaré y reconozco
+        al endosatario o cesionario dentro de cualquier proceso judicial o extrajudicial.
+      </p>
+      <p>
+        Renuncio expresamente a requerimientos para ser constituido en mora, presentación para pago,
+        aviso de rechazo y demás formalidades renunciables conforme a la ley. El pagaré podrá ser
+        diligenciado por EL ACREEDOR conforme a la carta de instrucciones adjunta y al artículo 622 del
+        Código de Comercio.
+      </p>
+      <p>
+        Para trabajadores con contrato laboral, autorizo el descuento por nómina, libranza o mecanismo
+        equivalente permitido por el pagador. Para prestadores de servicios, autorizo que los descuentos
+        se realicen sobre honorarios, cuentas de cobro, facturas o pagos derivados de la relación
+        contractual, según aplique y conforme a la autorización otorgada.
+      </p>
+
+      <h2>V. Firmas y otorgamiento</h2>
+      <p>
+        El presente pagaré se firma en {{ ciudad_firma_visible|default:"________________" }} el día
+        {{ fecha_firma_texto|default:"________________" }}.
+      </p>
+
+      <div class="signature">
+        <div class="line">
+          <strong>{{ deudor_nombres|default:"" }}</strong><br>
+          {{ tipo_documento_deudor|default:"C.C." }} {{ cedula_deudor|default:"" }}<br>
+          Deudor suscriptor
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="page">
+    <div class="content">
+      <h1>CARTA DE INSTRUCCIONES</h1>
+
+      <h2>I. Partes del acuerdo de instrucciones</h2>
+      <p>
+        Yo, <strong>{{ deudor_nombres|default:"________________" }}</strong>, identificado con
+        {{ tipo_documento_deudor|default:"C.C." }} No. <strong>{{ cedula_deudor|default:"________________" }}</strong>,
+        autorizo e instruyo irrevocablemente a
+        <strong>{{ beneficiario_razon_social|default:"APROBADO SOLUCIONES DIGITALES SAS" }}</strong>
+        (NIT {{ beneficiario_nit|default:"901949137-2" }}), su representante legal o apoderado, para
+        diligenciar en mi nombre el pagaré No. <strong>{{ numero_pagare|default:"___________" }}</strong>,
+        de acuerdo con las reglas de esta carta.
+      </p>
+
+      <h2>II. Obligación que respalda el pagaré</h2>
+      <p>
+        El pagaré respalda las obligaciones de crédito, financiación, intereses, comisiones, gastos,
+        seguros, impuestos, costos de cobranza y demás conceptos que se causen a mi cargo a favor de
+        EL ACREEDOR, incluyendo las obligaciones derivadas de libranza, adelanto de nómina o modalidad
+        de descuento autorizada.
+      </p>
+
+      <h2>III. Instrucciones de diligenciamiento</h2>
+      <p>
+        EL ACREEDOR podrá diligenciar los espacios en blanco por una suma igual al capital insoluto,
+        intereses causados y no pagados, intereses moratorios, gastos, costos, comisiones, impuestos,
+        seguros y cualquier otro valor relacionado con la obligación respaldada.
+      </p>
+      <p>
+        La fecha de pago podrá ser la que EL ACREEDOR determine, siempre que no sea anterior a la fecha
+        en que incurra en mora ni posterior al plazo legal aplicable. Los intereses moratorios se
+        liquidarán a la tasa máxima legal vigente al momento del diligenciamiento.
+      </p>
+      <p>
+        Los espacios en blanco podrán llenarse sin requerir nueva firma de mi parte, siempre con sujeción
+        a esta carta de instrucciones y a la obligación que respalda el pagaré.
+      </p>
+
+      <h2>IV. Facultades de cobro y garantías según tipo de vínculo</h2>
+      <h3>Contrato laboral</h3>
+      <p>
+        Si tengo contrato laboral, autorizo al pagador, empleador o entidad vinculada para descontar de
+        salario, prestaciones, liquidación, pagos laborales o cualquier suma a mi favor los valores
+        adeudados, dentro de los límites legales y de las autorizaciones suscritas.
+      </p>
+      <h3>Prestación de servicios</h3>
+      <p>
+        Si soy prestador de servicios, autorizo el descuento o compensación sobre honorarios, cuentas de
+        cobro, facturas, pagos contractuales o saldos a mi favor derivados de la relación de prestación
+        de servicios, conforme a las autorizaciones otorgadas.
+      </p>
+      <p>
+        EL ACREEDOR podrá adelantar gestiones de cobro preventivo, prejudicial, extrajudicial y judicial,
+        reportar la obligación conforme a la ley aplicable y reclamar los gastos y honorarios causados
+        por la gestión de cobro.
+      </p>
+
+      <h2>V. Eventos de incumplimiento</h2>
+      <p>
+        Constituyen eventos de incumplimiento la mora en el pago de cualquier cuota, la terminación o
+        suspensión del vínculo que sirve de fuente de pago sin normalización de la obligación, la
+        revocatoria de autorizaciones de descuento, la inexactitud relevante de la información entregada
+        o cualquier evento que afecte el recaudo oportuno de la obligación.
+      </p>
+
+      <h2>VI. Conservación y devolución del pagaré</h2>
+      <p>
+        EL ACREEDOR conservará el pagaré y esta carta mientras exista saldo u obligación vigente. Una vez
+        pagadas íntegramente las obligaciones respaldadas, se procederá con la devolución, anulación o
+        constancia de cancelación del título conforme al procedimiento legal y operativo aplicable.
+      </p>
+
+      <h2>VII. Declaración de conocimiento y voluntad</h2>
+      <p>
+        Declaro que he leído, entendido y aceptado el contenido del pagaré y de esta carta de
+        instrucciones. Acepto que los mecanismos electrónicos utilizados constituyen medio válido de
+        identificación, aceptación y manifestación de voluntad.
+      </p>
+
+      <table class="small">
+        <tr>
+          <th>Capital</th>
+          <td>{{ capital_valor|default:"$0" }}</td>
+          <th>Intereses</th>
+          <td>{{ intereses_valor|default:"$0" }}</td>
+          <th>Otros conceptos</th>
+          <td>{{ otros_conceptos_valor|default:"$0" }}</td>
+        </tr>
+      </table>
+
+      <p>
+        Firmado en {{ ciudad_firma_visible|default:"________________" }} el día
+        {{ fecha_firma_texto|default:"________________" }}.
+      </p>
+
+      <div class="signature">
+        <div class="line">
+          <strong>{{ deudor_nombres|default:"" }}</strong><br>
+          {{ tipo_documento_deudor|default:"C.C." }} {{ cedula_deudor|default:"" }}<br>
+          Deudor suscriptor
+        </div>
+      </div>
+    </div>
+  </section>
+</body>
+</html>
