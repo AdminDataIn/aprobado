@@ -141,8 +141,10 @@ Aplicacion_Ley_Libranza.md
 
 # Reportes y archivos operativos locales
 reports/
+.local_stash/
 *.tmp
 *.bak
+~$*
 Creditos_Cargar_*.xlsx
 fertobra_creditos_especiales_*.json
 
