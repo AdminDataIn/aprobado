@@ -306,18 +306,59 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         </div>
     </section>
 
+    <section class="libranza-presence-section" id="presencia-nacional">
+        <div class="libranza-container">
+            <div class="libranza-presence-shell">
+                <div class="libranza-presence-copy">
+                    <span class="libranza-eyebrow">Presencia nacional</span>
+                    <h2 class="libranza-section-title">Operación con impacto <span class="highlight-cyan">zonal</span></h2>
+                    <p>
+                        Trabajamos con empresas aliadas registradas en Aprobado y usamos sus datos geográficos
+                        reales para entender cobertura, operación y crecimiento territorial.
+                    </p>
+                </div>
+                <div class="libranza-presence-metrics">
+                    {% if landing_presencia.con_ubicacion_registrada %}
+                    <div class="libranza-presence-metric">
+                        <strong>{{ landing_presencia.con_ubicacion_registrada }}</strong>
+                        <span>empresas con ubicación</span>
+                    </div>
+                    <div class="libranza-presence-metric">
+                        <strong>{{ landing_presencia.departamentos_con_presencia|length }}</strong>
+                        <span>departamentos</span>
+                    </div>
+                    <div class="libranza-presence-metric">
+                        <strong>{{ landing_presencia.ciudades_con_presencia|length }}</strong>
+                        <span>ciudades y municipios</span>
+                    </div>
+                    {% else %}
+                    <div class="libranza-presence-empty">
+                        Estamos consolidando la información territorial de nuestras empresas aliadas para publicarla con datos verificados.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </section>
+
     {% if landing_trusted_companies %}
     <section class="libranza-trusted-section" id="empresas-confian">
         <div class="libranza-container">
             <div class="libranza-trusted-head">
                 <span class="libranza-eyebrow">Ellos confiaron en nosotros</span>
-                <h2 class="libranza-section-title">Convenios y aliados que ya operan con <span class="highlight-cyan">Aprobado</span></h2>
-                <p class="libranza-section-description" style="margin-bottom:0;max-width:760px;">Una grilla limpia para mostrar más organizaciones activas sin comprimir sus logos ni saturar la landing.</p>
+                <h2 class="libranza-section-title">Empresas que confían en <span class="highlight-cyan">Aprobado</span></h2>
+                <p class="libranza-section-description" style="margin-bottom:0;max-width:760px;">Organizaciones con convenio activo que hacen parte de nuestra operación de libranza.</p>
             </div>
             <div class="libranza-trusted-grid" aria-label="Empresas que confiaron en Aprobado">
                 {% for company in landing_trusted_companies %}
                 <div class="libranza-trusted-logo-card">
+                    {% if company.logo_url %}
                     <img src="{{ company.logo_url }}" alt="{{ company.nombre }}" class="libranza-trusted-logo{% if company.nombre == 'DataIn' or company.nombre == 'Datain' %} is-datain{% endif %}" loading="lazy">
+                    {% else %}
+                    <span class="libranza-trusted-initials">{{ company.iniciales }}</span>
+                    {% endif %}
+                    <strong>{{ company.nombre }}</strong>
+                    {% if company.ubicacion %}<small>{{ company.ubicacion }}</small>{% endif %}
                 </div>
                 {% endfor %}
             </div>
@@ -330,18 +371,21 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
             <div class="libranza-backers-head">
                 <span class="libranza-eyebrow">Quiénes nos respaldan</span>
                 <h2 class="libranza-section-title">Respaldo institucional para operar con confianza</h2>
-                <p class="libranza-section-description" style="margin-bottom:0;max-width:760px;">Aliados y referencias del ecosistema que fortalecen nuestra operación, validación y tecnología.</p>
+                <p class="libranza-section-description" style="margin-bottom:0;max-width:760px;">Tecnología, información y garantías que fortalecen nuestro proceso.</p>
             </div>
-            {# Placeholders seguros. Reemplazar por logos oficiales en static/images/respaldos/ con los mismos nombres de archivo. #}
+            {% if landing_backers %}
             <div class="libranza-backers-grid" aria-label="Entidades que respaldan a Aprobado">
                 {% for backer in landing_backers %}
                 <div class="libranza-backer-card">
                     <img src="{% static backer.logo_path %}" alt="{{ backer.nombre }}" class="libranza-backer-logo" loading="lazy">
                     <strong>{{ backer.nombre }}</strong>
-                    <small>Asset esperado: static/{{ backer.logo_path }}</small>
+                    <small>{{ backer.descripcion }}</small>
                 </div>
                 {% endfor %}
             </div>
+            {% else %}
+            <p class="libranza-section-description" style="margin-top:1.5rem;margin-bottom:0;">Estamos preparando la visualización pública de respaldos institucionales con assets verificados.</p>
+            {% endif %}
         </div>
     </section>
 
@@ -579,6 +623,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         line-height: 1.6;
     }
 
+    .libranza-presence-section,
     .libranza-trusted-section,
     .libranza-backers-section,
     .libranza-testimonials-section {
@@ -586,8 +631,74 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         background: #f8fafc;
     }
 
+    .libranza-presence-section {
+        background: #ffffff;
+    }
+
     .libranza-backers-section {
         background: #ffffff;
+    }
+
+    .libranza-presence-shell {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+        gap: 2rem;
+        align-items: center;
+        padding: 2rem;
+        border-radius: 1.4rem;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        background: linear-gradient(135deg, #f8fafc 0%, #eefbff 100%);
+        box-shadow: 0 18px 48px rgba(15, 23, 42, 0.06);
+    }
+
+    .libranza-presence-copy .libranza-section-title {
+        text-align: left;
+        margin-bottom: 0.9rem;
+    }
+
+    .libranza-presence-copy p {
+        color: #475569;
+        font-size: 1.05rem;
+        line-height: 1.65;
+        margin: 0;
+    }
+
+    .libranza-presence-metrics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.8rem;
+    }
+
+    .libranza-presence-metric,
+    .libranza-presence-empty {
+        min-height: 126px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 0.35rem;
+        padding: 1rem;
+        border-radius: 1rem;
+        background: #ffffff;
+        border: 1px solid rgba(14, 165, 233, 0.18);
+        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
+    }
+
+    .libranza-presence-empty {
+        grid-column: 1 / -1;
+        color: #475569;
+        line-height: 1.55;
+    }
+
+    .libranza-presence-metric strong {
+        color: #0a192f;
+        font-size: 2rem;
+        line-height: 1;
+    }
+
+    .libranza-presence-metric span {
+        color: #64748b;
+        font-weight: 700;
+        font-size: 0.88rem;
     }
 
     .libranza-trusted-head,
@@ -623,14 +734,29 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
     .libranza-trusted-logo-card {
         min-height: 104px;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
+        gap: 0.35rem;
         padding: 1rem 1.2rem;
         border-radius: 1rem;
         background: rgba(255, 255, 255, 0.92);
         border: 1px solid rgba(148, 163, 184, 0.18);
         overflow: hidden;
         scroll-snap-align: start;
+    }
+
+    .libranza-trusted-logo-card strong {
+        color: #0f172a;
+        font-size: 0.92rem;
+        text-align: center;
+        line-height: 1.2;
+    }
+
+    .libranza-trusted-logo-card small {
+        color: #64748b;
+        font-size: 0.76rem;
+        text-align: center;
     }
 
     .libranza-trusted-logo {
@@ -645,6 +771,20 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
     .libranza-trusted-logo.is-datain {
         max-width: 208px;
         max-height: 58px;
+    }
+
+    .libranza-trusted-initials {
+        width: 3rem;
+        height: 3rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: #dff8ff;
+        color: #0891b2;
+        border: 1px solid rgba(6, 182, 212, 0.22);
+        font-weight: 800;
+        letter-spacing: 0.02em;
     }
 
     .libranza-backers-grid {
@@ -753,6 +893,15 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         }
 
         .libranza-backers-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .libranza-presence-shell {
+            grid-template-columns: 1fr;
+            padding: 1.35rem;
+        }
+
+        .libranza-presence-metrics {
             grid-template-columns: 1fr;
         }
 

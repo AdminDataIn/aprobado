@@ -8,12 +8,13 @@ from django.db.models import Case, CharField, Count, DecimalField, F, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from gestion_creditos.models import AsesorComercial, Credito, CuotaAmortizacion
+from gestion_creditos.models import AsesorComercial, Credito, CuotaAmortizacion, Empresa
 from gestion_creditos.services.accounting import (
     get_accounting_summary_for_creditos,
     get_platform_disbursed_creditos_queryset,
 )
 from gestion_creditos.services.advisors import filter_creditos_by_asesor
+from gestion_creditos.services.empresa_geografia import obtener_presencia_empresas
 
 
 def calcular_total_en_mora(creditos=None):
@@ -216,6 +217,10 @@ def get_admin_dashboard_context(user, request=None):
         .order_by('nombre')
         .values('id', 'nombre')
     )
+    empresas_presencia = Empresa.objects.all()
+    if empresa_filter:
+        empresas_presencia = empresas_presencia.filter(nombre=empresa_filter)
+    presencia_empresas = obtener_presencia_empresas(empresas_presencia)
 
     return {
         'saldo_cartera_total': kpis['saldo_cartera_total'],
@@ -245,4 +250,5 @@ def get_admin_dashboard_context(user, request=None):
         'rentabilidad_breakdown_supported': accounting_metrics['rentabilidad_breakdown_supported'],
         'creditos_con_trazabilidad_contable': accounting_metrics['creditos_con_trazabilidad_contable'],
         'pagos_con_trazabilidad_contable': accounting_metrics['pagos_con_trazabilidad_contable'],
+        'presencia_empresas': presencia_empresas,
     }

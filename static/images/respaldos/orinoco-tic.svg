@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 96" role="img" aria-labelledby="title desc">
+  <title id="title">Orinoco TIC</title>
+  <desc id="desc">Referencia institucional para la seccion de respaldos.</desc>
+  <rect width="320" height="96" rx="18" fill="#ffffff"/>
+  <rect x="1" y="1" width="318" height="94" rx="17" fill="none" stroke="#dbe7f3" stroke-width="2"/>
+  <circle cx="45" cy="48" r="23" fill="#eef2ff"/>
+  <path d="M31 50c11-18 23-18 34 0M31 58c11-18 23-18 34 0" fill="none" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/>
+  <text x="82" y="47" fill="#0f172a" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700">Orinoco</text>
+  <text x="82" y="68" fill="#475569" font-family="Arial, Helvetica, sans-serif" font-size="16">TIC</text>
+</svg>

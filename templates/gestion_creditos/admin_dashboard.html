@@ -132,6 +132,83 @@
         .chart-card-compact .chart-container {
             min-height: 290px;
         }
+        .presence-shell {
+            margin: 1.25rem 0;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 1rem;
+            background: linear-gradient(135deg, #ffffff 0%, #eefbff 100%);
+            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.05);
+            overflow: hidden;
+        }
+        .presence-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 1rem;
+            flex-wrap: wrap;
+            padding: 1rem 1.25rem 0;
+        }
+        .presence-header p {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 0.88rem;
+        }
+        .presence-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.75rem;
+            padding: 1rem 1.25rem;
+        }
+        .presence-card {
+            min-height: 112px;
+            padding: 0.95rem;
+            border-radius: 0.9rem;
+            background: #fff;
+            border: 1px solid rgba(14, 165, 233, 0.14);
+        }
+        .presence-card strong {
+            display: block;
+            color: var(--text-primary);
+            font-size: 1.45rem;
+            line-height: 1;
+            margin-bottom: 0.35rem;
+        }
+        .presence-card span {
+            color: var(--text-secondary);
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+        .presence-body {
+            display: grid;
+            grid-template-columns: 0.9fr 1.1fr;
+            gap: 1rem;
+            padding: 0 1.25rem 1.25rem;
+        }
+        .presence-panel {
+            border-radius: 0.95rem;
+            background: rgba(255, 255, 255, 0.82);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            padding: 1rem;
+        }
+        .presence-zone {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.65rem 0;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+        }
+        .presence-zone:last-child {
+            border-bottom: 0;
+        }
+        .presence-zone small {
+            color: var(--text-secondary);
+            display: block;
+        }
+        .presence-empty {
+            padding: 1rem 1.25rem 1.25rem;
+            color: var(--text-secondary);
+        }
         @media (max-width: 991px) {
             .accounting-cards-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -139,12 +216,21 @@
             .compact-actions {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
+            .presence-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .presence-body {
+                grid-template-columns: 1fr;
+            }
         }
         @media (max-width: 767px) {
             .accounting-cards-grid {
                 grid-template-columns: 1fr;
             }
             .compact-actions {
+                grid-template-columns: 1fr;
+            }
+            .presence-grid {
                 grid-template-columns: 1fr;
             }
             .chart-card-compact .chart-container {
@@ -366,6 +452,81 @@
                 </div>
             </div>
         </div>
+
+        <section class="presence-shell" aria-labelledby="presenceTitle">
+            <div class="presence-header">
+                <div>
+                    <h2 id="presenceTitle" class="section-title mb-1">Presencia nacional e impacto zonal</h2>
+                    <p>Agregado territorial desde la información real registrada en empresas. No usa geocoding ni ubicaciones inventadas.</p>
+                </div>
+            </div>
+            <div class="presence-grid">
+                <div class="presence-card">
+                    <strong>{{ presencia_empresas.con_ubicacion_registrada }}</strong>
+                    <span>Empresas con ubicación registrada</span>
+                </div>
+                <div class="presence-card">
+                    <strong>{{ presencia_empresas.sin_ubicacion_registrada }}</strong>
+                    <span>Empresas sin ubicación registrada</span>
+                </div>
+                <div class="presence-card">
+                    <strong>{{ presencia_empresas.departamentos_con_presencia|length }}</strong>
+                    <span>Departamentos con presencia</span>
+                </div>
+                <div class="presence-card">
+                    <strong>{{ presencia_empresas.ciudades_con_presencia|length }}</strong>
+                    <span>Ciudades y municipios con presencia</span>
+                </div>
+            </div>
+            {% if presencia_empresas.ubicaciones %}
+            <div class="presence-body">
+                <div class="presence-panel">
+                    <h3 class="table-title mb-3">Ranking de zonas</h3>
+                    {% for zona in presencia_empresas.top_zonas %}
+                    <div class="presence-zone">
+                        <div>
+                            <strong>{{ zona.ciudad|default:zona.municipio|default:zona.departamento }}</strong>
+                            <small>{{ zona.departamento|default:"Departamento no registrado" }}</small>
+                        </div>
+                        <div class="text-end">
+                            <strong>{{ zona.empresas }}</strong>
+                            <small>{{ zona.creditos_activos }} créditos activos</small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="presence-panel">
+                    <h3 class="table-title mb-3">Ciudades y municipios</h3>
+                    <div class="table-responsive">
+                        <table class="table table-dashboard table-stack-mobile mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Departamento</th>
+                                    <th>Ciudad / Municipio</th>
+                                    <th>Empresas</th>
+                                    <th>Créditos activos</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for ciudad in presencia_empresas.ciudades_con_presencia %}
+                                <tr>
+                                    <td data-label="Departamento">{{ ciudad.departamento|default:"No registrado" }}</td>
+                                    <td data-label="Ciudad / Municipio"><strong>{{ ciudad.nombre }}</strong></td>
+                                    <td data-label="Empresas">{{ ciudad.empresas }}</td>
+                                    <td data-label="Créditos activos">{{ ciudad.creditos_activos }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="presence-empty">
+                Aún no hay ubicaciones reales registradas para mostrar impacto zonal. Las empresas sin ubicación se reportan aparte y no se mezclan como departamentos ficticios.
+            </div>
+            {% endif %}
+        </section>
 
         <div class="row g-3 mb-3">
             <div class="col-12 col-lg-8">

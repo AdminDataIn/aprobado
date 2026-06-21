@@ -65,6 +65,23 @@ def _empresa_tiene_ubicacion_real(empresa):
     )
 
 
+def _iniciales_empresa(nombre):
+    palabras = [
+        palabra[0]
+        for palabra in re.findall(r'[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]+', nombre or '')
+        if palabra
+    ]
+    return ''.join(palabras[:2]).upper() or 'AP'
+
+
+def _ubicacion_empresa(empresa):
+    partes = [
+        normalizar_ciudad(empresa.ciudad) or normalizar_municipio(empresa.municipio),
+        normalizar_departamento(empresa.departamento),
+    ]
+    return ', '.join(parte for parte in partes if parte) or None
+
+
 def obtener_presencia_empresas(queryset=None):
     """
     Devuelve agregados geograficos listos para dashboards o mapa futuro.
@@ -87,13 +104,7 @@ def obtener_presencia_empresas(queryset=None):
         departamento = normalizar_departamento(empresa.departamento)
         municipio = normalizar_municipio(empresa.municipio)
         ciudad = normalizar_ciudad(empresa.ciudad)
-        clave = (
-            departamento or '',
-            municipio or '',
-            ciudad or '',
-            empresa.latitud,
-            empresa.longitud,
-        )
+        clave = (departamento or '', municipio or '', ciudad or '')
         grupos.setdefault(clave, {
             'departamento': departamento,
             'municipio': municipio,
@@ -104,6 +115,10 @@ def obtener_presencia_empresas(queryset=None):
             'longitud': empresa.longitud,
             'empresa_ids': [],
         })
+        if grupos[clave]['latitud'] is None and empresa.latitud is not None:
+            grupos[clave]['latitud'] = empresa.latitud
+        if grupos[clave]['longitud'] is None and empresa.longitud is not None:
+            grupos[clave]['longitud'] = empresa.longitud
         grupos[clave]['empresas'] += 1
         grupos[clave]['empresa_ids'].append(empresa.id)
         ids_con_ubicacion.append(empresa.id)
@@ -135,10 +150,77 @@ def obtener_presencia_empresas(queryset=None):
         item['municipio'] or '',
         item['ciudad'] or '',
     ))
+    departamentos = {}
+    ciudades = {}
+    for ubicacion in ubicaciones:
+        departamento = ubicacion['departamento']
+        ciudad = ubicacion['ciudad'] or ubicacion['municipio']
+        if departamento:
+            departamentos.setdefault(departamento, {'nombre': departamento, 'empresas': 0, 'creditos_activos': 0})
+            departamentos[departamento]['empresas'] += ubicacion['empresas']
+            departamentos[departamento]['creditos_activos'] += ubicacion['creditos_activos']
+        if ciudad:
+            clave_ciudad = (departamento or '', ciudad)
+            ciudades.setdefault(clave_ciudad, {
+                'nombre': ciudad,
+                'departamento': departamento,
+                'empresas': 0,
+                'creditos_activos': 0,
+            })
+            ciudades[clave_ciudad]['empresas'] += ubicacion['empresas']
+            ciudades[clave_ciudad]['creditos_activos'] += ubicacion['creditos_activos']
+
+    departamentos_con_presencia = sorted(
+        departamentos.values(),
+        key=lambda item: (-item['empresas'], item['nombre']),
+    )
+    ciudades_con_presencia = sorted(
+        ciudades.values(),
+        key=lambda item: (-item['empresas'], item['departamento'] or '', item['nombre']),
+    )
+    top_zonas = sorted(
+        ubicaciones,
+        key=lambda item: (-item['empresas'], -item['creditos_activos'], item['departamento'] or ''),
+    )[:8]
 
     return {
         'ubicaciones': ubicaciones,
+        'departamentos_con_presencia': departamentos_con_presencia,
+        'ciudades_con_presencia': ciudades_con_presencia,
+        'top_zonas': top_zonas,
         'con_ubicacion_registrada': len(ids_con_ubicacion),
         'sin_ubicacion_registrada': len(ids_sin_ubicacion),
         'total_empresas': len(ids_con_ubicacion) + len(ids_sin_ubicacion),
     }
+
+
+def obtener_empresas_aliadas_visibles(queryset=None, limite=12):
+    """
+    Devuelve empresas activas para secciones visuales publicas.
+
+    No expone NIT, contactos, correos, telefonos ni documentos. Si la empresa
+    no tiene logo, entrega iniciales para una tarjeta institucional.
+    """
+    empresas = queryset if queryset is not None else Empresa.objects.filter(convenio_activo=True)
+    empresas = (
+        empresas
+        .filter(convenio_activo=True)
+        .only('nombre', 'logo', 'departamento', 'municipio', 'ciudad')
+        .order_by('nombre')[:limite]
+    )
+
+    aliadas = []
+    for empresa in empresas:
+        logo_url = None
+        if empresa.logo:
+            try:
+                logo_url = empresa.logo.url
+            except Exception:
+                logo_url = None
+        aliadas.append({
+            'nombre': empresa.nombre,
+            'logo_url': logo_url,
+            'iniciales': _iniciales_empresa(empresa.nombre),
+            'ubicacion': _ubicacion_empresa(empresa),
+        })
+    return aliadas

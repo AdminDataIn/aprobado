@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 96" role="img" aria-labelledby="title desc">
+  <title id="title">Figarantias</title>
+  <desc id="desc">Referencia institucional para la seccion de respaldos.</desc>
+  <rect width="320" height="96" rx="18" fill="#ffffff"/>
+  <rect x="1" y="1" width="318" height="94" rx="17" fill="none" stroke="#dbe7f3" stroke-width="2"/>
+  <rect x="25" y="29" width="40" height="40" rx="12" fill="#ecfeff"/>
+  <path d="M37 52l7 7 14-20" fill="none" stroke="#0f766e" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="82" y="56" fill="#0f172a" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Figarantias</text>
+</svg>

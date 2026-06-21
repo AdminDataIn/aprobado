@@ -4,6 +4,7 @@ from django.shortcuts import render, redirect
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.mail import EmailMultiAlternatives
+from django.contrib.staticfiles import finders
 from django.template.loader import render_to_string
 from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth.views import LoginView, LogoutView
@@ -17,6 +18,10 @@ from django.utils import timezone
 from django.db import transaction
 
 from gestion_creditos.models import AsesorComercial, Credito, Empresa
+from gestion_creditos.services.empresa_geografia import (
+    obtener_empresas_aliadas_visibles,
+    obtener_presencia_empresas,
+)
 from gestion_creditos.services.libranza_rules import LIBRANZA_MONTO_MAXIMO, LIBRANZA_MONTO_MINIMO_PUBLICO
 from gestion_creditos.services.tasa_service import obtener_tasa_credito
 from .forms import (
@@ -520,28 +525,32 @@ class MarketplaceAdminLoginView(MarketingLoginView):
 
 # Vista para la Landing Page de Crédito de Libranza
 def _build_landing_trusted_companies():
-    companies = (
-        Empresa.objects
-        .filter(convenio_activo=True)
-        .exclude(logo='')
-        .exclude(logo__isnull=True)
-        .only('nombre', 'logo', 'slug')
-        .order_by('nombre')
-    )
-    trusted_companies = []
-    for company in companies:
-        try:
-            logo_url = company.logo.url
-        except Exception:
-            continue
-        if not logo_url:
-            continue
-        trusted_companies.append({
-            'nombre': company.nombre,
-            'logo_url': logo_url,
-            'slug': company.slug,
-        })
-    return trusted_companies
+    return obtener_empresas_aliadas_visibles(limite=12)
+
+
+def _build_landing_backers():
+    respaldos = [
+        {
+            'nombre': 'DataCredito Experian',
+            'logo_path': 'images/respaldos/datacredito-experian.svg',
+            'descripcion': 'Información para fortalecer validaciones de riesgo cuando aplique.',
+        },
+        {
+            'nombre': 'FiGarantias',
+            'logo_path': 'images/respaldos/figarantias.svg',
+            'descripcion': 'Garantías que respaldan procesos de crédito de forma institucional.',
+        },
+        {
+            'nombre': 'Orinoco TIC',
+            'logo_path': 'images/respaldos/orinoco-tic.svg',
+            'descripcion': 'Tecnología para soportar operación digital y trazabilidad.',
+        },
+    ]
+    return [
+        respaldo
+        for respaldo in respaldos
+        if finders.find(respaldo['logo_path'])
+    ]
 
 
 def libranza_landing(request):
@@ -583,6 +592,8 @@ def libranza_landing(request):
             },
         ],
         'landing_trusted_companies': _build_landing_trusted_companies(),
+        'landing_presencia': obtener_presencia_empresas(Empresa.objects.filter(convenio_activo=True)),
+        'landing_backers': _build_landing_backers(),
         'landing_testimonials_enabled': False,
     }
     return render(request, 'libranza/libranza_landing.html', context)
