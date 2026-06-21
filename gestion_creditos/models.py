@@ -113,6 +113,13 @@ class Empresa(models.Model):
     representante_legal = models.CharField(max_length=160, blank=True)
     correo_contacto = models.EmailField(blank=True)
     telefono_contacto = models.CharField(max_length=20, blank=True)
+    pais = models.CharField(max_length=80, blank=True, null=True)
+    departamento = models.CharField(max_length=120, blank=True, null=True)
+    municipio = models.CharField(max_length=120, blank=True, null=True)
+    ciudad = models.CharField(max_length=120, blank=True, null=True)
+    direccion_principal = models.CharField(max_length=255, blank=True, null=True)
+    latitud = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
+    longitud = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
     asesor_comercial = models.ForeignKey(
         AsesorComercial,
         on_delete=models.SET_NULL,

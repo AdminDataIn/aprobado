@@ -305,6 +305,8 @@ class EmpresaAdmin(admin.ModelAdmin):
         'nombre',
         'slug',
         'tipo_empresa',
+        'departamento',
+        'municipio',
         'referido_display',
         'asesor_display',
         'convenio_activo',
@@ -314,7 +316,15 @@ class EmpresaAdmin(admin.ModelAdmin):
         'pagos_habilitados',
     )
     search_fields = ('nombre', 'slug', 'nit', 'correo_contacto')
-    list_filter = ('tipo_empresa', 'convenio_activo', 'pagos_habilitados', EmpresaReferidaFilter, 'asesor_comercial')
+    list_filter = (
+        'tipo_empresa',
+        'convenio_activo',
+        'pagos_habilitados',
+        'departamento',
+        'municipio',
+        EmpresaReferidaFilter,
+        'asesor_comercial',
+    )
     readonly_fields = ('asesor_actual_resumen',)
     fieldsets = (
         ('Informacion base', {
@@ -336,6 +346,14 @@ class EmpresaAdmin(admin.ModelAdmin):
             ),
             'description': 'Usa "Logo" como fuente única para marketplace y para la sección de empresas que confían '
                            'en nosotros. La presentación se controla desde frontend.',
+        }),
+        ('Geografia y presencia nacional', {
+            'fields': (
+                'pais', 'departamento', 'municipio', 'ciudad',
+                'direccion_principal', 'latitud', 'longitud',
+            ),
+            'description': 'Campos opcionales para presencia nacional y dashboards zonales. '
+                           'No uses ubicaciones inventadas ni coordenadas aproximadas sin fuente real.',
         }),
     )
 
