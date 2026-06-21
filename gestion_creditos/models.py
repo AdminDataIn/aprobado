@@ -642,6 +642,10 @@ class Credito(models.Model):
                 'can_originate_special_libranza',
                 'Puede simular y originar casos especiales de libranza',
             ),
+            (
+                'can_run_risk_diagnostic',
+                'Puede ejecutar diagnosticos internos de riesgo',
+            ),
         ]
         verbose_name = 'Crédito'
         verbose_name_plural = 'Créditos'
