@@ -1,0 +1,24 @@
+{
+  "status": "ACCEPTED",
+  "content": {
+    "status": "202 ACCEPTED",
+    "infoTransaccion": {
+      "msjExcepcion": "consulta tipo 7 (No existe Id)",
+      "tipoIdDigitado": "CC",
+      "numeroIdDigitado": "999999999",
+      "apellidoDigitado": "Prueba",
+      "codigosRespuesta": [
+        {"clave": "HC", "valor": "09"},
+        {"clave": "TX", "valor": "07"}
+      ]
+    },
+    "respuesta": {
+      "validacion": {
+        "conInformacion": false,
+        "msjExcepcion": "consulta tipo 7 (No existe Id)"
+      }
+    },
+    "response": "Consulta aceptada",
+    "message": null
+  }
+}

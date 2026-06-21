@@ -1,6 +1,6 @@
 {% extends "account/libranza/_base.html" %}
 
-{% block title %}Iniciar sesion - Libranza{% endblock %}
+{% block title %}Iniciar sesion - {{ producto_auth_nombre|default:"Libranza" }}{% endblock %}
 {% block body_class %}auth-body{% endblock %}
 
 {% block content %}
@@ -11,11 +11,11 @@
     <div class="container-account">
       <div class="div-card-agent-account">
         <div class="mb-3">
-          <span class="badge rounded-pill border">Acceso a tu credito</span>
+          <span class="badge rounded-pill border">{{ badge_auth_texto|default:"Acceso a tu credito" }}</span>
         </div>
 
-        <h2>Inicia sesion en Libranza</h2>
-        <p class="auth-desc">Accede con tu correo y contrasena o continua con Google usando el mismo correo asociado a tu credito.</p>
+        <h2>Inicia sesion en {{ producto_auth_nombre|default:"Libranza" }}</h2>
+        <p class="auth-desc">{{ descripcion_auth_texto|default:"Accede con tu correo y contrasena o continua con Google usando el mismo correo asociado a tu credito." }}</p>
 
         <form method="post">
           {% csrf_token %}
@@ -37,9 +37,16 @@
             {{ form.password }}
           </div>
 
-          <div class="forgot-row">
-            <a href="{% url 'libranza:password_reset' %}">Olvide mi contrasena</a>
-          </div>
+          {% if ocultar_recuperar_password %}
+          {% elif forgot_password_url %}
+            <div class="forgot-row">
+              <a href="{{ forgot_password_url }}">Olvide mi contrasena</a>
+            </div>
+          {% else %}
+            <div class="forgot-row">
+              <a href="{% url 'libranza:password_reset' %}">Olvide mi contrasena</a>
+            </div>
+          {% endif %}
 
           <button type="submit" class="btn-account">Continuar con correo</button>
         </form>
@@ -58,7 +65,11 @@
 
         <div class="auth-footer-links">
           <a href="{{ registration_url }}">Crear cuenta</a>
-          <a href="{% url 'libranza:landing' %}">&larr; Volver a Libranza</a>
+          {% if back_url %}
+            <a href="{{ back_url }}">&larr; {{ volver_auth_texto|default:"Volver" }}</a>
+          {% else %}
+            <a href="{% url 'libranza:landing' %}">&larr; Volver a Libranza</a>
+          {% endif %}
         </div>
       </div>
     </div>

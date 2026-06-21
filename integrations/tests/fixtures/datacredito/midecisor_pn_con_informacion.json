@@ -1,0 +1,68 @@
+{
+  "status": "ACCEPTED",
+  "content": {
+    "status": "202 ACCEPTED",
+    "infoTransaccion": {
+      "resultado": "",
+      "msjExcepcion": "",
+      "tipoIdDigitado": "CC",
+      "numeroIdDigitado": "123456789",
+      "apellidoDigitado": "Kent",
+      "codigosRespuesta": [
+        {"clave": "CC", "valor": "00"},
+        {"clave": "HC", "valor": "13"},
+        {"clave": "DE", "valor": "09"},
+        {"clave": "TX", "valor": "02"}
+      ]
+    },
+    "respuesta": {
+      "validacion": {
+        "conInformacion": true,
+        "msjExcepcion": null,
+        "datosBasicos": {
+          "conInformacion": true,
+          "primerNombre": "Persona",
+          "primerApellido": "Prueba",
+          "tipoDocumento": "CC",
+          "numeroDocumento": "123456789"
+        }
+      },
+      "comportamientoCrediticio": {
+        "comportamientoPago": {
+          "conInformacion": true,
+          "vectorComportamiento": [
+            {"anioMes": "2025-01", "comportamiento": "N"},
+            {"anioMes": "2025-02", "comportamiento": "N"}
+          ]
+        },
+        "indicadoresValores": {
+          "conInformacion": true,
+          "creditosVigentes": "7",
+          "creditosCerrados": "57",
+          "saldoActual": "205834",
+          "valorCuota": "4865",
+          "saldoMora": "0",
+          "porcentajeDeuda": "77.9"
+        }
+      },
+      "informacionRiesgo": {
+        "conInformacion": true,
+        "score": "853",
+        "viabilidad": "ALTA",
+        "ratingRecaudos": "A",
+        "montoSugerido": "13809492",
+        "alertas": [
+          {"alerta": "Coincidencia solo por nombre en lista estruct.gobierno"},
+          {"alerta": "Coincidencia solo por nombre en lista figura publica"}
+        ]
+      },
+      "endeudamiento": {
+        "conInformacion": true,
+        "ingreso": "12507000.0",
+        "porcentajeCuotaVsIngreso": "38.9"
+      }
+    },
+    "response": "Consulta exitosa",
+    "message": null
+  }
+}

@@ -7,6 +7,26 @@ pagador/convenio, vinculo laboral, capacidad de descuento y reglas de nomina.
 
 ## Servicios actuales
 
+### escenarios_credito
+
+Define los escenarios compartidos de credito de libranza. Aplican a libranza
+tradicional, prestadores de servicios y futuros canales de libranza:
+
+- `NUEVO_CREDITO`
+- `SEGUNDO_CREDITO`
+- `RECOGIDA_CARTERA`
+
+Incluye labels en espanol, normalizador y helpers:
+
+- `normalizar_escenario_credito`
+- `validar_escenario_credito`
+- `es_nuevo_credito`
+- `es_segundo_credito`
+- `es_recogida_cartera`
+
+Este modulo no evalua score, DataCredito, capacidad contractual ni predecision;
+solo centraliza los valores semanticos de escenario para evitar duplicacion.
+
 ### payment_capacity
 
 Calcula capacidad de descuento read-only para libranza y conserva las funciones

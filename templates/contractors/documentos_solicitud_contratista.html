@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentos Prestadores de Servicios - Aprobado</title>
+    {% include 'base/favicon.html' %}
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>
+<body class="body-index">
+{% include 'base/loader_global.html' %}
+<div class="div-body-main">
+    {% include 'base/navbar_contractors.html' %}
+
+    <main class="form-container">
+        <div class="form-content">
+            <aside class="form-sidebar">
+                <div class="form-title">
+                    <h1>Carga documental</h1>
+                    <p>{{ branding.nombre_visual }} - Adjunta los documentos requeridos para continuar con tu simulacion.</p>
+                </div>
+
+                <div class="step-list">
+                    <div class="step-item">
+                        <div class="step-content">
+                            <div class="step-number active">1</div>
+                            <div class="step-name active">Registro</div>
+                        </div>
+                        <div class="step-connector"></div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-content">
+                            <div class="step-number active">2</div>
+                            <div class="step-name active">Documentos</div>
+                        </div>
+                        <div class="step-connector"></div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-content">
+                            <div class="step-number inactive">3</div>
+                            <div class="step-name inactive">Simulacion</div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="form-main">
+                <div class="form-main-grid">
+                    <div class="form-steps-column">
+                        {% if documento_registrado %}
+                            <div class="document-file-status visible has-file">
+                                <span class="status-icon">OK</span>
+                                <span class="status-text">
+                                    <span class="status-label">Documento recibido</span>
+                                    <span class="status-value">{{ documento_registrado.documento.original_filename }}</span>
+                                </span>
+                            </div>
+                        {% endif %}
+
+                        <form method="post" enctype="multipart/form-data" class="form-step active" novalidate>
+                            {% csrf_token %}
+                            {{ formulario.non_field_errors }}
+                            <h2 class="step-title">Documentos de la solicitud</h2>
+                            <p class="form-helper-text">Formatos permitidos: PDF, JPG o PNG. Puedes cargar varias versiones; el equipo revisara la mas reciente recibida.</p>
+                            <p class="form-helper-text"><strong>Nota:</strong> La cédula se captura en vivo desde el dispositivo y el certificado bancario se carga en PDF para validación.</p>
+
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    {{ formulario.tipo_documento.label_tag }}
+                                    {{ formulario.tipo_documento }}
+                                    {{ formulario.tipo_documento.errors }}
+                                </div>
+                                <div class="form-field">
+                                    {{ formulario.archivo.label_tag }}
+                                    <div class="document-upload-card">
+                                        {{ formulario.archivo }}
+                                        <div class="document-upload-actions">
+                                            <button type="button" class="document-action-button secondary open-camera-btn" id="boton_camara_documento">
+                                                Tomar foto del documento
+                                            </button>
+                                        </div>
+                                        <p class="document-upload-help">Carga contrato actual, cedula frontal, cedula reversa o certificado bancario.</p>
+                                        <p class="document-upload-help">Contrato actual y certificado bancario deben ser PDF. Cedula frontal y reversa deben ser imagen JPG o PNG.</p>
+                                    </div>
+                                    {{ formulario.archivo.errors }}
+                                </div>
+                            </div>
+
+                            <div class="form-actions">
+                                <a href="{% url 'contractors:solicitud_contratista' %}" class="form-button previous">Volver</a>
+                                <button type="submit" class="form-button next">Cargar documento</button>
+                            </div>
+                        </form>
+
+                        <section class="form-step active documentos-resumen">
+                            <h2 class="step-title">Documentos cargados</h2>
+                            {% if documentos %}
+                                <div class="documentos-lista-aprobado">
+                                    {% for documento in documentos %}
+                                        <article class="document-upload-card documento-item-aprobado">
+                                            <div>
+                                                <strong>{{ documento.get_document_type_display }}</strong>
+                                                <p class="document-upload-help">{{ documento.original_filename }}</p>
+                                                <p class="document-upload-help">{{ documento.uploaded_at }}</p>
+                                            </div>
+                                            <span class="documento-estado-aprobado">{{ documento.get_status_display }}</span>
+                                        </article>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <p class="form-helper-text">Aun no hay documentos cargados.</p>
+                            {% endif %}
+
+                            <div class="form-actions">
+                                <div></div>
+                                <a class="form-button submit" href="{% url 'contractors:simulador_contratista' %}?solicitud_id={{ solicitud.id }}">
+                                    Simular con mi informacion
+                                </a>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    {% include 'base/footer_contractors.html' %}
+</div>
+{% include 'base/public_whatsapp_button.html' %}
+
+<div class="camera-modal" id="camera_modal" aria-hidden="true">
+    <div class="camera-modal-dialog">
+        <div class="camera-modal-header">
+            <div>
+                <h3>Tomar foto del documento</h3>
+                <p>Ubica el documento completo dentro del marco y confirma que sea legible.</p>
+            </div>
+            <button type="button" class="camera-close-button" id="camera_close_button">×</button>
+        </div>
+        <div class="camera-modal-body">
+            <div class="camera-preview-shell">
+                <video id="camera_preview" autoplay playsinline></video>
+                <canvas id="camera_canvas" style="display:none;"></canvas>
+                <div class="camera-preview-overlay"></div>
+                <div class="camera-preview-guide"></div>
+            </div>
+            <p class="camera-status-message" id="camera_status_message">Permite el acceso a la camara para tomar la foto.</p>
+            <div class="camera-modal-footer">
+                <button type="button" class="document-action-button secondary" id="camera_cancel_button">Cancelar</button>
+                <div class="camera-footer-actions">
+                    <button type="button" class="document-action-button primary" id="capture_photo_button">Tomar foto</button>
+                    <button type="button" class="document-action-button secondary" id="retake_photo_button" style="display:none;">Repetir</button>
+                    <button type="button" class="document-action-button primary" id="use_photo_button" style="display:none;">Usar foto</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .documentos-resumen {
+        margin-top: 2rem;
+        border-top: 1px solid #e5e7eb;
+        padding-top: 2rem;
+    }
+
+    .documentos-lista-aprobado {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .documento-item-aprobado {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .documento-estado-aprobado {
+        border-radius: 999px;
+        background: #e0f2fe;
+        color: #075985;
+        padding: 0.35rem 0.75rem;
+        font-size: 0.8rem;
+        font-weight: 700;
+    }
+
+    .document-upload-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .document-action-button {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 16px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .document-action-button.primary {
+        background: #0ea5c6;
+        color: #ffffff;
+    }
+
+    .document-action-button.secondary {
+        background: #e8f3fb;
+        color: #0f3557;
+        border: 1px solid #c9def0;
+    }
+
+    .camera-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 1100;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(15, 23, 42, 0.78);
+        backdrop-filter: blur(4px);
+    }
+
+    .camera-modal.visible {
+        display: flex;
+    }
+
+    .camera-modal-dialog {
+        width: min(100%, 720px);
+        border-radius: 24px;
+        background: #ffffff;
+        box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
+        overflow: hidden;
+    }
+
+    .camera-modal-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 24px 24px 16px;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .camera-modal-header h3 {
+        margin: 0 0 6px;
+        font-size: 24px;
+        color: #0f172a;
+    }
+
+    .camera-modal-header p {
+        margin: 0;
+        color: #64748b;
+    }
+
+    .camera-close-button {
+        border: 0;
+        background: transparent;
+        font-size: 28px;
+        line-height: 1;
+        color: #64748b;
+        cursor: pointer;
+    }
+
+    .camera-modal-body {
+        padding: 20px 24px 24px;
+    }
+
+    .camera-preview-shell {
+        position: relative;
+        border-radius: 20px;
+        overflow: hidden;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        min-height: 260px;
+    }
+
+    .camera-preview-shell video,
+    .camera-preview-shell canvas {
+        display: block;
+        width: 100%;
+        min-height: 260px;
+        max-height: 70vh;
+        object-fit: cover;
+    }
+
+    .camera-preview-overlay {
+        position: absolute;
+        inset: 0;
+        border: 18px solid rgba(15, 23, 42, 0.32);
+        pointer-events: none;
+    }
+
+    .camera-preview-guide {
+        position: absolute;
+        inset: 12%;
+        border: 2px dashed rgba(255, 255, 255, 0.9);
+        border-radius: 22px;
+        pointer-events: none;
+    }
+
+    .camera-modal-footer {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 18px;
+    }
+
+    .camera-footer-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .camera-status-message {
+        margin: 14px 0 0;
+        font-size: 14px;
+        color: #64748b;
+    }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const tipoDocumento = document.getElementById('id_tipo_documento');
+        const archivoInput = document.getElementById('id_archivo');
+        const botonCamara = document.getElementById('boton_camara_documento');
+        const modal = document.getElementById('camera_modal');
+        const video = document.getElementById('camera_preview');
+        const canvas = document.getElementById('camera_canvas');
+        const cerrar = document.getElementById('camera_close_button');
+        const cancelar = document.getElementById('camera_cancel_button');
+        const capturar = document.getElementById('capture_photo_button');
+        const repetir = document.getElementById('retake_photo_button');
+        const usar = document.getElementById('use_photo_button');
+        const estado = document.getElementById('camera_status_message');
+        let streamCamara = null;
+        let archivoCapturado = null;
+
+        function esDocumentoImagen() {
+            return ['documento_identidad_frontal', 'documento_identidad_reverso'].includes(tipoDocumento.value);
+        }
+
+        function actualizarAceptados() {
+            if (!archivoInput || !tipoDocumento) {
+                return;
+            }
+            if (esDocumentoImagen()) {
+                archivoInput.setAttribute('accept', '.jpg,.jpeg,.png,image/jpeg,image/png');
+                botonCamara.style.display = 'inline-flex';
+            } else {
+                archivoInput.setAttribute('accept', '.pdf,application/pdf');
+                botonCamara.style.display = 'none';
+            }
+        }
+
+        function detenerCamara() {
+            if (streamCamara) {
+                streamCamara.getTracks().forEach(function (track) { track.stop(); });
+                streamCamara = null;
+            }
+        }
+
+        function cerrarModal() {
+            detenerCamara();
+            modal.classList.remove('visible');
+            modal.setAttribute('aria-hidden', 'true');
+            video.style.display = 'block';
+            canvas.style.display = 'none';
+            capturar.style.display = 'inline-flex';
+            repetir.style.display = 'none';
+            usar.style.display = 'none';
+            archivoCapturado = null;
+        }
+
+        async function abrirCamara() {
+            if (!esDocumentoImagen()) {
+                estado.textContent = 'La camara solo esta disponible para cedula frontal o reversa.';
+                return;
+            }
+            try {
+                modal.classList.add('visible');
+                modal.setAttribute('aria-hidden', 'false');
+                streamCamara = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}});
+                video.srcObject = streamCamara;
+                estado.textContent = 'Ajusta el documento y toma la foto.';
+            } catch (error) {
+                estado.textContent = 'No fue posible abrir la camara. Puedes cargar una imagen desde tu dispositivo.';
+            }
+        }
+
+        function asignarArchivo(file) {
+            const transferencia = new DataTransfer();
+            transferencia.items.add(file);
+            archivoInput.files = transferencia.files;
+        }
+
+        tipoDocumento.addEventListener('change', actualizarAceptados);
+        botonCamara.addEventListener('click', abrirCamara);
+        cerrar.addEventListener('click', cerrarModal);
+        cancelar.addEventListener('click', cerrarModal);
+
+        capturar.addEventListener('click', function () {
+            const contexto = canvas.getContext('2d');
+            canvas.width = video.videoWidth || 1600;
+            canvas.height = video.videoHeight || 1200;
+            contexto.drawImage(video, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(function (blob) {
+                if (!blob) {
+                    estado.textContent = 'No fue posible capturar la imagen. Intentalo nuevamente.';
+                    return;
+                }
+                archivoCapturado = new File([blob], `${tipoDocumento.value}-${Date.now()}.jpg`, {type: 'image/jpeg'});
+                video.style.display = 'none';
+                canvas.style.display = 'block';
+                capturar.style.display = 'none';
+                repetir.style.display = 'inline-flex';
+                usar.style.display = 'inline-flex';
+                estado.textContent = 'Foto capturada. Confirma que sea legible antes de usarla.';
+            }, 'image/jpeg', 0.88);
+        });
+
+        repetir.addEventListener('click', function () {
+            video.style.display = 'block';
+            canvas.style.display = 'none';
+            capturar.style.display = 'inline-flex';
+            repetir.style.display = 'none';
+            usar.style.display = 'none';
+            archivoCapturado = null;
+        });
+
+        usar.addEventListener('click', function () {
+            if (archivoCapturado) {
+                asignarArchivo(archivoCapturado);
+                cerrarModal();
+            }
+        });
+
+        actualizarAceptados();
+    });
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script src="{% static 'js/global_loader.js' %}"></script>
+</body>
+</html>

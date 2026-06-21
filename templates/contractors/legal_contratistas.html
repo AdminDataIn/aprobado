@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ titulo }} - Aprobado Prestadores de Servicios</title>
+    {% include 'base/favicon.html' %}
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <style>
+        body {
+            background: #f8fafc;
+        }
+
+        .legal-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 56px 24px 64px;
+        }
+
+        .legal-header {
+            text-align: center;
+            margin-bottom: 44px;
+        }
+
+        .legal-kicker {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 14px;
+            padding: 7px 16px;
+            border-radius: 999px;
+            background: rgba(15, 181, 207, 0.12);
+            color: #0891b2;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .legal-header h1 {
+            margin: 0 0 12px;
+            color: #0a192f;
+            font-size: 36px;
+            font-weight: 700;
+            line-height: 1.15;
+        }
+
+        .update-date {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #eef2f7;
+            padding: 8px 16px;
+            border-radius: 20px;
+            color: #64748b;
+            font-size: 14px;
+        }
+
+        .update-date svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .legal-intro {
+            background: linear-gradient(135deg, #0f5f8f 0%, #0fb5cf 100%);
+            color: #ffffff;
+            padding: 26px 32px;
+            border-radius: 18px;
+            margin-bottom: 30px;
+            box-shadow: 0 18px 40px rgba(15, 95, 143, 0.18);
+        }
+
+        .legal-intro p {
+            margin: 0;
+            font-size: 16px;
+            line-height: 1.65;
+        }
+
+        .legal-intro p + p {
+            margin-top: 12px;
+        }
+
+        .legal-card {
+            background: #ffffff;
+            border-radius: 18px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 18px 40px rgba(15, 23, 42, 0.05);
+            overflow: hidden;
+            margin-bottom: 26px;
+        }
+
+        .legal-section {
+            padding: 26px 32px;
+            border-bottom: 1px solid #edf2f7;
+        }
+
+        .legal-section:last-child {
+            border-bottom: none;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 14px;
+        }
+
+        .section-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #0fb5cf 0%, #0a8fb0 100%);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 16px;
+            flex-shrink: 0;
+            box-shadow: 0 10px 24px rgba(15, 181, 207, 0.22);
+        }
+
+        .section-title {
+            margin: 0;
+            color: #0a192f;
+            font-size: 19px;
+            font-weight: 700;
+            line-height: 1.25;
+        }
+
+        .section-content {
+            color: #475569;
+            line-height: 1.7;
+            font-size: 15px;
+        }
+
+        .section-content p {
+            margin: 0;
+        }
+
+        .contact-card {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            color: #ffffff;
+            padding: 32px;
+            border-radius: 18px;
+            text-align: center;
+            box-shadow: 0 18px 40px rgba(5, 150, 105, 0.16);
+        }
+
+        .contact-card h2 {
+            margin: 0 0 8px;
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .contact-card p {
+            margin: 0 0 20px;
+            color: rgba(255, 255, 255, 0.92);
+            line-height: 1.6;
+        }
+
+        .contact-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .contact-buttons a {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #ffffff;
+            color: #047857;
+            padding: 12px 20px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 700;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .contact-buttons a:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
+        }
+
+        .legal-actions {
+            display: flex;
+            justify-content: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-top: 28px;
+        }
+
+        .legal-actions a {
+            min-width: 190px;
+        }
+
+        @media (max-width: 640px) {
+            .legal-container {
+                padding: 34px 16px 48px;
+            }
+
+            .legal-header h1 {
+                font-size: 29px;
+            }
+
+            .legal-intro,
+            .legal-section,
+            .contact-card {
+                padding: 22px;
+            }
+
+            .section-header {
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body class="body-index">
+{% include 'base/loader_global.html' %}
+<div class="div-body-main">
+    {% include 'base/navbar_contractors.html' %}
+
+    <main class="legal-container" data-legal-page="{{ tipo_legal }}">
+        <header class="legal-header">
+            <span class="legal-kicker">Prestadores de Servicios Aprobado</span>
+            <h1>{{ titulo }}</h1>
+            <span class="update-date">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                Ultima actualizacion: {{ fecha_actualizacion }}
+            </span>
+        </header>
+
+        <section class="legal-intro">
+            <p>{{ contenido }}</p>
+            {% if nota_contratistas %}
+                <p>{{ nota_contratistas }}</p>
+            {% endif %}
+        </section>
+
+        <section class="legal-card contractors-legal-sections">
+            {% for subtitulo, texto in secciones %}
+                <article class="legal-section contractors-legal-card">
+                    <div class="section-header">
+                        <span class="section-number">{{ forloop.counter }}</span>
+                        <h2 class="section-title">{{ subtitulo }}</h2>
+                    </div>
+                    <div class="section-content">
+                        <p>{{ texto }}</p>
+                    </div>
+                </article>
+            {% endfor %}
+        </section>
+
+        <section class="contact-card">
+            <h2>Canales de atencion</h2>
+            <p>Para consultas, actualizacion de datos, solicitudes sobre tratamiento de informacion o soporte del portal, comunicate con Aprobado.</p>
+            <div class="contact-buttons">
+                <a href="mailto:Info@aprobado.com.co">Info@aprobado.com.co</a>
+                <a href="tel:+573158562162">+57 315 856 2162</a>
+            </div>
+        </section>
+
+        <nav class="legal-actions" aria-label="Acciones legales Prestadores de Servicios">
+            <a href="{% url 'contractors:solicitud_contratista' %}" class="form-button previous">Volver a la solicitud</a>
+            <a href="{% url 'contractors:login_contratistas' %}?next={% url 'contractors:solicitud_contratista' %}" class="form-button next">Solicita tu credito</a>
+        </nav>
+    </main>
+
+    {% include 'base/footer_contractors.html' %}
+</div>
+{% include 'base/public_whatsapp_button.html' %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script src="{% static 'js/global_loader.js' %}"></script>
+</body>
+</html>

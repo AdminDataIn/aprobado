@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Detalle evaluacion prestador - Aprobado</title>
+    {% load static %}
+    {% load humanize %}
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+    {% include 'base/favicon.html' %}
+</head>
+<body class="theme-gestion">
+{% include 'base/loader_global.html' %}
+<header class="page-header">
+    <div class="container-fluid" style="max-width: 1200px;">
+        <div class="d-flex align-items-center justify-content-between">
+            <a href="{% url 'gestion:dashboard' %}" class="logo">
+                <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;">
+            </a>
+            <a href="{% url 'gestion:prestadores_riesgo' %}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i>Bandeja
+            </a>
+        </div>
+    </div>
+</header>
+
+<main class="container-fluid py-4" style="max-width: 1200px;">
+    {% if messages %}
+        <div class="mb-3">
+            {% for message in messages %}
+                <div class="alert {% if message.tags == 'error' %}alert-danger{% else %}alert-{{ message.tags|default:'info' }}{% endif %} mb-2">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="mb-4">
+        <h1 class="page-title mb-1">Evaluacion prestador #{{ auditoria.id }}</h1>
+        <p class="text-secondary mb-0">Snapshot sanitizado de la predecision formal. Fuente principal: auditoria.</p>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-6 col-xl-3">
+            <div class="card shadow-sm h-100"><div class="card-body">
+                <div class="text-secondary small">Solicitud</div>
+                <div class="fw-semibold">#{{ solicitud.id }} - {{ solicitud.document_number }}</div>
+                <div>{{ solicitud.first_name }} {{ solicitud.last_name }}</div>
+            </div></div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="card shadow-sm h-100"><div class="card-body">
+                <div class="text-secondary small">Empresa</div>
+                <div class="fw-semibold">{{ empresa|default:"-" }}</div>
+                <div>{{ auditoria.escenario_credito }}</div>
+            </div></div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="card shadow-sm h-100"><div class="card-body">
+                <div class="text-secondary small">Decision</div>
+                <div class="fw-semibold">{{ auditoria.decision }}</div>
+                <div>{% if auditoria.eligible %}Elegible read-only{% else %}No elegible read-only{% endif %}</div>
+            </div></div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="card shadow-sm h-100"><div class="card-body">
+                <div class="text-secondary small">Sugerencia</div>
+                <div class="fw-semibold">${{ auditoria.monto_maximo_sugerido|floatformat:0|intcomma }}</div>
+                <div>{{ auditoria.plazo_maximo_sugerido }} meses</div>
+            </div></div>
+        </div>
+    </div>
+
+    {% if puede_originar %}
+        <div class="card shadow-sm border-primary mb-4">
+            <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div>
+                    <h2 class="h5 mb-1">Originacion controlada</h2>
+                    <p class="text-secondary mb-0">Crea credito de libranza en estado EN_REVISION. No desembolsa, no activa y no genera pagare.</p>
+                </div>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="accion" value="originar">
+                    <button type="submit" class="btn btn-primary">
+                        Originar en revision
+                    </button>
+                </form>
+            </div>
+        </div>
+    {% endif %}
+
+    {% if puede_evaluar_datacredito %}
+        <div class="card shadow-sm border-warning mb-4">
+            <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div>
+                    <h2 class="h5 mb-1">DataCredito controlado</h2>
+                    <p class="text-secondary mb-0">Reutiliza snapshots vigentes o ejecuta una consulta individual segun permisos. No crea credito ni cambia estados financieros.</p>
+                </div>
+                <a href="{% url 'gestion:prestadores_riesgo_datacredito' auditoria.id %}" class="btn btn-outline-primary">
+                    Consultar DataCredito y reevaluar
+                </a>
+            </div>
+        </div>
+    {% endif %}
+
+    {% if novedad_pagador %}
+        <div class="card shadow-sm border-success mb-4">
+            <div class="card-body">
+                <h2 class="h5 mb-1">Novedad al pagador</h2>
+                <p class="text-secondary mb-0">
+                    Estado: <strong>{{ novedad_pagador.estado }}</strong>.
+                    Destinatarios registrados: {{ novedad_pagador.destinatarios|length }}.
+                </p>
+            </div>
+        </div>
+    {% elif puede_notificar_pagador %}
+        <div class="card shadow-sm border-info mb-4">
+            <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div>
+                    <h2 class="h5 mb-1">Novedad informativa al pagador</h2>
+                    <p class="text-secondary mb-0">Informa que existe un credito de prestador originado en revision. No requiere aprobacion del pagador.</p>
+                </div>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="accion" value="notificar_pagador">
+                    <button type="submit" class="btn btn-outline-primary">
+                        Notificar pagador
+                    </button>
+                </form>
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h2 class="h5 mb-3">Resumen operativo</h2>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <tbody>
+                        <tr><th>Score</th><td>{{ auditoria.score_final|default:"-" }}</td><th>Banda</th><td>{{ auditoria.score_banda|default:"-" }}</td></tr>
+                        <tr><th>Score status</th><td>{{ auditoria.score_status|default:"-" }}</td><th>DataCredito</th><td>{{ auditoria.datacredito_status|default:"-" }}</td></tr>
+                        <tr><th>Capacidad</th><td>{{ auditoria.capacidad_status|default:"-" }}</td><th>Riesgo</th><td>{{ auditoria.riesgo_status|default:"-" }}</td></tr>
+                        <tr><th>Fecha evaluacion</th><td>{{ auditoria.created_at|date:"Y-m-d H:i" }}</td><th>Usuario</th><td>{{ auditoria.usuario|default:"-" }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h2 class="h5 mb-3">Timeline operativo</h2>
+            {% if timeline_operativo %}
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Evento</th>
+                                <th>Usuario</th>
+                                <th>Descripción</th>
+                                <th>Estado resultante</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for evento in timeline_operativo %}
+                                <tr>
+                                    <td>{{ evento.created_at|date:"Y-m-d H:i" }}</td>
+                                    <td>
+                                        <div class="fw-semibold">{{ evento.titulo }}</div>
+                                        <div class="text-secondary small">{{ evento.tipo_evento }}</div>
+                                    </td>
+                                    <td>{{ evento.usuario|default:"-" }}</td>
+                                    <td>{{ evento.descripcion|default:"-" }}</td>
+                                    <td>{{ evento.estado_resultante|default:"-" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-secondary mb-0">Sin eventos operativos registrados para esta solicitud.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row g-3">
+        {% for seccion in secciones_snapshot %}
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h2 class="h6 mb-3">{{ seccion.titulo }}</h2>
+                        {% if seccion.contenido %}
+                            <pre class="bg-light border rounded p-3 small mb-0" style="white-space: pre-wrap;">{{ seccion.contenido }}</pre>
+                        {% else %}
+                            <p class="text-secondary mb-0">Sin datos en el snapshot.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</main>
+</body>
+</html>

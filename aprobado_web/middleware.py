@@ -15,12 +15,23 @@ class SubdomainRoutingMiddleware:
     def __call__(self, request):
         host = request.get_host().split(":")[0].lower()
 
-        primary_host = getattr(settings, "PRIMARY_DOMAIN_HOST", "aprobado.com.co").lower()
-        emprender_host = getattr(settings, "EMPRENDER_SUBDOMAIN_HOST", "emprender.aprobado.com.co").lower()
-        market_host = getattr(settings, "MARKET_SUBDOMAIN_HOST", "market.aprobado.com.co").lower()
+        primary_host = self._normalizar_host_configurado(
+            getattr(settings, "PRIMARY_DOMAIN_HOST", "aprobado.com.co"),
+        )
+        emprender_host = self._normalizar_host_configurado(
+            getattr(settings, "EMPRENDER_SUBDOMAIN_HOST", "emprender.aprobado.com.co"),
+        )
+        market_host = self._normalizar_host_configurado(
+            getattr(settings, "MARKET_SUBDOMAIN_HOST", "market.aprobado.com.co"),
+        )
+        contractors_host = self._normalizar_host_configurado(
+            getattr(settings, "CONTRACTORS_PORTAL_HOST", f"contratistas.{primary_host}"),
+        )
         www_primary_host = f"www.{primary_host}"
 
-        if host in {'127.0.0.1', 'localhost'}:
+        if self._es_host_contratistas(host, contractors_host):
+            request.urlconf = "aprobado_web.urls_contractors"
+        elif host in {'127.0.0.1', 'localhost'}:
             request.urlconf = self._urlconf_for_local_path(request.path)
         elif host == emprender_host:
             request.urlconf = "aprobado_web.urls_emprender"
@@ -62,6 +73,18 @@ class SubdomainRoutingMiddleware:
         if normalized_path.startswith("/libranza/"):
             return primary_host
         return None
+
+    @staticmethod
+    def _es_host_contratistas(host, contractors_host):
+        if host == contractors_host:
+            return True
+        return bool(getattr(settings, "DEBUG", False) and host == "contratistas.localhost")
+
+    @staticmethod
+    def _normalizar_host_configurado(host):
+        host = (host or "").strip().lower()
+        host = host.removeprefix("https://").removeprefix("http://")
+        return host.split("/", 1)[0].split(":", 1)[0]
 
     @staticmethod
     def _redirect(request, target_host):

@@ -106,11 +106,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                     <p>Financia tus proyectos personales con descuento automático de nómina. Proceso 100% digital, aprobación rápida y sin complicaciones.</p>
                     <div class="libranza-hero-buttons">
                         <a href="{% url 'libranza:simulador' %}" class="libranza-btn-primary">Simula tu crédito</a>
-                        {% if request.user.is_authenticated %}
-                        <a href="{% url 'libranza:adelanto_nomina' %}" class="libranza-btn-secondary">Solicitar adelanto de nómina</a>
-                        {% else %}
-                        <a href="#adelanto-nomina" class="libranza-btn-secondary">Simula tu adelanto de nómina</a>
-                        {% endif %}
+                        <a href="https://contratistas.aprobado.com.co/solicitar/" class="libranza-btn-secondary">Solicitar como Prestador de Servicios</a>
                     </div>
                 </div>
                 <!-- MODIFICAR: Imagen o gráfico hero -->
@@ -190,85 +186,35 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         </div>
     </section>
 
-    <section class="libranza-adelanto-section" id="adelanto-nomina">
+    <section class="libranza-contractors-section" id="contratistas">
         <div class="libranza-container">
-            <div class="libranza-adelanto-grid">
-                <div class="libranza-adelanto-copy">
-                    <span class="libranza-eyebrow">Producto adicional de libranza</span>
-                    <h2 class="libranza-section-title" style="text-align:left;margin-bottom:1rem;">Haz la simulación de tu <span class="highlight-cyan">adelanto de nómina</span></h2>
-                    <p class="libranza-section-description" style="text-align:left;max-width:none;">
-                        Este producto está pensado para cubrir necesidades puntuales de caja. Calcula tu monto estimado usando salario,
-                        auxilio de transporte y descuentos fijos, y conoce de inmediato tu neto a recibir.
+            <div class="libranza-contractors-card">
+                <div class="libranza-contractors-copy">
+                    <span class="libranza-eyebrow">Canal especializado</span>
+                    <h2 class="libranza-section-title">¿Eres <span class="highlight-cyan">Prestador de Servicios</span>?</h2>
+                    <p>
+                        También puedes iniciar tu solicitud con contrato vigente. Te pediremos tus datos,
+                        documentos y empresa contratante antes de habilitar la simulación.
                     </p>
-                    <div class="libranza-adelanto-benefits">
-                        <div class="libranza-adelanto-benefit">
-                            <strong>Simulación clara</strong>
-                            <span>Mostramos bruto, costo de originación, IVA, interés NM {{ adelanto_tasa_mensual }} y neto final.</span>
-                        </div>
-                        <div class="libranza-adelanto-benefit">
-                            <strong>Decisión controlada</strong>
-                            <span>La solicitud real solo se habilita si tu pagador te cargó con convenio activo y antigüedad mínima.</span>
-                        </div>
-                        <div class="libranza-adelanto-benefit">
-                            <strong>Flujo propio</strong>
-                            <span>No se mezcla con el crédito tradicional: tiene su propia revisión, firma y desembolso.</span>
-                        </div>
-                    </div>
-                    <div class="libranza-hero-buttons">
-                        {% if request.user.is_authenticated %}
-                        <a href="{% url 'libranza:adelanto_nomina' %}" class="libranza-btn-primary">Solicitar adelanto</a>
-                        {% else %}
-                        <a href="{% url 'libranza:login' %}?next={% url 'libranza:adelanto_nomina' %}" class="libranza-btn-primary">Iniciar sesión para solicitar</a>
-                        {% endif %}
-                    </div>
+                    <a href="https://contratistas.aprobado.com.co/solicitar/" class="libranza-btn-primary">Solicitar como Prestador de Servicios</a>
+                    <small>Este flujo está diseñado para prestadores de servicios con empresa registrada en Aprobado.</small>
                 </div>
-
-                <div class="libranza-adelanto-simulator" id="adelanto-simulador">
-                    <div class="libranza-adelanto-card">
-                        <div class="libranza-adelanto-card-head">
-                            <span class="libranza-eyebrow">Simulador inmediato</span>
-                            <h3>Calcula tu adelanto estimado</h3>
-                        </div>
-                        <form id="adelantoSimulatorForm" class="libranza-adelanto-form" data-loader="ajax" novalidate>
-                            {% csrf_token %}
-                            <div class="libranza-adelanto-fields">
-                                <div class="libranza-adelanto-field">
-                                    <label for="adelanto-salario">Salario mensual</label>
-                                    <input type="text" id="adelanto-salario" inputmode="numeric" autocomplete="off" data-money-input placeholder="Ej. 2.400.000">
-                                </div>
-                                <div class="libranza-adelanto-field">
-                                    <label for="adelanto-auxilio">Auxilio de transporte</label>
-                                    <input type="text" id="adelanto-auxilio" inputmode="numeric" autocomplete="off" data-money-input placeholder="Ej. 162.000">
-                                </div>
-                                <div class="libranza-adelanto-field libranza-adelanto-field-wide">
-                                    <label for="adelanto-descuentos">Descuentos fijos</label>
-                                    <input type="text" id="adelanto-descuentos" inputmode="numeric" autocomplete="off" data-money-input placeholder="Ej. 300.000">
-                                </div>
-                            </div>
-                            <div class="libranza-adelanto-inline-note">Usa valores mensuales en pesos colombianos. Formateamos automáticamente los montos al escribir.</div>
-                            <button type="submit" class="libranza-btn-primary libranza-adelanto-submit" id="adelanto-submit-btn" style="width:100%;">
-                                <span>Simular adelanto</span>
-                            </button>
-                        </form>
-
-                        <div class="libranza-adelanto-results" id="adelantoSimulatorResults">
-                            <div class="libranza-adelanto-result-main">
-                                <span>Monto neto estimado a recibir</span>
-                                <strong id="adelanto-neto">$0</strong>
-                                <small id="adelanto-estado">Ingresa tus datos para calcular el resultado.</small>
-                            </div>
-                            <div class="libranza-adelanto-result-grid">
-                                <div><span>Monto bruto</span><strong id="adelanto-bruto">$0</strong></div>
-                                <div><span>Valor diario</span><strong id="adelanto-diario">$0</strong></div>
-                                <div><span>Costo de originación {{ adelanto_comision_percent }}%</span><strong id="adelanto-comision">$0</strong></div>
-                                <div><span>IVA sobre costo de originación</span><strong id="adelanto-iva">$0</strong></div>
-                                <div><span>Interés NM {{ adelanto_tasa_mensual }}</span><strong id="adelanto-interes">$0</strong></div>
-                                <div><span>Descuento estimado nómina</span><strong id="adelanto-descuento">$0</strong></div>
-                            </div>
-                            <div class="libranza-adelanto-note">
-                                La simulación es informativa. Para solicitar, validamos convenio activo, antigüedad mínima y el vínculo laboral cargado por tu pagador.
-                            </div>
-                        </div>
+                <div class="libranza-contractors-steps" aria-label="Pasos para prestadores de servicios">
+                    <div class="libranza-contractors-step">
+                        <span>1</span>
+                        <strong>Regístrate</strong>
+                    </div>
+                    <div class="libranza-contractors-step">
+                        <span>2</span>
+                        <strong>Carga tus documentos</strong>
+                    </div>
+                    <div class="libranza-contractors-step">
+                        <span>3</span>
+                        <strong>Validamos tu contrato</strong>
+                    </div>
+                    <div class="libranza-contractors-step">
+                        <span>4</span>
+                        <strong>Simula con tus datos</strong>
                     </div>
                 </div>
             </div>
@@ -364,27 +310,40 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
     <section class="libranza-trusted-section" id="empresas-confian">
         <div class="libranza-container">
             <div class="libranza-trusted-head">
-                <span class="libranza-eyebrow">Empresas que confían en nosotros</span>
+                <span class="libranza-eyebrow">Ellos confiaron en nosotros</span>
                 <h2 class="libranza-section-title">Convenios y aliados que ya operan con <span class="highlight-cyan">Aprobado</span></h2>
-                <p class="libranza-section-description" style="margin-bottom:0;max-width:760px;">Una franja limpia para mostrar organizaciones que ya confían en nuestro flujo digital, sin convertir la landing en una vitrina cargada.</p>
+                <p class="libranza-section-description" style="margin-bottom:0;max-width:760px;">Una grilla limpia para mostrar más organizaciones activas sin comprimir sus logos ni saturar la landing.</p>
             </div>
-            <div class="libranza-trusted-marquee-shell" aria-label="Empresas que confían en Aprobado">
-                <div class="libranza-trusted-marquee-track">
-                    {% for company in landing_trusted_companies %}
-                    <div class="libranza-trusted-logo-card">
-                        <img src="{{ company.logo_url }}" alt="{{ company.nombre }}" class="libranza-trusted-logo{% if company.nombre == 'DataIn' %} is-datain{% endif %}" loading="lazy">
-                    </div>
-                    {% endfor %}
-                    {% for company in landing_trusted_companies %}
-                    <div class="libranza-trusted-logo-card" aria-hidden="true">
-                        <img src="{{ company.logo_url }}" alt="" class="libranza-trusted-logo{% if company.nombre == 'DataIn' %} is-datain{% endif %}" loading="lazy">
-                    </div>
-                    {% endfor %}
+            <div class="libranza-trusted-grid" aria-label="Empresas que confiaron en Aprobado">
+                {% for company in landing_trusted_companies %}
+                <div class="libranza-trusted-logo-card">
+                    <img src="{{ company.logo_url }}" alt="{{ company.nombre }}" class="libranza-trusted-logo{% if company.nombre == 'DataIn' or company.nombre == 'Datain' %} is-datain{% endif %}" loading="lazy">
                 </div>
+                {% endfor %}
             </div>
         </div>
     </section>
     {% endif %}
+
+    <section class="libranza-backers-section" id="quienes-nos-respaldan">
+        <div class="libranza-container">
+            <div class="libranza-backers-head">
+                <span class="libranza-eyebrow">Quiénes nos respaldan</span>
+                <h2 class="libranza-section-title">Respaldo institucional para operar con confianza</h2>
+                <p class="libranza-section-description" style="margin-bottom:0;max-width:760px;">Aliados y referencias del ecosistema que fortalecen nuestra operación, validación y tecnología.</p>
+            </div>
+            {# Placeholders seguros. Reemplazar por logos oficiales en static/images/respaldos/ con los mismos nombres de archivo. #}
+            <div class="libranza-backers-grid" aria-label="Entidades que respaldan a Aprobado">
+                {% for backer in landing_backers %}
+                <div class="libranza-backer-card">
+                    <img src="{% static backer.logo_path %}" alt="{{ backer.nombre }}" class="libranza-backer-logo" loading="lazy">
+                    <strong>{{ backer.nombre }}</strong>
+                    <small>Asset esperado: static/{{ backer.logo_path }}</small>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
 
     <section class="libranza-testimonials-section" id="testimonios">
         <div class="libranza-container">
@@ -516,11 +475,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                         <!-- MODIFICAR: Botones de acción -->
                         {# ✅ NUEVAS URLs - Libranza #}
                         <a href="{% url 'libranza:simulador' %}" class="libranza-btn-primary-large">Simular crédito</a>
-                        {% if request.user.is_authenticated %}
-                        <a href="{% url 'libranza:adelanto_nomina' %}" class="libranza-btn-secondary-large">Solicitar adelanto</a>
-                        {% else %}
-                        <a href="{% url 'libranza:login' %}?next={{ request.get_full_path|urlencode }}" class="libranza-btn-secondary-large">Iniciar sesión</a>
-                        {% endif %}
+                        <a href="https://contratistas.aprobado.com.co/solicitar/" class="libranza-btn-secondary-large">Solicitar como Prestador de Servicios</a>
                     </div>
                     <!-- MODIFICAR: Información de contacto -->
                     <p class="libranza-contact-info">
@@ -625,12 +580,18 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
     }
 
     .libranza-trusted-section,
+    .libranza-backers-section,
     .libranza-testimonials-section {
         padding: 4.5rem 0;
         background: #f8fafc;
     }
 
-    .libranza-trusted-head {
+    .libranza-backers-section {
+        background: #ffffff;
+    }
+
+    .libranza-trusted-head,
+    .libranza-backers-head {
         margin-bottom: 2rem;
     }
 
@@ -642,50 +603,25 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         box-shadow: 0 16px 40px rgba(15, 23, 42, 0.05);
     }
 
-    .libranza-trusted-marquee-shell {
-        position: relative;
-        overflow: hidden;
+    .libranza-trusted-grid {
+        display: grid;
+        grid-auto-flow: column;
+        grid-template-rows: repeat(2, minmax(104px, auto));
+        grid-auto-columns: minmax(210px, 1fr);
+        gap: 1rem;
         margin-top: 2rem;
-        padding: 1rem 0;
+        padding: 1rem;
         border-radius: 1.25rem;
         border: 1px solid rgba(15, 23, 42, 0.08);
         background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
         box-shadow: 0 16px 40px rgba(15, 23, 42, 0.05);
-    }
-
-    .libranza-trusted-marquee-shell::before,
-    .libranza-trusted-marquee-shell::after {
-        content: "";
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        width: 5rem;
-        z-index: 1;
-        pointer-events: none;
-    }
-
-    .libranza-trusted-marquee-shell::before {
-        left: 0;
-        background: linear-gradient(90deg, #ffffff 0%, rgba(255,255,255,0) 100%);
-    }
-
-    .libranza-trusted-marquee-shell::after {
-        right: 0;
-        background: linear-gradient(270deg, #ffffff 0%, rgba(255,255,255,0) 100%);
-    }
-
-    .libranza-trusted-marquee-track {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        width: max-content;
-        animation: trustedLogosMarquee 26s linear infinite;
+        overflow-x: auto;
+        scrollbar-width: thin;
+        scroll-snap-type: x proximity;
     }
 
     .libranza-trusted-logo-card {
-        width: 230px;
-        height: 96px;
-        flex: 0 0 auto;
+        min-height: 104px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -694,6 +630,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         background: rgba(255, 255, 255, 0.92);
         border: 1px solid rgba(148, 163, 184, 0.18);
         overflow: hidden;
+        scroll-snap-align: start;
     }
 
     .libranza-trusted-logo {
@@ -708,6 +645,45 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
     .libranza-trusted-logo.is-datain {
         max-width: 208px;
         max-height: 58px;
+    }
+
+    .libranza-backers-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+
+    .libranza-backer-card {
+        min-height: 178px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 0.75rem;
+        padding: 1.35rem;
+        border-radius: 1rem;
+        border: 1px solid #dbe7f3;
+        background: #f8fafc;
+        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.05);
+    }
+
+    .libranza-backer-logo {
+        width: 100%;
+        max-width: 210px;
+        height: 54px;
+        object-fit: contain;
+        object-position: left center;
+    }
+
+    .libranza-backer-card strong {
+        color: #0a192f;
+        font-size: 1rem;
+    }
+
+    .libranza-backer-card small {
+        color: #64748b;
+        font-size: 0.78rem;
+        line-height: 1.35;
     }
 
     .libranza-testimonials-shell {
@@ -764,19 +740,20 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         background: rgba(255, 255, 255, 0.18);
     }
 
-    @keyframes trustedLogosMarquee {
-        from { transform: translateX(0); }
-        to { transform: translateX(calc(-50% - 0.5rem)); }
-    }
-
     @media (max-width: 960px) {
         .libranza-testimonials-shell {
             grid-template-columns: 1fr;
         }
 
-        .libranza-trusted-logo-card {
-            width: 190px;
-            height: 84px;
+        .libranza-trusted-grid {
+            grid-auto-flow: row;
+            grid-template-rows: none;
+            grid-template-columns: repeat(2, minmax(150px, 1fr));
+            overflow-x: visible;
+        }
+
+        .libranza-backers-grid {
+            grid-template-columns: 1fr;
         }
 
         .libranza-trusted-logo {
@@ -790,15 +767,10 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         }
     }
 
-    @media (prefers-reduced-motion: reduce) {
-        .libranza-trusted-marquee-shell {
-            overflow-x: auto;
-            scrollbar-width: thin;
-        }
-
-        .libranza-trusted-marquee-track {
-            animation: none;
-            padding-inline: 1rem;
+    @media (max-width: 520px) {
+        .libranza-trusted-grid {
+            grid-template-columns: 1fr;
+            padding: 0.75rem;
         }
     }
 
@@ -960,18 +932,6 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         box-shadow: 0 8px 20px rgba(6, 182, 212, 0.3);
     }
 
-    .libranza-adelanto-section {
-        padding: 4.5rem 1rem;
-        background: linear-gradient(180deg, #f8fcff 0%, #eef7ff 100%);
-    }
-
-    .libranza-adelanto-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
-        gap: 2rem;
-        align-items: start;
-    }
-
     .libranza-eyebrow {
         display: inline-flex;
         align-items: center;
@@ -985,167 +945,91 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         text-transform: uppercase;
     }
 
-    .libranza-adelanto-benefits {
+    .libranza-contractors-section {
+        padding: 4.5rem 1rem;
+        background: #f8fafc;
+    }
+
+    .libranza-contractors-card {
         display: grid;
-        gap: 1rem;
-        margin: 1.5rem 0 2rem;
+        grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+        gap: 2rem;
+        align-items: center;
+        background: #ffffff;
+        border: 1px solid #e5edf5;
+        border-radius: 24px;
+        padding: 2rem;
+        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
     }
 
-    .libranza-adelanto-benefit {
-        background: white;
-        border: 1px solid #dbe7f3;
-        border-radius: 18px;
-        padding: 1rem 1.1rem;
-        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+    .libranza-contractors-copy .libranza-section-title {
+        text-align: left;
+        margin: 1rem 0 0.9rem;
     }
 
-    .libranza-adelanto-benefit strong {
+    .libranza-contractors-copy p {
+        color: #334155;
+        line-height: 1.65;
+        font-size: 1.05rem;
+        margin-bottom: 1.4rem;
+    }
+
+    .libranza-contractors-copy small {
         display: block;
-        color: #0a192f;
-        margin-bottom: 0.25rem;
-    }
-
-    .libranza-adelanto-benefit span {
-        color: #4b5563;
-        line-height: 1.5;
-    }
-
-    .libranza-adelanto-card {
-        background: #0f2035;
-        border-radius: 28px;
-        padding: 1.35rem;
-        box-shadow: 0 24px 50px rgba(15, 23, 42, 0.18);
-        color: #f8fbff;
-    }
-
-    .libranza-adelanto-card-head h3 {
-        margin: 0.7rem 0 0;
-        font-size: 1.45rem;
-        color: #ffffff;
-    }
-
-    .libranza-adelanto-form {
-        display: grid;
-        gap: 0.9rem;
-        margin-top: 1.2rem;
-    }
-
-    .libranza-adelanto-fields {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.85rem;
-    }
-
-    .libranza-adelanto-field label {
-        display: block;
-        font-size: 0.83rem;
-        font-weight: 600;
-        color: rgba(255,255,255,0.8);
-        margin-bottom: 0.4rem;
-    }
-
-    .libranza-adelanto-field input {
-        width: 100%;
-        border: 1px solid rgba(255,255,255,0.14);
-        background: rgba(255,255,255,0.05);
-        color: #ffffff;
-        border-radius: 14px;
-        padding: 0.85rem 0.95rem;
-        outline: none;
-    }
-
-    .libranza-adelanto-field-wide {
-        grid-column: 1 / -1;
-    }
-
-    .libranza-adelanto-inline-note {
-        color: rgba(255,255,255,0.68);
-        font-size: 0.82rem;
+        color: #64748b;
+        margin-top: 1rem;
         line-height: 1.45;
     }
 
-    .libranza-adelanto-submit[disabled] {
-        opacity: 0.7;
-        cursor: wait;
-    }
-
-    .libranza-adelanto-field input::placeholder {
-        color: rgba(255,255,255,0.36);
-    }
-
-    .libranza-adelanto-results {
-        margin-top: 1.15rem;
+    .libranza-contractors-steps {
         display: grid;
-        gap: 0.85rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
     }
 
-    .libranza-adelanto-result-main {
-        background: linear-gradient(135deg, rgba(34,211,238,0.16), rgba(6,182,212,0.08));
-        border: 1px solid rgba(34,211,238,0.2);
-        border-radius: 20px;
-        padding: 1.1rem 1.2rem;
+    .libranza-contractors-step {
+        min-height: 118px;
+        background: #f8fbff;
+        border: 1px solid #dbeafe;
+        border-radius: 18px;
+        padding: 1.1rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 0.75rem;
     }
 
-    .libranza-adelanto-result-main span,
-    .libranza-adelanto-result-main small {
-        display: block;
-        color: rgba(255,255,255,0.75);
-    }
-
-    .libranza-adelanto-result-main strong {
-        display: block;
-        font-size: 1.75rem;
-        margin: 0.35rem 0;
-    }
-
-    .libranza-adelanto-result-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.7rem;
-    }
-
-    .libranza-adelanto-result-grid div {
-        background: rgba(255,255,255,0.05);
-        border: 1px solid rgba(255,255,255,0.09);
-        border-radius: 16px;
-        padding: 0.8rem 0.85rem;
-    }
-
-    .libranza-adelanto-result-grid span {
-        display: block;
-        color: rgba(255,255,255,0.68);
-        font-size: 0.82rem;
-        margin-bottom: 0.25rem;
-    }
-
-    .libranza-adelanto-result-grid strong {
+    .libranza-contractors-step span {
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        background: #16b8d3;
         color: #ffffff;
-        font-size: 1rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
     }
 
-    .libranza-adelanto-note {
-        background: rgba(255,255,255,0.06);
-        border-radius: 16px;
-        padding: 0.9rem 1rem;
-        color: rgba(255,255,255,0.78);
-        line-height: 1.5;
+    .libranza-contractors-step strong {
+        color: #0a192f;
+        font-size: 1rem;
+        line-height: 1.3;
     }
 
     @media (max-width: 960px) {
-        .libranza-adelanto-grid {
+        .libranza-contractors-card {
             grid-template-columns: 1fr;
-        }
-
-        .libranza-adelanto-fields,
-        .libranza-adelanto-result-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
         }
     }
 
     @media (max-width: 480px) {
-        .libranza-adelanto-fields,
-        .libranza-adelanto-result-grid {
+        .libranza-contractors-steps {
             grid-template-columns: 1fr;
+        }
+
+        .libranza-contractors-card {
+            padding: 1.25rem;
         }
     }
 
@@ -1338,7 +1222,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
     /* CTA SECTION */
     .libranza-cta-section {
         padding: 4rem 1rem;
-        background: linear-gradient(135deg, #0a192f 0%, #1e293b 100%);
+        background: #0a192f;
     }
 
     .libranza-cta-card {
@@ -1437,96 +1321,6 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
             });
         });
 
-        const simulatorForm = document.getElementById('adelantoSimulatorForm');
-        if (simulatorForm) {
-            const moneyInputs = simulatorForm.querySelectorAll('[data-money-input]');
-            const submitButton = document.getElementById('adelanto-submit-btn');
-            const formatCurrency = (value) => {
-                const number = Number(value || 0);
-                return new Intl.NumberFormat('es-CO', {
-                    style: 'currency',
-                    currency: 'COP',
-                    maximumFractionDigits: 0,
-                }).format(number);
-            };
-
-            const formatThousands = (value) => {
-                const cleaned = String(value || '').replace(/\D/g, '');
-                if (!cleaned) return '';
-                return new Intl.NumberFormat('es-CO', {
-                    maximumFractionDigits: 0,
-                }).format(Number(cleaned));
-            };
-
-            const parseMoneyInput = (input) => String(input?.value || '').replace(/\D/g, '') || '0';
-
-            const setLoadingState = (isLoading) => {
-                if (!submitButton) return;
-                submitButton.disabled = isLoading;
-                submitButton.querySelector('span').textContent = isLoading ? 'Calculando...' : 'Simular adelanto';
-            };
-
-            moneyInputs.forEach((input) => {
-                input.addEventListener('input', () => {
-                    const digits = parseMoneyInput(input);
-                    input.value = digits === '0' ? '' : formatThousands(digits);
-                });
-                input.addEventListener('blur', () => {
-                    const digits = parseMoneyInput(input);
-                    input.value = digits === '0' ? '' : formatThousands(digits);
-                });
-            });
-
-            simulatorForm.addEventListener('submit', async function (event) {
-                event.preventDefault();
-                const salario = parseMoneyInput(document.getElementById('adelanto-salario'));
-                const auxilio = parseMoneyInput(document.getElementById('adelanto-auxilio'));
-                const descuentos = parseMoneyInput(document.getElementById('adelanto-descuentos'));
-
-                setLoadingState(true);
-                if (window.AprobadoLoader) {
-                    window.AprobadoLoader.show('Calculando adelanto...', 'loading', { immediate: true });
-                }
-
-                try {
-                    const response = await fetch("{% url 'libranza:simular_adelanto' %}", {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': simulatorForm.querySelector('[name=csrfmiddlewaretoken]').value,
-                        },
-                        body: JSON.stringify({
-                            salario,
-                            auxilio_transporte: auxilio,
-                            descuentos,
-                        }),
-                    });
-
-                    const data = await response.json().catch(() => ({}));
-                    if (!response.ok) {
-                        throw new Error(data.error || 'No pudimos calcular la simulación en este momento.');
-                    }
-
-                    document.getElementById('adelanto-neto').textContent = formatCurrency(data.neto_a_recibir);
-                    document.getElementById('adelanto-bruto').textContent = formatCurrency(data.monto_bruto_adelanto);
-                    document.getElementById('adelanto-diario').textContent = formatCurrency(data.valor_diario_estimado);
-                    document.getElementById('adelanto-comision').textContent = formatCurrency(data.comision);
-                    document.getElementById('adelanto-iva').textContent = formatCurrency(data.iva_comision);
-                    document.getElementById('adelanto-interes').textContent = formatCurrency(data.interes);
-                    document.getElementById('adelanto-descuento').textContent = formatCurrency(data.descuento_nomina_estimado);
-                    document.getElementById('adelanto-estado').textContent = data.puede_solicitar
-                        ? 'Resultado estimado listo. Si cumples elegibilidad, puedes iniciar la solicitud.'
-                        : 'Con estos datos no se genera adelanto disponible. Revisa ingresos y descuentos.';
-                } catch (error) {
-                    document.getElementById('adelanto-estado').textContent = error.message || 'No pudimos calcular la simulación en este momento.';
-                } finally {
-                    setLoadingState(false);
-                    if (window.AprobadoLoader) {
-                        window.AprobadoLoader.hide();
-                    }
-                }
-            });
-        }
     });
 </script>
 

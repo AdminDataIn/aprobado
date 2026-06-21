@@ -1,0 +1,20 @@
+{
+  "ReportHDCplus": {
+    "productResult": {
+      "responseCode": "13",
+      "responseDesc": "Consulta exitosa"
+    },
+    "models": [
+      {
+        "modelName": "HDC Plus",
+        "modelType": "Score",
+        "scoreValue": "711"
+      }
+    ],
+    "obligations": [
+      {
+        "paymentBehavior": "NNN"
+      }
+    ]
+  }
+}

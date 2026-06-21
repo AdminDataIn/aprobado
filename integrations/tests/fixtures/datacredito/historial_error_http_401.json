@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "errorType": "Unauthorized",
+      "message": "Error received from Idp."
+    }
+  ],
+  "success": false
+}

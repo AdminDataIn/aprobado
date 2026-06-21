@@ -6,6 +6,11 @@ Rol: Staff members que aprueban/rechazan créditos
 """
 from django.urls import path
 from django.views.generic import RedirectView
+from contractors.views_riesgo import (
+    bandeja_riesgo_prestadores_view,
+    detalle_riesgo_prestador_view,
+    evaluar_datacredito_prestador_view,
+)
 from .. import views
 
 app_name = 'gestion'
@@ -22,6 +27,13 @@ urlpatterns = [
     path('adelantos-nomina/', views.admin_adelantos_nomina_view, name='adelantos_nomina'),
     path('creditos/', views.admin_creditos_activos_view, name='creditos_activos'),
     path('cartera/', views.admin_cartera_view, name='cartera_mora'),
+    path('prestadores/riesgo/', bandeja_riesgo_prestadores_view, name='prestadores_riesgo'),
+    path('prestadores/riesgo/<int:audit_id>/', detalle_riesgo_prestador_view, name='prestadores_riesgo_detalle'),
+    path(
+        'prestadores/riesgo/<int:audit_id>/evaluar-datacredito/',
+        evaluar_datacredito_prestador_view,
+        name='prestadores_riesgo_datacredito',
+    ),
     path('libranza/casos-especiales/simular/', views.admin_libranza_special_case_simulator_view, name='libranza_special_case_simulator'),
     path('libranza/casos-especiales/<int:audit_id>/originar/', views.admin_libranza_special_case_originate_view, name='libranza_special_case_originate'),
 

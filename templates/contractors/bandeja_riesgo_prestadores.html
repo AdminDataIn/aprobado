@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bandeja de riesgo prestadores - Aprobado</title>
+    {% load static %}
+    {% load humanize %}
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+    {% include 'base/favicon.html' %}
+</head>
+<body class="theme-gestion">
+{% include 'base/loader_global.html' %}
+<header class="page-header">
+    <div class="container-fluid" style="max-width: 1320px;">
+        <div class="d-flex align-items-center justify-content-between">
+            <a href="{% url 'gestion:dashboard' %}" class="logo">
+                <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;">
+            </a>
+            <a href="{% url 'gestion:dashboard' %}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i>Dashboard
+            </a>
+        </div>
+    </div>
+</header>
+
+<main class="container-fluid py-4" style="max-width: 1320px;">
+    <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+        <div>
+            <h1 class="page-title mb-1">Bandeja de riesgo prestadores</h1>
+            <p class="text-secondary mb-0">Evaluaciones formales guardadas en auditoria. No origina creditos ni modifica estados.</p>
+        </div>
+        <div class="btn-group" role="group" aria-label="Filtro por decision">
+            <a class="btn btn-sm {% if not decision_actual %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{% url 'gestion:prestadores_riesgo' %}">Todas</a>
+            {% for decision in decisiones %}
+                <a class="btn btn-sm {% if decision_actual == decision %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{% url 'gestion:prestadores_riesgo' %}?decision={{ decision }}">{{ decision }}</a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Solicitud</th>
+                        <th>Documento</th>
+                        <th>Solicitante</th>
+                        <th>Empresa</th>
+                        <th>Escenario</th>
+                        <th>Decision</th>
+                        <th>Score</th>
+                        <th>Banda</th>
+                        <th>DataCredito</th>
+                        <th>Monto sugerido</th>
+                        <th>Plazo</th>
+                        <th>Fecha evaluacion</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for fila in filas %}
+                        <tr>
+                            <td>#{{ fila.solicitud.id }}</td>
+                            <td>{{ fila.documento }}</td>
+                            <td>{{ fila.solicitante }}</td>
+                            <td>{{ fila.empresa|default:"-" }}</td>
+                            <td>{{ fila.auditoria.escenario_credito }}</td>
+                            <td><span class="badge text-bg-secondary">{{ fila.auditoria.decision }}</span></td>
+                            <td>{{ fila.auditoria.score_final|default:"-" }}</td>
+                            <td>{{ fila.auditoria.score_banda|default:"-" }}</td>
+                            <td>{{ fila.auditoria.datacredito_status|default:"-" }}</td>
+                            <td>${{ fila.auditoria.monto_maximo_sugerido|floatformat:0|intcomma }}</td>
+                            <td>{{ fila.auditoria.plazo_maximo_sugerido }} meses</td>
+                            <td>{{ fila.auditoria.created_at|date:"Y-m-d H:i" }}</td>
+                            <td class="text-end">
+                                <a class="btn btn-sm btn-outline-primary" href="{% url 'gestion:prestadores_riesgo_detalle' fila.auditoria.id %}">
+                                    Ver evaluacion
+                                </a>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="13" class="text-center text-secondary py-4">No hay evaluaciones para el filtro seleccionado.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+        <nav class="mt-4" aria-label="Paginacion de bandeja">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                    <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if decision_actual %}&decision={{ decision_actual }}{% endif %}">Anterior</a></li>
+                {% endif %}
+                <li class="page-item active"><span class="page-link">Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span></li>
+                {% if page_obj.has_next %}
+                    <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{% if decision_actual %}&decision={{ decision_actual }}{% endif %}">Siguiente</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+    {% endif %}
+</main>
+</body>
+</html>

@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    {% load static %}
+    {% load humanize %}
+    {% load l10n %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador Prestadores de Servicios - Aprobado</title>
+    {% include 'base/favicon.html' %}
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <style>
+        .simulador-legal-note {
+            margin-top: 0.85rem;
+            font-size: 0.8rem;
+            line-height: 1.5;
+            color: #64748b;
+        }
+
+        .simulador-post-actions {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+
+        .simulador-card form {
+            margin: 0;
+        }
+
+        .simulador-cta-button.secondary {
+            background: #ffffff;
+            color: #0f3557;
+            border: 1px solid #c9def0;
+        }
+
+        .simulador-calc-status {
+            margin: 0.75rem 0;
+            min-height: 1.4rem;
+            font-size: 0.9rem;
+            color: #475569;
+        }
+
+        .simulador-calc-status.is-loading {
+            color: #0891b2;
+            font-weight: 700;
+        }
+
+        .simulador-calc-status.is-error {
+            color: #b91c1c;
+            font-weight: 700;
+        }
+
+        .simulador-spinner {
+            display: inline-block;
+            width: 0.9rem;
+            height: 0.9rem;
+            margin-right: 0.4rem;
+            border: 2px solid rgba(8, 145, 178, 0.2);
+            border-top-color: #0891b2;
+            border-radius: 999px;
+            animation: simuladorSpin 0.8s linear infinite;
+            vertical-align: -0.15rem;
+        }
+
+        .simulador-submit[disabled] {
+            cursor: not-allowed;
+            opacity: 0.55;
+        }
+
+        .simulador-success-card {
+            margin-top: 1rem;
+            padding: 1.25rem;
+            border: 1px solid #99f6e4;
+            border-radius: 1rem;
+            background: #f0fdfa;
+            color: #134e4a;
+            font-weight: 600;
+        }
+
+        .simulador-success-card h2 {
+            margin: 0 0 0.5rem;
+            color: #0f766e;
+            font-size: 1.35rem;
+        }
+
+        .simulador-success-card p {
+            margin: 0.35rem 0;
+            line-height: 1.5;
+        }
+
+        .simulador-success-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .simulador-info-strip {
+            display: grid;
+            gap: 0.65rem;
+            margin: 1rem 0;
+            padding: 0.85rem 1rem;
+            border: 1px solid #dbeafe;
+            border-radius: 0.9rem;
+            background: #f8fbff;
+            color: #334155;
+            font-size: 0.9rem;
+            line-height: 1.45;
+        }
+
+        .simulador-highlight-row {
+            background: #f0f9ff;
+            border-radius: 0.75rem;
+        }
+
+        .simulador-primary-row {
+            background: #ecfeff;
+            border-radius: 0.75rem;
+        }
+
+        @media (max-width: 760px) {
+            .simulador-results-container {
+                gap: 0.6rem;
+            }
+
+            .simulador-result-row {
+                align-items: stretch;
+                gap: 0.45rem;
+            }
+
+            .simulador-post-actions,
+            .simulador-success-actions {
+                flex-direction: column;
+            }
+
+            .simulador-post-actions .simulador-cta-button,
+            .simulador-success-actions .simulador-cta-button {
+                width: 100%;
+                text-align: center;
+            }
+        }
+
+        @keyframes simuladorSpin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+<body class="body-index">
+{% include 'base/loader_global.html' %}
+<div class="div-body-main">
+    {% include 'base/navbar_contractors.html' %}
+
+    <main class="simulador-main">
+        <section class="simulador-hero-section">
+            <div class="simulador-container">
+                <div class="simulador-hero">
+                    <div class="simulador-text-content">
+                        <h1>Simulador de credito para Prestadores de Servicios</h1>
+                        <p>{{ branding.nombre_visual }} - Calcula una cuota estimada usando la informacion de tu solicitud {{ solicitud.id }}, tu contrato vigente y las condiciones activas del portal.</p>
+                        <a href="{% url 'contractors:documentos_solicitud_contratista' solicitud.id %}" class="simulador-cta-button">Volver a documentos</a>
+                        {% if simulacion_aceptada %}
+                            <div class="simulador-success-card" role="status" aria-live="polite">
+                                <h2>Solicitud recibida</h2>
+                                <p>Tu solicitud quedó en evaluación. Revisaremos documentos, contrato vigente, capacidad contractual y políticas internas.</p>
+                                <p>La aprobación no es automática. Te notificaremos por los canales registrados si necesitamos información adicional.</p>
+                                <div class="simulador-success-actions">
+                                    <a href="{% url 'contractors:mi_credito_contratista' %}" class="simulador-cta-button">Ir a Mi crédito</a>
+                                    <a href="{% url 'contractors:solicitud_contratista' %}" class="simulador-cta-button secondary">Nueva solicitud</a>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="simulador-card">
+                        <form method="post" class="simulador-form" id="formularioSimuladorContratista" data-calcular-url="{% url 'contractors:calcular_simulacion_contratista' %}" data-solicitud-id="{{ solicitud.id }}">
+                            {% csrf_token %}
+                            {{ formulario.non_field_errors }}
+                            <div class="simulador-form-step active">
+                                <div class="simulador-slider-container">
+                                    <div class="simulador-slider-title">Monto a simular</div>
+                                    <div class="simulador-range-container">
+                                        <div class="simulador-range-progress" id="simulador-progress-1"></div>
+                                        <input type="range"
+                                               min="{{ configuracion_producto.min_amount|unlocalize }}"
+                                               max="{{ configuracion_producto.max_amount|unlocalize }}"
+                                               step="50000"
+                                               value="{{ formulario.monto.value|default:configuracion_producto.min_amount|unlocalize }}"
+                                               class="simulador-range-input"
+                                               id="simulador-range-1"
+                                               name="monto">
+                                        <div class="simulador-range-tooltip" id="simulador-tooltip-1">$ {{ formulario.monto.value|default:configuracion_producto.min_amount|floatformat:0|intcomma }}</div>
+                                    </div>
+                                    <div class="simulador-range-labels">
+                                        <span>$ {{ configuracion_producto.min_amount|floatformat:0|intcomma }}</span>
+                                        <span>$ {{ configuracion_producto.max_amount|floatformat:0|intcomma }}</span>
+                                    </div>
+                                    {{ formulario.monto.errors }}
+                                </div>
+
+                                <div class="simulador-slider-container">
+                                    <div class="simulador-slider-title">Plazo en meses</div>
+                                    <div class="simulador-range-container">
+                                        <div class="simulador-range-progress" id="simulador-progress-2"></div>
+                                        <input type="range"
+                                               min="{{ configuracion_producto.min_term_months }}"
+                                               max="{{ configuracion_producto.max_term_months }}"
+                                               step="1"
+                                               value="{{ formulario.plazo_meses.value|default:configuracion_producto.min_term_months }}"
+                                               class="simulador-range-input"
+                                               id="simulador-range-2"
+                                               name="plazo_meses">
+                                        <div class="simulador-range-tooltip" id="simulador-tooltip-2">{{ formulario.plazo_meses.value|default:configuracion_producto.min_term_months }} meses</div>
+                                    </div>
+                                    <div class="simulador-range-labels">
+                                        <span>{{ configuracion_producto.min_term_months }} meses</span>
+                                        <span>{{ configuracion_producto.max_term_months }} meses</span>
+                                    </div>
+                                    {{ formulario.plazo_meses.errors }}
+                                </div>
+
+                                <div class="simulador-calc-status is-loading" id="simulador-status" aria-live="polite">
+                                    <span class="simulador-spinner"></span>Calculando...
+                                </div>
+
+                                <div class="simulador-info-strip">
+                                    <strong>Resumen financiero estimado</strong>
+                                    <span>FiGarantías y seguro de vida se financian dentro del crédito. La simulación no constituye aprobación automática.</span>
+                                </div>
+
+                                <div class="simulador-results-container">
+                                    <div class="simulador-result-row">
+                                        <label class="simulador-result-label">Monto solicitado:</label>
+                                        <input type="text" data-resultado-campo="monto_solicitado" value="Calculando..." class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label class="simulador-result-label">Costo de originación:</label>
+                                        <input type="text" data-resultado-campo="costo_originacion" value="Calculando..." class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label class="simulador-result-label">IVA costo de originación:</label>
+                                        <input type="text" data-resultado-campo="iva_costo_originacion" value="Calculando..." class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label class="simulador-result-label">FiGarantías, IVA incluido:</label>
+                                        <input type="text" data-resultado-campo="fondo_garantia_total" value="Calculando..." class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label class="simulador-result-label">Seguro de vida financiado:</label>
+                                        <input type="text" data-resultado-campo="seguro_vida" value="Calculando..." class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label class="simulador-result-label">Capital total financiado:</label>
+                                        <input type="text" data-resultado-campo="capital_total_financiado" value="Calculando..." class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label class="simulador-result-label">Intereses estimados:</label>
+                                        <input type="text" data-resultado-campo="intereses_estimados" value="Calculando..." class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label class="simulador-result-label">Tasa mensual:</label>
+                                        <input type="text" data-resultado-campo="tasa_mensual" value="Calculando..." class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row">
+                                        <label class="simulador-result-label">TEA:</label>
+                                        <input type="text" data-resultado-campo="tea_calculada" value="Calculando..." class="simulador-result-input" readonly>
+                                    </div>
+                                    <div class="simulador-result-row simulador-highlight-row" style="border-top: 2px solid #06b6d4; padding-top: 10px; margin-top: 10px;">
+                                        <label class="simulador-result-label" style="font-weight: 700;">Total estimado:</label>
+                                        <input type="text" data-resultado-campo="total_estimado" value="Calculando..." class="simulador-result-input" style="font-weight: 700;" readonly>
+                                    </div>
+                                    <div class="simulador-result-row simulador-primary-row">
+                                        <label class="simulador-result-label" style="font-weight: 700; color: #06b6d4;">Cuota mensual:</label>
+                                        <input type="text" data-resultado-campo="cuota_mensual" value="Calculando..." class="simulador-result-input" style="font-weight: 700; color: #06b6d4;" readonly>
+                                    </div>
+                                </div>
+                                <p class="simulador-legal-note">
+                                    La simulacion es informativa y depende de la revision documental, contrato vigente, capacidad contractual y reglas internas de riesgo.
+                                </p>
+                                <div class="simulador-post-actions">
+                                    <button type="submit" class="simulador-cta-button simulador-submit" id="boton-aceptar-simulacion" disabled>Aceptar simulación y enviar solicitud</button>
+                                    <span class="simulador-legal-note" id="simulador-version-politica"></span>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    {% include 'base/footer_contractors.html' %}
+</div>
+{% include 'base/public_whatsapp_button.html' %}
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const sliderMonto = document.getElementById("simulador-range-1");
+        const tooltipMonto = document.getElementById("simulador-tooltip-1");
+        const progresoMonto = document.getElementById("simulador-progress-1");
+        const sliderPlazo = document.getElementById("simulador-range-2");
+        const tooltipPlazo = document.getElementById("simulador-tooltip-2");
+        const progresoPlazo = document.getElementById("simulador-progress-2");
+        const formulario = document.getElementById("formularioSimuladorContratista");
+        const estado = document.getElementById("simulador-status");
+        const botonAceptar = document.getElementById("boton-aceptar-simulacion");
+        const versionPolitica = document.getElementById("simulador-version-politica");
+        const camposResultado = document.querySelectorAll("[data-resultado-campo]");
+        let temporizadorCalculo = null;
+        let solicitudActual = 0;
+        let ultimoResultadoValido = false;
+
+        function formatoMoneda(valor) {
+            return new Intl.NumberFormat('es-CO', {
+                style: 'currency',
+                currency: 'COP',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+            }).format(Number(valor || 0));
+        }
+
+        function formatoMonedaDecimal(valor) {
+            return new Intl.NumberFormat('es-CO', {
+                style: 'currency',
+                currency: 'COP',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            }).format(Number(valor || 0));
+        }
+
+        function obtenerCookie(nombre) {
+            const partes = document.cookie ? document.cookie.split(';') : [];
+            for (const parte of partes) {
+                const [clave, ...valor] = parte.trim().split('=');
+                if (clave === nombre) {
+                    return decodeURIComponent(valor.join('='));
+                }
+            }
+            return '';
+        }
+
+        function actualizarSlider(slider, tooltip, progreso, formateador) {
+            const minimo = Number(slider.min);
+            const maximo = Number(slider.max);
+            const valor = Number(slider.value);
+            const porcentaje = maximo === minimo ? 0 : ((valor - minimo) / (maximo - minimo)) * 100;
+            tooltip.innerText = formateador(valor);
+            tooltip.style.left = `${porcentaje}%`;
+            tooltip.style.transform = 'translateX(-50%)';
+            progreso.style.width = `${porcentaje}%`;
+        }
+
+        function actualizarMonto() {
+            actualizarSlider(sliderMonto, tooltipMonto, progresoMonto, formatoMoneda);
+        }
+
+        function actualizarPlazo() {
+            actualizarSlider(sliderPlazo, tooltipPlazo, progresoPlazo, function (valor) {
+                return `${valor} ${valor === 1 ? 'mes' : 'meses'}`;
+            });
+        }
+
+        function marcarCalculando() {
+            ultimoResultadoValido = false;
+            botonAceptar.disabled = true;
+            estado.className = "simulador-calc-status is-loading";
+            estado.innerHTML = '<span class="simulador-spinner"></span>Calculando...';
+        }
+
+        function marcarError(mensaje) {
+            ultimoResultadoValido = false;
+            botonAceptar.disabled = true;
+            estado.className = "simulador-calc-status is-error";
+            estado.textContent = mensaje || "No fue posible calcular la simulacion.";
+        }
+
+        function marcarExito() {
+            ultimoResultadoValido = true;
+            botonAceptar.disabled = false;
+            estado.className = "simulador-calc-status";
+            estado.textContent = "Simulacion calculada. Puedes aceptar la oferta para enviar la solicitud.";
+        }
+
+        function limpiarResultados(texto) {
+            camposResultado.forEach(function (campo) {
+                campo.value = texto;
+            });
+        }
+
+        function actualizarResultados(resultado) {
+            const monetarios = new Set([
+                "monto_solicitado",
+                "costo_originacion",
+                "iva_costo_originacion",
+                "fondo_garantia_total",
+                "seguro_vida",
+                "capital_total_financiado",
+                "intereses_estimados",
+                "total_estimado",
+                "cuota_mensual",
+            ]);
+            camposResultado.forEach(function (campo) {
+                const llave = campo.dataset.resultadoCampo;
+                if (monetarios.has(llave)) {
+                    campo.value = formatoMonedaDecimal(resultado[llave]);
+                } else if (llave === "tasa_mensual" || llave === "tea_calculada") {
+                    campo.value = `${Number(resultado[llave] || 0).toLocaleString('es-CO', {
+                        minimumFractionDigits: 4,
+                        maximumFractionDigits: 4,
+                    })}%`;
+                } else {
+                    campo.value = resultado[llave] || "";
+                }
+            });
+            versionPolitica.textContent = resultado.version_politica ? `Politica: ${resultado.version_politica}` : "";
+        }
+
+        function calcularSimulacion() {
+            solicitudActual += 1;
+            const idSolicitud = solicitudActual;
+            marcarCalculando();
+            fetch(formulario.dataset.calcularUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": obtenerCookie("csrftoken"),
+                },
+                body: JSON.stringify({
+                    solicitud_id: formulario.dataset.solicitudId,
+                    monto: String(sliderMonto.value),
+                    plazo_meses: Number(sliderPlazo.value),
+                }),
+            })
+                .then(function (respuesta) {
+                    return respuesta.json().then(function (data) {
+                        return {okHttp: respuesta.ok, data};
+                    });
+                })
+                .then(function (respuesta) {
+                    if (idSolicitud !== solicitudActual) {
+                        return;
+                    }
+                    if (!respuesta.okHttp || !respuesta.data.ok) {
+                        marcarError(respuesta.data.error);
+                        return;
+                    }
+                    actualizarResultados(respuesta.data.resultado);
+                    marcarExito();
+                })
+                .catch(function () {
+                    if (idSolicitud === solicitudActual) {
+                        marcarError("No fue posible calcular la simulacion.");
+                    }
+                });
+        }
+
+        function programarCalculo() {
+            actualizarMonto();
+            actualizarPlazo();
+            limpiarResultados("Calculando...");
+            marcarCalculando();
+            window.clearTimeout(temporizadorCalculo);
+            temporizadorCalculo = window.setTimeout(calcularSimulacion, 300);
+        }
+
+        sliderMonto.addEventListener("input", programarCalculo);
+        sliderPlazo.addEventListener("input", programarCalculo);
+        formulario.addEventListener("submit", function (evento) {
+            if (!ultimoResultadoValido) {
+                evento.preventDefault();
+                marcarError("Espera a que la simulacion termine antes de continuar.");
+            }
+        });
+        actualizarMonto();
+        actualizarPlazo();
+        limpiarResultados("Calculando...");
+        calcularSimulacion();
+    });
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script src="{% static 'js/global_loader.js' %}"></script>
+</body>
+</html>

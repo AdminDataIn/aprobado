@@ -80,6 +80,7 @@ def _can_open_redis_socket(redis_url, timeout=0.15):
 PRIMARY_DOMAIN_HOST = os.environ.get('PRIMARY_DOMAIN_HOST', 'aprobado.com.co')
 EMPRENDER_SUBDOMAIN_HOST = os.environ.get('EMPRENDER_SUBDOMAIN_HOST', 'emprender.aprobado.com.co')
 MARKET_SUBDOMAIN_HOST = os.environ.get('MARKET_SUBDOMAIN_HOST', 'market.aprobado.com.co')
+CONTRACTORS_PORTAL_HOST = os.environ.get('CONTRACTORS_PORTAL_HOST', f'contratistas.{PRIMARY_DOMAIN_HOST}')
 CONTACT_EMAIL = os.environ.get(
     'CONTACT_EMAIL',
     'Info@aprobado.com.co'
@@ -128,9 +129,11 @@ ALLOWED_HOSTS = _split_env_list(
     (
         f'{PRIMARY_DOMAIN_HOST},'
         f'www.{PRIMARY_DOMAIN_HOST},'
+        f'.{PRIMARY_DOMAIN_HOST},'
         f'{EMPRENDER_SUBDOMAIN_HOST},'
         f'{MARKET_SUBDOMAIN_HOST},'
-        '127.0.0.1,localhost,'
+        f'{CONTRACTORS_PORTAL_HOST},'
+        '127.0.0.1,localhost,.localhost,contratistas.localhost,'
         '.onrender.com,aprobado-proj.onrender.com'
     )
 )
@@ -148,6 +151,52 @@ CSRF_TRUSTED_ORIGINS = _split_env_list(
 USE_X_FORWARDED_HOST = True
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+CONTRACTORS_CONTRACT_AI_ENABLED = os.environ.get('CONTRACTORS_CONTRACT_AI_ENABLED', 'False').lower() == 'true'
+CONTRACTORS_CONTRACT_AI_MODEL = os.environ.get('CONTRACTORS_CONTRACT_AI_MODEL', 'gpt-4o-mini')
+CONTRACTORS_DATACREDITO_ENABLED = os.environ.get('CONTRACTORS_DATACREDITO_ENABLED', 'False').lower() == 'true'
+CONTRACTORS_DATACREDITO_PROVIDER = os.environ.get('CONTRACTORS_DATACREDITO_PROVIDER', 'mock')
+CONTRACTORS_DATACREDITO_TIMEOUT_SECONDS = int(os.environ.get('CONTRACTORS_DATACREDITO_TIMEOUT_SECONDS', '10'))
+CONTRACTORS_DATACREDITO_MOCK_SCENARIO = os.environ.get('CONTRACTORS_DATACREDITO_MOCK_SCENARIO', 'bueno')
+CONTRACTORS_SCORE_CONFIG_VERSION = os.environ.get('CONTRACTORS_SCORE_CONFIG_VERSION', 'prestadores_score_v2_2026_06')
+DATACREDITO_AUTHORIZATION_TEXT_VERSION = os.environ.get('DATACREDITO_AUTHORIZATION_TEXT_VERSION', '')
+DATACREDITO_AUTHORIZATION_TEXT = os.environ.get('DATACREDITO_AUTHORIZATION_TEXT', '')
+DATACREDITO_ALLOW_LEGACY_SNAPSHOT_WITHOUT_AUTH_UAT = os.environ.get(
+    'DATACREDITO_ALLOW_LEGACY_SNAPSHOT_WITHOUT_AUTH_UAT',
+    'False',
+).lower() == 'true'
+DATACREDITO_UAT_AUTHORIZED_DEMO_DOCUMENTS = os.environ.get('DATACREDITO_UAT_AUTHORIZED_DEMO_DOCUMENTS', '').strip()
+DATACREDITO_REAL_ENABLED = os.environ.get('DATACREDITO_REAL_ENABLED', 'False').lower() == 'true'
+DATACREDITO_ENVIRONMENT = os.environ.get('DATACREDITO_ENVIRONMENT', 'uat')
+DATACREDITO_CLIENT_ID = os.environ.get('DATACREDITO_CLIENT_ID', '')
+DATACREDITO_CLIENT_SECRET = os.environ.get('DATACREDITO_CLIENT_SECRET', '')
+DATACREDITO_USERNAME = os.environ.get('DATACREDITO_USERNAME', '')
+DATACREDITO_PASSWORD = os.environ.get('DATACREDITO_PASSWORD', '')
+DATACREDITO_API_PASSWORD = os.environ.get('DATACREDITO_API_PASSWORD', '')
+DATACREDITO_PRODUCT_ID = os.environ.get('DATACREDITO_PRODUCT_ID', '')
+DATACREDITO_INFO_ACCOUNT_TYPE = os.environ.get('DATACREDITO_INFO_ACCOUNT_TYPE', '1')
+DATACREDITO_SERVER_IP_ADDRESS = os.environ.get('DATACREDITO_SERVER_IP_ADDRESS', '')
+DATACREDITO_DECISOR_CLIENT_ID = os.environ.get('DATACREDITO_DECISOR_CLIENT_ID', '')
+DATACREDITO_DECISOR_CLIENT_SECRET = os.environ.get('DATACREDITO_DECISOR_CLIENT_SECRET', '')
+DATACREDITO_DECISOR_USERNAME = os.environ.get('DATACREDITO_DECISOR_USERNAME', '')
+DATACREDITO_DECISOR_PASSWORD = os.environ.get('DATACREDITO_DECISOR_PASSWORD', '')
+DATACREDITO_HDC_CLIENT_ID = os.environ.get('DATACREDITO_HDC_CLIENT_ID', '')
+DATACREDITO_HDC_CLIENT_SECRET = os.environ.get('DATACREDITO_HDC_CLIENT_SECRET', '')
+DATACREDITO_HDC_USERNAME = os.environ.get('DATACREDITO_HDC_USERNAME', '')
+DATACREDITO_HDC_PASSWORD = os.environ.get('DATACREDITO_HDC_PASSWORD', '')
+DATACREDITO_HDC_SERVICE_USER = os.environ.get('DATACREDITO_HDC_SERVICE_USER', '')
+DATACREDITO_HDC_SERVICE_PASSWORD = os.environ.get('DATACREDITO_HDC_SERVICE_PASSWORD', '')
+DATACREDITO_HDC_PRODUCT_ID = os.environ.get('DATACREDITO_HDC_PRODUCT_ID', '64')
+DATACREDITO_HDC_INFO_ACCOUNT_TYPE = os.environ.get('DATACREDITO_HDC_INFO_ACCOUNT_TYPE', '1')
+DATACREDITO_HDC_SERVER_IP_ADDRESS = os.environ.get('DATACREDITO_HDC_SERVER_IP_ADDRESS', '').strip()
+DATACREDITO_HDC_CHANNEL_NAME = os.environ.get('DATACREDITO_HDC_CHANNEL_NAME', 'Canal-01')
+DATACREDITO_HDC_CHANNEL_TYPE = os.environ.get('DATACREDITO_HDC_CHANNEL_TYPE', '42')
+DATACREDITO_TIMEOUT_SECONDS = int(os.environ.get('DATACREDITO_TIMEOUT_SECONDS', '15'))
+DATACREDITO_TOKEN_URL = os.environ.get('DATACREDITO_TOKEN_URL', '')
+DATACREDITO_REVOKE_TOKEN_URL = os.environ.get('DATACREDITO_REVOKE_TOKEN_URL', '')
+DATACREDITO_MIDECISOR_URL = os.environ.get('DATACREDITO_MIDECISOR_URL', '')
+DATACREDITO_HISTORIAL_URL = os.environ.get('DATACREDITO_HISTORIAL_URL', '')
+DATACREDITO_DOCUMENT_HASH_SECRET = os.environ.get('DATACREDITO_DOCUMENT_HASH_SECRET', '')
+DATACREDITO_REUSE_DAYS = int(os.environ.get('DATACREDITO_REUSE_DAYS', '30'))
 MANUAL_PAYMENT_AUTH_KEY = os.environ.get('MANUAL_PAYMENT_AUTH_KEY', 'clave-secreta-para-desarrollo')
 
 # ========================
@@ -166,6 +215,8 @@ INSTALLED_APPS = [
     'usuarios',
     'configuraciones',
     'gestion_creditos',
+    'contractors',
+    'integrations',
     'usuariocreditos',
 ]
 
@@ -220,6 +271,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'aprobado_web.middleware.SubdomainRoutingMiddleware',
+    'contractors.middleware.ContractorTenantMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',

@@ -1,0 +1,8 @@
+{
+  "ReportHDCplus": {
+    "productResult": {
+      "responseCode": "02",
+      "responseDesc": "Clave errada"
+    }
+  }
+}
