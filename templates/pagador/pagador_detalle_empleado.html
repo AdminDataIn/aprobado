@@ -1,0 +1,243 @@
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalle del empleado - Aprobado</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+    {% include 'base/favicon.html' %}
+    <style>
+        .detail-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem}.detail-box{border:1px solid rgba(15,23,42,.08);border-radius:.75rem;background:#f8fafc;padding:.85rem}.detail-label{font-size:.72rem;text-transform:uppercase;color:var(--text-secondary);letter-spacing:.02em}.detail-value{font-weight:700;color:var(--text-primary)}.timeline-list{position:relative}.timeline-item{border-left:2px solid #e2e8f0;padding:0 0 1rem 1rem;position:relative}.timeline-item:before{content:"";position:absolute;left:-.42rem;top:.15rem;width:.75rem;height:.75rem;border-radius:999px;background:#16b9d4}.doc-chip{display:flex;align-items:center;justify-content:space-between;gap:.75rem;border:1px solid rgba(15,23,42,.08);border-radius:.75rem;padding:.75rem;background:#fff}@media(max-width:992px){.detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:576px){.detail-grid{grid-template-columns:1fr}}
+    </style>
+</head>
+<body class="theme-details">
+{% include 'base/loader_global.html' %}
+<header class="page-header">
+    <div class="container-fluid" style="max-width:1400px;">
+        <div class="d-flex align-items-center justify-content-between">
+            <a href="{% url 'pagador:dashboard' %}" class="logo"><img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height:40px;"></a>
+            <div class="d-flex align-items-center gap-3">
+                <div class="user-info">
+                    <div class="user-details">
+                        <h6 class="mb-0">{{ request.user.get_full_name|default:request.user.username }}</h6>
+                        <small>{{ empresa.nombre }}</small>
+                    </div>
+                    <div class="user-avatar">{{ request.user.username|slice:":1"|upper }}</div>
+                </div>
+                <form method="post" action="{% url 'pagador:logout' %}">{% csrf_token %}<button type="submit" class="btn btn-outline"><i class="bi bi-box-arrow-right"></i></button></form>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main class="container-fluid py-4" style="max-width:1400px;">
+    <div class="page-hero mb-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+                <h1 class="page-title mb-2">{{ colaborador.nombre|default:"Empleado sin nombre" }}</h1>
+                <div class="hero-meta">{{ empresa.nombre }} · Documento {{ colaborador.documento_enmascarado|default:"sin documento" }}</div>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-0">
+                        <li class="breadcrumb-item"><a href="{% url 'pagador:dashboard' %}">Dashboard</a></li>
+                        <li class="breadcrumb-item"><a href="{% url 'pagador:carga_empleados' %}">Gestión de empleados</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Detalle</li>
+                    </ol>
+                </nav>
+            </div>
+            <a href="{% url 'pagador:carga_empleados' %}" class="btn btn-outline-primary"><i class="bi bi-arrow-left me-2"></i>Volver a empleados</a>
+        </div>
+    </div>
+
+    <section class="card mb-4">
+        <div class="card-header"><h2 class="card-title mb-0"><i class="bi bi-person-vcard me-2"></i>Datos básicos</h2></div>
+        <div class="card-content">
+            <div class="detail-grid">
+                <div class="detail-box"><div class="detail-label">Documento</div><div class="detail-value">{{ colaborador.documento_enmascarado|default:"-" }}</div></div>
+                <div class="detail-box"><div class="detail-label">Correo</div><div class="detail-value">{{ colaborador.correo|default:"-" }}</div></div>
+                <div class="detail-box"><div class="detail-label">Estado vínculo</div><div class="detail-value">{{ colaborador.status_label }}</div></div>
+                <div class="detail-box"><div class="detail-label">Estado crédito/solicitud</div><div class="detail-value">{{ colaborador.estado_solicitud }}</div></div>
+            </div>
+            {% if not vinculo %}
+            <div class="alert alert-warning mt-3 mb-0">
+                <strong>Pendiente vínculo laboral.</strong> Este colaborador aparece por una solicitud o crédito, pero todavía no tiene vínculo laboral completo en la base de empleados de la empresa.
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <div class="row g-4">
+        <div class="col-xl-6">
+            <section class="card h-100">
+                <div class="card-header"><h2 class="card-title mb-0"><i class="bi bi-briefcase me-2"></i>Empresa y vínculo</h2></div>
+                <div class="card-content">
+                    {% if vinculo %}
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">Empresa</dt><dd class="col-sm-7">{{ vinculo.empresa.nombre }}</dd>
+                        <dt class="col-sm-5">Fecha alta</dt><dd class="col-sm-7">{{ vinculo.fecha_alta_aprobado|date:"d/m/Y"|default:"-" }}</dd>
+                        <dt class="col-sm-5">Validado por pagador</dt><dd class="col-sm-7">{% if vinculo.validado_por_pagador %}Sí{% else %}No{% endif %}</dd>
+                        <dt class="col-sm-5">Estado</dt><dd class="col-sm-7">{{ vinculo.get_estado_vinculo_display }}</dd>
+                    </dl>
+                    <button type="button" class="btn btn-sm btn-outline-primary mt-3" data-bs-toggle="modal" data-bs-target="#empleadoModal-{{ vinculo.id }}">
+                        <i class="bi bi-pencil-square me-1"></i>Actualizar vínculo
+                    </button>
+                    {% else %}
+                    <p class="text-muted mb-0">No hay vínculo laboral registrado para este documento en la empresa actual.</p>
+                    {% endif %}
+                </div>
+            </section>
+        </div>
+        <div class="col-xl-6">
+            <section class="card h-100">
+                <div class="card-header"><h2 class="card-title mb-0"><i class="bi bi-clock-history me-2"></i>Timeline básico operativo</h2></div>
+                <div class="card-content">
+                    <div class="timeline-list">
+                        {% if vinculo %}
+                        <div class="timeline-item">
+                            <strong>Vínculo laboral registrado</strong>
+                            <div class="small text-muted">{{ vinculo.fecha_alta_aprobado|date:"d/m/Y"|default:"Sin fecha" }}</div>
+                        </div>
+                        {% endif %}
+                        {% for solicitud in solicitudes_prestador %}
+                        <div class="timeline-item">
+                            <strong>Solicitud de prestador: {{ solicitud.get_status_display }}</strong>
+                            <div class="small text-muted">{{ solicitud.created_at|date:"d/m/Y H:i" }}</div>
+                        </div>
+                        {% endfor %}
+                        {% for credito in creditos %}
+                        <div class="timeline-item">
+                            <strong>Crédito {{ credito.numero_credito }}: {{ credito.get_estado_display }}</strong>
+                            <div class="small text-muted">{{ credito.fecha_solicitud|date:"d/m/Y H:i" }}</div>
+                        </div>
+                        {% empty %}
+                            {% if not solicitudes_prestador and not vinculo %}
+                            <p class="text-muted mb-0">Sin eventos operativos disponibles.</p>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <section class="card mt-4">
+        <div class="card-header"><h2 class="card-title mb-0"><i class="bi bi-cash-stack me-2"></i>Créditos relacionados</h2></div>
+        <div class="card-content">
+            {% if creditos %}
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Crédito</th><th>Línea</th><th>Estado</th><th>Monto</th><th>Acciones</th></tr></thead>
+                    <tbody>
+                    {% for credito in creditos %}
+                    <tr>
+                        <td>{{ credito.numero_credito }}</td>
+                        <td>{{ credito.get_linea_display }}</td>
+                        <td>{{ credito.get_estado_display }}</td>
+                        <td>${{ credito.monto_aprobado|default:credito.monto_solicitado|floatformat:0|intcomma }}</td>
+                        <td>
+                            <a class="btn btn-sm btn-outline-primary" href="{% url 'pagador:credito_detalle' credito.id %}">Ver crédito</a>
+                            <a class="btn btn-sm btn-outline-secondary" href="{% url 'pagador:credito_documentacion' credito.id %}">Documentación permitida</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">No hay créditos relacionados.</p>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="card mt-4">
+        <div class="card-header"><h2 class="card-title mb-0"><i class="bi bi-file-earmark-text me-2"></i>Solicitudes relacionadas</h2></div>
+        <div class="card-content">
+            {% if solicitudes_prestador %}
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Solicitud</th><th>Estado</th><th>Escenario</th><th>Fecha</th></tr></thead>
+                    <tbody>
+                    {% for solicitud in solicitudes_prestador %}
+                    <tr>
+                        <td>#{{ solicitud.id }}</td>
+                        <td>{{ solicitud.get_status_display }}</td>
+                        <td>{{ solicitud.get_escenario_credito_display }}</td>
+                        <td>{{ solicitud.created_at|date:"d/m/Y H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">No hay solicitudes de prestadores relacionadas.</p>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="card mt-4">
+        <div class="card-header"><h2 class="card-title mb-0"><i class="bi bi-folder2-open me-2"></i>Documentación permitida</h2></div>
+        <div class="card-content">
+            <p class="text-muted">El pagador solo puede consultar cédula, contrato o soporte laboral y certificado bancario. No se exponen documentos internos no permitidos.</p>
+            {% if documentos_permitidos %}
+            <div class="row g-3">
+                {% for documento in documentos_permitidos %}
+                <div class="col-md-6 col-xl-4">
+                    <div class="doc-chip">
+                        <div>
+                            <strong>{{ documento.title }}</strong>
+                            <div class="small text-muted">{{ documento.source }} · {{ documento.status }}</div>
+                        </div>
+                        <a href="{{ documento.url }}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">Ver</a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">No hay documentos permitidos disponibles para este empleado.</p>
+            {% endif %}
+        </div>
+    </section>
+</main>
+
+{% if vinculo %}
+<div class="modal fade" id="empleadoModal-{{ vinculo.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <form method="post" action="{% url 'pagador:actualizar_empleado' vinculo.id %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Actualizar vínculo laboral</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6"><label class="form-label">Nombre completo</label><input type="text" name="nombre_empleado" value="{{ vinculo.nombre_empleado }}" class="form-control" required></div>
+                        <div class="col-md-6"><label class="form-label">Documento</label><input type="text" name="documento_empleado" value="{{ vinculo.documento_empleado }}" class="form-control" required></div>
+                        <div class="col-md-6"><label class="form-label">Correo</label><input type="email" name="correo_empleado" value="{{ vinculo.correo_empleado|default:vinculo.usuario.email }}" class="form-control"></div>
+                        <div class="col-md-6"><label class="form-label">Teléfono</label><input type="text" name="telefono_empleado" value="{{ vinculo.telefono_empleado }}" class="form-control"></div>
+                        <div class="col-md-4"><label class="form-label">Fecha alta Aprobado</label><input type="date" name="fecha_alta_aprobado" value="{{ vinculo.fecha_alta_aprobado|date:'Y-m-d' }}" class="form-control" required></div>
+                        <div class="col-md-4"><label class="form-label">Estado</label><select name="estado_vinculo" class="form-select">{% for value,label in vinculo_estado_choices %}<option value="{{ value }}" {% if vinculo.estado_vinculo == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+                        <div class="col-md-4 d-flex align-items-end"><div class="form-check mb-2"><input type="checkbox" name="validado_por_pagador" id="validado_detalle_{{ vinculo.id }}" class="form-check-input" {% if vinculo.validado_por_pagador %}checked{% endif %}><label for="validado_detalle_{{ vinculo.id }}" class="form-check-label">Validado por pagador</label></div></div>
+                        <div class="col-md-4"><label class="form-label">Salario base mensual</label><input type="text" name="salario_base_mensual" value="{{ vinculo.salario_base_mensual|default:0 }}" class="form-control" inputmode="numeric"></div>
+                        <div class="col-md-4"><label class="form-label">Auxilio transporte mensual</label><input type="text" name="auxilio_transporte_mensual" value="{{ vinculo.auxilio_transporte_mensual|default:0 }}" class="form-control" inputmode="numeric"></div>
+                        <div class="col-md-4"><label class="form-label">Descuentos fijos mensuales</label><input type="text" name="descuentos_fijos_mensuales" value="{{ vinculo.descuentos_fijos_mensuales|default:0 }}" class="form-control" inputmode="numeric"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar vínculo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script src="{% static 'js/global_loader.js' %}"></script>
+</body>
+</html>

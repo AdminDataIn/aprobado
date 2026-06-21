@@ -658,6 +658,84 @@ class EmployeeBulkUploadForm(forms.Form):
         return archivo
 
 
+class EmployeeDirectUpdateForm(forms.Form):
+    nombre_empleado = forms.CharField(
+        label='Nombre completo',
+        max_length=160,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    documento_empleado = forms.CharField(
+        label='Documento',
+        max_length=20,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    correo_empleado = forms.EmailField(
+        label='Correo',
+        required=False,
+        widget=forms.EmailInput(attrs={'class': 'form-control'}),
+    )
+    telefono_empleado = forms.CharField(
+        label='Telefono',
+        required=False,
+        max_length=20,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    fecha_alta_aprobado = forms.DateField(
+        label='Fecha alta Aprobado',
+        input_formats=['%Y-%m-%d', '%d/%m/%Y'],
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+    )
+    salario_base_mensual = MoneyTextDecimalField(
+        label='Salario base mensual',
+        required=False,
+        decimal_places=2,
+        max_digits=12,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'inputmode': 'numeric',
+            'autocomplete': 'off',
+        }),
+    )
+    auxilio_transporte_mensual = MoneyTextDecimalField(
+        label='Auxilio transporte mensual',
+        required=False,
+        decimal_places=2,
+        max_digits=12,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'inputmode': 'numeric',
+            'autocomplete': 'off',
+        }),
+    )
+    descuentos_fijos_mensuales = MoneyTextDecimalField(
+        label='Descuentos fijos mensuales',
+        required=False,
+        decimal_places=2,
+        max_digits=12,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'inputmode': 'numeric',
+            'autocomplete': 'off',
+        }),
+    )
+    estado_vinculo = forms.ChoiceField(
+        label='Estado',
+        choices=VinculoLaboralEmpresa.EstadoVinculo.choices,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    validado_por_pagador = forms.BooleanField(
+        label='Validado por pagador',
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+    )
+
+    def clean_documento_empleado(self):
+        documento = ''.join(ch for ch in self.cleaned_data['documento_empleado'] if ch.isdigit())
+        if not documento:
+            raise forms.ValidationError('El documento es obligatorio.')
+        return documento
+
+
 class PagoCreditoOfflineForm(forms.Form):
     monto = forms.DecimalField(
         label='Monto a aplicar',

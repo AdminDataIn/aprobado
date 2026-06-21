@@ -1,4 +1,6 @@
 {% load static %}
+{% load humanize %}
+{% load l10n %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -9,183 +11,297 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
     {% include 'base/favicon.html' %}
+    <style>
+        .employee-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.75rem}.metric-box{border:1px solid rgba(15,23,42,.08);border-radius:.75rem;padding:.85rem;background:#f8fafc}.metric-box span{display:block;font-size:.75rem;color:var(--text-secondary);text-transform:uppercase}.metric-box strong{font-size:1.45rem;color:var(--text-primary)}.missing-list{display:flex;gap:.35rem;flex-wrap:wrap}.missing-chip{font-size:.72rem;padding:.2rem .45rem;border-radius:999px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa}.secondary-upload{border:1px dashed rgba(15,23,42,.18);background:#fbfdff}@media(max-width:1200px){.employee-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:768px){.employee-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:576px){.employee-metrics{grid-template-columns:1fr}}
+    </style>
 </head>
 <body class="theme-dashboard">
 {% include 'base/loader_global.html' %}
-    <header class="page-header">
-        <div class="container-fluid" style="max-width: 1400px;">
-            <div class="d-flex align-items-center justify-content-between">
-                <a href="{% url 'pagador:dashboard' %}" class="logo">
-                    <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height: 40px;">
-                </a>
-                <div class="d-flex align-items-center gap-3">
-                    <div class="user-info">
-                        <div class="user-details">
-                            <h6 class="mb-0">{{ request.user.get_full_name|default:request.user.username }}</h6>
-                            <small>{{ empresa.nombre }}</small>
-                        </div>
-                        <div class="user-avatar">{{ request.user.username|slice:":1"|upper }}</div>
+<header class="page-header">
+    <div class="container-fluid" style="max-width:1400px;">
+        <div class="d-flex align-items-center justify-content-between">
+            <a href="{% url 'pagador:dashboard' %}" class="logo">
+                <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado Logo" style="height:40px;">
+            </a>
+            <div class="d-flex align-items-center gap-3">
+                <div class="user-info">
+                    <div class="user-details">
+                        <h6 class="mb-0">{{ request.user.get_full_name|default:request.user.username }}</h6>
+                        <small>{{ empresa.nombre }}</small>
                     </div>
-                    <form method="post" action="{% url 'pagador:logout' %}">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-outline">
-                            <i class="bi bi-box-arrow-right"></i>
-                        </button>
-                    </form>
+                    <div class="user-avatar">{{ request.user.username|slice:":1"|upper }}</div>
                 </div>
-            </div>
-        </div>
-    </header>
-
-    <div class="container-fluid py-4" style="max-width: 1400px;">
-        <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-3">
-            <div>
-                <h1 class="page-title">{{ dashboard_title }}</h1>
-                <p class="text-muted mb-2">{{ section_description }}</p>
-                <nav aria-label="breadcrumb">
-                    <ol class="breadcrumb">
-                        <li class="breadcrumb-item"><a href="{% url 'pagador:dashboard' %}">Dashboard</a></li>
-                        <li class="breadcrumb-item active" aria-current="page">Gestión de empleados</li>
-                    </ol>
-                </nav>
-                <div class="d-flex flex-wrap gap-2 mt-3">
-                    <a href="{% url 'pagador:dashboard' %}" class="btn btn-sm btn-outline-primary">Créditos y solicitudes</a>
-                    <a href="{% url 'pagador:adelantos_dashboard' %}" class="btn btn-sm btn-outline-primary">Adelantos de nómina</a>
-                    <a href="{% url 'pagador:carga_empleados' %}" class="btn btn-sm btn-primary">Gestión de empleados</a>
-                </div>
-            </div>
-            <div class="d-flex gap-2 flex-wrap">
-                <a href="{% url 'pagador:descargar_plantilla_empleados' %}" class="btn btn-sm btn-outline-success" data-download="true">
-                    <i class="bi bi-file-earmark-excel me-2"></i>Descargar plantilla oficial
-                </a>
-                <a href="{% url 'pagador:dashboard' %}" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-arrow-left me-2"></i>Volver al panel
-                </a>
-            </div>
-        </div>
-
-        {% if messages %}
-            {% for message in messages %}
-            <div class="alert {% if message.tags == 'error' %}alert-danger{% elif message.tags == 'warning' %}alert-warning{% else %}alert-success{% endif %}">
-                {{ message }}
-            </div>
-            {% endfor %}
-        {% endif %}
-
-        <div class="row g-4">
-            <div class="col-xl-5">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title mb-0"><i class="bi bi-file-earmark-arrow-up me-2"></i>Paso 1: Cargar base de empleados</h3>
-                    </div>
-                    <div class="card-content">
-                        <p class="text-muted">Descarga la plantilla oficial, completa los datos del empleado y luego sube ese mismo archivo para crear o actualizar la base laboral de la empresa.</p>
-                        <form method="post" enctype="multipart/form-data" class="d-grid gap-3">
-                            {% csrf_token %}
-                            <div>
-                                <label class="form-label" for="{{ form.archivo.id_for_label }}">Archivo Excel</label>
-                                {{ form.archivo }}
-                                {% if form.archivo.errors %}
-                                <div class="text-danger small mt-1">{{ form.archivo.errors|join:", " }}</div>
-                                {% endif %}
-                                <small class="text-muted d-block mt-2">
-                                    Formato oficial: <strong>.xlsx</strong>. La fecha debe venir como <strong>DD/MM/AAAA</strong> o <strong>YYYY-MM-DD</strong>.
-                                </small>
-                            </div>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-upload me-2"></i>Procesar empleados
-                            </button>
-                        </form>
-                    </div>
-                </div>
-
-                <div class="card mt-4">
-                    <div class="card-header">
-                        <h3 class="card-title mb-0"><i class="bi bi-list-check me-2"></i>Campos obligatorios</h3>
-                    </div>
-                    <div class="card-content">
-                        <ul class="mb-0 ps-3 text-muted">
-                            <li>tipo_documento, documento, nombres y apellidos</li>
-                            <li>correo y celular</li>
-                            <li>salario_base, auxilio_transporte y descuentos_fijos</li>
-                            <li>fecha_alta_aprobado y estado_vinculo</li>
-                            <li>convenio_activo</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-xl-7">
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h3 class="card-title mb-0"><i class="bi bi-person-check me-2"></i>{{ legacy_flow_title }}</h3>
-                    </div>
-                    <div class="card-content">
-                        <p class="text-muted mb-2">{{ legacy_flow_description }}</p>
-                        <div class="small text-muted mb-3">
-                            <strong>Diferencia frente a “Cargar empleados”:</strong> la carga de empleados crea o actualiza la base laboral desde Excel. Esta opción no sube archivos nuevos; solo completa datos de usuarios antiguos que ya estaban relacionados con la empresa.
-                        </div>
-                        <form method="post" action="{% url 'pagador:reconciliar_empleados' %}">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-sm btn-outline-secondary">Completar usuarios existentes</button>
-                        </form>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title mb-0"><i class="bi bi-table me-2"></i>Resultado de la última carga</h3>
-                    </div>
-                    <div class="card-content">
-                        {% if resultados %}
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle">
-                                <thead>
-                                    <tr>
-                                        <th>Fila</th>
-                                        <th>Documento</th>
-                                        <th>Correo</th>
-                                        <th>Estado</th>
-                                        <th>Detalle</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for resultado in resultados %}
-                                    <tr>
-                                        <td>{{ resultado.fila }}</td>
-                                        <td>{{ resultado.documento|default:'-' }}</td>
-                                        <td>{{ resultado.correo|default:'-' }}</td>
-                                        <td>
-                                            {% if resultado.estado == 'error' %}
-                                            <span class="badge bg-danger">Error</span>
-                                            {% elif resultado.estado == 'creado' %}
-                                            <span class="badge bg-success">Creado</span>
-                                            {% elif resultado.estado == 'actualizado' %}
-                                            <span class="badge bg-primary">Actualizado</span>
-                                            {% else %}
-                                            <span class="badge bg-secondary">{{ resultado.estado }}</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ resultado.error|default:'Procesado correctamente.' }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        {% else %}
-                        <div class="text-center py-5 text-muted">
-                            <i class="bi bi-file-earmark-spreadsheet" style="font-size:2rem;"></i>
-                            <p class="mt-3 mb-0">Todavía no has cargado una plantilla en esta sesión. Descarga primero el Excel oficial y luego súbelo aquí.</p>
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
+                <form method="post" action="{% url 'pagador:logout' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline"><i class="bi bi-box-arrow-right"></i></button>
+                </form>
             </div>
         </div>
     </div>
+</header>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
-    <script src="{% static 'js/global_loader.js' %}"></script>
+<main class="container-fluid py-4" style="max-width:1400px;">
+    <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-3">
+        <div>
+            <h1 class="page-title">{{ dashboard_title }}</h1>
+            <p class="text-muted mb-2">{{ section_description }}</p>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'pagador:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Gesti&oacute;n de empleados</li>
+                </ol>
+            </nav>
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                <a href="{% url 'pagador:dashboard' %}" class="btn btn-sm btn-outline-primary">Cr&eacute;ditos y solicitudes</a>
+                <a href="{% url 'pagador:adelantos_dashboard' %}" class="btn btn-sm btn-outline-primary">Adelantos de n&oacute;mina</a>
+                <a href="{% url 'pagador:carga_empleados' %}" class="btn btn-sm btn-primary">Gesti&oacute;n de empleados</a>
+            </div>
+        </div>
+        <a href="{% url 'pagador:dashboard' %}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Volver al panel
+        </a>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-danger{% elif message.tags == 'warning' %}alert-warning{% else %}alert-success{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <section class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div>
+                <h3 class="card-title mb-1"><i class="bi bi-people me-2"></i>Colaboradores de la empresa</h3>
+                <p class="text-muted mb-0">Vista viva construida desde v&iacute;nculos laborales, solicitudes y cr&eacute;ditos registrados en Aprobado.</p>
+            </div>
+        </div>
+        <div class="card-content">
+            <div class="employee-metrics mb-3">
+                <div class="metric-box"><span>Total colaboradores</span><strong>{{ empleados_summary.total }}</strong></div>
+                <div class="metric-box"><span>En solicitud</span><strong>{{ empleados_summary.en_solicitud }}</strong></div>
+                <div class="metric-box"><span>Pendiente v&iacute;nculo laboral</span><strong>{{ empleados_summary.pendientes_vinculo }}</strong></div>
+                <div class="metric-box"><span>Con cr&eacute;dito activo</span><strong>{{ empleados_summary.con_credito_activo }}</strong></div>
+                <div class="metric-box"><span>En mora</span><strong>{{ empleados_summary.en_mora }}</strong></div>
+            </div>
+
+            <form method="get" class="row g-2 align-items-end mb-3">
+                <div class="col-lg-3">
+                    <label for="empleado_search" class="form-label">Documento / nombre</label>
+                    <input type="text" name="empleado_search" id="empleado_search" value="{{ empleado_search }}" class="form-control" placeholder="Nombre, documento o correo">
+                </div>
+                <div class="col-lg-3">
+                    <label for="empleado_estado" class="form-label">Estado</label>
+                    <select name="empleado_estado" id="empleado_estado" class="form-select">
+                        <option value="">Todos</option>
+                        {% for value,label in empleado_status_choices %}
+                        <option value="{{ value }}" {% if empleado_estado == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label">Empresa</label>
+                    <input type="text" class="form-control" value="{{ empresa.nombre }}" disabled>
+                </div>
+                <div class="col-lg-2">
+                    <label for="con_credito_activo" class="form-label">Con cr&eacute;dito activo</label>
+                    <select name="con_credito_activo" id="con_credito_activo" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="1" {% if empleado_con_credito_activo == '1' %}selected{% endif %}>S&iacute;</option>
+                        <option value="0" {% if empleado_con_credito_activo == '0' %}selected{% endif %}>No</option>
+                    </select>
+                </div>
+                <div class="col-lg-2">
+                    <label for="pendiente_vinculo" class="form-label">Pendiente v&iacute;nculo</label>
+                    <select name="pendiente_vinculo" id="pendiente_vinculo" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="1" {% if empleado_pendiente_vinculo == '1' %}selected{% endif %}>S&iacute;</option>
+                        <option value="0" {% if empleado_pendiente_vinculo == '0' %}selected{% endif %}>No</option>
+                    </select>
+                </div>
+                <div class="col-12 d-flex justify-content-end gap-2">
+                    <a href="{% url 'pagador:carga_empleados' %}" class="btn btn-outline-secondary">Limpiar</a>
+                    <button type="submit" class="btn btn-primary">Filtrar</button>
+                </div>
+            </form>
+
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Documento</th>
+                            <th>Empresa</th>
+                            <th>Estado v&iacute;nculo</th>
+                            <th>Estado cr&eacute;dito / solicitud</th>
+                            <th>&Uacute;ltima actualizaci&oacute;n</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in empleados_gestion %}
+                        <tr>
+                            <td><strong>{{ item.nombre|default:"Sin nombre" }}</strong><div class="small text-muted">{% if item.correo %}{{ item.correo }}{% endif %}</div></td>
+                            <td>{{ item.documento_enmascarado|default:"Sin documento" }}</td>
+                            <td>{{ item.empresa_nombre|default:empresa.nombre }}</td>
+                            <td>
+                                <span class="badge {% if item.status == 'completo' or item.status == 'con_credito_activo' %}bg-success{% elif item.status == 'pendiente_validacion' %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ item.status_label }}</span>
+                                {% if item.missing_fields %}
+                                <div class="missing-list mt-1">{% for field in item.missing_fields %}<span class="missing-chip">{{ field }}</span>{% endfor %}</div>
+                                {% endif %}
+                            </td>
+                            <td><div>Solicitud: <strong>{{ item.estado_solicitud }}</strong></div><div class="small {% if item.tiene_mora %}text-danger{% elif item.tiene_credito_activo %}text-success{% else %}text-muted{% endif %}">Cr&eacute;dito: {{ item.estado_credito }}</div></td>
+                            <td>{% if item.ultima_actualizacion %}{{ item.ultima_actualizacion|date:"d/m/Y H:i" }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                            <td>
+                                <div class="d-flex flex-wrap gap-1">
+                                    {% if item.acciones.ver_detalle and item.documento %}<a href="{% url 'pagador:empleado_detalle' item.documento %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-person-lines-fill me-1"></i>Detalle</a>{% endif %}
+                                    {% if item.acciones.ver_credito and item.credito_principal %}<a href="{% url 'pagador:credito_detalle' item.credito_principal.id %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye me-1"></i>Cr&eacute;ditos</a>{% endif %}
+                                    {% if item.acciones.ver_documentacion and item.credito_principal %}<a href="{% url 'pagador:credito_documentacion' item.credito_principal.id %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-folder2-open me-1"></i>Documentaci&oacute;n permitida</a>{% endif %}
+                                    {% if item.acciones.editar_vinculo and item.vinculo %}<button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#empleadoModal-{{ item.vinculo.id }}"><i class="bi bi-pencil-square me-1"></i>Actualizar v&iacute;nculo</button>{% endif %}
+                                    {% if not item.vinculo %}<span class="badge bg-warning text-dark align-self-center">Pendiente completar v&iacute;nculo laboral</span>{% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-center text-muted py-4">No hay colaboradores para mostrar con los filtros actuales.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <div class="row g-4">
+        <div class="col-xl-5">
+            <section class="card secondary-upload">
+                <div class="card-header">
+                    <h3 class="card-title mb-0"><i class="bi bi-file-earmark-arrow-up me-2"></i>Carga masiva opcional</h3>
+                </div>
+                <div class="card-content">
+                    <p class="text-muted">Usa esta opci&oacute;n solo si necesitas actualizar muchos colaboradores a la vez. La gesti&oacute;n diaria debe hacerse desde la vista viva de colaboradores.</p>
+                    <div class="mb-3">
+                        <a href="{% url 'pagador:descargar_plantilla_empleados' %}" class="btn btn-sm btn-outline-success" data-download="true">
+                            <i class="bi bi-file-earmark-excel me-2"></i>Descargar plantilla oficial
+                        </a>
+                    </div>
+                    <form method="post" enctype="multipart/form-data" class="d-grid gap-3">
+                        {% csrf_token %}
+                        <div>
+                            <label class="form-label" for="{{ form.archivo.id_for_label }}">Archivo Excel</label>
+                            {{ form.archivo }}
+                            {% if form.archivo.errors %}
+                            <div class="text-danger small mt-1">{{ form.archivo.errors|join:", " }}</div>
+                            {% endif %}
+                            <small class="text-muted d-block mt-2">Formato oficial: <strong>.xlsx</strong>.</small>
+                        </div>
+                        <button type="submit" class="btn btn-outline-primary"><i class="bi bi-upload me-2"></i>Procesar carga masiva</button>
+                    </form>
+                </div>
+            </section>
+
+            <section class="card mt-4">
+                <div class="card-header"><h3 class="card-title mb-0"><i class="bi bi-list-check me-2"></i>Campos obligatorios</h3></div>
+                <div class="card-content">
+                    <ul class="mb-0 ps-3 text-muted">
+                        <li>tipo_documento, documento, nombres y apellidos</li>
+                        <li>correo y celular</li>
+                        <li>salario_base, auxilio_transporte y descuentos_fijos</li>
+                        <li>fecha_alta_aprobado y estado_vinculo</li>
+                        <li>convenio_activo</li>
+                    </ul>
+                </div>
+            </section>
+        </div>
+
+        <div class="col-xl-7">
+            <section class="card mb-4">
+                <div class="card-header"><h3 class="card-title mb-0"><i class="bi bi-person-check me-2"></i>{{ legacy_flow_title }}</h3></div>
+                <div class="card-content">
+                    <p class="text-muted mb-2">{{ legacy_flow_description }}</p>
+                    <div class="small text-muted mb-3">
+                        <strong>Diferencia frente a la carga masiva:</strong> esta opci&oacute;n no sube archivos nuevos; solo completa datos de usuarios antiguos que ya estaban relacionados con la empresa.
+                    </div>
+                    <form method="post" action="{% url 'pagador:reconciliar_empleados' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-secondary">Completar usuarios existentes</button>
+                    </form>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="card-header"><h3 class="card-title mb-0"><i class="bi bi-table me-2"></i>Resultado de la &uacute;ltima carga</h3></div>
+                <div class="card-content">
+                    {% if resultados %}
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead><tr><th>Fila</th><th>Documento</th><th>Correo</th><th>Estado</th><th>Detalle</th></tr></thead>
+                            <tbody>
+                                {% for resultado in resultados %}
+                                <tr>
+                                    <td>{{ resultado.fila }}</td>
+                                    <td>{{ resultado.documento|default:'-' }}</td>
+                                    <td>{{ resultado.correo|default:'-' }}</td>
+                                    <td>
+                                        {% if resultado.estado == 'error' %}<span class="badge bg-danger">Error</span>
+                                        {% elif resultado.estado == 'creado' %}<span class="badge bg-success">Creado</span>
+                                        {% elif resultado.estado == 'actualizado' %}<span class="badge bg-primary">Actualizado</span>
+                                        {% else %}<span class="badge bg-secondary">{{ resultado.estado }}</span>{% endif %}
+                                    </td>
+                                    <td>{{ resultado.error|default:'Procesado correctamente.' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-file-earmark-spreadsheet" style="font-size:2rem;"></i>
+                        <p class="mt-3 mb-0">Todav&iacute;a no has cargado una plantilla en esta sesi&oacute;n.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </section>
+        </div>
+    </div>
+
+    {% for item in empleados_gestion %}{% if item.vinculo %}
+    <div class="modal fade" id="empleadoModal-{{ item.vinculo.id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <form method="post" action="{% url 'pagador:actualizar_empleado' item.vinculo.id %}">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title">Actualizar v&iacute;nculo laboral</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6"><label class="form-label">Nombre completo</label><input type="text" name="nombre_empleado" value="{{ item.vinculo.nombre_empleado }}" class="form-control" required></div>
+                            <div class="col-md-6"><label class="form-label">Documento</label><input type="text" name="documento_empleado" value="{{ item.vinculo.documento_empleado }}" class="form-control" required></div>
+                            <div class="col-md-6"><label class="form-label">Correo</label><input type="email" name="correo_empleado" value="{{ item.vinculo.correo_empleado|default:item.vinculo.usuario.email }}" class="form-control"></div>
+                            <div class="col-md-6"><label class="form-label">Tel&eacute;fono</label><input type="text" name="telefono_empleado" value="{{ item.vinculo.telefono_empleado }}" class="form-control"></div>
+                            <div class="col-md-4"><label class="form-label">Fecha alta Aprobado</label><input type="date" name="fecha_alta_aprobado" value="{{ item.vinculo.fecha_alta_aprobado|date:'Y-m-d' }}" class="form-control" required></div>
+                            <div class="col-md-4"><label class="form-label">Estado</label><select name="estado_vinculo" class="form-select">{% for value,label in vinculo_estado_choices %}<option value="{{ value }}" {% if item.vinculo.estado_vinculo == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+                            <div class="col-md-4 d-flex align-items-end"><div class="form-check mb-2"><input type="checkbox" name="validado_por_pagador" id="validado_{{ item.vinculo.id }}" class="form-check-input" {% if item.vinculo.validado_por_pagador %}checked{% endif %}><label for="validado_{{ item.vinculo.id }}" class="form-check-label">Validado por pagador</label></div></div>
+                            <div class="col-md-4"><label class="form-label">Salario base mensual</label><input type="text" name="salario_base_mensual" value="{{ item.vinculo.salario_base_mensual|default:0|unlocalize }}" class="form-control" inputmode="numeric"></div>
+                            <div class="col-md-4"><label class="form-label">Auxilio transporte mensual</label><input type="text" name="auxilio_transporte_mensual" value="{{ item.vinculo.auxilio_transporte_mensual|default:0|unlocalize }}" class="form-control" inputmode="numeric"></div>
+                            <div class="col-md-4"><label class="form-label">Descuentos fijos mensuales</label><input type="text" name="descuentos_fijos_mensuales" value="{{ item.vinculo.descuentos_fijos_mensuales|default:0|unlocalize }}" class="form-control" inputmode="numeric"></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Guardar empleado</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}{% endfor %}
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script src="{% static 'js/global_loader.js' %}"></script>
 </body>
 </html>

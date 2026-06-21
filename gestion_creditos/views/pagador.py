@@ -1,6 +1,12 @@
 from .common import *
 from .common import _build_capacidad_descuento_context, _obtener_decision_pagador
-from ..models import CuotaAmortizacion
+from django.db.models import OuterRef
+from ..models import CreditoLibranza, CuotaAmortizacion, VinculoLaboralEmpresa
+from ..forms import EmployeeDirectUpdateForm
+from ..services.pagador_collaborators_service import (
+    build_pagador_collaborators_context,
+    build_pagador_employee_detail_context,
+)
 
 
 @login_required(login_url='/pagador/login/')
@@ -41,8 +47,15 @@ def pagador_carga_empleados_view(request):
         'form': form,
         'resultados': resultados,
         'empresa': request.empresa,
+        **build_pagador_collaborators_context(
+            request.empresa,
+            search=request.GET.get('empleado_search', '').strip(),
+            estado_filter=request.GET.get('empleado_estado', '').strip(),
+            con_credito_activo=request.GET.get('con_credito_activo', '').strip(),
+            pendiente_vinculo=request.GET.get('pendiente_vinculo', '').strip(),
+        ),
         'dashboard_title': 'Gestión de empleados',
-        'section_description': 'Mantén la base laboral actualizada para habilitar libranza y adelanto de nómina sin digitación manual dispersa.',
+        'section_description': 'Consulta colaboradores reales detectados desde vínculos laborales, solicitudes y créditos de la empresa.',
         'legacy_flow_title': 'Completar datos de usuarios existentes',
         'legacy_flow_description': (
             'Usa esta opción solo cuando ya cargaste la base laboral y quieres completar '
@@ -63,8 +76,133 @@ def pagador_reconciliar_empleados_view(request):
     return redirect('pagador:carga_empleados')
 
 
+@login_required(login_url='/pagador/login/')
+@pagador_required
+@require_http_methods(["POST"])
+def pagador_actualizar_empleado_view(request, vinculo_id):
+    vinculo = get_object_or_404(
+        VinculoLaboralEmpresa.objects.select_related('usuario', 'empresa'),
+        pk=vinculo_id,
+        empresa=request.empresa,
+    )
+    form = EmployeeDirectUpdateForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, 'No se pudo actualizar el empleado. Revisa los campos obligatorios.')
+        return redirect('pagador:carga_empleados')
+
+    data = form.cleaned_data
+    vinculo.nombre_empleado = data['nombre_empleado'].strip().upper()
+    vinculo.documento_empleado = data['documento_empleado']
+    vinculo.correo_empleado = (data.get('correo_empleado') or '').strip().lower()
+    vinculo.telefono_empleado = ''.join(ch for ch in (data.get('telefono_empleado') or '') if ch.isdigit())
+    vinculo.fecha_alta_aprobado = data['fecha_alta_aprobado']
+    vinculo.salario_base_mensual = data.get('salario_base_mensual') or Decimal('0.00')
+    vinculo.auxilio_transporte_mensual = data.get('auxilio_transporte_mensual') or Decimal('0.00')
+    vinculo.descuentos_fijos_mensuales = data.get('descuentos_fijos_mensuales') or Decimal('0.00')
+    vinculo.estado_vinculo = data['estado_vinculo']
+    vinculo.validado_por_pagador = data.get('validado_por_pagador', False)
+    vinculo.observaciones = 'Actualizado desde gestion directa del pagador.'
+    vinculo.cargado_por = request.user
+    vinculo.save(update_fields=[
+        'nombre_empleado',
+        'documento_empleado',
+        'correo_empleado',
+        'telefono_empleado',
+        'fecha_alta_aprobado',
+        'salario_base_mensual',
+        'auxilio_transporte_mensual',
+        'descuentos_fijos_mensuales',
+        'estado_vinculo',
+        'validado_por_pagador',
+        'observaciones',
+        'cargado_por',
+        'actualizado_en',
+    ])
+
+    user_updates = []
+    if vinculo.correo_empleado and vinculo.usuario.email != vinculo.correo_empleado:
+        vinculo.usuario.email = vinculo.correo_empleado
+        user_updates.append('email')
+    name_parts = vinculo.nombre_empleado.split()
+    first_name = name_parts[0] if name_parts else ''
+    last_name = ' '.join(name_parts[1:]) if len(name_parts) > 1 else ''
+    if first_name and vinculo.usuario.first_name != first_name[:150]:
+        vinculo.usuario.first_name = first_name[:150]
+        user_updates.append('first_name')
+    if vinculo.usuario.last_name != last_name[:150]:
+        vinculo.usuario.last_name = last_name[:150]
+        user_updates.append('last_name')
+    if user_updates:
+        vinculo.usuario.save(update_fields=user_updates)
+
+    messages.success(request, f'Empleado {vinculo.nombre_empleado} actualizado.')
+    return redirect('pagador:carga_empleados')
+
+
 PAGADOR_PER_PAGE_CHOICES = (10, 20, 50)
 PAGADOR_ROUNDING_RESIDUAL_THRESHOLD = Decimal('2.00')
+def _pagador_allowed_document_fields():
+    return (
+        ('cedula_frontal', 'Cedula frontal'),
+        ('cedula_trasera', 'Cedula reverso'),
+        ('certificado_laboral', 'Contrato / soporte laboral'),
+        ('certificado_bancario', 'Certificado bancario'),
+    )
+
+
+def _infer_pagador_document_kind(file_field):
+    filename = (getattr(file_field, 'name', '') or '').split('?', 1)[0].lower()
+    if filename.endswith('.pdf'):
+        return 'pdf'
+    if filename.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+        return 'image'
+    return 'file'
+
+
+def _build_pagador_credit_documents(request, credito):
+    allowed_fields = (
+        _pagador_allowed_document_fields()
+    )
+    documents = []
+    detalle = getattr(credito, 'detalle_libranza', None)
+    if not detalle:
+        return documents
+
+    preview_path = reverse('pagador:documento_preview')
+    for field_name, label in allowed_fields:
+        file_field = getattr(detalle, field_name, None)
+        if not file_field or not getattr(file_field, 'name', ''):
+            continue
+        estado = 'Cargado'
+        if field_name == 'certificado_bancario':
+            estado = dict([
+                ('pendiente', 'Pendiente extraccion'),
+                ('completo', 'Validado'),
+                ('error', 'Requiere revision'),
+            ]).get(detalle.certificado_bancario_estado_extraccion, 'Cargado')
+        documents.append({
+            'title': label,
+            'url': request.build_absolute_uri(f"{preview_path}?path={quote(file_field.name)}"),
+            'kind': _infer_pagador_document_kind(file_field),
+            'source': 'Solicitud',
+            'status': estado,
+            'created_at': credito.fecha_solicitud,
+            'signed_at': None,
+            'description': f"{detalle.nombre_completo} - {detalle.cedula}",
+        })
+    return documents
+
+
+def _pagador_can_access_document_path(empresa, path):
+    if not path:
+        return False
+    detalles = CreditoLibranza.objects.filter(empresa=empresa)
+    for detalle in detalles:
+        for field_name, _label in _pagador_allowed_document_fields():
+            file_field = getattr(detalle, field_name, None)
+            if file_field and getattr(file_field, 'name', '') == path:
+                return True
+    return False
 
 
 def _get_pagador_per_page(request):
@@ -89,7 +227,7 @@ def _pagador_estado_priority_expression():
 
 def _build_pagador_creditos_queryset(empresa, search_query='', estado_filter='', sort_by='estado_operativo', forced_linea=None):
     total_pagado_subquery = HistorialPago.objects.filter(
-        credito_id=F('pk'),
+        credito_id=OuterRef('pk'),
         estado=HistorialPago.EstadoPago.EXITOSO
     ).values('credito_id').annotate(total=Sum('monto')).values('total')
 
@@ -303,8 +441,14 @@ def _build_pagador_dashboard_context(request, *, forced_linea=None):
     query_params.pop('page', None)
     errores_pago_masivo = request.session.pop('errores_pago_masivo', None)
     solicitudes_pendientes = creditos_base.filter(estado=Credito.EstadoCredito.EN_REVISION)
+    pagadores_activos = (
+        PerfilPagador.objects
+        .select_related('usuario')
+        .filter(empresa=empresa, es_pagador=True)
+        .order_by('usuario__email', 'usuario__username')
+    )
 
-    return {
+    context = {
         'empresa': empresa,
         'creditos': creditos_page,
         'errores_pago_masivo': errores_pago_masivo,
@@ -333,7 +477,10 @@ def _build_pagador_dashboard_context(request, *, forced_linea=None):
         'creditos_con_pago_directo': creditos_con_pago_directo,
         'total_visible_pagable': total_visible_pagable,
         'show_excel_fallback': forced_linea != Credito.LineaCredito.ADELANTO_NOMINA,
+        'pagadores_activos': pagadores_activos,
+        'pagadores_activos_count': pagadores_activos.count(),
     }
+    return context
 
 
 def _pagador_redirect_target(request):
@@ -468,6 +615,73 @@ def pagador_adelantos_dashboard_view(request):
         'pagador/pagador_dashboard.html',
         _build_pagador_dashboard_context(request, forced_linea=Credito.LineaCredito.ADELANTO_NOMINA),
     )
+
+
+def _get_pagador_credito_or_404(request, credito_id):
+    credito = get_object_or_404(
+        Credito.objects.select_related('detalle_libranza', 'detalle_adelanto_nomina__vinculo_laboral__empresa'),
+        id=credito_id,
+        linea__in=[Credito.LineaCredito.LIBRANZA, Credito.LineaCredito.ADELANTO_NOMINA],
+    )
+    if credito.empresa_relacionada != request.empresa:
+        raise Http404("Credito no encontrado.")
+    return credito
+
+
+@login_required(login_url='/pagador/login/')
+@pagador_required
+def pagador_documentacion_credito_view(request, credito_id):
+    credito = _get_pagador_credito_or_404(request, credito_id)
+    documentos = _build_pagador_credit_documents(request, credito)
+    return render(request, 'pagador/pagador_documentos_credito.html', {
+        'credito': credito,
+        'documentos': documentos,
+        'total_documentos': len(documentos),
+        'empresa_credito': credito.empresa_relacionada,
+    })
+
+
+@login_required(login_url='/pagador/login/')
+@pagador_required
+@require_http_methods(["GET"])
+def pagador_detalle_empleado_view(request, documento):
+    detalle = build_pagador_employee_detail_context(request.empresa, documento)
+    if not detalle:
+        raise Http404("Empleado no encontrado.")
+
+    documentos_permitidos = []
+    for credito in detalle['creditos']:
+        documentos_permitidos.extend(_build_pagador_credit_documents(request, credito))
+
+    return render(request, 'pagador/pagador_detalle_empleado.html', {
+        'empresa': request.empresa,
+        'colaborador': detalle['colaborador'],
+        'vinculo': detalle['vinculo'],
+        'creditos': detalle['creditos'],
+        'solicitudes_prestador': detalle['solicitudes_prestador'],
+        'documentos_permitidos': documentos_permitidos,
+        'vinculo_estado_choices': VinculoLaboralEmpresa.EstadoVinculo.choices,
+        'dashboard_title': 'Detalle del empleado',
+    })
+
+
+@login_required(login_url='/pagador/login/')
+@pagador_required
+@xframe_options_exempt
+def pagador_documento_preview_view(request):
+    path = (request.GET.get('path') or '').strip()
+    if not _pagador_can_access_document_path(request.empresa, path):
+        raise Http404("Documento no encontrado.")
+    try:
+        full_path = safe_join(settings.MEDIA_ROOT, path)
+    except SuspiciousFileOperation:
+        raise Http404("Documento no encontrado.")
+    if not os.path.exists(full_path):
+        raise Http404("Documento no encontrado.")
+    content_type, _ = mimetypes.guess_type(full_path)
+    response = FileResponse(open(full_path, 'rb'), content_type=content_type or 'application/octet-stream')
+    response['Content-Disposition'] = f'inline; filename="{os.path.basename(full_path)}"'
+    return response
 
 
 @login_required(login_url='/pagador/login/')
