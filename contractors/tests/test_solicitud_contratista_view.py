@@ -1,5 +1,7 @@
 from datetime import date
 from decimal import Decimal
+import hashlib
+import json
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -16,6 +18,11 @@ from contractors.models import (
     ContractorProductConfig,
     ConfiguracionPortalContratistas,
     InformacionLaboralSolicitudContratista,
+    TimelinePrestador,
+)
+from contractors.forms import (
+    calcular_hash_analisis_contractual_desde_datos,
+    MENSAJE_ANALISIS_CONTRACTUAL_OBSOLETO,
 )
 from contractors.services.analisis_contrato_ia import ResultadoAnalisisContratoIAOpenAI
 from gestion_creditos.models import (
@@ -146,6 +153,7 @@ class SolicitudContratistaViewTests(TestCase):
             'valor_pendiente_cobrar': '8000000.00',
             'observaciones': 'Contrato vigente.',
             'terminos_aceptados': 'on',
+            'tratamiento_datos_analisis_ia': 'on',
             'documento_identidad_frontal_capturado': '1',
             'documento_identidad_reverso_capturado': '1',
             'documento_identidad_frontal': SimpleUploadedFile(
@@ -170,7 +178,44 @@ class SolicitudContratistaViewTests(TestCase):
             ),
         }
         datos.update(overrides)
+        if 'analisis_contractual_metadata' not in overrides:
+            datos['analisis_contractual_metadata'] = json.dumps(
+                self._metadata_analisis_vigente(
+                    datos,
+                    contenido_contrato=self._contenido_archivo_payload(datos.get('contrato_actual')),
+                )
+            )
         return datos
+
+    def _contenido_archivo_payload(self, archivo):
+        if not archivo:
+            return b''
+        posicion = None
+        if hasattr(archivo, 'tell') and hasattr(archivo, 'seek'):
+            posicion = archivo.tell()
+            archivo.seek(0)
+        contenido = archivo.read()
+        if posicion is not None:
+            archivo.seek(posicion)
+        return contenido
+
+    def _hash_analisis_para_payload(self, datos, contenido_contrato=b'%PDF-contrato'):
+        return calcular_hash_analisis_contractual_desde_datos(
+            datos,
+            archivo_hash=hashlib.sha256(contenido_contrato).hexdigest(),
+        )
+
+    def _metadata_analisis_vigente(self, datos, *, bloqueos=None, contenido_contrato=b'%PDF-contrato'):
+        return {
+            'metadata': {},
+            'advertencias': [],
+            'bloqueos': bloqueos or [],
+            'eventos': [],
+            'sugerencia_empresa': {},
+            'requiere_revision_manual': False,
+            'analysis_input_hash': self._hash_analisis_para_payload(datos, contenido_contrato=contenido_contrato),
+            'analysis_generated_at': '2026-06-21T10:00:00-05:00',
+        }
 
     def test_get_muestra_formulario_en_subdominio_valido(self):
         response = self.client.get('/solicitar/', HTTP_HOST='contratistas.aprobado.com.co')
@@ -213,6 +258,14 @@ class SolicitudContratistaViewTests(TestCase):
         self.assertContains(response, 'Validando información...')
         self.assertContains(response, 'window.analisisContratoEnProceso')
         self.assertContains(response, 'button-spinner')
+        self.assertContains(response, 'id_tratamiento_datos_analisis_ia')
+        self.assertContains(response, 'Debes autorizar el analisis asistido del contrato para continuar.')
+        self.assertContains(response, 'Debes analizar el contrato antes de continuar.')
+        self.assertContains(response, 'Certificado seleccionado')
+        self.assertContains(response, 'Contrato seleccionado')
+        self.assertContains(response, 'Registrando solicitud...')
+        self.assertContains(response, 'authorization-grid-linear')
+        self.assertContains(response, 'authorization-card-simple')
         self.assertContains(response, 'Fecha final inferida - requiere confirmacion.')
         self.assertContains(response, 'Valor pendiente inferido - requiere confirmacion.')
         self.assertContains(response, 'Contrato vencido detectado')
@@ -225,7 +278,8 @@ class SolicitudContratistaViewTests(TestCase):
         self.assertContains(response, 'id="step-4"')
         self.assertContains(response, 'id_terminos_aceptados')
         self.assertContains(response, 'id_autorizacion_datacredito_aceptada')
-        self.assertContains(response, 'Autorización DataCrédito')
+        self.assertNotContains(response, 'Ver t')
+        self.assertNotContains(response, 'consulta crediticia. Solo se usa')
         self.assertContains(response, 'Autorizo la consulta de mi informacion financiera y crediticia')
 
     def test_post_incompleto_no_crea_solicitud(self):
@@ -238,6 +292,155 @@ class SolicitudContratistaViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Ingrese los nombres.')
         self.assertEqual(ContractorApplication.objects.count(), 0)
+
+    def test_tratamiento_datos_analisis_ia_obligatorio(self):
+        payload = self._payload()
+        payload.pop('tratamiento_datos_analisis_ia')
+
+        response = self.client.post('/solicitar/', payload, HTTP_HOST='contratistas.aprobado.com.co')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Debes autorizar el analisis asistido del contrato para continuar.')
+        self.assertEqual(ContractorApplication.objects.count(), 0)
+
+    def test_autorizacion_ia_sin_analisis_no_crea_solicitud(self):
+        response = self.client.post(
+            '/solicitar/',
+            self._payload(analisis_contractual_metadata=''),
+            HTTP_HOST='contratistas.aprobado.com.co',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Debes analizar el contrato antes de continuar.')
+        self.assertEqual(ContractorApplication.objects.count(), 0)
+
+    def test_post_con_analisis_contractual_obsoleto_no_crea_solicitud(self):
+        metadata_obsoleta = {
+            'metadata': {},
+            'advertencias': [],
+            'bloqueos': [],
+            'eventos': [],
+            'sugerencia_empresa': {},
+            'requiere_revision_manual': False,
+            'analysis_input_hash': 'hash-anterior',
+            'analysis_generated_at': '2026-06-21T10:00:00-05:00',
+        }
+
+        response = self.client.post(
+            '/solicitar/',
+            self._payload(analisis_contractual_metadata=json.dumps(metadata_obsoleta)),
+            HTTP_HOST='contratistas.aprobado.com.co',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, MENSAJE_ANALISIS_CONTRACTUAL_OBSOLETO)
+        self.assertEqual(ContractorApplication.objects.count(), 0)
+
+        evento = TimelinePrestador.objects.get()
+        self.assertEqual(evento.tipo_evento, 'ANALISIS_IA_CONTRATO')
+        self.assertEqual(evento.estado_resultante, 'CONTRATO_ANALISIS_OBSOLETO')
+        self.assertEqual(evento.titulo, 'COMPORTAMIENTO_DIGITAL_ANALISIS_CONTRATO_OBSOLETO')
+        self.assertTrue(evento.metadata['requires_reanalysis'])
+        self.assertEqual(evento.metadata['reason'], 'analysis_input_hash_mismatch')
+        self.assertNotIn('1020304050', str(evento.metadata))
+        self.assertNotIn('%PDF', str(evento.metadata))
+        self.assertNotIn('prompt', str(evento.metadata).lower())
+        self.assertNotIn('base64', str(evento.metadata).lower())
+
+    def test_empresa_detectada_distinta_a_seleccionada_bloquea_y_registra_timeline(self):
+        otra_empresa = Empresa.objects.create(
+            nombre='Otra Empresa Convenio',
+            convenio_activo=True,
+            tipo_empresa=Empresa.TipoEmpresa.CONVENIO,
+        )
+        datos = self._payload(empresa=str(otra_empresa.id), empresa_busqueda=otra_empresa.nombre)
+        metadata = self._metadata_analisis_vigente(datos)
+        metadata['sugerencia_empresa'] = {
+            'empresa_id': self.empresa_core.id,
+            'nombre': self.empresa_core.nombre,
+            'tipo_coincidencia': 'nit_exacto',
+        }
+
+        response = self.client.post(
+            '/solicitar/',
+            self._payload(
+                empresa=str(otra_empresa.id),
+                empresa_busqueda=otra_empresa.nombre,
+                analisis_contractual_metadata=json.dumps(metadata),
+            ),
+            HTTP_HOST='contratistas.aprobado.com.co',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'La empresa seleccionada no coincide con la empresa detectada en el contrato.')
+        self.assertEqual(ContractorApplication.objects.count(), 0)
+        evento = TimelinePrestador.objects.get(estado_resultante='EMPRESA_CONTRATO_NO_COINCIDE')
+        self.assertEqual(evento.titulo, 'COMPORTAMIENTO_DIGITAL_EMPRESA_NO_COINCIDE')
+        self.assertTrue(evento.metadata['requiere_revision_manual'])
+        self.assertNotIn('1020304050', str(evento.metadata))
+        self.assertNotIn('%PDF', str(evento.metadata))
+
+    def test_cambio_documento_invalida_analisis_y_limpia_bloqueo_anterior(self):
+        datos_originales = self._payload()
+        metadata = self._metadata_analisis_vigente(datos_originales, bloqueos=['contrato_vencido_detectado'])
+
+        response = self.client.post(
+            '/solicitar/',
+            self._payload(
+                numero_documento='1020304051',
+                analisis_contractual_metadata=json.dumps(metadata),
+            ),
+            HTTP_HOST='contratistas.aprobado.com.co',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, MENSAJE_ANALISIS_CONTRACTUAL_OBSOLETO)
+        self.assertNotContains(response, 'El contrato detectado esta vencido')
+        self.assertEqual(TimelinePrestador.objects.filter(estado_resultante='CONTRATO_ANALISIS_OBSOLETO').count(), 1)
+
+    def test_cambio_empresa_invalida_analisis_anterior(self):
+        otra_empresa = Empresa.objects.create(
+            nombre='Otra Empresa Convenio',
+            convenio_activo=True,
+            tipo_empresa=Empresa.TipoEmpresa.CONVENIO,
+        )
+        datos_originales = self._payload()
+        metadata = self._metadata_analisis_vigente(datos_originales)
+
+        response = self.client.post(
+            '/solicitar/',
+            self._payload(
+                empresa=str(otra_empresa.id),
+                empresa_busqueda=otra_empresa.nombre,
+                analisis_contractual_metadata=json.dumps(metadata),
+            ),
+            HTTP_HOST='contratistas.aprobado.com.co',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, MENSAJE_ANALISIS_CONTRACTUAL_OBSOLETO)
+        self.assertEqual(TimelinePrestador.objects.filter(estado_resultante='CONTRATO_ANALISIS_OBSOLETO').count(), 1)
+
+    def test_cambio_contrato_pdf_invalida_analisis_anterior(self):
+        datos_originales = self._payload()
+        metadata = self._metadata_analisis_vigente(datos_originales, contenido_contrato=b'%PDF-contrato-original')
+
+        response = self.client.post(
+            '/solicitar/',
+            self._payload(
+                contrato_actual=SimpleUploadedFile(
+                    'contrato-nuevo.pdf',
+                    b'%PDF-contrato-nuevo',
+                    content_type='application/pdf',
+                ),
+                analisis_contractual_metadata=json.dumps(metadata),
+            ),
+            HTTP_HOST='contratistas.aprobado.com.co',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, MENSAJE_ANALISIS_CONTRACTUAL_OBSOLETO)
+        self.assertEqual(TimelinePrestador.objects.filter(estado_resultante='CONTRATO_ANALISIS_OBSOLETO').count(), 1)
 
     @override_settings(
         DATACREDITO_AUTHORIZATION_TEXT_VERSION='uat-v1',

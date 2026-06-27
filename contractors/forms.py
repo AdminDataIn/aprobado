@@ -17,6 +17,44 @@ from gestion_creditos.models import Empresa
 
 PATRON_NOMBRE_PERSONA = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ' -]{1,}$")
 PATRON_TEXTO_BASURA = re.compile(r'^(.)\1{3,}$|^(asdf|asdasd|asdasdasd|qwerty|test|prueba)$', re.IGNORECASE)
+MENSAJE_ANALISIS_CONTRACTUAL_OBSOLETO = (
+    'Modificaste datos relacionados con el contrato. Para continuar, vuelve a analizar el contrato '
+    'con la informacion actualizada.'
+)
+CAMPOS_HASH_ANALISIS_CONTRACTUAL = (
+    'tipo_documento',
+    'numero_documento',
+    'empresa',
+    'fecha_inicio_contrato',
+    'fecha_fin_contrato',
+    'valor_total_contrato',
+    'valor_pagado_contrato',
+    'valor_pendiente_cobrar',
+)
+
+
+def calcular_hash_analisis_contractual_desde_datos(datos, archivo_hash=''):
+    payload = {}
+    for campo in CAMPOS_HASH_ANALISIS_CONTRACTUAL:
+        valor = datos.get(campo)
+        if hasattr(valor, 'pk'):
+            valor = valor.pk
+        if isinstance(valor, Decimal):
+            valor = str(valor.quantize(Decimal('0.01')))
+        elif valor is not None:
+            valor = str(valor).strip()
+        payload[campo] = valor or ''
+    payload['contrato_actual_hash'] = archivo_hash or ''
+    contenido = json.dumps(payload, sort_keys=True, separators=(',', ':'))
+    return hashlib.sha256(contenido.encode('utf-8')).hexdigest()
+
+
+def calcular_hash_analisis_contractual_formulario(datos):
+    archivo = datos.get('contrato_actual')
+    return calcular_hash_analisis_contractual_desde_datos(
+        datos,
+        archivo_hash=_hash_temporal_archivo(archivo) if archivo else '',
+    )
 
 
 class FormularioSimulacionContratista(forms.Form):
@@ -220,6 +258,13 @@ class FormularioSolicitudContratista(forms.Form):
         widget=forms.Textarea(attrs={'class': 'form-textarea', 'rows': 2, 'placeholder': 'Notas adicionales si aplica'}),
     )
     analisis_contractual_metadata = forms.CharField(required=False, widget=forms.HiddenInput())
+    tratamiento_datos_analisis_ia = forms.BooleanField(
+        label='Acepto usar el analisis asistido del contrato.',
+        required=True,
+        error_messages={
+            'required': 'Debes autorizar el analisis asistido del contrato para continuar.',
+        },
+    )
     confirmar_fecha_fin_inferida = forms.BooleanField(required=False, widget=forms.CheckboxInput())
     confirmar_valor_pendiente_inferido = forms.BooleanField(required=False, widget=forms.CheckboxInput())
     terminos_aceptados = forms.BooleanField(
@@ -394,9 +439,25 @@ class FormularioSolicitudContratista(forms.Form):
 
         metadata_contractual = self._limpiar_metadata_contractual(datos.get('analisis_contractual_metadata'))
         datos['analisis_contractual_metadata'] = metadata_contractual
-        if metadata_contractual:
+        hash_actual_analisis = calcular_hash_analisis_contractual_formulario(datos)
+        if not metadata_contractual or not metadata_contractual.get('analysis_input_hash'):
+            self.add_error('contrato_actual', 'Debes analizar el contrato antes de continuar.')
+        elif metadata_contractual.get('analysis_input_hash') != hash_actual_analisis:
+            metadata_contractual['analysis_obsolete'] = True
+            self.add_error('contrato_actual', MENSAJE_ANALISIS_CONTRACTUAL_OBSOLETO)
+        else:
             bloqueos = set(metadata_contractual.get('bloqueos') or ())
             metadata_segura = metadata_contractual.get('metadata') or {}
+            sugerencia_empresa = metadata_contractual.get('sugerencia_empresa') or {}
+            empresa_detectada_id = sugerencia_empresa.get('empresa_id')
+            if empresa and empresa_detectada_id and str(empresa.pk) != str(empresa_detectada_id):
+                bloqueos.add('EMPRESA_CONTRATO_NO_COINCIDE')
+                metadata_contractual['bloqueos'] = sorted(bloqueos)
+                metadata_contractual['requiere_revision_manual'] = True
+                self.add_error(
+                    'empresa_busqueda',
+                    'La empresa seleccionada no coincide con la empresa detectada en el contrato. Esta solicitud requiere revision.',
+                )
             if 'contrato_vencido_detectado' in bloqueos or metadata_segura.get('contrato_vencido_detectado'):
                 self.add_error(
                     'fecha_fin_contrato',
@@ -406,6 +467,11 @@ class FormularioSolicitudContratista(forms.Form):
                 self.add_error(
                     'empresa_busqueda',
                     'La empresa detectada por NIT no coincide con el nombre del contrato. Debes confirmar la empresa con soporte.',
+                )
+            if 'EMPRESA_CONTRATO_NO_COINCIDE' in bloqueos:
+                self.add_error(
+                    'empresa',
+                    'La empresa seleccionada no coincide con la empresa detectada en el contrato. Esta solicitud requiere revision.',
                 )
             if metadata_segura.get('fecha_fin_requiere_confirmacion') and not datos.get('confirmar_fecha_fin_inferida'):
                 self.add_error(
@@ -451,6 +517,9 @@ class FormularioSolicitudContratista(forms.Form):
             'eventos',
             'sugerencia_empresa',
             'requiere_revision_manual',
+            'analysis_input_hash',
+            'analysis_generated_at',
+            'analysis_obsolete',
         }
         return {llave: datos.get(llave) for llave in permitidas if llave in datos}
 

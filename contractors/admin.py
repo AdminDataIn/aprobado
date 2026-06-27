@@ -44,6 +44,7 @@ class ConfiguracionPortalContratistasAdmin(AdminContratistasBase):
     fieldsets = (
         ('Portal unico', {
             'fields': ('nombre_visible', 'host', 'slug', 'activo'),
+            'description': 'Define host/subdominio, branding y textos del portal publico.',
         }),
         ('Marca', {
             'fields': ('logo', 'color_primario', 'color_secundario', 'correo_soporte', 'texto_landing'),
@@ -79,6 +80,7 @@ class OrganizacionContratistaAdmin(AdminContratistasBase):
     fieldsets = (
         ('Identificacion', {
             'fields': ('name', 'slug', 'subdomain'),
+            'description': 'Entidad operativa/tenant para administracion interna; no es el prestador solicitante.',
         }),
         ('Estado', {
             'fields': ('is_active',),
@@ -100,6 +102,7 @@ class MarcaContratistaAdmin(AdminContratistasBase):
         }),
         ('Marca', {
             'fields': ('display_name', 'logo', 'primary_color', 'secondary_color'),
+            'description': 'Define logos, colores y apariencia.',
         }),
         ('Contenido publico', {
             'fields': ('landing_copy', 'support_email'),
@@ -127,6 +130,7 @@ class ConfiguracionProductoContratistaAdmin(AdminContratistasBase):
     fieldsets = (
         ('Organizacion y producto', {
             'fields': ('organization', 'product_type', 'is_active'),
+            'description': 'Define reglas financieras del simulador: montos, plazo, tasa, costos y seguros.',
         }),
         ('Limites de simulacion', {
             'fields': ('min_amount', 'max_amount', 'min_term_months', 'max_term_months'),
@@ -151,6 +155,7 @@ class PerfilContratistaAdmin(AdminContratistasBase):
     fieldsets = (
         ('Usuario y organizacion', {
             'fields': ('user', 'organization', 'role'),
+            'description': 'Roles internos de operacion: viewer, operator, manager, owner. No son el usuario solicitante final.',
         }),
         ('Estado', {
             'fields': ('is_active',),

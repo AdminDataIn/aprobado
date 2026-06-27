@@ -368,7 +368,14 @@ class EndpointAnalisisContratoContratistaTests(TestCase):
             response = self._post()
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.json()['success'])
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertRegex(data['metadata']['analysis_input_hash'], r'^[a-f0-9]{64}$')
+        self.assertIn('analysis_generated_at', data['metadata'])
+        self.assertEqual(
+            data['analisis_contractual_seguro']['metadata']['analysis_input_hash'],
+            data['metadata']['analysis_input_hash'],
+        )
         self.assertEqual(ContractorApplication.objects.count(), 0)
         self.assertEqual(ContractorApplicationDocument.objects.count(), 0)
         self.assertEqual(Credito.objects.count(), 0)

@@ -1,8 +1,10 @@
 from django.contrib.auth import logout
+import hashlib
 import json
 import re
 import unicodedata
 from pathlib import Path
+from django.conf import settings
 from django.http import Http404
 from django.http import JsonResponse
 from django.core.cache import cache
@@ -13,8 +15,11 @@ from django.views.decorators.http import require_POST
 from django.core.exceptions import ValidationError
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
+from django.utils import timezone
 
 from contractors.forms import (
+    CAMPOS_HASH_ANALISIS_CONTRACTUAL,
+    calcular_hash_analisis_contractual_desde_datos,
     FormularioDocumentoSolicitudContratista,
     FormularioSimulacionContratista,
     FormularioSolicitudContratista,
@@ -24,6 +29,7 @@ from contractors.models import (
     TAMANO_MAXIMO_DOCUMENTO_BYTES,
 )
 from contractors.selectors import (
+    listar_hosts_configuracion_portal_contratistas_activos,
     listar_documentos_solicitud_contratista,
     obtener_solicitud_contratista,
 )
@@ -333,6 +339,9 @@ def solicitud_contratista_view(request):
                 ValidationError,
             ) as exc:
                 formulario.add_error(None, _mensajes_validacion(exc))
+        else:
+            _registrar_huella_analisis_contractual_obsoleto(request, formulario)
+            _registrar_huella_empresa_contrato_no_coincide(request, formulario)
     else:
         formulario = FormularioSolicitudContratista(configuracion_producto=configuracion_portal)
 
@@ -448,6 +457,12 @@ def analizar_contrato_contratista_view(request):
             status=400,
         )
 
+    analysis_input_hash = calcular_hash_analisis_contractual_desde_datos(
+        request.POST,
+        archivo_hash=_hash_temporal_archivo(contrato),
+    )
+    analysis_generated_at = timezone.now().isoformat()
+
     if not _tratamiento_datos_aceptado(request):
         return JsonResponse(
             {
@@ -524,7 +539,11 @@ def analizar_contrato_contratista_view(request):
     )
     if inconsistencia_identidad:
         metadata = resultado.metadata_segura()
-        metadata.update(inconsistencia_identidad)
+        metadata.update({
+            **inconsistencia_identidad,
+            'analysis_input_hash': analysis_input_hash,
+            'analysis_generated_at': analysis_generated_at,
+        })
         registrar_evento_timeline_prestador(
             tipo_evento='ANALISIS_IA_CONTRATO',
             titulo='Inconsistencia de identidad detectada',
@@ -555,6 +574,10 @@ def analizar_contrato_contratista_view(request):
         request=request,
     )
     analisis_seguro = enriquecer_analisis_contrato_prestador(resultado)
+    analisis_seguro.metadata.update({
+        'analysis_input_hash': analysis_input_hash,
+        'analysis_generated_at': analysis_generated_at,
+    })
     for evento_seguro in analisis_seguro.eventos:
         registrar_evento_timeline_prestador(
             tipo_evento='ANALISIS_IA_CONTRATO',
@@ -584,6 +607,8 @@ def analizar_contrato_contratista_view(request):
             'requiere_revision_manual': analisis_seguro.requiere_revision_manual,
             'metadata': {
                 **resultado.metadata_segura(),
+                'analysis_input_hash': analysis_input_hash,
+                'analysis_generated_at': analysis_generated_at,
                 'analisis_contractual_seguro': analisis_seguro.metadata,
             },
             'analisis_contractual_seguro': analisis_seguro.como_dict(),
@@ -733,6 +758,15 @@ def politica_privacidad_contratistas_view(request):
 def _obtener_configuracion_portal_activa(request):
     configuracion_portal = getattr(request, 'configuracion_portal_contratistas', None)
     if not configuracion_portal or not configuracion_portal.activo:
+        if getattr(settings, 'DEBUG', False):
+            host = request.get_host()
+            hosts_activos = listar_hosts_configuracion_portal_contratistas_activos()
+            hosts = ', '.join(hosts_activos) if hosts_activos else 'sin hosts activos'
+            raise Http404(
+                'configuracion_portal_contratistas_no_encontrada. '
+                f'Host recibido: {host}. Hosts configurados activos: {hosts}. '
+                'Ejecute: python manage.py seed_prestadores_qa_local --host contratistas.localhost:8000',
+            )
         raise Http404('configuracion_portal_contratistas_no_encontrada')
     return configuracion_portal
 
@@ -833,6 +867,50 @@ def _resolver_inconsistencia_identidad_contrato(*, documento_ingresado, document
     return {}
 
 
+def _registrar_huella_analisis_contractual_obsoleto(request, formulario):
+    metadata = getattr(formulario, 'cleaned_data', {}).get('analisis_contractual_metadata') or {}
+    if not metadata.get('analysis_obsolete'):
+        return None
+    return registrar_evento_timeline_prestador(
+        tipo_evento='ANALISIS_IA_CONTRATO',
+        titulo='COMPORTAMIENTO_DIGITAL_ANALISIS_CONTRATO_OBSOLETO',
+        descripcion='El usuario modifico datos relevantes despues de analizar el contrato; se exige reanalisis.',
+        estado_resultante='CONTRATO_ANALISIS_OBSOLETO',
+        metadata={
+            'reason': 'analysis_input_hash_mismatch',
+            'fields_changed': list(CAMPOS_HASH_ANALISIS_CONTRACTUAL) + ['contrato_actual'],
+            'requires_reanalysis': True,
+            'previous_analysis_generated_at': metadata.get('analysis_generated_at') or '',
+            'has_previous_blocking_reasons': bool(metadata.get('bloqueos')),
+        },
+        usuario=request.user,
+        request=request,
+    )
+
+
+def _registrar_huella_empresa_contrato_no_coincide(request, formulario):
+    metadata = getattr(formulario, 'cleaned_data', {}).get('analisis_contractual_metadata') or {}
+    bloqueos = set(metadata.get('bloqueos') or ())
+    if 'EMPRESA_CONTRATO_NO_COINCIDE' not in bloqueos:
+        return None
+
+    sugerencia_empresa = metadata.get('sugerencia_empresa') or {}
+    return registrar_evento_timeline_prestador(
+        tipo_evento='ANALISIS_IA_CONTRATO',
+        titulo='COMPORTAMIENTO_DIGITAL_EMPRESA_NO_COINCIDE',
+        descripcion='La empresa seleccionada no coincide con la empresa detectada en el contrato.',
+        estado_resultante='EMPRESA_CONTRATO_NO_COINCIDE',
+        metadata={
+            'tipo_coincidencia_empresa': sugerencia_empresa.get('tipo_coincidencia') or '',
+            'empresa_detectada_id': sugerencia_empresa.get('empresa_id') or '',
+            'requiere_revision_manual': True,
+            'raw_empresa_no_incluida': True,
+        },
+        usuario=request.user,
+        request=request,
+    )
+
+
 def _enmascarar_documento(valor):
     valor = _normalizar_nit(valor)
     if len(valor) <= 4:
@@ -852,6 +930,24 @@ def _validar_pdf_temporal_contrato(archivo):
     if tamano > TAMANO_MAXIMO_DOCUMENTO_BYTES:
         return 'El contrato vigente supera el tamano maximo permitido.'
     return ''
+
+
+def _hash_temporal_archivo(archivo):
+    posicion = None
+    if hasattr(archivo, 'tell') and hasattr(archivo, 'seek'):
+        try:
+            posicion = archivo.tell()
+            archivo.seek(0)
+        except Exception:
+            posicion = None
+    digest = hashlib.sha256()
+    for bloque in getattr(archivo, 'chunks', lambda: iter(lambda: archivo.read(8192), b''))():
+        if not bloque:
+            break
+        digest.update(bloque)
+    if posicion is not None:
+        archivo.seek(posicion)
+    return digest.hexdigest()
 
 
 def _tratamiento_datos_aceptado(request):

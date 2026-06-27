@@ -2,7 +2,6 @@ from django.conf import settings
 
 from contractors.selectors import (
     obtener_configuracion_portal_contratistas_por_host,
-    obtener_configuracion_portal_contratistas_por_slug,
     obtener_organizacion_por_subdominio,
 )
 
@@ -26,13 +25,11 @@ class ContractorTenantMiddleware:
         return self.get_response(request)
 
     def _resolver_configuracion_portal(self, request):
-        host = (request.get_host() or '').split(':', 1)[0].lower()
-        if not self._es_host_portal(request, host):
+        host_recibido = self._normalizar_host_recibido(request.get_host())
+        host_sin_puerto = host_recibido.split(':', 1)[0]
+        if not self._es_host_portal(request, host_sin_puerto):
             return None
-        configuracion = obtener_configuracion_portal_contratistas_por_host(host)
-        if configuracion is None and getattr(settings, 'DEBUG', False) and host == f'{SUBDOMINIO_PORTAL_CONTRATISTAS}.localhost':
-            configuracion = obtener_configuracion_portal_contratistas_por_slug(SUBDOMINIO_PORTAL_CONTRATISTAS)
-        return configuracion
+        return obtener_configuracion_portal_contratistas_por_host(host_recibido)
 
     def _resolve_organization(self, request):
         subdominio = self._extraer_subdominio_portal(request)
@@ -67,6 +64,12 @@ class ContractorTenantMiddleware:
         host = (host or '').strip().lower()
         host = host.removeprefix('https://').removeprefix('http://')
         return host.split('/', 1)[0].split(':', 1)[0]
+
+    @staticmethod
+    def _normalizar_host_recibido(host):
+        host = (host or '').strip().lower()
+        host = host.removeprefix('https://').removeprefix('http://')
+        return host.split('/', 1)[0]
 
     # Alias interno temporal para tests/compatibilidad de Fase 1.
     _extract_subdomain = _extraer_subdominio_portal

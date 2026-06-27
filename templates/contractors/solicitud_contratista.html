@@ -214,9 +214,10 @@
                                                 <span>Permite analizar temporalmente el PDF para sugerir información editable. No reemplaza tu confirmación.</span>
                                             </div>
                                             <label class="contract-ai-consent">
-                                                <input type="checkbox" id="id_tratamiento_datos_analisis_ia">
-                                                Acepto usar el análisis asistido del contrato.
+                                                {{ formulario.tratamiento_datos_analisis_ia }}
+                                                {{ formulario.tratamiento_datos_analisis_ia.label }}
                                             </label>
+                                            {{ formulario.tratamiento_datos_analisis_ia.errors }}
                                         </div>
                                     </div>
                                 </div>
@@ -258,14 +259,7 @@
 
                             <div class="form-step" id="step-4">
                                 <h2 class="step-title">Confirma la información de tu contrato</h2>
-                                <p class="form-helper-text">Si el análisis asistido detecta datos del contrato, aparecerán para que los confirmes o corrijas antes de enviar.</p>
-                                <div class="document-file-status visible">
-                                    <span class="status-icon">IA</span>
-                                    <div class="status-text">
-                                        <span class="status-label">Análisis de contrato</span>
-                                        <span class="status-value" id="contract_ai_summary">Información detectada automáticamente si la IA está habilitada. Verifica que sea correcta antes de continuar.</span>
-                                    </div>
-                                </div>
+                                <p class="form-helper-text" id="contract_ai_summary">Analisis completado. Verifica los datos antes de continuar.</p>
                                 <div class="contract-ai-messages" id="contract_ai_messages" aria-live="polite">
                                     <div class="contract-ai-message is-success" id="contract_ai_success" style="display:none;"></div>
                                     <div class="contract-ai-message is-warning" id="contract_ai_warning" style="display:none;"></div>
@@ -276,14 +270,14 @@
                                     <div class="terms-content" id="confirmacion_fecha_fin_inferida_shell" style="display:none;">
                                         {{ formulario.confirmar_fecha_fin_inferida }}
                                         <label for="{{ formulario.confirmar_fecha_fin_inferida.id_for_label }}">
-                                            Confirmo que la fecha final del contrato detectada o inferida es correcta.
+                                            Confirmo la fecha final del contrato.
                                         </label>
                                     </div>
                                     {{ formulario.confirmar_fecha_fin_inferida.errors }}
                                     <div class="terms-content" id="confirmacion_valor_pendiente_inferido_shell" style="display:none;">
                                         {{ formulario.confirmar_valor_pendiente_inferido }}
                                         <label for="{{ formulario.confirmar_valor_pendiente_inferido.id_for_label }}">
-                                            Confirmo que el valor pendiente por cobrar detectado o inferido es correcto.
+                                            Confirmo el valor pendiente del contrato.
                                         </label>
                                     </div>
                                     {{ formulario.confirmar_valor_pendiente_inferido.errors }}
@@ -330,16 +324,8 @@
                                         {{ formulario.observaciones.errors }}
                                     </div>
                                 </div>
-                                <div class="authorization-grid">
-                                    <div class="authorization-card">
-                                        <div class="authorization-copy">
-                                            <strong>Términos y privacidad</strong>
-                                            <span>Autorización general para registrar tu solicitud y tratar tus datos según las políticas publicadas.</span>
-                                            <span class="authorization-links">
-                                                <a href="{% url 'contractors:terminos_condiciones_contratistas' %}" target="_blank" rel="noopener">Ver términos</a>
-                                                <a href="{% url 'contractors:politica_privacidad_contratistas' %}" target="_blank" rel="noopener">Ver privacidad</a>
-                                            </span>
-                                        </div>
+                                <div class="authorization-grid authorization-grid-linear">
+                                    <div class="authorization-card authorization-card-simple">
                                         <div class="terms-content authorization-check">
                                         {{ formulario.terminos_aceptados }}
                                         <label for="{{ formulario.terminos_aceptados.id_for_label }}">
@@ -351,11 +337,7 @@
                                         </div>
                                         {{ formulario.terminos_aceptados.errors }}
                                     </div>
-                                    <div class="authorization-card terms-datacredito">
-                                        <div class="authorization-copy">
-                                            <strong>Autorización DataCrédito</strong>
-                                            <span>Autorización independiente para consulta crediticia. Solo se usa cuando Aprobado habilite una evaluación formal controlada.</span>
-                                        </div>
+                                    <div class="authorization-card authorization-card-simple terms-datacredito">
                                         <div class="terms-content authorization-check">
                                         {{ formulario.autorizacion_datacredito_aceptada }}
                                         <label for="{{ formulario.autorizacion_datacredito_aceptada.id_for_label }}">
@@ -561,6 +543,11 @@
         margin: 1rem 0;
     }
 
+    .authorization-grid-linear {
+        grid-template-columns: 1fr;
+        max-width: 760px;
+    }
+
     .authorization-card {
         border: 1px solid #d9e2ec;
         border-radius: 18px;
@@ -572,6 +559,11 @@
     .authorization-card-compact {
         margin-top: 0.8rem;
         background: #f8fbff;
+    }
+
+    .authorization-card.has-error {
+        border-color: #fca5a5;
+        box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
     }
 
     .authorization-check {
@@ -1033,6 +1025,7 @@
                 {id: 'id_documento_identidad_reverso', archivo: true, camara: true, extensiones: ['jpg', 'jpeg', 'png'], mensaje: 'Captura la cedula trasera desde la camara.'},
                 {id: 'id_certificado_bancario', archivo: true, extensiones: ['pdf'], mensaje: 'Carga el certificado bancario en PDF.'},
                 {id: 'id_contrato_actual', archivo: true, extensiones: ['pdf'], mensaje: 'Carga el contrato vigente en PDF.'},
+                {id: 'id_tratamiento_datos_analisis_ia', checkbox: true, mensaje: 'Debes autorizar el analisis asistido del contrato para continuar.'},
             ],
             3: [
                 {id: 'id_empresa', mensaje: 'Debes elegir una empresa de la lista de resultados.'},
@@ -1060,7 +1053,7 @@
         }
 
         function contenedorCampo(campo) {
-            return campo ? campo.closest('.form-field, .terms-container') : null;
+            return campo ? campo.closest('.form-field, .terms-container, .authorization-card, .authorization-check') : null;
         }
 
         function limpiarErrorCampo(campo) {
@@ -1145,7 +1138,23 @@
                     mostrarErrorCampo(campo, 'El analisis detecto un bloqueo contractual que requiere revision antes de continuar.');
                     return false;
                 }
+                if (campo.dataset.analisisObsoleto === '1') {
+                    mostrarErrorCampo(campo, 'Modificaste datos del contrato. Vuelve a analizarlo para continuar.');
+                    return false;
+                }
+                if (regla.id === 'id_contrato_actual') {
+                    const metadataAnalisis = document.getElementById('id_analisis_contractual_metadata');
+                    if (!metadataAnalisis || !metadataAnalisis.value) {
+                        mostrarErrorCampo(campo, 'Debes analizar el contrato antes de continuar.');
+                        mostrarBloqueoAnalisis('Debes analizar el contrato antes de continuar.');
+                        return false;
+                    }
+                }
                 return true;
+            }
+            if (regla.id === 'id_empresa' && campo.dataset.empresaNoCoincide === '1') {
+                mostrarErrorCampo(campo, 'La empresa seleccionada no coincide con la empresa detectada en el contrato. Esta solicitud requiere revision.');
+                return false;
             }
             if (!valor) {
                 mostrarErrorCampo(campo, regla.mensaje);
@@ -1257,6 +1266,7 @@
         const empresaHelper = document.getElementById('empresa_helper_text');
         const empresaSelectedCard = document.getElementById('empresa_selected_card');
         let timeoutBusquedaEmpresa = null;
+        let empresaDetectadaContrato = null;
 
         function establecerEstadoEmpresa(estado, mensaje) {
             if (!empresaShell) {
@@ -1278,10 +1288,41 @@
             }
         }
 
+        function normalizarTextoComparacion(valor) {
+            return String(valor || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-zA-Z0-9 ]+/g, ' ')
+                .replace(/\b(SAS|S A S|SA|S A|LTDA|L T D A)\b/g, '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toUpperCase();
+        }
+
+        function empresaCoincideConContrato(id, nombre) {
+            if (!empresaDetectadaContrato) {
+                return true;
+            }
+            if (empresaDetectadaContrato.empresa_id && String(id) === String(empresaDetectadaContrato.empresa_id)) {
+                return true;
+            }
+            if (!empresaDetectadaContrato.empresa_id && empresaDetectadaContrato.nombre) {
+                return normalizarTextoComparacion(nombre) === normalizarTextoComparacion(empresaDetectadaContrato.nombre);
+            }
+            return false;
+        }
+
         function seleccionarEmpresa(id, nombre) {
             empresaSeleccionada.value = id;
             empresaBusqueda.value = nombre;
-            establecerEstadoEmpresa('is-selected', 'Empresa validada correctamente. Continuaremos con esa empresa.');
+            empresaSeleccionada.dispatchEvent(new Event('change', {bubbles: true}));
+            if (!empresaCoincideConContrato(id, nombre)) {
+                empresaSeleccionada.dataset.empresaNoCoincide = '1';
+                establecerEstadoEmpresa('is-invalid', 'La empresa seleccionada no coincide con la empresa detectada en el contrato. Esta solicitud requiere revision.');
+            } else {
+                empresaSeleccionada.dataset.empresaNoCoincide = '0';
+                establecerEstadoEmpresa('is-selected', 'Empresa validada correctamente. Continuaremos con esa empresa.');
+            }
             if (empresaSelectedCard) {
                 empresaSelectedCard.style.display = 'block';
                 empresaSelectedCard.innerHTML = `<strong>Empresa seleccionada</strong><small>${nombre}</small>`;
@@ -1330,6 +1371,7 @@
         if (empresaBusqueda && empresaSeleccionada) {
             empresaBusqueda.addEventListener('input', function () {
                 empresaSeleccionada.value = '';
+                empresaSeleccionada.dataset.empresaNoCoincide = '0';
                 if (empresaSelectedCard) {
                     empresaSelectedCard.style.display = 'none';
                     empresaSelectedCard.innerHTML = '';
@@ -1371,6 +1413,26 @@
                         mostrarPaso(numeroPaso);
                         return;
                     }
+                }
+                const botonSubmit = formulario.querySelector('button[type="submit"]');
+                if (botonSubmit) {
+                    botonSubmit.dataset.textoOriginal = botonSubmit.textContent;
+                    botonSubmit.disabled = true;
+                    botonSubmit.textContent = formulario.dataset.loaderText || 'Registrando solicitud...';
+                    window.setTimeout(function () {
+                        if (document.body.contains(botonSubmit) && botonSubmit.disabled) {
+                            botonSubmit.disabled = false;
+                            botonSubmit.textContent = botonSubmit.dataset.textoOriginal || 'Continuar a simulacion';
+                        }
+                    }, 15000);
+                }
+            });
+
+            window.addEventListener('pageshow', function () {
+                const botonSubmit = formulario.querySelector('button[type="submit"]');
+                if (botonSubmit && botonSubmit.disabled) {
+                    botonSubmit.disabled = false;
+                    botonSubmit.textContent = botonSubmit.dataset.textoOriginal || 'Continuar a simulacion';
                 }
             });
         }
@@ -1541,8 +1603,14 @@
                 return;
             }
             empresaSeleccionada.value = '';
+            empresaSeleccionada.dataset.empresaNoCoincide = '0';
             empresaBusqueda.value = nombreSugerido;
             const tipo = sugerencia && sugerencia.tipo_coincidencia ? sugerencia.tipo_coincidencia : 'sugerencia';
+            empresaDetectadaContrato = {
+                empresa_id: sugerencia && sugerencia.empresa_id ? String(sugerencia.empresa_id) : '',
+                nombre: nombreSugerido,
+                tipo_coincidencia: tipo,
+            };
             let mensaje = 'Detectamos una empresa en el contrato. Debes elegirla desde la lista de resultados.';
             if (tipo === 'nit_exacto') {
                 mensaje = 'Encontramos una empresa por NIT. Confirma seleccionandola desde la lista.';
@@ -1562,14 +1630,47 @@
                 return;
             }
             const seguro = data.analisis_contractual_seguro || {};
+            const metadataRespuesta = data.metadata || {};
+            const metadataSegura = seguro.metadata || metadataRespuesta.analisis_contractual_seguro || {};
             campoMetadataContractual.value = JSON.stringify({
-                metadata: seguro.metadata || {},
+                metadata: metadataSegura || {},
                 advertencias: seguro.advertencias || data.advertencias || [],
                 bloqueos: seguro.bloqueos || data.bloqueos || [],
                 eventos: seguro.eventos || [],
                 sugerencia_empresa: seguro.sugerencia_empresa || data.sugerencia_empresa || {},
                 requiere_revision_manual: Boolean(seguro.requiere_revision_manual || data.requiere_revision_manual),
+                analysis_input_hash: metadataRespuesta.analysis_input_hash || metadataSegura.analysis_input_hash || '',
+                analysis_generated_at: metadataRespuesta.analysis_generated_at || metadataSegura.analysis_generated_at || '',
+                analysis_obsolete: false,
             });
+            if (campoContrato) {
+                campoContrato.dataset.analisisObsoleto = '0';
+            }
+        }
+
+        function marcarAnalisisContratoObsoleto() {
+            if (!campoMetadataContractual || !campoMetadataContractual.value || window.analisisContratoEnProceso) {
+                return;
+            }
+            let metadata = {};
+            try {
+                metadata = JSON.parse(campoMetadataContractual.value || '{}');
+            } catch (error) {
+                metadata = {};
+            }
+            if (!metadata.analysis_input_hash || metadata.analysis_obsolete) {
+                return;
+            }
+            metadata.analysis_obsolete = true;
+            campoMetadataContractual.value = JSON.stringify(metadata);
+            if (campoContrato) {
+                campoContrato.dataset.analisisObsoleto = '1';
+                campoContrato.dataset.bloqueoContractual = '0';
+            }
+            if (estadoAnalisisContrato) {
+                estadoAnalisisContrato.textContent = 'Modificaste datos del contrato. Vuelve a analizarlo para continuar.';
+            }
+            mostrarAdvertenciasAnalisis('Modificaste datos del contrato. Vuelve a analizarlo para continuar.');
         }
 
         function mostrarConfirmacionesContractuales(metadata) {
@@ -1648,7 +1749,7 @@
                 }
             }
 
-            const mensajeBase = 'Detectamos informacion en tu contrato. Verifica que sea correcta antes de continuar.';
+            const mensajeBase = 'Analisis completado. Verifica los datos detectados antes de continuar.';
             mostrarExitoAnalisis(mensajeBase);
             if (advertencias.length) {
                 mostrarAdvertenciasAnalisis(advertencias);
@@ -1665,6 +1766,7 @@
             campoContrato.dataset.contratoInvalido = data.es_contrato === false ? '1' : '0';
             campoContrato.dataset.inconsistenciaIdentidad = data.bloqueos && data.bloqueos.includes('inconsistencia_identidad_documento_contrato') ? '1' : '0';
             campoContrato.dataset.bloqueoContractual = data.bloqueos && data.bloqueos.length ? '1' : '0';
+            campoContrato.dataset.analisisObsoleto = '0';
             if (data.success) {
                 if (estadoAnalisisContrato) {
                     estadoAnalisisContrato.textContent = 'Contrato analizado. Confirma o corrige la informacion detectada.';
@@ -1723,7 +1825,22 @@
             const datos = new FormData();
             datos.append('contrato_actual', archivo);
             datos.append('tratamiento_datos_analisis_ia', '1');
-            datos.append('numero_documento', valorCampo(document.getElementById('id_numero_documento')));
+            [
+                'id_tipo_documento',
+                'id_numero_documento',
+                'id_empresa',
+                'id_fecha_inicio_contrato',
+                'id_fecha_fin_contrato',
+                'id_valor_total_contrato',
+                'id_valor_pagado_contrato',
+                'id_valor_pendiente_cobrar',
+            ].forEach(function (idCampo) {
+                const campo = document.getElementById(idCampo);
+                if (!campo || !campo.name) {
+                    return;
+                }
+                datos.append(campo.name, valorCampo(campo));
+            });
             fetch(formulario.dataset.analisisContratoUrl, {
                 method: 'POST',
                 body: datos,
@@ -1757,9 +1874,11 @@
         }
         if (campoContrato) {
             campoContrato.addEventListener('change', function () {
+                actualizarEstadoDocumento(campoContrato);
                 campoContrato.dataset.contratoInvalido = '0';
                 campoContrato.dataset.inconsistenciaIdentidad = '0';
                 campoContrato.dataset.bloqueoContractual = '0';
+                campoContrato.dataset.analisisObsoleto = '0';
                 if (campoMetadataContractual) {
                     campoMetadataContractual.value = '';
                 }
@@ -1770,6 +1889,23 @@
             });
         }
 
+        [
+            'id_tipo_documento',
+            'id_numero_documento',
+            'id_empresa',
+            'id_fecha_inicio_contrato',
+            'id_fecha_fin_contrato',
+            'id_valor_total_contrato',
+            'id_valor_pagado_contrato',
+            'id_valor_pendiente_cobrar',
+        ].forEach(function (idCampo) {
+            const campo = document.getElementById(idCampo);
+            if (campo) {
+                campo.addEventListener('input', marcarAnalisisContratoObsoleto);
+                campo.addEventListener('change', marcarAnalisisContratoObsoleto);
+            }
+        });
+
         function actualizarEstadoDocumento(campo) {
             const estado = campo ? document.getElementById(`${campo.id}_status`) : null;
             const archivo = campo && campo.files && campo.files[0];
@@ -1779,8 +1915,11 @@
             estado.classList.add('has-file');
             const valor = estado.querySelector('.status-value');
             const icono = estado.querySelector('.status-icon');
+            const etiqueta = campo.id === 'id_certificado_bancario'
+                ? 'Certificado seleccionado'
+                : (campo.id === 'id_contrato_actual' ? 'Contrato seleccionado' : 'Archivo seleccionado');
             if (valor) {
-                valor.textContent = archivo.name;
+                valor.textContent = `${etiqueta}: ${archivo.name}`;
             }
             if (icono) {
                 icono.textContent = 'OK';
@@ -1852,7 +1991,12 @@
             });
         });
 
-        ['id_documento_identidad_frontal', 'id_documento_identidad_reverso'].forEach(function (idCampo) {
+        [
+            'id_documento_identidad_frontal',
+            'id_documento_identidad_reverso',
+            'id_certificado_bancario',
+            'id_contrato_actual',
+        ].forEach(function (idCampo) {
             const campo = document.getElementById(idCampo);
             if (campo) {
                 campo.addEventListener('change', function () {

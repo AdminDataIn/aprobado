@@ -128,6 +128,44 @@ El dominio raiz `aprobado.com.co` no debe exponer rutas de contractors.
 `/simular/` ya no debe usarse como entrada publica directa. Si no existe una
 pre-solicitud asociada, la vista redirige a `/solicitar/`.
 
+## QA Local
+
+Para probar el flujo local de Prestadores de Servicios sin depender de Google
+OAuth ni de configuracion manual en admin, use:
+
+```bash
+python manage.py seed_prestadores_qa_local --host contratistas.localhost:8000
+```
+
+El comando es idempotente y crea o actualiza:
+
+- `ConfiguracionPortalContratistas` activa para el host indicado.
+- organizacion, branding y producto legacy minimo para compatibilidad interna.
+- `Empresa Demo Prestadores SAS` con convenio activo.
+- usuarios demo:
+  - `admin@aprobado.local`
+  - `solicitante@aprobado.local`
+  - `pagador@aprobado.local`
+
+En `DEBUG=True` el comando imprime la contrasena local demo. No envia correos,
+no crea solicitudes, no consulta DataCredito, no crea creditos y no crea pagos.
+
+Para probar como prestador use un usuario normal, por ejemplo
+`solicitante@aprobado.local`. No cree manualmente un `Perfil contratista` para
+el solicitante final: esos perfiles son roles internos de operacion
+(`viewer`, `operator`, `manager`, `owner`) y no representan al usuario publico.
+
+Flujo local recomendado:
+
+1. Abra `http://contratistas.localhost:8000/login/`.
+2. Ingrese con correo y contrasena local.
+3. Abra `http://contratistas.localhost:8000/solicitar/`.
+4. Seleccione `Empresa Demo Prestadores SAS` desde el buscador de empresas.
+
+El login de Prestadores puede probarse con correo y contrasena. Google queda
+oculto en este flujo local para evitar errores de OAuth por configuracion de
+subdominio, sin afectar el login general de libranza.
+
 ## Simulacion Financiera Prestadores V2
 
 La simulacion financiera de prestadores se ejecuta desde:
@@ -1162,11 +1200,35 @@ La capacidad contractual productiva no usa la IA como fuente definitiva. Usa los
 datos confirmados por el usuario y la metadata segura solo para marcar bloqueos,
 advertencias y `requiere_revision_manual`.
 
+Cada analisis contractual guarda `analysis_input_hash` y `analysis_generated_at`
+en la metadata segura. Si despues del analisis el usuario modifica documento,
+empresa, fechas, valores contractuales o el PDF del contrato, el backend marca
+el analisis anterior como obsoleto, limpia el bloqueo viejo como fuente vigente,
+exige reanalisis y registra una huella de comportamiento digital en
+`TimelinePrestador` con metadata sanitizada. Esa huella queda disponible para el
+componente futuro de comportamiento digital del score, sin recalcular score en
+este PR.
+
 Antes de enviar el PDF a OpenAI, el usuario debe aceptar la autorizacion de
 tratamiento de datos del analisis contractual. Si no la acepta, el endpoint no
 llama OpenAI y responde:
 
 `Debes aceptar la autorizacion de tratamiento de datos antes de analizar el contrato.`
+
+## Login Google en Prestadores
+
+El boton de Google solo se muestra si existe una `SocialApp` de Google asociada
+al `Site` activo. Si no existe configuracion, el login por correo/contrasena
+sigue disponible y no se lanza `DoesNotExist`.
+
+Callbacks esperados para Google Console:
+
+- local: `http://contratistas.localhost:8000/accounts/google/login/callback/`
+- produccion: `https://contratistas.aprobado.com.co/accounts/google/login/callback/`
+
+Para pruebas UAT/local no imprimir ni versionar `client_secret`. Si Google falla
+con `SocialApp` existente, revisar asociacion al `Site`, dominio del `Site`,
+redirect URI autorizada y preservacion de `next=/solicitar/`.
 
 Usuario admin:
 

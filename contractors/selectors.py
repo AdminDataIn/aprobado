@@ -1,3 +1,4 @@
+from django.conf import settings
 from contractors.models import (
     ContractorApplication,
     ContractorApplicationDocument,
@@ -23,13 +24,49 @@ def obtener_organizacion_por_subdominio(subdominio):
 
 
 def obtener_configuracion_portal_contratistas_por_host(host):
-    host = ConfiguracionPortalContratistas.normalizar_host(host)
-    if not host:
+    host_recibido = _normalizar_host_recibido(host)
+    if not host_recibido:
         return None
-    return ConfiguracionPortalContratistas.objects.filter(
-        host=host,
-        activo=True,
-    ).first()
+
+    candidatos = []
+    host_sin_puerto = ConfiguracionPortalContratistas.normalizar_host(host_recibido)
+    for candidato in (host_recibido, host_sin_puerto):
+        if candidato and candidato not in candidatos:
+            candidatos.append(candidato)
+
+    for candidato in candidatos:
+        configuracion = ConfiguracionPortalContratistas.objects.filter(
+            host=candidato,
+            activo=True,
+        ).first()
+        if configuracion:
+            return configuracion
+
+    if getattr(settings, 'DEBUG', False):
+        configuracion_slug = obtener_configuracion_portal_contratistas_por_slug('contratistas')
+        if configuracion_slug:
+            return configuracion_slug
+
+        activas = list(ConfiguracionPortalContratistas.objects.filter(activo=True).order_by('id')[:2])
+        if len(activas) == 1:
+            return activas[0]
+
+    return None
+
+
+def listar_hosts_configuracion_portal_contratistas_activos():
+    return list(
+        ConfiguracionPortalContratistas.objects
+        .filter(activo=True)
+        .order_by('host')
+        .values_list('host', flat=True)
+    )
+
+
+def _normalizar_host_recibido(host):
+    host = (host or '').strip().lower()
+    host = host.removeprefix('https://').removeprefix('http://')
+    return host.split('/', 1)[0]
 
 
 def obtener_configuracion_portal_contratistas_por_slug(slug):
