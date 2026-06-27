@@ -311,31 +311,52 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
             <div class="libranza-presence-shell">
                 <div class="libranza-presence-copy">
                     <span class="libranza-eyebrow">Presencia nacional</span>
-                    <h2 class="libranza-section-title">Operación con impacto <span class="highlight-cyan">zonal</span></h2>
+                    <h2 class="libranza-section-title">Empresas que ya <span class="highlight-cyan">confían en nosotros</span></h2>
                     <p>
-                        Trabajamos con empresas aliadas registradas en Aprobado y usamos sus datos geográficos
-                        reales para entender cobertura, operación y crecimiento territorial.
+                        Trabajamos con aliados en todo el país. Conoce dónde estamos presentes y cómo
+                        crecemos junto a empresas de diferentes regiones de Colombia.
                     </p>
-                </div>
-                <div class="libranza-presence-metrics">
-                    {% if landing_presencia.con_ubicacion_registrada %}
-                    <div class="libranza-presence-metric">
-                        <strong>{{ landing_presencia.con_ubicacion_registrada }}</strong>
-                        <span>empresas con ubicación</span>
+                    <div class="libranza-presence-metrics" aria-label="Métricas de presencia nacional">
+                        <div class="libranza-presence-metric">
+                            <strong>{{ landing_presencia.con_ubicacion_registrada|default:0 }}</strong>
+                            <span>empresas con ubicación</span>
+                        </div>
+                        <div class="libranza-presence-metric">
+                            <strong>{{ landing_presencia.departamentos_con_presencia|length }}</strong>
+                            <span>departamentos</span>
+                        </div>
+                        <div class="libranza-presence-metric">
+                            <strong>{{ landing_presencia.ciudades_con_presencia|length }}</strong>
+                            <span>ciudades y municipios</span>
+                        </div>
+                        <div class="libranza-presence-metric is-muted">
+                            <strong>{{ landing_presencia.sin_ubicacion_registrada|default:0 }}</strong>
+                            <span>empresas sin ubicación</span>
+                        </div>
                     </div>
-                    <div class="libranza-presence-metric">
-                        <strong>{{ landing_presencia.departamentos_con_presencia|length }}</strong>
-                        <span>departamentos</span>
-                    </div>
-                    <div class="libranza-presence-metric">
-                        <strong>{{ landing_presencia.ciudades_con_presencia|length }}</strong>
-                        <span>ciudades y municipios</span>
-                    </div>
-                    {% else %}
-                    <div class="libranza-presence-empty">
-                        Estamos consolidando la información territorial de nuestras empresas aliadas para publicarla con datos verificados.
+                    {% if landing_presencia.top_zonas %}
+                    <div class="libranza-active-cities">
+                        <p>Ciudades activas</p>
+                        <div>
+                            {% for zona in landing_presencia.top_zonas|slice:":8" %}
+                            <span>{{ zona.ciudad|default:zona.municipio|default:zona.departamento }}</span>
+                            {% endfor %}
+                        </div>
                     </div>
                     {% endif %}
+                </div>
+                <div class="libranza-map-card" aria-label="Mapa zonal de presencia en Colombia">
+                    {{ landing_presencia.mapa_ubicaciones|json_script:"libranza-presence-map-data" }}
+                    <div
+                        class="libranza-map-frame"
+                        id="libranza-colombia-map"
+                        data-geojson-local-url="{% static 'maps/colombia.geo.json' %}"
+                        aria-label="Mapa real de Colombia con presencia de empresas"
+                    >
+                        <div class="libranza-map-loading" id="libranza-map-loading">Cargando mapa de Colombia...</div>
+                        <div class="libranza-map-tooltip" id="libranza-map-tooltip" role="status" aria-live="polite"></div>
+                    </div>
+                    <p class="libranza-map-source">Fuente cartográfica local: DANE / datos.gov.co</p>
                 </div>
             </div>
         </div>
@@ -349,18 +370,47 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                 <h2 class="libranza-section-title">Empresas que confían en <span class="highlight-cyan">Aprobado</span></h2>
                 <p class="libranza-section-description" style="margin-bottom:0;max-width:760px;">Organizaciones con convenio activo que hacen parte de nuestra operación de libranza.</p>
             </div>
-            <div class="libranza-trusted-grid" aria-label="Empresas que confiaron en Aprobado">
-                {% for company in landing_trusted_companies %}
-                <div class="libranza-trusted-logo-card">
-                    {% if company.logo_url %}
-                    <img src="{{ company.logo_url }}" alt="{{ company.nombre }}" class="libranza-trusted-logo{% if company.nombre == 'DataIn' or company.nombre == 'Datain' %} is-datain{% endif %}" loading="lazy">
-                    {% else %}
-                    <span class="libranza-trusted-initials">{{ company.iniciales }}</span>
-                    {% endif %}
-                    <strong>{{ company.nombre }}</strong>
-                    {% if company.ubicacion %}<small>{{ company.ubicacion }}</small>{% endif %}
+            <div class="libranza-logo-rail{% if landing_trusted_companies|length <= 4 %} is-static{% endif %}" aria-label="Empresas activas que confían en Aprobado">
+                {% if landing_trusted_companies|length <= 4 %}
+                <div class="libranza-logo-static-grid">
+                    {% for company in landing_trusted_companies %}
+                        {% include "libranza/partials/company_logo_item.html" with company=company %}
+                    {% endfor %}
                 </div>
-                {% endfor %}
+                {% else %}
+                <div class="libranza-logo-rail-row">
+                    <div class="libranza-logo-rail-track">
+                        {% for company in landing_trusted_companies %}
+                            {% if forloop.counter|divisibleby:2 %}
+                            {% include "libranza/partials/company_logo_item.html" with company=company %}
+                            {% endif %}
+                        {% endfor %}
+                        <span class="libranza-logo-rail-repeat" aria-hidden="true">
+                            {% for company in landing_trusted_companies %}
+                                {% if forloop.counter|divisibleby:2 %}
+                                {% include "libranza/partials/company_logo_item.html" with company=company ocultar_nombre=True %}
+                                {% endif %}
+                            {% endfor %}
+                        </span>
+                    </div>
+                </div>
+                <div class="libranza-logo-rail-row is-reverse">
+                    <div class="libranza-logo-rail-track">
+                        {% for company in landing_trusted_companies %}
+                            {% if not forloop.counter|divisibleby:2 %}
+                            {% include "libranza/partials/company_logo_item.html" with company=company %}
+                            {% endif %}
+                        {% endfor %}
+                        <span class="libranza-logo-rail-repeat" aria-hidden="true">
+                            {% for company in landing_trusted_companies %}
+                                {% if not forloop.counter|divisibleby:2 %}
+                                {% include "libranza/partials/company_logo_item.html" with company=company ocultar_nombre=True %}
+                                {% endif %}
+                            {% endfor %}
+                        </span>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
     </section>
@@ -386,23 +436,6 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
             {% else %}
             <p class="libranza-section-description" style="margin-top:1.5rem;margin-bottom:0;">Estamos preparando la visualización pública de respaldos institucionales con assets verificados.</p>
             {% endif %}
-        </div>
-    </section>
-
-    <section class="libranza-testimonials-section" id="testimonios">
-        <div class="libranza-container">
-            <div class="libranza-testimonials-shell">
-                <div>
-                    <span class="libranza-eyebrow">Testimonios</span>
-                    <h2 class="libranza-section-title" style="text-align:left;margin-bottom:0.75rem;">Historias reales, sección lista para activarse</h2>
-                    <p class="libranza-section-description" style="text-align:left;max-width:none;">Dejamos preparada la estructura para publicar testimonios validados de clientes y empresas, sin inventar contenido ni forzar prueba social antes de tiempo.</p>
-                </div>
-                <div class="libranza-testimonials-placeholder">
-                    <i class="bi bi-chat-quote"></i>
-                    <strong>Espacio reservado para testimonios</strong>
-                    <span>Cuando tengamos casos validados, aquí se mostrarán relatos breves con nombre, empresa y resultado.</span>
-                </div>
-            </div>
         </div>
     </section>
 
@@ -641,14 +674,14 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
 
     .libranza-presence-shell {
         display: grid;
-        grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
-        gap: 2rem;
+        grid-template-columns: minmax(300px, 0.88fr) minmax(560px, 1.12fr);
+        gap: 2.3rem;
         align-items: center;
-        padding: 2rem;
-        border-radius: 1.4rem;
-        border: 1px solid rgba(15, 23, 42, 0.08);
-        background: linear-gradient(135deg, #f8fafc 0%, #eefbff 100%);
-        box-shadow: 0 18px 48px rgba(15, 23, 42, 0.06);
+        padding: 3rem;
+        border-radius: 1.25rem;
+        border: 1px solid rgba(13, 181, 207, 0.16);
+        background: #ffffff;
+        box-shadow: 0 18px 44px rgba(15, 23, 42, 0.07);
     }
 
     .libranza-presence-copy .libranza-section-title {
@@ -665,18 +698,19 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
 
     .libranza-presence-metrics {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 0.8rem;
+        margin-top: 1.4rem;
     }
 
     .libranza-presence-metric,
     .libranza-presence-empty {
-        min-height: 126px;
+        min-height: 116px;
         display: flex;
         flex-direction: column;
         justify-content: center;
         gap: 0.35rem;
-        padding: 1rem;
+        padding: 1.25rem;
         border-radius: 1rem;
         background: #ffffff;
         border: 1px solid rgba(14, 165, 233, 0.18);
@@ -699,6 +733,174 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         color: #64748b;
         font-weight: 700;
         font-size: 0.88rem;
+    }
+
+    .libranza-presence-metric.is-muted {
+        border-color: rgba(148, 163, 184, 0.24);
+        background: rgba(255, 255, 255, 0.72);
+    }
+
+    .libranza-active-cities {
+        margin-top: 1.15rem;
+    }
+
+    .libranza-active-cities p {
+        margin: 0 0 0.45rem;
+        color: #48677c;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+    }
+
+    .libranza-active-cities div {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+    }
+
+    .libranza-active-cities span {
+        display: inline-flex;
+        padding: 0.28rem 0.75rem;
+        border-radius: 999px;
+        background: #d8f6fb;
+        color: #075c78;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .libranza-map-card {
+        position: relative;
+        min-height: 520px;
+        padding: 0;
+        border-radius: 0;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        overflow: visible;
+    }
+
+    .libranza-map-frame {
+        position: relative;
+        width: 100%;
+        min-height: 500px;
+        background: transparent;
+        overflow: hidden;
+    }
+
+    .libranza-map-loading {
+        color: #0f4f5e;
+        font-weight: 800;
+        font-size: 0.95rem;
+    }
+
+    .libranza-colombia-map-svg {
+        width: 100%;
+        height: auto;
+        display: block;
+        overflow: visible;
+        filter: drop-shadow(0 18px 28px rgba(6, 145, 178, 0.10));
+    }
+
+    .libranza-map-country {
+        filter: drop-shadow(0 14px 26px rgba(6, 145, 178, 0.10));
+    }
+
+    .libranza-map-department {
+        fill: #e7f8fb;
+        stroke: #a7dce8;
+        stroke-width: 0.9;
+        vector-effect: non-scaling-stroke;
+        transition: fill 0.2s ease, stroke 0.2s ease, opacity 0.2s ease;
+    }
+
+    .libranza-map-department.is-active {
+        fill: #bdeef7;
+        stroke: #2bb7d1;
+        stroke-width: 1.1;
+    }
+
+    .libranza-map-point {
+        fill: #0677a3;
+        stroke: #ffffff;
+        stroke-width: 2;
+        filter: drop-shadow(0 8px 16px rgba(6, 119, 163, 0.26));
+    }
+
+    .libranza-map-point-glow {
+        fill: #13b8d0;
+        opacity: 0.18;
+        animation: libranzaMapPulse 2s ease-in-out infinite;
+    }
+
+    .libranza-map-point-group:hover .libranza-map-point,
+    .libranza-map-point-group:focus .libranza-map-point {
+        fill: #0a192f;
+    }
+
+    .libranza-map-label {
+        fill: #0a192f;
+        font-size: 0.62rem;
+        font-weight: 800;
+        paint-order: stroke;
+        stroke: rgba(255, 255, 255, 0.92);
+        stroke-width: 3px;
+        stroke-linejoin: round;
+        pointer-events: none;
+    }
+
+    @keyframes libranzaMapPulse {
+        0%, 100% { opacity: 0.18; transform: scale(1); }
+        50% { opacity: 0.34; transform: scale(1.22); }
+    }
+
+    .libranza-map-tooltip {
+        position: absolute;
+        z-index: 5;
+        min-width: 150px;
+        max-width: 220px;
+        padding: 0.7rem 0.85rem;
+        border-radius: 0.85rem;
+        background: rgba(10, 25, 47, 0.96);
+        color: #ffffff;
+        box-shadow: 0 16px 34px rgba(15, 23, 42, 0.22);
+        font-size: 0.82rem;
+        line-height: 1.35;
+        pointer-events: none;
+        opacity: 0;
+        transform: translate(-50%, calc(-100% - 18px));
+        transition: opacity 0.15s ease;
+    }
+
+    .libranza-map-tooltip strong {
+        display: block;
+        color: #22d3ee;
+        font-size: 0.88rem;
+        margin-bottom: 0.15rem;
+    }
+
+    .libranza-map-zones {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        margin-top: 0.75rem;
+    }
+
+    .libranza-map-zones span {
+        display: inline-flex;
+        padding: 0.35rem 0.72rem;
+        border-radius: 999px;
+        background: #d8f6fb;
+        color: #075c78;
+        font-weight: 800;
+        font-size: 0.78rem;
+    }
+
+    .libranza-map-source {
+        margin: 0.25rem 0 0;
+        color: #6b8da0;
+        font-size: 0.68rem;
+        text-align: center;
     }
 
     .libranza-trusted-head,
@@ -746,6 +948,98 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         scroll-snap-align: start;
     }
 
+    .libranza-logo-rail {
+        --logo-rail-duration: 55s;
+        --logo-rail-duration-alt: 65s;
+        display: grid;
+        gap: 1rem;
+        margin-top: 2rem;
+        padding: 1.1rem 0;
+        overflow: hidden;
+        border-radius: 1.4rem;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.05);
+        -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 7%, #000 93%, transparent 100%);
+        mask-image: linear-gradient(90deg, transparent 0, #000 7%, #000 93%, transparent 100%);
+    }
+
+    .libranza-logo-rail.is-static {
+        overflow-x: visible;
+        -webkit-mask-image: none;
+        mask-image: none;
+    }
+
+    .libranza-logo-static-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        padding: 0 1rem;
+    }
+
+    .libranza-logo-static-grid .libranza-logo-item {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .libranza-logo-rail-row {
+        overflow: hidden;
+    }
+
+    .libranza-logo-rail-track {
+        width: max-content;
+        display: flex;
+        gap: 1rem;
+        align-items: stretch;
+        animation: libranzaLogoRail var(--logo-rail-duration) linear infinite;
+        padding: 0 1rem;
+    }
+
+    .libranza-logo-rail-row.is-reverse .libranza-logo-rail-track {
+        animation-direction: reverse;
+        animation-duration: var(--logo-rail-duration-alt);
+    }
+
+    .libranza-logo-rail:hover .libranza-logo-rail-track {
+        animation-play-state: paused;
+    }
+
+    .libranza-logo-rail-repeat {
+        display: inline-flex;
+        gap: 1rem;
+    }
+
+    .libranza-logo-item {
+        min-width: 220px;
+        height: 110px;
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+        padding: 0.95rem 1.15rem;
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.96);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+    }
+
+    .libranza-logo-item strong {
+        max-width: 190px;
+        color: #0f172a;
+        font-size: 0.88rem;
+        text-align: center;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    @keyframes libranzaLogoRail {
+        from { transform: translateX(0); }
+        to { transform: translateX(-50%); }
+    }
+
     .libranza-trusted-logo-card strong {
         color: #0f172a;
         font-size: 0.92rem;
@@ -760,8 +1054,8 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
     }
 
     .libranza-trusted-logo {
-        max-width: 170px;
-        max-height: 44px;
+        max-width: 172px;
+        max-height: 70px;
         width: auto;
         height: auto;
         object-fit: contain;
@@ -769,8 +1063,8 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
     }
 
     .libranza-trusted-logo.is-datain {
-        max-width: 208px;
-        max-height: 58px;
+        max-width: 188px;
+        max-height: 74px;
     }
 
     .libranza-trusted-initials {
@@ -789,7 +1083,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
 
     .libranza-backers-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap: 1rem;
         margin-top: 2rem;
     }
@@ -902,17 +1196,29 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         }
 
         .libranza-presence-metrics {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .libranza-map-card {
+            min-height: 420px;
+        }
+
+        .libranza-map-frame {
+            min-height: 350px;
+        }
+
+        .libranza-colombia-map-svg {
+            height: 340px;
         }
 
         .libranza-trusted-logo {
             max-width: 148px;
-            max-height: 40px;
+            max-height: 58px;
         }
 
         .libranza-trusted-logo.is-datain {
             max-width: 176px;
-            max-height: 50px;
+            max-height: 64px;
         }
     }
 
@@ -920,6 +1226,37 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         .libranza-trusted-grid {
             grid-template-columns: 1fr;
             padding: 0.75rem;
+        }
+
+        .libranza-presence-metrics {
+            grid-template-columns: 1fr;
+        }
+
+        .libranza-logo-item {
+            min-width: 156px;
+            height: 84px;
+            padding: 0.85rem;
+        }
+
+        .libranza-trusted-logo {
+            max-width: 128px;
+            max-height: 48px;
+        }
+
+        .libranza-logo-item strong {
+            max-width: 138px;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .libranza-logo-rail-track {
+            animation: none;
+        }
+
+        .libranza-logo-rail {
+            overflow-x: auto;
+            -webkit-mask-image: none;
+            mask-image: none;
         }
     }
 
@@ -1440,6 +1777,239 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
      JAVASCRIPT PARA FUNCIONALIDAD INTERACTIVA
      ============================================ -->
 <script>
+    function normalizarTextoMapa(valor) {
+        return String(valor || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+    }
+
+    function datosPresenciaMapa() {
+        const nodoDatos = document.getElementById('libranza-presence-map-data');
+        if (!nodoDatos) {
+            return [];
+        }
+        try {
+            const datos = JSON.parse(nodoDatos.textContent || '[]');
+            return Array.isArray(datos) ? datos : [];
+        } catch (error) {
+            return [];
+        }
+    }
+
+    function crearElementoSvg(nombre) {
+        return document.createElementNS('http://www.w3.org/2000/svg', nombre);
+    }
+
+    function nombreDepartamentoMapa(feature) {
+        const propiedades = feature && feature.properties ? feature.properties : {};
+        return propiedades.DPTO_CNMBR || propiedades.NOMBRE_DPT || propiedades.name || propiedades.NAME || '';
+    }
+
+    function proyectarCoordenadaMapa(coordenada, ancho, alto) {
+        const longitud = Number(coordenada[0]);
+        const latitud = Number(coordenada[1]);
+        const limites = {
+            minLon: -81.9,
+            maxLon: -66.0,
+            minLat: -4.7,
+            maxLat: 13.5,
+        };
+        const paddingX = Math.max(12, ancho * 0.03);
+        const paddingY = Math.max(12, alto * 0.03);
+        const mercatorY = function (lat) {
+            const radianes = lat * Math.PI / 180;
+            return Math.log(Math.tan(Math.PI / 4 + radianes / 2));
+        };
+        const mercatorMin = mercatorY(limites.minLat);
+        const mercatorMax = mercatorY(limites.maxLat);
+        const mercatorActual = mercatorY(latitud);
+        const x = paddingX + ((longitud - limites.minLon) / (limites.maxLon - limites.minLon)) * (ancho - paddingX * 2);
+        const y = paddingY + ((mercatorMax - mercatorActual) / (mercatorMax - mercatorMin)) * (alto - paddingY * 2);
+        return [x, y];
+    }
+
+    function construirPathMapa(geometry, ancho, alto) {
+        if (!geometry || !geometry.coordinates) {
+            return '';
+        }
+        const poligonos = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
+        return poligonos.map(function (poligono) {
+            return poligono.map(function (anillo) {
+                return anillo.map(function (coordenada, indice) {
+                    const punto = proyectarCoordenadaMapa(coordenada, ancho, alto);
+                    return `${indice === 0 ? 'M' : 'L'}${punto[0].toFixed(1)} ${punto[1].toFixed(1)}`;
+                }).join(' ') + ' Z';
+            }).join(' ');
+        }).join(' ');
+    }
+
+    function moverTooltipMapa(evento, contenedor, tooltip) {
+        const rect = contenedor.getBoundingClientRect();
+        const anchoTooltip = tooltip.offsetWidth || 180;
+        const altoTooltip = tooltip.offsetHeight || 76;
+        let x = (evento.clientX || rect.left + rect.width / 2) - rect.left + 14;
+        let y = (evento.clientY || rect.top + rect.height / 2) - rect.top - 10;
+        if (x + anchoTooltip > rect.width - 10) {
+            x = x - anchoTooltip - 28;
+        }
+        if (y + altoTooltip > rect.height - 10) {
+            y = y - altoTooltip - 10;
+        }
+        tooltip.style.left = `${Math.max(10, x)}px`;
+        tooltip.style.top = `${Math.max(10, y)}px`;
+    }
+
+    function renderizarMapaPresenciaNacional() {
+        const contenedor = document.getElementById('libranza-colombia-map');
+        if (!contenedor || contenedor.dataset.rendered === 'true') {
+            return;
+        }
+        contenedor.dataset.rendered = 'true';
+        const urlGeojson = contenedor.dataset.geojsonLocalUrl;
+        const cargando = document.getElementById('libranza-map-loading');
+        const tooltip = document.getElementById('libranza-map-tooltip');
+        const ubicaciones = datosPresenciaMapa().filter(function (ubicacion) {
+            return ubicacion && ubicacion.latitud !== null && ubicacion.longitud !== null;
+        });
+        if (!urlGeojson) {
+            if (cargando) {
+                cargando.textContent = 'No fue posible cargar el mapa de Colombia.';
+            }
+            return;
+        }
+
+        const ancho = Math.max(contenedor.clientWidth || 560, 420);
+        const alto = Math.max(Math.min(ancho * 1.12, 640), 500);
+        const svg = crearElementoSvg('svg');
+        svg.setAttribute('class', 'libranza-colombia-map-svg');
+        svg.setAttribute('viewBox', `0 0 ${ancho} ${alto}`);
+        svg.setAttribute('role', 'img');
+        svg.setAttribute('aria-label', 'Mapa de Colombia con presencia real de empresas aliadas');
+        contenedor.appendChild(svg);
+
+        fetch(urlGeojson, { credentials: 'same-origin' })
+            .then(function (respuesta) {
+                if (!respuesta.ok) {
+                    throw new Error('geojson_no_disponible');
+                }
+                return respuesta.json();
+            })
+            .then(function (geojson) {
+                if (cargando) {
+                    cargando.remove();
+                }
+                const maxEmpresas = Math.max.apply(null, ubicaciones.map(function (ubicacion) {
+                    return Number(ubicacion.empresas || 1);
+                }).concat([1]));
+                const departamentosActivos = new Set(ubicaciones.map(function (ubicacion) {
+                    return normalizarTextoMapa(ubicacion.departamento);
+                }));
+                const gruposPorDepartamento = new Map();
+                ubicaciones.forEach(function (ubicacion) {
+                    const slug = normalizarTextoMapa(ubicacion.departamento);
+                    gruposPorDepartamento.set(slug, (gruposPorDepartamento.get(slug) || 0) + Number(ubicacion.empresas || 0));
+                });
+
+                const capa = crearElementoSvg('g');
+                capa.setAttribute('class', 'libranza-map-country');
+                svg.appendChild(capa);
+
+                (geojson.features || []).forEach(function (feature) {
+                    const nombre = nombreDepartamentoMapa(feature);
+                    const slug = normalizarTextoMapa(nombre);
+                    const activo = departamentosActivos.has(slug);
+                    const path = crearElementoSvg('path');
+                    path.setAttribute('class', `libranza-map-department${activo ? ' is-active' : ''}`);
+                    path.setAttribute('data-departamento', slug);
+                    path.setAttribute('d', construirPathMapa(feature.geometry, ancho, alto));
+                    const title = crearElementoSvg('title');
+                    const total = gruposPorDepartamento.get(slug) || 0;
+                    title.textContent = total ? `${nombre}: ${total} empresa${total === 1 ? '' : 's'} aliada${total === 1 ? '' : 's'}` : nombre;
+                    path.appendChild(title);
+                    capa.appendChild(path);
+                });
+
+                const puntos = crearElementoSvg('g');
+                puntos.setAttribute('class', 'libranza-map-points');
+                capa.appendChild(puntos);
+
+                ubicaciones.forEach(function (ubicacion) {
+                    const ciudad = ubicacion.ciudad || ubicacion.municipio || ubicacion.departamento || 'Ubicacion registrada';
+                    const punto = proyectarCoordenadaMapa([Number(ubicacion.longitud), Number(ubicacion.latitud)], ancho, alto);
+                    const radio = Math.max(5, Math.min(15, 5 + (Number(ubicacion.empresas || 1) / maxEmpresas) * 9));
+                    const grupo = crearElementoSvg('g');
+                    grupo.setAttribute('class', 'libranza-map-point-group');
+                    grupo.setAttribute('tabindex', '0');
+                    grupo.setAttribute('aria-label', `${ciudad}, ${ubicacion.departamento}: ${ubicacion.empresas} empresa${ubicacion.empresas === 1 ? '' : 's'} aliada${ubicacion.empresas === 1 ? '' : 's'}`);
+                    grupo.setAttribute('transform', `translate(${punto[0].toFixed(1)}, ${punto[1].toFixed(1)})`);
+
+                    const halo = crearElementoSvg('circle');
+                    halo.setAttribute('class', 'libranza-map-point-glow');
+                    halo.setAttribute('r', (radio + 7).toFixed(1));
+                    grupo.appendChild(halo);
+
+                    const marcador = crearElementoSvg('circle');
+                    marcador.setAttribute('class', 'libranza-map-point');
+                    marcador.setAttribute('r', radio.toFixed(1));
+                    grupo.appendChild(marcador);
+
+                    const etiqueta = crearElementoSvg('text');
+                    etiqueta.setAttribute('class', 'libranza-map-label');
+                    etiqueta.setAttribute('x', (radio + 5).toFixed(1));
+                    etiqueta.setAttribute('y', '4');
+                    etiqueta.textContent = ciudad;
+                    grupo.appendChild(etiqueta);
+
+                    const title = crearElementoSvg('title');
+                    title.textContent = `${ciudad}, ${ubicacion.departamento} - ${ubicacion.empresas} empresa${ubicacion.empresas === 1 ? '' : 's'} aliada${ubicacion.empresas === 1 ? '' : 's'}`;
+                    grupo.appendChild(title);
+
+                    grupo.addEventListener('mouseenter', function (evento) {
+                        if (!tooltip) {
+                            return;
+                        }
+                        tooltip.innerHTML = `<strong>${ciudad}, ${ubicacion.departamento || 'Colombia'}</strong><span>${ubicacion.empresas} empresa${ubicacion.empresas === 1 ? '' : 's'} aliada${ubicacion.empresas === 1 ? '' : 's'}</span>`;
+                        moverTooltipMapa(evento, contenedor, tooltip);
+                        tooltip.style.opacity = '1';
+                    });
+                    grupo.addEventListener('focus', function (evento) {
+                        if (!tooltip) {
+                            return;
+                        }
+                        tooltip.innerHTML = `<strong>${ciudad}, ${ubicacion.departamento || 'Colombia'}</strong><span>${ubicacion.empresas} empresa${ubicacion.empresas === 1 ? '' : 's'} aliada${ubicacion.empresas === 1 ? '' : 's'}</span>`;
+                        moverTooltipMapa(evento, contenedor, tooltip);
+                        tooltip.style.opacity = '1';
+                    });
+                    grupo.addEventListener('mousemove', function (evento) {
+                        if (!tooltip) {
+                            return;
+                        }
+                        moverTooltipMapa(evento, contenedor, tooltip);
+                    });
+                    grupo.addEventListener('mouseleave', function () {
+                        if (tooltip) {
+                            tooltip.style.opacity = '0';
+                        }
+                    });
+                    grupo.addEventListener('blur', function () {
+                        if (tooltip) {
+                            tooltip.style.opacity = '0';
+                        }
+                    });
+
+                    puntos.appendChild(grupo);
+                });
+            })
+            .catch(function () {
+                if (cargando) {
+                    cargando.textContent = 'No fue posible cargar el mapa de Colombia.';
+                }
+            });
+    }
+
     // Función para expandir/colapsar FAQs
     function toggleFAQ(button) {
         const faqItem = button.parentElement;
@@ -1470,6 +2040,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
             });
         });
 
+        renderizarMapaPresenciaNacional();
     });
 </script>
 

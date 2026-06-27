@@ -3,10 +3,11 @@
 from django.shortcuts import render, redirect
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.contrib.sites.models import Site
 from django.core.mail import EmailMultiAlternatives
 from django.contrib.staticfiles import finders
 from django.template.loader import render_to_string
-from allauth.socialaccount.models import SocialAccount
+from allauth.socialaccount.models import SocialAccount, SocialApp
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib import messages
 from django.contrib.auth import logout, login as auth_login
@@ -108,6 +109,14 @@ def _build_google_login_url(next_url):
         'next': next_url,
     })
     return f"/accounts/google/login/?{query}"
+
+
+def _google_socialapp_disponible(request):
+    try:
+        site = Site.objects.get_current(request)
+        return SocialApp.objects.filter(provider='google', sites=site).exists()
+    except Exception:
+        return False
 
 
 def _get_token_invalid_reason(access_token):
@@ -532,7 +541,7 @@ def _build_landing_backers():
     respaldos = [
         {
             'nombre': 'DataCredito Experian',
-            'logo_path': 'images/respaldos/datacredito-experian.svg',
+            'logo_path': 'images/respaldos/datacredito-experian.png',
             'descripcion': 'Información para fortalecer validaciones de riesgo cuando aplique.',
         },
         {
@@ -542,8 +551,13 @@ def _build_landing_backers():
         },
         {
             'nombre': 'Orinoco TIC',
-            'logo_path': 'images/respaldos/orinoco-tic.svg',
+            'logo_path': 'images/respaldos/orinoco-tic.png',
             'descripcion': 'Tecnología para soportar operación digital y trazabilidad.',
+        },
+        {
+            'nombre': 'Seguros SURA',
+            'logo_path': 'images/respaldos/seguros-sura.svg',
+            'descripcion': 'Seguro de vida deudores para acompañar el respaldo del crédito.',
         },
     ]
     return [
@@ -658,6 +672,7 @@ class ProductLoginView(LoginView):
         context = super().get_context_data(**kwargs)
         next_url = _get_safe_next_url(self.request, self.next_default_url)
         context['google_login_url'] = _build_google_login_url(next_url)
+        context.setdefault('mostrar_login_google', _google_socialapp_disponible(self.request))
         context['next_url'] = next_url
         if getattr(self, 'registration_url_name', None):
             context['registration_url'] = _with_next(
@@ -825,6 +840,7 @@ class ProductRegisterView(TemplateView):
             'login_url': _with_next(reverse(self.login_url_name), next_url),
             'back_url': reverse(self.landing_url_name),
             'google_login_url': _build_google_login_url(next_url),
+            'mostrar_login_google': _google_socialapp_disponible(self.request),
             'next_url': next_url,
         }
 
