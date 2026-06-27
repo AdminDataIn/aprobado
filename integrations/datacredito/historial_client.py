@@ -1,5 +1,6 @@
 import requests
 import uuid
+from zoneinfo import ZoneInfo
 
 from django.utils import timezone
 
@@ -15,6 +16,8 @@ from integrations.datacredito.settings import obtener_configuracion_datacredito
 
 def consultar_historial_credito(entrada: EntradaHistorialCredito, session=None):
     configuracion = validar_consumo_real_habilitado(obtener_configuracion_datacredito())
+    if configuracion.parametros_historial_error:
+        raise DatacreditoConfigError(configuracion.parametros_historial_error)
     faltantes = (
         configuracion.credenciales_historial.validar_para_token()
         + configuracion.credenciales_servicio_historial.validar_para_historial()
@@ -72,10 +75,10 @@ def consultar_historial_credito(entrada: EntradaHistorialCredito, session=None):
 
 def _construir_payload_historial(entrada, configuracion):
     request_uuid = entrada.request_uuid or str(uuid.uuid4())
-    fecha_hora = entrada.fecha_hora or timezone.now().isoformat()
+    fecha_hora = entrada.fecha_hora or timezone.now().astimezone(ZoneInfo('America/Bogota')).isoformat()
     canal_nombre = entrada.canal_origen_nombre or configuracion.credenciales_servicio_historial.channel_name
     canal_tipo = entrada.canal_origen_tipo or configuracion.credenciales_servicio_historial.channel_type
-    return {
+    payload = {
         'user': configuracion.credenciales_servicio_historial.user,
         'password': configuracion.credenciales_servicio_historial.password,
         'identifyingTrx': {
@@ -90,10 +93,14 @@ def _construir_payload_historial(entrada, configuracion):
                     'personIdNumber': entrada.numero_identificacion,
                     'personIdType': _normalizar_tipo_identificacion(entrada.tipo_identificacion),
                 },
-                'personLastName': entrada.apellido,
+                'personLastName': str(entrada.apellido or '').strip().upper(),
             }
         },
     }
+    parametros = entrada.parametros or configuracion.parametros_historial
+    if parametros:
+        payload['parameters'] = [dict(parametro) for parametro in parametros]
+    return payload
 
 
 def _normalizar_tipo_identificacion(tipo_identificacion):
@@ -118,17 +125,44 @@ def _sanitizar_raw(cuerpo):
         return {}
     prohibidas = {
         'personIdNumber',
+        'personLastName',
         'numeroIdentificacion',
         'identificacion',
         'documento',
+        'documentNumber',
+        'identificationNumber',
+        'accountNumber',
+        'account_number',
+        'numeroCuenta',
+        'numero_cuenta',
+        'counterpartyIdNumber',
+        'primaryKey',
+        'name',
+        'fullName',
+        'address',
+        'direccion',
+        'phone',
+        'telefono',
+        'email',
+        'correo',
         'access_token',
+        'refresh_token',
         'client_secret',
         'password',
     }
-    return {
-        clave: valor for clave, valor in cuerpo.items()
-        if clave not in prohibidas
-    }
+    return _sanitizar_valor(cuerpo, {clave.lower() for clave in prohibidas})
+
+
+def _sanitizar_valor(valor, prohibidas):
+    if isinstance(valor, dict):
+        return {
+            clave: _sanitizar_valor(subvalor, prohibidas)
+            for clave, subvalor in valor.items()
+            if str(clave).lower() not in prohibidas
+        }
+    if isinstance(valor, list):
+        return [_sanitizar_valor(item, prohibidas) for item in valor]
+    return valor
 
 
 def _buscar_response_code(cuerpo):

@@ -1,3 +1,6 @@
+import json
+import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from django.conf import settings
@@ -46,6 +49,10 @@ class ConfiguracionDatacredito:
     credenciales_servicio_historial: CredencialesServicioHistorial
     usa_legacy_decisor: bool = False
     usa_legacy_historial: bool = False
+    parametros_historial: tuple[dict, ...] = ()
+    parametros_historial_error: str = ''
+    parametros_historial_configurados: bool = False
+    parametros_historial_longitud: int = 0
 
 
 def obtener_configuracion_datacredito():
@@ -68,14 +75,30 @@ def obtener_configuracion_datacredito():
     credenciales_decisor = CredencialesOAuthDecisor(
         client_id=getattr(settings, 'DATACREDITO_DECISOR_CLIENT_ID', '') or '',
         client_secret=getattr(settings, 'DATACREDITO_DECISOR_CLIENT_SECRET', '') or '',
-        username=getattr(settings, 'DATACREDITO_DECISOR_USERNAME', '') or '',
-        password=getattr(settings, 'DATACREDITO_DECISOR_PASSWORD', '') or '',
+        username=(
+            getattr(settings, 'DATACREDITO_DECISOR_TOKEN_USERNAME', '')
+            or getattr(settings, 'DATACREDITO_DECISOR_USERNAME', '')
+            or ''
+        ),
+        password=(
+            getattr(settings, 'DATACREDITO_DECISOR_TOKEN_PASSWORD', '')
+            or getattr(settings, 'DATACREDITO_DECISOR_PASSWORD', '')
+            or ''
+        ),
     )
     credenciales_historial = CredencialesOAuthHistorial(
         client_id=getattr(settings, 'DATACREDITO_HDC_CLIENT_ID', '') or '',
         client_secret=getattr(settings, 'DATACREDITO_HDC_CLIENT_SECRET', '') or '',
-        username=getattr(settings, 'DATACREDITO_HDC_USERNAME', '') or '',
-        password=getattr(settings, 'DATACREDITO_HDC_PASSWORD', '') or '',
+        username=(
+            getattr(settings, 'DATACREDITO_HDC_TOKEN_USERNAME', '')
+            or getattr(settings, 'DATACREDITO_HDC_USERNAME', '')
+            or ''
+        ),
+        password=(
+            getattr(settings, 'DATACREDITO_HDC_TOKEN_PASSWORD', '')
+            or getattr(settings, 'DATACREDITO_HDC_PASSWORD', '')
+            or ''
+        ),
     )
     credenciales_servicio_historial = CredencialesServicioHistorial(
         user=getattr(settings, 'DATACREDITO_HDC_SERVICE_USER', '') or '',
@@ -86,6 +109,8 @@ def obtener_configuracion_datacredito():
         channel_name=getattr(settings, 'DATACREDITO_HDC_CHANNEL_NAME', 'Canal-01') or 'Canal-01',
         channel_type=str(getattr(settings, 'DATACREDITO_HDC_CHANNEL_TYPE', '42') or '42'),
     )
+    parametros_historial_raw = _obtener_parametros_historial_raw()
+    parametros_historial, parametros_historial_error = _parsear_parametros_historial(parametros_historial_raw)
     usa_legacy_decisor = False
     usa_legacy_historial = False
     if credenciales_decisor.validar_para_token() and not credenciales_legacy.validar_para_token():
@@ -132,6 +157,10 @@ def obtener_configuracion_datacredito():
         credenciales_servicio_historial=credenciales_servicio_historial,
         usa_legacy_decisor=usa_legacy_decisor,
         usa_legacy_historial=usa_legacy_historial,
+        parametros_historial=parametros_historial,
+        parametros_historial_error=parametros_historial_error,
+        parametros_historial_configurados=bool(parametros_historial_raw.strip()),
+        parametros_historial_longitud=len(parametros_historial_raw),
     )
 
 
@@ -143,3 +172,39 @@ def obtener_credenciales_oauth(servicio, configuracion=None):
     if servicio == 'historial':
         return configuracion.credenciales_historial
     raise ValueError('servicio_datacredito_invalido')
+
+
+def _parsear_parametros_historial(valor):
+    texto = str(valor or '').strip()
+    if not texto:
+        return (), ''
+    try:
+        datos = json.loads(texto)
+    except json.JSONDecodeError:
+        return (), 'DATACREDITO_HDC_PARAMETERS_JSON no es JSON valido.'
+    if not isinstance(datos, list):
+        return (), 'DATACREDITO_HDC_PARAMETERS_JSON debe ser una lista.'
+
+    parametros = []
+    for item in datos:
+        if not isinstance(item, Mapping):
+            return (), 'Cada parametro HDC debe ser un objeto.'
+        parametro = {
+            'type': str(item.get('type', '')).strip(),
+            'nameParameter': str(item.get('nameParameter', '')).strip(),
+            'valueParameter': str(item.get('valueParameter', '')).strip(),
+        }
+        if not all(parametro.values()):
+            return (), 'Cada parametro HDC debe incluir type, nameParameter y valueParameter.'
+        parametros.append(parametro)
+    return tuple(parametros), ''
+
+
+def _obtener_parametros_historial_raw():
+    valor_configuracion = getattr(settings, 'DATACREDITO_HDC_PARAMETERS_JSON', None)
+    if valor_configuracion:
+        return str(valor_configuracion)
+    valor_entorno = os.environ.get('DATACREDITO_HDC_PARAMETERS_JSON')
+    if valor_entorno is not None:
+        return str(valor_entorno or '')
+    return str(valor_configuracion or '')

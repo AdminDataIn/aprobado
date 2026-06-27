@@ -3,8 +3,6 @@ import uuid
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from django.utils import timezone
-
 from integrations.datacredito import decisor_client, historial_client
 from integrations.datacredito.dto import EntradaHistorialCredito, EntradaMiDecisor
 from integrations.datacredito.exceptions import DatacreditoError
@@ -12,6 +10,7 @@ from integrations.datacredito.normalizadores import (
     normalizar_historial_credito,
     normalizar_midecisor_pn,
 )
+from integrations.datacredito.request_preview import construir_request_sanitizado_datacredito
 from integrations.datacredito.snapshots import obtener_o_consultar_datacredito
 from integrations.datacredito.settings import obtener_configuracion_datacredito
 
@@ -39,6 +38,7 @@ class Command(BaseCommand):
         parser.add_argument('--diagnostico-detallado', action='store_true')
         parser.add_argument('--usar-snapshot', action='store_true')
         parser.add_argument('--forzar-consulta', action='store_true')
+        parser.add_argument('--mostrar-request-sanitizado', action='store_true')
 
     def handle(self, *args, **options):
         if options['validar_configuracion']:
@@ -56,6 +56,28 @@ class Command(BaseCommand):
                 {
                     'ejecutado': False,
                     'error': f"Faltan argumentos: {', '.join(faltantes_argumentos)}.",
+                },
+                salida_json=options['salida_json'],
+            )
+
+        if options['mostrar_request_sanitizado']:
+            servicio = options['servicio']
+            servicios = [SERVICIO_DECISOR, SERVICIO_HISTORIAL] if servicio == SERVICIO_AMBOS else [servicio]
+            return self._responder(
+                {
+                    'ejecutado': False,
+                    'dry_run_request': True,
+                    'ambiente': str(getattr(settings, 'DATACREDITO_ENVIRONMENT', 'uat') or 'uat').lower(),
+                    'documento_enmascarado': _enmascarar_documento(options['numero_documento']),
+                    'resultados': [
+                        construir_request_sanitizado_datacredito(
+                            servicio=servicio_actual,
+                            tipo_documento=options['tipo_documento'],
+                            numero_documento=options['numero_documento'],
+                            apellido=options['apellido'],
+                        )
+                        for servicio_actual in servicios
+                    ],
                 },
                 salida_json=options['salida_json'],
             )
@@ -130,6 +152,17 @@ class Command(BaseCommand):
                 'product_id_configurado': bool(configuracion.credenciales_servicio_historial.product_id),
                 'info_account_type_configurado': bool(configuracion.credenciales_servicio_historial.info_account_type),
                 'server_ip_configurada': bool(configuracion.credenciales_servicio_historial.server_ip_address),
+                'parameters_env_var': 'DATACREDITO_HDC_PARAMETERS_JSON',
+                'parameters_env_presente': configuracion.parametros_historial_configurados,
+                'parameters_longitud': configuracion.parametros_historial_longitud,
+                'parameters_json_parseado': (
+                    configuracion.parametros_historial_configurados
+                    and not bool(configuracion.parametros_historial_error)
+                ),
+                'parameters_cantidad': len(configuracion.parametros_historial),
+                'parameters_configurados': configuracion.parametros_historial_configurados,
+                'parameters_validos': not bool(configuracion.parametros_historial_error),
+                'parameters_error': configuracion.parametros_historial_error,
                 'usa_legacy': configuracion.usa_legacy_historial,
             },
         }
@@ -172,12 +205,13 @@ class Command(BaseCommand):
     def _consultar_historial(self, options, *, diagnostico_detallado=False):
         if options.get('usar_snapshot'):
             return self._consultar_con_snapshot(SERVICIO_HISTORIAL, options, diagnostico_detallado=diagnostico_detallado)
+        configuracion = obtener_configuracion_datacredito()
         entrada = EntradaHistorialCredito(
             tipo_identificacion=options['tipo_documento'],
             numero_identificacion=options['numero_documento'],
             apellido=options['apellido'],
             request_uuid=str(uuid.uuid4()),
-            fecha_hora=timezone.now().isoformat(),
+            parametros=configuracion.parametros_historial,
         )
         try:
             raw = historial_client.consultar_historial_credito(entrada)
@@ -255,6 +289,15 @@ class Command(BaseCommand):
                     self.stdout.write(f"historial.product_id_configurado={datos['product_id_configurado']}")
                     self.stdout.write(f"historial.info_account_type_configurado={datos['info_account_type_configurado']}")
                     self.stdout.write(f"historial.server_ip_configurada={datos['server_ip_configurada']}")
+                    self.stdout.write(f"historial.parameters_env_var={datos['parameters_env_var']}")
+                    self.stdout.write(f"historial.parameters_env_presente={datos['parameters_env_presente']}")
+                    self.stdout.write(f"historial.parameters_longitud={datos['parameters_longitud']}")
+                    self.stdout.write(f"historial.parameters_json_parseado={datos['parameters_json_parseado']}")
+                    self.stdout.write(f"historial.parameters_cantidad={datos['parameters_cantidad']}")
+                    self.stdout.write(f"historial.parameters_configurados={datos['parameters_configurados']}")
+                    self.stdout.write(f"historial.parameters_validos={datos['parameters_validos']}")
+                    if datos.get('parameters_error'):
+                        self.stdout.write(f"historial.parameters_error={datos['parameters_error']}")
                 if datos.get('usa_legacy'):
                     self.stdout.write(f"{servicio}.advertencia=usa_credenciales_legacy")
                 if datos['faltantes']:
@@ -262,6 +305,17 @@ class Command(BaseCommand):
             return
 
         if not payload.get('ejecutado'):
+            if payload.get('dry_run_request'):
+                self.stdout.write(f"ambiente={payload['ambiente']}")
+                self.stdout.write(f"documento={payload['documento_enmascarado']}")
+                for resultado in payload['resultados']:
+                    self.stdout.write(f"servicio={resultado['servicio']}")
+                    self.stdout.write(f"  token.url={resultado['token_request']['url']}")
+                    self.stdout.write(f"  service.url={resultado['service_request']['url']}")
+                    self.stdout.write(f"  service.method={resultado['service_request']['method']}")
+                    self.stdout.write(f"  service.headers_presentes={resultado['service_request']['headers_presentes']}")
+                    self.stdout.write(f"  service.body_keys={resultado['service_request']['body_keys']}")
+                return
             self.stdout.write(payload['error'])
             return
 
@@ -287,7 +341,7 @@ def _resumen_normalizado(
 ):
     codigo = codigo_funcional or normalizado.codigo_respuesta or normalizado.response_code
     score_disponible = bool(normalizado.score_midecisor or normalizado.score or normalizado.scores_hdc)
-    return {
+    resumen = {
         'servicio': servicio,
         'http_status': http_status,
         'codigo_funcional': codigo,
@@ -310,11 +364,31 @@ def _resumen_normalizado(
         'rating_recaudos': normalizado.metadata_segura.get('rating_recaudos'),
         'monto_sugerido': normalizado.monto_sugerido,
         'alertas_resumen': list(normalizado.alertas_resumen),
+        'hdc_estructura': (normalizado.metadata_segura or {}).get('hdc_estructura') if servicio == SERVICIO_HISTORIAL else None,
         'error': None,
         'error_tipo': None,
         'etapa_error': None,
         'clase_error': None,
     }
+    if diagnostico_detallado and servicio == SERVICIO_HISTORIAL:
+        hdc_resumen = (normalizado.metadata_segura or {}).get('hdc_resumen') or {}
+        resumen.update(
+            {
+                'hdc_total_liabilities': hdc_resumen.get('total_liabilities'),
+                'hdc_liabilities_castigadas': hdc_resumen.get('liabilities_castigadas'),
+                'hdc_liabilities_en_mora': hdc_resumen.get('liabilities_en_mora'),
+                'hdc_saldo_total_hdc': hdc_resumen.get('saldo_total_hdc'),
+                'hdc_saldo_mora_hdc': hdc_resumen.get('saldo_mora_hdc'),
+                'hdc_cuota_total_hdc': hdc_resumen.get('cuota_total_hdc'),
+                'hdc_max_mora_dias': hdc_resumen.get('max_mora_dias'),
+                'hdc_huellas_ultimos_6_meses': hdc_resumen.get('huellas_ultimos_6_meses'),
+                'hdc_alertas_hdc': hdc_resumen.get('alertas_hdc'),
+                'hdc_sectores_detectados': hdc_resumen.get('sectores_detectados'),
+                'hdc_tipos_cartera_detectados': hdc_resumen.get('tipos_cartera_detectados'),
+                'hdc_resumen': hdc_resumen,
+            }
+        )
+    return resumen
 
 
 def _resumen_error(servicio, exc, *, etapa_default=None, http_status=None, codigo_funcional=None, error_tipo=None):

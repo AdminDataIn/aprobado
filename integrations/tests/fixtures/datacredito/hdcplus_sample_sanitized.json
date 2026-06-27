@@ -1,0 +1,4652 @@
+{
+  "ReportHDCplus": {
+    "productResult": {
+      "consultDate": "2026-06-26T22:25:27",
+      "responseCode": 13,
+      "responseDesc": "La consulta fue efectiva"
+    },
+    "identifyingAttributes": {
+      "tradeholderindicator": true
+    },
+    "basicInformation": {
+      "gender": 3,
+      "genderDesc": "Mujer",
+      "citizenTaxRegistrationIndicator": false,
+      "officialSourceValidationStatus": true,
+      "identification": {
+        "statusId": "00",
+        "issueDate": "2021-01-08",
+        "issuingCityName": "VILLAVICENCIO",
+        "issuingStateName": "META"
+      },
+      "age": {
+        "min": 22,
+        "max": 28
+      },
+      "demographic": {
+        "identification": [
+          {
+            "recordId": 0,
+            "issueDate": "2021-01-09",
+            "issuingCityNameId": "00000000",
+            "businessName": "SISTECREDITO S.A.S                                                                                  "
+          }
+        ],
+        "internationalOperations": [
+          {
+            "recordId": 0,
+            "internationalOperationsLastUpdated": "2023-06-30",
+            "businessName": "SISTECREDITO S.A.S                                                                                  ",
+            "internationalOperationsIndicator": false
+          }
+        ]
+      }
+    },
+    "savings": [
+      {
+        "account": {
+          "block": false,
+          "rating": 1,
+          "ratingDesc": "NORMAL",
+          "filingCityName": "META",
+          "filingCityCode": 50001000,
+          "businessLineName": "BANCO          DAVIVIENDA",
+          "accountOpeningDate": "2026-02-19",
+          "tradeHolderIndicator": "N",
+          "economicSector": 1,
+          "economicSectorName": "SECTOR FINANCIERO",
+          "stateOfAccountHolder": 0,
+          "stateOfAccountHolderDesc": "NORMAL",
+          "subAccountTypeName": "CUENTAS DE AHORRO Y BANCARIAS",
+          "accountType": 51,
+          "subAccountType": "00",
+          "subAccountTypeDesc": "AHO"
+        },
+        "features": {
+          "accountCategory": 2,
+          "accountCategoryDesc": "GMF"
+        },
+        "status": {
+          "businessBureauEvent": "01",
+          "businessBureauEventDesc": "CUENTA ACTIVA",
+          "behaviourDate": "2026-05-31"
+        },
+        "values": [
+          {
+            "rating": 1,
+            "ratingDesc": "NORMAL",
+            "behaviourDate": "2026-05-31",
+            "currencyType": 1,
+            "currencyTypeDesc": "Moneda Legal"
+          }
+        ]
+      },
+      {
+        "account": {
+          "block": false,
+          "rating": 1,
+          "ratingDesc": "NORMAL",
+          "filingCityName": "META",
+          "filingCityCode": 50001000,
+          "businessLineName": "BANCO          DAVIVIENDA",
+          "accountOpeningDate": "2023-03-06",
+          "tradeHolderIndicator": "N",
+          "economicSector": 1,
+          "economicSectorName": "SECTOR FINANCIERO",
+          "stateOfAccountHolder": 0,
+          "stateOfAccountHolderDesc": "NORMAL",
+          "subAccountTypeName": "CUENTAS DE AHORRO Y BANCARIAS",
+          "accountType": 51,
+          "subAccountType": "00",
+          "subAccountTypeDesc": "AHO"
+        },
+        "features": {
+          "accountCategory": 0,
+          "accountCategoryDesc": "NOR"
+        },
+        "status": {
+          "businessBureauEvent": "05",
+          "businessBureauEventDesc": "SALDADA",
+          "behaviourDate": "2025-07-31"
+        },
+        "values": [
+          {
+            "rating": 1,
+            "ratingDesc": "NORMAL",
+            "behaviourDate": "2025-07-31",
+            "currencyType": 1,
+            "currencyTypeDesc": "Moneda Legal"
+          }
+        ]
+      },
+      {
+        "account": {
+          "block": false,
+          "rating": 1,
+          "ratingDesc": "NORMAL",
+          "filingCityName": "VILLAVICENCIO",
+          "filingCityCode": 50001000,
+          "businessLineName": "BANCOLOMBIA",
+          "accountOpeningDate": "2021-10-05",
+          "tradeHolderIndicator": "N",
+          "economicSector": 1,
+          "economicSectorName": "SECTOR FINANCIERO",
+          "stateOfAccountHolder": 0,
+          "stateOfAccountHolderDesc": "NORMAL",
+          "subAccountTypeName": "CUENTAS DE AHORRO Y BANCARIAS",
+          "accountType": 51,
+          "subAccountType": "00",
+          "subAccountTypeDesc": "AHO"
+        },
+        "features": {
+          "accountCategory": 0,
+          "accountCategoryDesc": "NOR"
+        },
+        "status": {
+          "businessBureauEvent": "05",
+          "businessBureauEventDesc": "SALDADA",
+          "behaviourDate": "2023-03-31"
+        },
+        "values": [
+          {
+            "rating": 1,
+            "ratingDesc": "NORMAL",
+            "behaviourDate": "2023-03-31",
+            "currencyType": 1,
+            "currencyTypeDesc": "Moneda Legal"
+          }
+        ]
+      },
+      {
+        "account": {
+          "block": false,
+          "rating": 1,
+          "ratingDesc": "NORMAL",
+          "filingCityName": "MEDELLIN",
+          "filingCityCode": "05001000",
+          "businessLineName": "CUENTA         NEQUI",
+          "accountOpeningDate": "2021-01-19",
+          "tradeHolderIndicator": "N",
+          "economicSector": 1,
+          "economicSectorName": "SECTOR FINANCIERO",
+          "stateOfAccountHolder": 0,
+          "stateOfAccountHolderDesc": "NORMAL",
+          "subAccountTypeName": "CUENTAS DE AHORRO Y BANCARIAS",
+          "accountType": 51,
+          "subAccountType": "00",
+          "subAccountTypeDesc": "AHO"
+        },
+        "features": {
+          "accountCategory": 4,
+          "accountCategoryDesc": "ELE"
+        },
+        "status": {
+          "businessBureauEvent": "01",
+          "businessBureauEventDesc": "CUENTA ACTIVA",
+          "behaviourDate": "2026-05-31"
+        },
+        "values": [
+          {
+            "rating": 1,
+            "ratingDesc": "NORMAL",
+            "behaviourDate": "2026-05-31",
+            "currencyType": 1,
+            "currencyTypeDesc": "Moneda Legal"
+          }
+        ]
+      },
+      {
+        "account": {
+          "block": false,
+          "rating": 1,
+          "ratingDesc": "NORMAL",
+          "filingCityName": null,
+          "filingCityCode": "00000000",
+          "businessLineName": "DAVIPLATA      DAVIPLATA",
+          "accountOpeningDate": "2023-06-01",
+          "tradeHolderIndicator": "N",
+          "economicSector": 1,
+          "economicSectorName": "SECTOR FINANCIERO",
+          "stateOfAccountHolder": 0,
+          "stateOfAccountHolderDesc": "NORMAL",
+          "subAccountTypeName": "CTAS AHORROS BANCARIA DIGITAL.",
+          "accountType": 51,
+          "subAccountType": "01",
+          "subAccountTypeDesc": "AHD"
+        },
+        "features": {
+          "accountCategory": 4,
+          "accountCategoryDesc": "ELE"
+        },
+        "status": {
+          "businessBureauEvent": "01",
+          "businessBureauEventDesc": "CUENTA ACTIVA",
+          "behaviourDate": "2026-05-31"
+        },
+        "values": [
+          {
+            "rating": 1,
+            "ratingDesc": "NORMAL",
+            "behaviourDate": "2026-05-31",
+            "currencyType": 1,
+            "currencyTypeDesc": "Moneda Legal"
+          }
+        ]
+      },
+      {
+        "account": {
+          "block": false,
+          "rating": 1,
+          "ratingDesc": "NORMAL",
+          "filingCityName": "VILLAVICENCIO",
+          "filingCityCode": 50001000,
+          "businessLineName": "dale!          Aval S. Digita",
+          "accountOpeningDate": "2023-05-15",
+          "tradeHolderIndicator": "N",
+          "economicSector": 3,
+          "economicSectorName": "SECTOR REAL",
+          "stateOfAccountHolder": 0,
+          "stateOfAccountHolderDesc": "NORMAL",
+          "subAccountTypeName": "CTAS AHORROS BANCARIA DIGITAL.",
+          "accountType": 51,
+          "subAccountType": "01",
+          "subAccountTypeDesc": "AHD"
+        },
+        "features": {
+          "accountCategory": 4,
+          "accountCategoryDesc": "ELE"
+        },
+        "status": {
+          "businessBureauEvent": "01",
+          "businessBureauEventDesc": "CUENTA ACTIVA",
+          "behaviourDate": "2026-05-31"
+        },
+        "values": [
+          {
+            "rating": 1,
+            "ratingDesc": "NORMAL",
+            "behaviourDate": "2026-05-31",
+            "currencyType": 1,
+            "currencyTypeDesc": "Moneda Legal"
+          }
+        ]
+      }
+    ],
+    "liabilities": [
+      {
+        "account": {
+          "block": false,
+          "rating": 0,
+          "ratingDesc": null,
+          "filingCityName": "MEDELLIN",
+          "filingCityCode": "05001000",
+          "businessLineName": "NOVAVENTA S A",
+          "accountOpeningDate": "2021-07-15",
+          "tradeHolderIndicator": "N",
+          "economicSector": 3,
+          "economicSectorName": "SECTOR REAL",
+          "stateOfAccountHolder": 0,
+          "stateOfAccountHolderDesc": "NORMAL",
+          "subAccountTypeName": "CARTERA DE ALIMENTOS",
+          "accountType": 31,
+          "subAccountType": "00",
+          "accountTypeDesc": "ALI",
+          "subAccountTypeDesc": "ALI"
+        },
+        "liabilitiesAccount": {
+          "expiryDate": "2023-09-06",
+          "paymentType": 0,
+          "paymentTypeDesc": "VIGENTE",
+          "businessBehaviourVectorProduct": "CCCCCCCCCCCCCCCCCC66666666543NNNNN666543NNNNN-N ",
+          "probabilityOfDefault": 0,
+          "ratingHD": false
+        },
+        "featuresLiabilities": {
+          "typeOfCredit": 4,
+          "typeOfCreditDesc": "OTRO",
+          "contractType": 2,
+          "contractTypeDesc": "Indefinido",
+          "contractTerm": 0,
+          "guaranteeType": 1,
+          "guaranteeTypeName": "ADMIS",
+          "contractExecution": 4,
+          "typeOfDebtor": "00",
+          "typeOfDebtorDesc": "PRINCIPAL: RESPONSABLE DEL PAGO"
+        },
+        "status": {
+          "account": {
+            "businessAccountStatus": "06",
+            "businessAccountStatusDesc": "CASTIGADA",
+            "accountStatusDate": "2026-05-31"
+          },
+          "origin": {
+            "originStatusOfAccount": 0,
+            "originStatusOfAccountDesc": "NORMAL",
+            "dateOfOriginStatus": "2023-09-09"
+          },
+          "payment": {
+            "businessBureauEvent": 45,
+            "businessBureauEventDesc": "CARTERA CASTIGADA",
+            "paymentDate": "2026-05-31",
+            "paymentMonths": 48
+          }
+        },
+        "values": [
+          {
+            "rating": "-",
+            "ratingDesc": "NO REPORTA INFORMACIÓN",
+            "behaviourDate": "2026-05-31",
+            "currencyType": 1,
+            "currencyTypeDesc": "Moneda Legal",
+            "valueMonthlyPayment": 296000,
+            "paidInstallments": 0,
+            "installmentsOverdue": 1,
+            "delinquencyMaturation": 979,
+            "availableBalance": -1,
+            "paymentDeadline": "2023-09-25",
+            "periodicityOfPayments": 9,
+            "periodicityOfPaymentsDesc": "OTRO TIPO",
+            "businessValueBalanceOverdue": 296000,
+            "debtBalance": 296000,
+            "initialValue": -1,
+            "totalNumberOfInstallments": 1
+          }
+        ]
+      },
+      {
+        "account": {
+          "block": false,
+          "rating": 5,
+          "ratingDesc": "E",
+          "filingCityName": "MEDELLIN",
+          "filingCityCode": "05001000",
+          "businessLineName": "NEQUI          LI",
+          "accountOpeningDate": "2023-02-13",
+          "tradeHolderIndicator": "N",
+          "economicSector": 1,
+          "economicSectorName": "SECTOR FINANCIERO",
+          "stateOfAccountHolder": 0,
+          "stateOfAccountHolderDesc": "NORMAL",
+          "subAccountTypeName": "CARTERA BANCARIA",
+          "accountType": "05",
+          "subAccountType": "00",
+          "accountTypeDesc": "CAB",
+          "subAccountTypeDesc": "CAB"
+        },
+        "liabilitiesAccount": {
+          "expiryDate": "2025-02-13",
+          "paymentType": 0,
+          "paymentTypeDesc": "VIGENTE",
+          "businessBehaviourVectorProduct": "CCCCCCCCCCCCCCCCCCCCCCCCCCC66654321NNNN-------- ",
+          "probabilityOfDefault": 0,
+          "ratingHD": false
+        },
+        "featuresLiabilities": {
+          "typeOfCredit": 2,
+          "typeOfCreditDesc": "CONSUMO",
+          "contractType": 1,
+          "contractTypeDesc": "Definido",
+          "contractTerm": 0,
+          "guaranteeType": "Q",
+          "guaranteeTypeName": "NO IDONEA",
+          "contractExecution": 2,
+          "typeOfDebtor": "00",
+          "typeOfDebtorDesc": "PRINCIPAL: RESPONSABLE DEL PAGO"
+        },
+        "status": {
+          "account": {
+            "businessAccountStatus": "06",
+            "businessAccountStatusDesc": "CASTIGADA",
+            "accountStatusDate": "2026-05-31"
+          },
+          "origin": {
+            "originStatusOfAccount": 0,
+            "originStatusOfAccountDesc": "NORMAL",
+            "dateOfOriginStatus": "2023-02-13"
+          },
+          "payment": {
+            "businessBureauEvent": 45,
+            "businessBureauEventDesc": "CARTERA CASTIGADA",
+            "paymentDate": "2026-05-31",
+            "paymentMonths": 48
+          }
+        },
+        "values": [
+          {
+            "rating": "-",
+            "ratingDesc": "NO REPORTA INFORMACIÓN",
+            "behaviourDate": "2026-05-31",
+            "currencyType": 1,
+            "currencyTypeDesc": "Moneda Legal",
+            "valueMonthlyPayment": 32000,
+            "paidInstallments": 2,
+            "installmentsOverdue": 10,
+            "delinquencyMaturation": 999,
+            "availableBalance": -1,
+            "paymentDeadline": "2024-02-13",
+            "paymentDate": "2024-01-06",
+            "periodicityOfPayments": 1,
+            "periodicityOfPaymentsDesc": "MENSUAL",
+            "businessValueBalanceOverdue": 459000,
+            "debtBalance": 841000,
+            "initialValue": 560000,
+            "totalNumberOfInstallments": 24
+          }
+        ]
+      },
+      {
+        "account": {
+          "block": false,
+          "rating": 0,
+          "ratingDesc": null,
+          "filingCityName": "BOGOTA D.C.",
+          "filingCityCode": "00000000",
+          "businessLineName": "TELMEX COLOMBI",
+          "accountOpeningDate": "2024-03-07",
+          "tradeHolderIndicator": "N",
+          "economicSector": 4,
+          "economicSectorName": "SECTOR TELCOS",
+          "stateOfAccountHolder": 0,
+          "stateOfAccountHolderDesc": "NORMAL",
+          "subAccountTypeName": "CARTERA DE COMUNICACIONES",
+          "accountType": 24,
+          "subAccountType": "00",
+          "accountTypeDesc": "CDC",
+          "subAccountTypeDesc": "CDC"
+        },
+        "liabilitiesAccount": {
+          "expiryDate": "2026-06-19",
+          "paymentType": 0,
+          "paymentTypeDesc": "VIGENTE",
+          "businessBehaviourVectorProduct": "NNNNNNN--NNNNNN-NNNN--N-N---------------------- ",
+          "probabilityOfDefault": 0,
+          "ratingHD": true
+        },
+        "featuresLiabilities": {
+          "typeOfCredit": 1,
+          "typeOfCreditDesc": "COMERCIAL",
+          "contractType": 2,
+          "contractTypeDesc": "Indefinido",
+          "contractTerm": 0,
+          "guaranteeType": 1,
+          "guaranteeTypeName": "ADMIS",
+          "contractExecution": 1,
+          "typeOfDebtor": "00",
+          "typeOfDebtorDesc": "PRINCIPAL: RESPONSABLE DEL PAGO"
+        },
+        "status": {
+          "account": {
+            "businessAccountStatus": "01",
+            "businessAccountStatusDesc": "AL DÍA",
+            "accountStatusDate": "2026-04-30"
+          },
+          "origin": {
+            "originStatusOfAccount": 0,
+            "originStatusOfAccountDesc": "NORMAL",
+            "dateOfOriginStatus": "2024-03-07"
+          },
+          "payment": {
+            "businessBureauEvent": "01",
+            "businessBureauEventDesc": "AL DIA",
+            "paymentDate": "2026-04-30",
+            "paymentMonths": 48
+          }
+        },
+        "values": [
+          {
+            "rating": "-",
+            "ratingDesc": "NO REPORTA INFORMACIÓN",
+            "behaviourDate": "2026-04-30",
+            "currencyType": 1,
+            "currencyTypeDesc": "Moneda Legal",
+            "valueMonthlyPayment": 115000,
+            "paidInstallments": -1,
+            "installmentsOverdue": 0,
+            "delinquencyMaturation": 0,
+            "availableBalance": 0,
+            "paymentDeadline": "2026-06-19",
+            "paymentDate": "2026-03-21",
+            "periodicityOfPayments": 1,
+            "periodicityOfPaymentsDesc": "MENSUAL",
+            "businessValueBalanceOverdue": 0,
+            "debtBalance": 0,
+            "initialValue": 115000,
+            "totalNumberOfInstallments": -1
+          }
+        ]
+      },
+      {
+        "account": {
+          "block": false,
+          "filingCityName": null,
+          "filingCityCode": 11001000,
+          "businessLineName": "ADELANTE       SOLUCIONES",
+          "accountOpeningDate": "2022-03-11",
+          "tradeHolderIndicator": "N",
+          "economicSector": 3,
+          "economicSectorName": "SECTOR REAL",
+          "stateOfAccountHolder": 0,
+          "stateOfAccountHolderDesc": "NORMAL",
+          "subAccountTypeName": "CARTERA OTROS CREDITOS",
+          "accountType": 11,
+          "subAccountType": "00",
+          "accountTypeDesc": "CON",
+          "subAccountTypeDesc": "COC"
+        },
+        "liabilitiesAccount": {
+          "expiryDate": "2022-07-10",
+          "paymentType": 1,
+          "paymentTypeDesc": "PAGO VOLUNTARIO",
+          "businessBehaviourVectorProduct": "NNNN------------------------------------------- ",
+          "probabilityOfDefault": 0,
+          "ratingHD": true
+        },
+        "featuresLiabilities": {
+          "typeOfCredit": 2,
+          "typeOfCreditDesc": "CONSUMO",
+          "contractType": 1,
+          "contractTypeDesc": "Definido",
+          "contractTerm": 0,
+          "guaranteeType": 1,
+          "guaranteeTypeName": "ADMIS",
+          "contractExecution": 2,
+          "typeOfDebtor": "00",
+          "typeOfDebtorDesc": "PRINCIPAL: RESPONSABLE DEL PAGO"
+        },
+        "status": {
+          "account": {
+            "businessAccountStatus": "03",
+            "businessAccountStatusDesc": "PAGO TOTAL",
+            "accountStatusDate": "2022-07-31"
+          },
+          "origin": {
+            "originStatusOfAccount": 0,
+            "originStatusOfAccountDesc": "NORMAL",
+            "dateOfOriginStatus": "2022-03-11"
+          },
+          "payment": {
+            "businessBureauEvent": "08",
+            "businessBureauEventDesc": "PAGO VOLUNTARIO",
+            "paymentDate": "2022-07-31",
+            "paymentMonths": 48
+          }
+        },
+        "values": [
+          {
+            "rating": "-",
+            "ratingDesc": "NO REPORTA INFORMACIÓN",
+            "behaviourDate": "2022-07-31",
+            "currencyType": 1,
+            "currencyTypeDesc": "Moneda Legal",
+            "valueMonthlyPayment": 0,
+            "paidInstallments": 3,
+            "installmentsOverdue": 0,
+            "delinquencyMaturation": 0,
+            "availableBalance": -1,
+            "paymentDeadline": "2022-07-31",
+            "paymentDate": "2022-07-31",
+            "periodicityOfPayments": 1,
+            "periodicityOfPaymentsDesc": "MENSUAL",
+            "businessValueBalanceOverdue": 0,
+            "debtBalance": 0,
+            "initialValue": 293000,
+            "totalNumberOfInstallments": 3
+          }
+        ]
+      },
+      {
+        "account": {
+          "block": false,
+          "rating": 5,
+          "ratingDesc": "E",
+          "filingCityName": "ACACIAS",
+          "filingCityCode": 50006000,
+          "businessLineName": "SISTECREDITO",
+          "accountOpeningDate": "2023-06-16",
+          "tradeHolderIndicator": "N",
+          "economicSector": 3,
+          "economicSectorName": "SECTOR REAL",
+          "stateOfAccountHolder": 0,
+          "stateOfAccountHolderDesc": "NORMAL",
+          "subAccountTypeName": "CREDITOS DE CONSUMO",
+          "accountType": 46,
+          "subAccountType": "00",
+          "accountTypeDesc": "CON",
+          "subAccountTypeDesc": "CON"
+        },
+        "liabilitiesAccount": {
+          "expiryDate": "2023-10-16",
+          "paymentType": 0,
+          "paymentTypeDesc": "VIGENTE",
+          "businessBehaviourVectorProduct": "666666666666666666666666666654321NN------------ ",
+          "probabilityOfDefault": 0,
+          "ratingHD": false
+        },
+        "featuresLiabilities": {
+          "typeOfCredit": 2,
+          "typeOfCreditDesc": "CONSUMO",
+          "contractType": 1,
+          "contractTypeDesc": "Definido",
+          "contractTerm": 0,
+          "guaranteeType": 1,
+          "guaranteeTypeName": "ADMIS",
+          "contractExecution": 2,
+          "typeOfDebtor": "00",
+          "typeOfDebtorDesc": "PRINCIPAL: RESPONSABLE DEL PAGO"
+        },
+        "status": {
+          "account": {
+            "businessAccountStatus": "02",
+            "businessAccountStatusDesc": "EN MORA",
+            "accountStatusDate": "2026-05-31"
+          },
+          "origin": {
+            "originStatusOfAccount": 0,
+            "originStatusOfAccountDesc": "NORMAL",
+            "dateOfOriginStatus": "2023-06-16"
+          },
+          "payment": {
+            "businessBureauEvent": 20,
+            "businessBureauEventDesc": "ESTA MORA 120",
+            "paymentDate": "2026-05-31",
+            "paymentMonths": 48
+          }
+        },
+        "values": [
+          {
+            "rating": "-",
+            "ratingDesc": "NO REPORTA INFORMACIÓN",
+            "behaviourDate": "2026-05-31",
+            "currencyType": 1,
+            "currencyTypeDesc": "Moneda Legal",
+            "valueMonthlyPayment": 53000,
+            "paidInstallments": 0,
+            "installmentsOverdue": 4,
+            "delinquencyMaturation": 120,
+            "availableBalance": -1,
+            "paymentDeadline": "2023-10-16",
+            "periodicityOfPayments": 9,
+            "periodicityOfPaymentsDesc": "OTRO TIPO",
+            "businessValueBalanceOverdue": 208000,
+            "debtBalance": 208000,
+            "initialValue": 214000,
+            "totalNumberOfInstallments": 4
+          }
+        ]
+      },
+      {
+        "account": {
+          "block": false,
+          "rating": 0,
+          "ratingDesc": null,
+          "filingCityName": "BOGOTA",
+          "filingCityCode": "00000000",
+          "businessLineName": "SOLVENTA       COLOMBIA",
+          "accountOpeningDate": "2024-11-25",
+          "tradeHolderIndicator": "N",
+          "economicSector": 3,
+          "economicSectorName": "SECTOR REAL",
+          "stateOfAccountHolder": 0,
+          "stateOfAccountHolderDesc": "NORMAL",
+          "subAccountTypeName": "SERVICIOS FINANCIEROS",
+          "accountType": 44,
+          "subAccountType": "00",
+          "accountTypeDesc": "CON",
+          "subAccountTypeDesc": "SFI"
+        },
+        "liabilitiesAccount": {
+          "expiryDate": "2024-12-30",
+          "paymentType": 0,
+          "paymentTypeDesc": "VIGENTE",
+          "businessBehaviourVectorProduct": "CCCCCCCCCCCC54221-N---------------------------- ",
+          "probabilityOfDefault": 0,
+          "ratingHD": false
+        },
+        "featuresLiabilities": {
+          "typeOfCredit": 1,
+          "typeOfCreditDesc": "COMERCIAL",
+          "contractType": 1,
+          "contractTypeDesc": "Definido",
+          "contractTerm": 0,
+          "guaranteeType": 0,
+          "guaranteeTypeName": "SIN GAR",
+          "contractExecution": 1,
+          "typeOfDebtor": "00",
+          "typeOfDebtorDesc": "PRINCIPAL: RESPONSABLE DEL PAGO"
+        },
+        "status": {
+          "account": {
+            "businessAccountStatus": "06",
+            "businessAccountStatusDesc": "CASTIGADA",
+            "accountStatusDate": "2026-06-10"
+          },
+          "origin": {
+            "originStatusOfAccount": 0,
+            "originStatusOfAccountDesc": "NORMAL",
+            "dateOfOriginStatus": "2024-11-25"
+          },
+          "payment": {
+            "businessBureauEvent": 45,
+            "businessBureauEventDesc": "CARTERA CASTIGADA",
+            "paymentDate": "2026-06-10",
+            "paymentMonths": 48
+          }
+        },
+        "values": [
+          {
+            "rating": "-",
+            "ratingDesc": "NO REPORTA INFORMACIÓN",
+            "behaviourDate": "2026-06-30",
+            "currencyType": 1,
+            "currencyTypeDesc": "Moneda Legal",
+            "valueMonthlyPayment": 300000,
+            "paidInstallments": 0,
+            "installmentsOverdue": 1,
+            "delinquencyMaturation": 360,
+            "availableBalance": -1,
+            "periodicityOfPayments": 1,
+            "periodicityOfPaymentsDesc": "MENSUAL",
+            "businessValueBalanceOverdue": 890000,
+            "debtBalance": 300000,
+            "initialValue": 300000,
+            "totalNumberOfInstallments": 1
+          }
+        ]
+      },
+      {
+        "account": {
+          "block": false,
+          "rating": 6,
+          "ratingDesc": "AA",
+          "filingCityName": "BOGOTA",
+          "filingCityCode": "00000000",
+          "businessLineName": "ICETEX CENTRO",
+          "accountOpeningDate": "2023-08-24",
+          "tradeHolderIndicator": "N",
+          "economicSector": 3,
+          "economicSectorName": "SECTOR REAL",
+          "stateOfAccountHolder": 0,
+          "stateOfAccountHolderDesc": "NORMAL",
+          "subAccountTypeName": "CARTERA EDUCACION",
+          "accountType": 43,
+          "subAccountType": "00",
+          "accountTypeDesc": "EDU",
+          "subAccountTypeDesc": "EDU"
+        },
+        "liabilitiesAccount": {
+          "expiryDate": "2033-08-24",
+          "paymentType": 0,
+          "paymentTypeDesc": "VIGENTE",
+          "businessBehaviourVectorProduct": "32--N666666654321-N21N-NNNNNN-NNN-------------- ",
+          "probabilityOfDefault": 0,
+          "ratingHD": true
+        },
+        "featuresLiabilities": {
+          "typeOfCredit": 2,
+          "typeOfCreditDesc": "CONSUMO",
+          "contractType": 0,
+          "contractTypeDesc": "No Reportado",
+          "contractTerm": 0,
+          "guaranteeType": 2,
+          "guaranteeTypeName": "OTR GAR",
+          "contractExecution": 2,
+          "typeOfDebtor": "00",
+          "typeOfDebtorDesc": "PRINCIPAL: RESPONSABLE DEL PAGO"
+        },
+        "status": {
+          "account": {
+            "businessAccountStatus": "01",
+            "businessAccountStatusDesc": "AL DÍA",
+            "accountStatusDate": "2026-05-31"
+          },
+          "origin": {
+            "originStatusOfAccount": 0,
+            "originStatusOfAccountDesc": "NORMAL",
+            "dateOfOriginStatus": "2023-08-24"
+          },
+          "payment": {
+            "businessBureauEvent": 16,
+            "businessBureauEventDesc": "MORA 120 AL DIA",
+            "paymentDate": "2026-05-31",
+            "paymentMonths": 48
+          }
+        },
+        "values": [
+          {
+            "rating": "-",
+            "ratingDesc": "NO REPORTA INFORMACIÓN",
+            "behaviourDate": "2026-05-31",
+            "currencyType": 1,
+            "currencyTypeDesc": "Moneda Legal",
+            "valueMonthlyPayment": 331000,
+            "paidInstallments": 2,
+            "installmentsOverdue": 0,
+            "delinquencyMaturation": 0,
+            "availableBalance": -1,
+            "paymentDeadline": "2026-05-31",
+            "periodicityOfPayments": 1,
+            "periodicityOfPaymentsDesc": "MENSUAL",
+            "businessValueBalanceOverdue": 0,
+            "debtBalance": 10984000,
+            "initialValue": 10935000,
+            "totalNumberOfInstallments": 42
+          }
+        ]
+      }
+    ],
+    "location": {
+      "nationalNatural": {
+        "gender": 3,
+        "citizenTaxRegistrationIndicator": false,
+        "officialSourceValidationStatus": true,
+        "identification": {
+          "statusId": "00",
+          "statusDesc": "VIGENTE",
+          "issueDate": "2021-01-08",
+          "issuingCityName": "VILLAVICENCIO",
+          "issuingStateName": "META"
+        },
+        "age": {
+          "min": 22,
+          "minDesc": "22 - 28",
+          "max": 28,
+          "maxDesc": "22 - 28"
+        },
+        "demographic": {
+          "identification": [
+            {
+              "recordId": 0,
+              "issueDate": "2021-01-09",
+              "issuingCityNameId": "00000000",
+              "businessName": "SISTECREDITO S.A.S                                                                                  "
+            }
+          ],
+          "internationalOperations": [
+            {
+              "recordId": 0,
+              "internationalOperationsLastUpdated": "2023-06-30",
+              "businessName": "SISTECREDITO S.A.S                                                                                  ",
+              "internationalOperationsIndicator": false
+            }
+          ]
+        }
+      }
+    },
+    "alerts": [
+      {
+        "alertCode": "004",
+        "alertCodeDesc": null,
+        "source": "000001",
+        "sourceDescription": "Datacredito",
+        "responseDesc": "Fuentes publicas",
+        "alertDate": "2026-06-26",
+        "alertLastUpdated": "2026-06-26",
+        "alertExpiryDate": "2026-06-26"
+      }
+    ],
+    "globalIndebtedness": [
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2026-03-31",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 820000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "NEQUI          LI",
+          "economicSector": "1 ",
+          "economicSectorName": null
+        },
+        "Guarantee": {
+          "guaranteeType": "Q",
+          "guaranteeTypeName": null,
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2025-12-31",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 11284000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "ICETEX CENTRO",
+          "economicSector": "3 ",
+          "economicSectorName": null
+        },
+        "Guarantee": {
+          "guaranteeType": 9,
+          "guaranteeTypeName": "Otras garantías.",
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2025-09-30",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 208000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "SISTECREDITO",
+          "economicSector": "3 ",
+          "economicSectorName": null
+        },
+        "Guarantee": {
+          "guaranteeType": 9,
+          "guaranteeTypeName": "Otras garantías.",
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2026-03-31",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 208000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "SISTECREDITO",
+          "economicSector": "3 ",
+          "economicSectorName": null
+        },
+        "Guarantee": {
+          "guaranteeType": 9,
+          "guaranteeTypeName": "Otras garantías.",
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2025-06-30",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 8847000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "ICETEX CENTRO",
+          "economicSector": "3 ",
+          "economicSectorName": null
+        },
+        "Guarantee": {
+          "guaranteeType": 9,
+          "guaranteeTypeName": "Otras garantías.",
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2025-06-30",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 525000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "NEQUI          LI",
+          "economicSector": "1 ",
+          "economicSectorName": null
+        },
+        "Guarantee": {
+          "guaranteeType": "Q",
+          "guaranteeTypeName": null,
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2025-12-31",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 296000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "NOVAVENTA S A",
+          "economicSector": "3 ",
+          "economicSectorName": null
+        },
+        "Guarantee": {
+          "guaranteeType": 9,
+          "guaranteeTypeName": "Otras garantías.",
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2025-06-30",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 208000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "SISTECREDITO",
+          "economicSector": "3 ",
+          "economicSectorName": null
+        },
+        "Guarantee": {
+          "guaranteeType": 9,
+          "guaranteeTypeName": "Otras garantías.",
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2026-03-31",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 296000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "NOVAVENTA S A",
+          "economicSector": "3 ",
+          "economicSectorName": null
+        },
+        "Guarantee": {
+          "guaranteeType": 9,
+          "guaranteeTypeName": "Otras garantías.",
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2025-06-30",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 296000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "NOVAVENTA S A",
+          "economicSector": "3 ",
+          "economicSectorName": null
+        },
+        "Guarantee": {
+          "guaranteeType": 9,
+          "guaranteeTypeName": "Otras garantías.",
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2025-09-30",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 8847000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "ICETEX CENTRO",
+          "economicSector": "3 ",
+          "economicSectorName": null
+        },
+        "Guarantee": {
+          "guaranteeType": 9,
+          "guaranteeTypeName": "Otras garantías.",
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2025-09-30",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 525000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "NEQUI          LI",
+          "economicSector": "1 ",
+          "economicSectorName": null
+        },
+        "Guarantee": {
+          "guaranteeType": "Q",
+          "guaranteeTypeName": null,
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2025-09-30",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 300000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "SOLVENTA       COLOMBIA",
+          "economicSector": 3,
+          "economicSectorName": "SECTOR REAL"
+        },
+        "Guarantee": {
+          "guaranteeType": 0,
+          "guaranteeTypeName": "Sin garantía",
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2025-12-31",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 791000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "NEQUI          LI",
+          "economicSector": "1 ",
+          "economicSectorName": null
+        },
+        "Guarantee": {
+          "guaranteeType": "Q",
+          "guaranteeTypeName": null,
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2026-03-31",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 11284000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "ICETEX CENTRO",
+          "economicSector": "3 ",
+          "economicSectorName": null
+        },
+        "Guarantee": {
+          "guaranteeType": 9,
+          "guaranteeTypeName": "Otras garantías.",
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2025-06-30",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 300000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "SOLVENTA       COLOMBIA",
+          "economicSector": 3,
+          "economicSectorName": "SECTOR REAL"
+        },
+        "Guarantee": {
+          "guaranteeType": 0,
+          "guaranteeTypeName": "Sin garantía",
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2025-09-30",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 296000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "NOVAVENTA S A",
+          "economicSector": "3 ",
+          "economicSectorName": null
+        },
+        "Guarantee": {
+          "guaranteeType": 9,
+          "guaranteeTypeName": "Otras garantías.",
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2025-12-31",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 300000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "SOLVENTA       COLOMBIA",
+          "economicSector": 3,
+          "economicSectorName": "SECTOR REAL"
+        },
+        "Guarantee": {
+          "guaranteeType": 0,
+          "guaranteeTypeName": "Sin garantía",
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2026-03-31",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 300000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "SOLVENTA       COLOMBIA",
+          "economicSector": 3,
+          "economicSectorName": "SECTOR REAL"
+        },
+        "Guarantee": {
+          "guaranteeType": 0,
+          "guaranteeTypeName": "Sin garantía",
+          "guaranteeValue": -1
+        }
+      },
+      {
+        "sourceGlobalIndebtedness": "DC",
+        "sourceGlobalIndebtednessDesc": "Datacredito",
+        "quarterQualification": "-",
+        "quarterQualificationDesc": "NO REPORTA INFORMACIÓN",
+        "cutoffDate": "2025-12-31",
+        "tradeHolderIndicator": "N",
+        "currencyType": "MC",
+        "currencyTypeDesc": null,
+        "quantityOfObligations": 1,
+        "capitalValue": 208000,
+        "typeOfCredit": "CNS",
+        "typeOfCreditDesc": "Consumo",
+        "entity": {
+          "businessLineName": "SISTECREDITO",
+          "economicSector": "3 ",
+          "economicSectorName": null
+        },
+        "Guarantee": {
+          "guaranteeType": 9,
+          "guaranteeTypeName": "Otras garantías.",
+          "guaranteeValue": -1
+        }
+      }
+    ],
+    "inquiryFootprints": [
+      {
+        "quantity": "01",
+        "economicSectorName": "SECTOR REAL",
+        "economicSector": 3,
+        "accountTypeName": "COC",
+        "accountTypeDesc": null,
+        "filingCityName": "------------",
+        "inquiryDate": "2026-06-24",
+        "inquiryReasonCode": "01",
+        "inquiryReasonDesc": "SOLICITUD DE PRODUCTO"
+      },
+      {
+        "quantity": "03",
+        "economicSectorName": "SECTOR REAL",
+        "economicSector": 3,
+        "accountTypeName": "CAS",
+        "accountTypeDesc": null,
+        "filingCityName": "------------",
+        "inquiryDate": "2026-02-11",
+        "inquiryReasonCode": "00",
+        "inquiryReasonDesc": "RAZÓN DESCONOCIDA"
+      },
+      {
+        "quantity": "01",
+        "economicSectorName": "SECTOR FINANCIERO",
+        "economicSector": 1,
+        "accountTypeName": "TDC",
+        "accountTypeDesc": null,
+        "filingCityName": "------------",
+        "inquiryDate": "2026-01-16",
+        "inquiryReasonCode": "01",
+        "inquiryReasonDesc": "SOLICITUD DE PRODUCTO"
+      }
+    ],
+    "agregatedInfo": {
+      "overview": {
+        "balances": {
+          "valueMonthlyPayment": 1127,
+          "HightestDebtBalance": 10984,
+          "debtBalanceD30": 0,
+          "debtBalanceD60": 0,
+          "debtBalanceD90": 1853,
+          "totaldebtBalance": 12629,
+          "totalValueBalanceOverdue": 1853,
+          "month": [
+            {
+              "behaviourDate": "2026-06-10",
+              "totalBalance": 300000,
+              "totalValueBalanceOverdue": 890000
+            },
+            {
+              "behaviourDate": "2026-05-10",
+              "totalBalance": 12629000,
+              "totalValueBalanceOverdue": 1851000
+            },
+            {
+              "behaviourDate": "2026-04-10",
+              "totalBalance": 12783000,
+              "totalValueBalanceOverdue": 4403000
+            },
+            {
+              "behaviourDate": "2026-03-10",
+              "totalBalance": 12908000,
+              "totalValueBalanceOverdue": 3972000
+            },
+            {
+              "behaviourDate": "2026-02-10",
+              "totalBalance": 1614000,
+              "totalValueBalanceOverdue": 1817000
+            },
+            {
+              "behaviourDate": "2026-01-10",
+              "totalBalance": 1604000,
+              "totalValueBalanceOverdue": 1807000
+            },
+            {
+              "behaviourDate": "2025-12-10",
+              "totalBalance": 12879000,
+              "totalValueBalanceOverdue": 1797000
+            },
+            {
+              "behaviourDate": "2025-11-10",
+              "totalBalance": 10432000,
+              "totalValueBalanceOverdue": 2203000
+            },
+            {
+              "behaviourDate": "2025-10-10",
+              "totalBalance": 10176000,
+              "totalValueBalanceOverdue": 2188000
+            },
+            {
+              "behaviourDate": "2025-09-10",
+              "totalBalance": 10176000,
+              "totalValueBalanceOverdue": 2184000
+            },
+            {
+              "behaviourDate": "2025-08-10",
+              "totalBalance": 10372000,
+              "totalValueBalanceOverdue": 2169000
+            },
+            {
+              "behaviourDate": "2025-07-10",
+              "totalBalance": 10474000,
+              "totalValueBalanceOverdue": 2150000
+            },
+            {
+              "behaviourDate": "2025-06-10",
+              "totalBalance": 10176000,
+              "totalValueBalanceOverdue": 2133000
+            },
+            {
+              "behaviourDate": "2025-05-10",
+              "totalBalance": 10176000,
+              "totalValueBalanceOverdue": 2116000
+            },
+            {
+              "behaviourDate": "2025-04-10",
+              "totalBalance": 10176000,
+              "totalValueBalanceOverdue": 2100000
+            },
+            {
+              "behaviourDate": "2025-03-10",
+              "totalBalance": 10176000,
+              "totalValueBalanceOverdue": 1972000
+            },
+            {
+              "behaviourDate": "2025-02-10",
+              "totalBalance": 10176000,
+              "totalValueBalanceOverdue": 1957000
+            },
+            {
+              "behaviourDate": "2025-01-10",
+              "totalBalance": 10176000,
+              "totalValueBalanceOverdue": 1794000
+            },
+            {
+              "behaviourDate": "2024-12-10",
+              "totalBalance": 9876000,
+              "totalValueBalanceOverdue": 1262000
+            },
+            {
+              "behaviourDate": "2024-11-10",
+              "totalBalance": 1030000,
+              "totalValueBalanceOverdue": 895000
+            },
+            {
+              "behaviourDate": "2024-10-10",
+              "totalBalance": 9877000,
+              "totalValueBalanceOverdue": 891000
+            },
+            {
+              "behaviourDate": "2024-09-10",
+              "totalBalance": 11131000,
+              "totalValueBalanceOverdue": 1883000
+            },
+            {
+              "behaviourDate": "2024-08-10",
+              "totalBalance": 11131000,
+              "totalValueBalanceOverdue": 1528000
+            },
+            {
+              "behaviourDate": "2024-07-10",
+              "totalBalance": 11131000,
+              "totalValueBalanceOverdue": 1179000
+            }
+          ],
+          "sector": [
+            {
+              "shareSector": 6.659276268904901,
+              "debtBalance": 841,
+              "economicSector": 1
+            },
+            {
+              "shareSector": 0,
+              "debtBalance": 0,
+              "economicSector": 2
+            },
+            {
+              "shareSector": 93.3407237310951,
+              "debtBalance": 11788,
+              "economicSector": 3
+            },
+            {
+              "shareSector": 0,
+              "debtBalance": 0,
+              "economicSector": 4
+            }
+          ]
+        },
+        "principals": {
+          "maturationSince": "2021-01-19",
+          "consultedLast6Months": 5,
+          "closedCredits": 1,
+          "currentNegativeCredits": 4,
+          "currentCredits": 6,
+          "openedAccountsAHOCCB": 4,
+          "closedAccountsAHOCCB": 2,
+          "totalDisputes": 0,
+          "negativeHistoricalLast12Months": 5,
+          "currentDisputes": 0
+        },
+        "behavior": {
+          "month": [
+            {
+              "behaviourDate": "2026-06-10",
+              "behaviour": "C",
+              "numberOfAccounts": 1
+            },
+            {
+              "behaviourDate": "2026-05-10",
+              "behaviour": "C",
+              "numberOfAccounts": 4
+            },
+            {
+              "behaviourDate": "2026-04-10",
+              "behaviour": "C",
+              "numberOfAccounts": 5
+            },
+            {
+              "behaviourDate": "2026-03-10",
+              "behaviour": "C",
+              "numberOfAccounts": 5
+            },
+            {
+              "behaviourDate": "2026-02-10",
+              "behaviour": "C",
+              "numberOfAccounts": 4
+            },
+            {
+              "behaviourDate": "2026-01-10",
+              "behaviour": "C",
+              "numberOfAccounts": 4
+            },
+            {
+              "behaviourDate": "2025-12-10",
+              "behaviour": "C",
+              "numberOfAccounts": 4
+            },
+            {
+              "behaviourDate": "2025-11-10",
+              "behaviour": "C",
+              "numberOfAccounts": 5
+            },
+            {
+              "behaviourDate": "2025-10-10",
+              "behaviour": "C",
+              "numberOfAccounts": 5
+            },
+            {
+              "behaviourDate": "2025-09-10",
+              "behaviour": "C",
+              "numberOfAccounts": 5
+            },
+            {
+              "behaviourDate": "2025-08-10",
+              "behaviour": "C",
+              "numberOfAccounts": 5
+            },
+            {
+              "behaviourDate": "2025-07-10",
+              "behaviour": "C",
+              "numberOfAccounts": 5
+            },
+            {
+              "behaviourDate": "2025-06-10",
+              "behaviour": "C",
+              "numberOfAccounts": 5
+            },
+            {
+              "behaviourDate": "2025-05-10",
+              "behaviour": "C",
+              "numberOfAccounts": 5
+            },
+            {
+              "behaviourDate": "2025-04-10",
+              "behaviour": "C",
+              "numberOfAccounts": 5
+            },
+            {
+              "behaviourDate": "2025-03-10",
+              "behaviour": "C",
+              "numberOfAccounts": 5
+            },
+            {
+              "behaviourDate": "2025-02-10",
+              "behaviour": "C",
+              "numberOfAccounts": 5
+            },
+            {
+              "behaviourDate": "2025-01-10",
+              "behaviour": "C",
+              "numberOfAccounts": 5
+            },
+            {
+              "behaviourDate": "2024-12-10",
+              "behaviour": "C",
+              "numberOfAccounts": 4
+            },
+            {
+              "behaviourDate": "2024-11-10",
+              "behaviour": "C",
+              "numberOfAccounts": 3
+            },
+            {
+              "behaviourDate": "2024-10-10",
+              "behaviour": "C",
+              "numberOfAccounts": 3
+            },
+            {
+              "behaviourDate": "2024-09-10",
+              "behaviour": "C",
+              "numberOfAccounts": 4
+            },
+            {
+              "behaviourDate": "2024-08-10",
+              "behaviour": "C",
+              "numberOfAccounts": 4
+            },
+            {
+              "behaviourDate": "2024-07-10",
+              "behaviour": "C",
+              "numberOfAccounts": 3
+            }
+          ]
+        }
+      },
+      "debtEvolution": {
+        "averageAnalysis": {
+          "openingAccounts": -100,
+          "valueMonthlyPayment": 27.3,
+          "debtBalance": 13.8,
+          "maximumDelinquency": 0,
+          "closingAccounts": 0,
+          "initialValue": 0.3,
+          "usePercentage": 12.44284723002869,
+          "scoreValue": 0,
+          "totalOpened": 0,
+          "totalClosed": 0
+        },
+        "trimester": [
+          {
+            "trimesterDate": "2026-06-01",
+            "quota": 1312000,
+            "monthsMaximumDelinquency": 6,
+            "DebBasic": {
+              "openingAccounts": 0,
+              "valueMonthlyPayment": "E",
+              "debtBalance": 12706000,
+              "maximumDelinquency": "M 180",
+              "closingAccounts": 0,
+              "initialValue": 12124000,
+              "usePercentage": 1.0480039590894095,
+              "scoreValue": 0,
+              "totalOpened": 10,
+              "totalClosed": 3
+            }
+          },
+          {
+            "trimesterDate": "2026-03-01",
+            "quota": 1493666,
+            "monthsMaximumDelinquency": 6,
+            "DebBasic": {
+              "openingAccounts": 0,
+              "valueMonthlyPayment": "E",
+              "debtBalance": 12898000,
+              "maximumDelinquency": "M 180",
+              "closingAccounts": 0,
+              "initialValue": 12120666,
+              "usePercentage": 1.064132885979869,
+              "scoreValue": 0,
+              "totalOpened": 10,
+              "totalClosed": 3
+            }
+          },
+          {
+            "trimesterDate": "2025-12-01",
+            "quota": 1031000,
+            "monthsMaximumDelinquency": 6,
+            "DebBasic": {
+              "openingAccounts": 1,
+              "valueMonthlyPayment": "E",
+              "debtBalance": 11162333,
+              "maximumDelinquency": "M 180",
+              "closingAccounts": 0,
+              "initialValue": 12086000,
+              "usePercentage": 0.9235754867891225,
+              "scoreValue": 0,
+              "totalOpened": 10,
+              "totalClosed": 3
+            }
+          }
+        ]
+      },
+      "totals": {
+        "total": [
+          {
+            "typeOfDebtor": "Principal",
+            "valueMonthlyPayment": 1127,
+            "initialValue": 12124,
+            "share": 100,
+            "debtBalance": 12629,
+            "ValueBalanceOverdue": 1853
+          },
+          {
+            "typeOfDebtor": "Codeudor",
+            "valueMonthlyPayment": 0,
+            "initialValue": 0,
+            "share": 0,
+            "debtBalance": 0,
+            "ValueBalanceOverdue": 0
+          }
+        ],
+        "accountType": [
+          {
+            "typeOfDebtor": "Principal",
+            "typeOfDebtName": "CAB",
+            "typeOfDebtDesc": null,
+            "valueMonthlyPayment": 32,
+            "initialValue": 560,
+            "debtBalance": 841,
+            "totalValueBalanceOverdue": 459,
+            "typeOfDebt": "Cartera bancaria"
+          },
+          {
+            "typeOfDebtor": "Principal",
+            "typeOfDebtName": "EDU",
+            "typeOfDebtDesc": null,
+            "valueMonthlyPayment": 331,
+            "initialValue": 10935,
+            "debtBalance": 10984,
+            "totalValueBalanceOverdue": 0,
+            "typeOfDebt": "Cartera educación"
+          },
+          {
+            "typeOfDebtor": "Principal",
+            "typeOfDebtName": "ALI",
+            "typeOfDebtDesc": null,
+            "valueMonthlyPayment": 296,
+            "initialValue": 0,
+            "debtBalance": 296,
+            "totalValueBalanceOverdue": 296,
+            "typeOfDebt": "Cartera de alimentos"
+          },
+          {
+            "typeOfDebtor": "Principal",
+            "typeOfDebtName": "CON",
+            "typeOfDebtDesc": null,
+            "valueMonthlyPayment": 353,
+            "initialValue": 514,
+            "debtBalance": 508,
+            "totalValueBalanceOverdue": 1098,
+            "typeOfDebt": "Créditos de consumo"
+          },
+          {
+            "typeOfDebtor": "Principal",
+            "typeOfDebtName": "CDC",
+            "typeOfDebtDesc": null,
+            "valueMonthlyPayment": 115,
+            "initialValue": 115,
+            "debtBalance": 0,
+            "totalValueBalanceOverdue": 0,
+            "typeOfDebt": "Cartera de comunicaciones"
+          }
+        ]
+      },
+      "portfolioComposition": {
+        "accountType": [
+          {
+            "numberOfAccounts": 4,
+            "accountType": "AHO",
+            "accountTypeDesc": null,
+            "percentage": 1,
+            "typeOfDebtor": "Principal",
+            "State": [
+              {
+                "code": "Activa",
+                "codeDesc": null,
+                "quantityOfObligations": 4
+              }
+            ]
+          },
+          {
+            "numberOfAccounts": 1,
+            "accountType": "ALI",
+            "accountTypeDesc": null,
+            "percentage": 1,
+            "typeOfDebtor": "Principal",
+            "State": [
+              {
+                "code": "Cart. castigada",
+                "codeDesc": null,
+                "quantityOfObligations": 1
+              }
+            ]
+          },
+          {
+            "numberOfAccounts": 1,
+            "accountType": "CAB",
+            "accountTypeDesc": null,
+            "percentage": 1,
+            "typeOfDebtor": "Principal",
+            "State": [
+              {
+                "code": "Cart. castigada",
+                "codeDesc": null,
+                "quantityOfObligations": 1
+              }
+            ]
+          },
+          {
+            "numberOfAccounts": 1,
+            "accountType": "CDC",
+            "accountTypeDesc": null,
+            "percentage": 1,
+            "typeOfDebtor": "Principal",
+            "State": [
+              {
+                "code": "Al dia",
+                "codeDesc": null,
+                "quantityOfObligations": 1
+              }
+            ]
+          },
+          {
+            "numberOfAccounts": 2,
+            "accountType": "CON",
+            "accountTypeDesc": null,
+            "percentage": 1,
+            "typeOfDebtor": "Principal",
+            "State": [
+              {
+                "code": "Cart. castigada",
+                "codeDesc": null,
+                "quantityOfObligations": 1
+              },
+              {
+                "code": "Esta en mora 120",
+                "codeDesc": null,
+                "quantityOfObligations": 1
+              }
+            ]
+          },
+          {
+            "numberOfAccounts": 1,
+            "accountType": "EDU",
+            "accountTypeDesc": null,
+            "percentage": 1,
+            "typeOfDebtor": "Principal",
+            "State": [
+              {
+                "code": "Al dia Mora 120",
+                "codeDesc": null,
+                "quantityOfObligations": 1
+              }
+            ]
+          }
+        ]
+      },
+      "historicalDebtBalance": {
+        "amounts": [
+          {
+            "numberOfAccountsConsidered": 5,
+            "trimesterDate": "2026-06-01",
+            "debtBalance": 12706000,
+            "numberOfAccounts": 6
+          },
+          {
+            "numberOfAccountsConsidered": 5,
+            "trimesterDate": "2026-03-01",
+            "debtBalance": 12898000,
+            "numberOfAccounts": 6
+          },
+          {
+            "numberOfAccountsConsidered": 5,
+            "trimesterDate": "2025-12-01",
+            "debtBalance": 11162333.3,
+            "numberOfAccounts": 6
+          },
+          {
+            "numberOfAccountsConsidered": 6,
+            "trimesterDate": "2025-09-01",
+            "debtBalance": 10340666.7,
+            "numberOfAccounts": 6
+          },
+          {
+            "numberOfAccountsConsidered": 5,
+            "trimesterDate": "2025-06-01",
+            "debtBalance": 10176000,
+            "numberOfAccounts": 6
+          },
+          {
+            "numberOfAccountsConsidered": 5,
+            "trimesterDate": "2025-03-01",
+            "debtBalance": 10176000,
+            "numberOfAccounts": 6
+          },
+          {
+            "numberOfAccountsConsidered": 4,
+            "trimesterDate": "2024-12-01",
+            "debtBalance": 9876666.7,
+            "numberOfAccounts": 6
+          },
+          {
+            "numberOfAccountsConsidered": 4,
+            "trimesterDate": "2024-09-01",
+            "debtBalance": 11131000,
+            "numberOfAccounts": 5
+          }
+        ],
+        "accountType": [
+          {
+            "accountType": "ALI",
+            "accountTypeDesc": null,
+            "trimester": [
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2026-06-01",
+                "debtBalance": 296000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2026-03-01",
+                "debtBalance": 296000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2025-12-01",
+                "debtBalance": 296000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2025-09-01",
+                "debtBalance": 296000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2025-06-01",
+                "debtBalance": 296000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2025-03-01",
+                "debtBalance": 296000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2024-12-01",
+                "debtBalance": 296000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2024-09-01",
+                "debtBalance": 296000,
+                "numberOfAccounts": 1
+              }
+            ]
+          },
+          {
+            "accountType": "CAB",
+            "accountTypeDesc": null,
+            "trimester": [
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2026-06-01",
+                "debtBalance": 835500,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2026-03-01",
+                "debtBalance": 810000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2025-12-01",
+                "debtBalance": 699000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2025-09-01",
+                "debtBalance": 525000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2025-06-01",
+                "debtBalance": 525000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2025-03-01",
+                "debtBalance": 525000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2024-12-01",
+                "debtBalance": 525000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2024-09-01",
+                "debtBalance": 525000,
+                "numberOfAccounts": 1
+              }
+            ]
+          },
+          {
+            "accountType": "CDC",
+            "accountTypeDesc": null,
+            "trimester": [
+              {
+                "numberOfAccountsConsidered": 0,
+                "trimesterDate": "2026-06-01",
+                "debtBalance": 0,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 0,
+                "trimesterDate": "2026-03-01",
+                "debtBalance": 0,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 0,
+                "trimesterDate": "2025-12-01",
+                "debtBalance": 0,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2025-09-01",
+                "debtBalance": 164666,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 0,
+                "trimesterDate": "2025-06-01",
+                "debtBalance": 0,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 0,
+                "trimesterDate": "2025-03-01",
+                "debtBalance": 0,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 0,
+                "trimesterDate": "2024-12-01",
+                "debtBalance": 0,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 0,
+                "trimesterDate": "2024-09-01",
+                "debtBalance": 0,
+                "numberOfAccounts": 1
+              }
+            ]
+          },
+          {
+            "accountType": "CON",
+            "accountTypeDesc": null,
+            "trimester": [
+              {
+                "numberOfAccountsConsidered": 2,
+                "trimesterDate": "2026-06-01",
+                "debtBalance": 508000,
+                "numberOfAccounts": 2
+              },
+              {
+                "numberOfAccountsConsidered": 2,
+                "trimesterDate": "2026-03-01",
+                "debtBalance": 508000,
+                "numberOfAccounts": 2
+              },
+              {
+                "numberOfAccountsConsidered": 2,
+                "trimesterDate": "2025-12-01",
+                "debtBalance": 508000,
+                "numberOfAccounts": 2
+              },
+              {
+                "numberOfAccountsConsidered": 2,
+                "trimesterDate": "2025-09-01",
+                "debtBalance": 508000,
+                "numberOfAccounts": 2
+              },
+              {
+                "numberOfAccountsConsidered": 2,
+                "trimesterDate": "2025-06-01",
+                "debtBalance": 508000,
+                "numberOfAccounts": 2
+              },
+              {
+                "numberOfAccountsConsidered": 2,
+                "trimesterDate": "2025-03-01",
+                "debtBalance": 508000,
+                "numberOfAccounts": 2
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2024-12-01",
+                "debtBalance": 208666,
+                "numberOfAccounts": 2
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2024-09-01",
+                "debtBalance": 209000,
+                "numberOfAccounts": 1
+              }
+            ]
+          },
+          {
+            "accountType": "EDU",
+            "accountTypeDesc": null,
+            "trimester": [
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2026-06-01",
+                "debtBalance": 11066500,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2026-03-01",
+                "debtBalance": 11284000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2025-12-01",
+                "debtBalance": 9659333,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2025-09-01",
+                "debtBalance": 8847000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2025-06-01",
+                "debtBalance": 8847000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2025-03-01",
+                "debtBalance": 8847000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2024-12-01",
+                "debtBalance": 8847000,
+                "numberOfAccounts": 1
+              },
+              {
+                "numberOfAccountsConsidered": 1,
+                "trimesterDate": "2024-09-01",
+                "debtBalance": 10101000,
+                "numberOfAccounts": 1
+              }
+            ]
+          }
+        ]
+      },
+      "indebtednessOverview": {
+        "trimester": [
+          {
+            "trimesterDate": "2026-03-01",
+            "sector": [
+              {
+                "economicSectorName": "Financiero",
+                "economicSector": 1,
+                "admissibleGuarantee": {
+                  "guaranteeType": 0,
+                  "guaranteeTypeName": "Sin garantía"
+                },
+                "otherGuarantee": {
+                  "guaranteeTypeName": 0
+                },
+                "liabilities": [
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Comercial",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Hipotecario",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 1,
+                    "typeOfDebt": "Consumo",
+                    "capitalValue": 820
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Tarjeta de Crédito",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Microcrédito",
+                    "capitalValue": 0
+                  }
+                ]
+              },
+              {
+                "economicSectorName": "Cooperativo",
+                "economicSector": 2,
+                "admissibleGuarantee": {
+                  "guaranteeType": 0,
+                  "guaranteeTypeName": "Sin garantía"
+                },
+                "otherGuarantee": {
+                  "guaranteeTypeName": 0
+                },
+                "liabilities": [
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Comercial",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Hipotecario",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Consumo",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Tarjeta de Crédito",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Microcrédito",
+                    "capitalValue": 0
+                  }
+                ]
+              },
+              {
+                "economicSectorName": "Real",
+                "economicSector": 3,
+                "admissibleGuarantee": {
+                  "guaranteeType": 0,
+                  "guaranteeTypeName": "Sin garantía"
+                },
+                "otherGuarantee": {
+                  "guaranteeTypeName": 0
+                },
+                "liabilities": [
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Comercial",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Hipotecario",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 4,
+                    "typeOfDebt": "Consumo",
+                    "capitalValue": 12088
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Tarjeta de Crédito",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Microcrédito",
+                    "capitalValue": 0
+                  }
+                ]
+              },
+              {
+                "economicSectorName": "Telcos",
+                "economicSector": 4,
+                "admissibleGuarantee": {
+                  "guaranteeType": 0,
+                  "guaranteeTypeName": "Sin garantía"
+                },
+                "otherGuarantee": {
+                  "guaranteeTypeName": 0
+                },
+                "liabilities": [
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Comercial",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Hipotecario",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Consumo",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Tarjeta de Crédito",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Microcrédito",
+                    "capitalValue": 0
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "trimesterDate": "2025-12-01",
+            "sector": [
+              {
+                "economicSectorName": "Financiero",
+                "economicSector": 1,
+                "admissibleGuarantee": {
+                  "guaranteeType": 0,
+                  "guaranteeTypeName": "Sin garantía"
+                },
+                "otherGuarantee": {
+                  "guaranteeTypeName": 0
+                },
+                "liabilities": [
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Comercial",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Hipotecario",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 1,
+                    "typeOfDebt": "Consumo",
+                    "capitalValue": 791
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Tarjeta de Crédito",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Microcrédito",
+                    "capitalValue": 0
+                  }
+                ]
+              },
+              {
+                "economicSectorName": "Cooperativo",
+                "economicSector": 2,
+                "admissibleGuarantee": {
+                  "guaranteeType": 0,
+                  "guaranteeTypeName": "Sin garantía"
+                },
+                "otherGuarantee": {
+                  "guaranteeTypeName": 0
+                },
+                "liabilities": [
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Comercial",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Hipotecario",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Consumo",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Tarjeta de Crédito",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Microcrédito",
+                    "capitalValue": 0
+                  }
+                ]
+              },
+              {
+                "economicSectorName": "Real",
+                "economicSector": 3,
+                "admissibleGuarantee": {
+                  "guaranteeType": 0,
+                  "guaranteeTypeName": "Sin garantía"
+                },
+                "otherGuarantee": {
+                  "guaranteeTypeName": 0
+                },
+                "liabilities": [
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Comercial",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Hipotecario",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 4,
+                    "typeOfDebt": "Consumo",
+                    "capitalValue": 12088
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Tarjeta de Crédito",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Microcrédito",
+                    "capitalValue": 0
+                  }
+                ]
+              },
+              {
+                "economicSectorName": "Telcos",
+                "economicSector": 4,
+                "admissibleGuarantee": {
+                  "guaranteeType": 0,
+                  "guaranteeTypeName": "Sin garantía"
+                },
+                "otherGuarantee": {
+                  "guaranteeTypeName": 0
+                },
+                "liabilities": [
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Comercial",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Hipotecario",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Consumo",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Tarjeta de Crédito",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Microcrédito",
+                    "capitalValue": 0
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "trimesterDate": "2025-09-01",
+            "sector": [
+              {
+                "economicSectorName": "Financiero",
+                "economicSector": 1,
+                "admissibleGuarantee": {
+                  "guaranteeType": 0,
+                  "guaranteeTypeName": "Sin garantía"
+                },
+                "otherGuarantee": {
+                  "guaranteeTypeName": 0
+                },
+                "liabilities": [
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Comercial",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Hipotecario",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 1,
+                    "typeOfDebt": "Consumo",
+                    "capitalValue": 525
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Tarjeta de Crédito",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Microcrédito",
+                    "capitalValue": 0
+                  }
+                ]
+              },
+              {
+                "economicSectorName": "Cooperativo",
+                "economicSector": 2,
+                "admissibleGuarantee": {
+                  "guaranteeType": 0,
+                  "guaranteeTypeName": "Sin garantía"
+                },
+                "otherGuarantee": {
+                  "guaranteeTypeName": 0
+                },
+                "liabilities": [
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Comercial",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Hipotecario",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Consumo",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Tarjeta de Crédito",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Microcrédito",
+                    "capitalValue": 0
+                  }
+                ]
+              },
+              {
+                "economicSectorName": "Real",
+                "economicSector": 3,
+                "admissibleGuarantee": {
+                  "guaranteeType": 0,
+                  "guaranteeTypeName": "Sin garantía"
+                },
+                "otherGuarantee": {
+                  "guaranteeTypeName": 0
+                },
+                "liabilities": [
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Comercial",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Hipotecario",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 4,
+                    "typeOfDebt": "Consumo",
+                    "capitalValue": 9651
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Tarjeta de Crédito",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Microcrédito",
+                    "capitalValue": 0
+                  }
+                ]
+              },
+              {
+                "economicSectorName": "Telcos",
+                "economicSector": 4,
+                "admissibleGuarantee": {
+                  "guaranteeType": 0,
+                  "guaranteeTypeName": "Sin garantía"
+                },
+                "otherGuarantee": {
+                  "guaranteeTypeName": 0
+                },
+                "liabilities": [
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Comercial",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Hipotecario",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Consumo",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Tarjeta de Crédito",
+                    "capitalValue": 0
+                  },
+                  {
+                    "numberOfAccounts": 0,
+                    "typeOfDebt": "Microcrédito",
+                    "capitalValue": 0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "agregatedInfoMicrocredit": {
+      "debtEvolution": {
+        "debtEvolutionSector": [
+          {
+            "economicSectorName": "Real",
+            "economicSector": 3,
+            "debtEvolutionAccountType": [
+              {
+                "accountType": "ALI",
+                "accountTypeDesc": null,
+                "debtEvolutionTrimesterValue": [
+                  {
+                    "number": 1,
+                    "debtBalance": 296,
+                    "valueMonthlyPaymentOverdue": 296,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "ALI",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2026/06",
+                    "valueBalanceOverdue": 296,
+                    "debtPercentage": 0,
+                    "initialValue": 0
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 296,
+                    "valueMonthlyPaymentOverdue": 296,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "ALI",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2026/03",
+                    "valueBalanceOverdue": 296,
+                    "debtPercentage": 0,
+                    "initialValue": 0
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 296,
+                    "valueMonthlyPaymentOverdue": 296,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "ALI",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/12",
+                    "valueBalanceOverdue": 296,
+                    "debtPercentage": 0,
+                    "initialValue": 0
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 296,
+                    "valueMonthlyPaymentOverdue": 296,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "ALI",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/09",
+                    "valueBalanceOverdue": 296,
+                    "debtPercentage": 0,
+                    "initialValue": 0
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 296,
+                    "valueMonthlyPaymentOverdue": 296,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "ALI",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/06",
+                    "valueBalanceOverdue": 296,
+                    "debtPercentage": 0,
+                    "initialValue": 0
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 296,
+                    "valueMonthlyPaymentOverdue": 296,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "ALI",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/03",
+                    "valueBalanceOverdue": 296,
+                    "debtPercentage": 0,
+                    "initialValue": 0
+                  }
+                ]
+              },
+              {
+                "accountType": "CON",
+                "accountTypeDesc": null,
+                "debtEvolutionTrimesterValue": [
+                  {
+                    "number": 2,
+                    "debtBalance": 508,
+                    "valueMonthlyPaymentOverdue": 353,
+                    "menorRating": 5,
+                    "codeLeastRating": "E",
+                    "accountType": "CON",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2026/06",
+                    "valueBalanceOverdue": 1098,
+                    "debtPercentage": 98.8,
+                    "initialValue": 514
+                  },
+                  {
+                    "number": 2,
+                    "debtBalance": 508,
+                    "valueMonthlyPaymentOverdue": 353,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "CON",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2026/03",
+                    "valueBalanceOverdue": 1090,
+                    "debtPercentage": 98.8,
+                    "initialValue": 514
+                  },
+                  {
+                    "number": 2,
+                    "debtBalance": 508,
+                    "valueMonthlyPaymentOverdue": 353,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "CON",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/12",
+                    "valueBalanceOverdue": 1061,
+                    "debtPercentage": 98.8,
+                    "initialValue": 514
+                  },
+                  {
+                    "number": 2,
+                    "debtBalance": 508,
+                    "valueMonthlyPaymentOverdue": 353,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "CON",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/09",
+                    "valueBalanceOverdue": 1053,
+                    "debtPercentage": 98.8,
+                    "initialValue": 514
+                  },
+                  {
+                    "number": 2,
+                    "debtBalance": 508,
+                    "valueMonthlyPaymentOverdue": 353,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "CON",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/06",
+                    "valueBalanceOverdue": 1027,
+                    "debtPercentage": 98.8,
+                    "initialValue": 514
+                  },
+                  {
+                    "number": 2,
+                    "debtBalance": 508,
+                    "valueMonthlyPaymentOverdue": 353,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "CON",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/03",
+                    "valueBalanceOverdue": 892,
+                    "debtPercentage": 98.8,
+                    "initialValue": 514
+                  }
+                ]
+              },
+              {
+                "accountType": "EDU",
+                "accountTypeDesc": null,
+                "debtEvolutionTrimesterValue": [
+                  {
+                    "number": 1,
+                    "debtBalance": 10984,
+                    "valueMonthlyPaymentOverdue": 331,
+                    "menorRating": 6,
+                    "codeLeastRating": "AA",
+                    "accountType": "EDU",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2026/06",
+                    "valueBalanceOverdue": 0,
+                    "debtPercentage": 100.4,
+                    "initialValue": 10935
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 11284,
+                    "valueMonthlyPaymentOverdue": 701,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "EDU",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2026/03",
+                    "valueBalanceOverdue": 2135,
+                    "debtPercentage": 103.2,
+                    "initialValue": 10935
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 11284,
+                    "valueMonthlyPaymentOverdue": 697,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "EDU",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/12",
+                    "valueBalanceOverdue": 0,
+                    "debtPercentage": 103.2,
+                    "initialValue": 10935
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 8847,
+                    "valueMonthlyPaymentOverdue": 61,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "EDU",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/09",
+                    "valueBalanceOverdue": 407,
+                    "debtPercentage": 0,
+                    "initialValue": 0
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 8847,
+                    "valueMonthlyPaymentOverdue": 61,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "EDU",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/06",
+                    "valueBalanceOverdue": 393,
+                    "debtPercentage": 0,
+                    "initialValue": 0
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 8847,
+                    "valueMonthlyPaymentOverdue": 61,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "EDU",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/03",
+                    "valueBalanceOverdue": 379,
+                    "debtPercentage": 0,
+                    "initialValue": 0
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "economicSectorName": "Financiero",
+            "economicSector": 1,
+            "debtEvolutionAccountType": [
+              {
+                "accountType": "CAB",
+                "accountTypeDesc": null,
+                "debtEvolutionTrimesterValue": [
+                  {
+                    "number": 1,
+                    "debtBalance": 841,
+                    "valueMonthlyPaymentOverdue": 32,
+                    "menorRating": 5,
+                    "codeLeastRating": "E",
+                    "accountType": "CAB",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2026/06",
+                    "valueBalanceOverdue": 459,
+                    "debtPercentage": 150.2,
+                    "initialValue": 560
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 820,
+                    "valueMonthlyPaymentOverdue": 32,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "CAB",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2026/03",
+                    "valueBalanceOverdue": 451,
+                    "debtPercentage": 146.4,
+                    "initialValue": 560
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 791,
+                    "valueMonthlyPaymentOverdue": 32,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "CAB",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/12",
+                    "valueBalanceOverdue": 440,
+                    "debtPercentage": 141.2,
+                    "initialValue": 560
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 525,
+                    "valueMonthlyPaymentOverdue": 32,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "CAB",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/09",
+                    "valueBalanceOverdue": 428,
+                    "debtPercentage": 93.8,
+                    "initialValue": 560
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 525,
+                    "valueMonthlyPaymentOverdue": 32,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "CAB",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/06",
+                    "valueBalanceOverdue": 417,
+                    "debtPercentage": 93.8,
+                    "initialValue": 560
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 525,
+                    "valueMonthlyPaymentOverdue": 32,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "CAB",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/03",
+                    "valueBalanceOverdue": 405,
+                    "debtPercentage": 93.8,
+                    "initialValue": 560
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "economicSectorName": "Telcos",
+            "economicSector": 4,
+            "debtEvolutionAccountType": [
+              {
+                "accountType": "CDC",
+                "accountTypeDesc": null,
+                "debtEvolutionTrimesterValue": [
+                  {
+                    "number": 1,
+                    "debtBalance": 0,
+                    "valueMonthlyPaymentOverdue": 115,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "CDC",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2026/06",
+                    "valueBalanceOverdue": 0,
+                    "debtPercentage": 0,
+                    "initialValue": 115
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 0,
+                    "valueMonthlyPaymentOverdue": 115,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "CDC",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2026/03",
+                    "valueBalanceOverdue": 0,
+                    "debtPercentage": 0,
+                    "initialValue": 115
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 0,
+                    "valueMonthlyPaymentOverdue": 110,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "CDC",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/12",
+                    "valueBalanceOverdue": 0,
+                    "debtPercentage": 0,
+                    "initialValue": 110
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 0,
+                    "valueMonthlyPaymentOverdue": 66,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "CDC",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/09",
+                    "valueBalanceOverdue": 0,
+                    "debtPercentage": 0,
+                    "initialValue": 66
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 0,
+                    "valueMonthlyPaymentOverdue": 93,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "CDC",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/06",
+                    "valueBalanceOverdue": 0,
+                    "debtPercentage": 0,
+                    "initialValue": 93
+                  },
+                  {
+                    "number": 1,
+                    "debtBalance": 0,
+                    "valueMonthlyPaymentOverdue": 93,
+                    "menorRating": 0,
+                    "codeLeastRating": "-",
+                    "accountType": "CDC",
+                    "accountTypeDesc": null,
+                    "trimesterDate": "2025/03",
+                    "valueBalanceOverdue": 0,
+                    "debtPercentage": 0,
+                    "initialValue": 93
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "trimesterDate": [
+          "2026/06",
+          "2026/03",
+          "2025/12",
+          "2025/09",
+          "2025/06",
+          "2025/03"
+        ]
+      },
+      "overview": {
+        "currentIndebtedness": {
+          "sector": [
+            {
+              "economicSectorName": "SECTOR REAL",
+              "economicSector": 3,
+              "accountType": [
+                {
+                  "accountType": "ALI",
+                  "accountTypeDesc": null,
+                  "user": [
+                    {
+                      "typeOfDebtor": "Principal",
+                      "account": [
+                        {
+                          "valueMonthlyPaymentOverdue": 296,
+                          "Negativebehaviour": true,
+                          "behaviourName": "Cart. castigada",
+                          "initialValue": 0,
+                          "rating": "-",
+                          "ratingDesc": "NO REPORTA INFORMACIÓN",
+                          "totalDebtBalanceLiabilities": 12629,
+                          "debtBalance": 296,
+                          "valueBalanceOverdue": 296
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "accountType": "CON",
+                  "accountTypeDesc": null,
+                  "user": [
+                    {
+                      "typeOfDebtor": "Principal",
+                      "account": [
+                        {
+                          "valueMonthlyPaymentOverdue": 53,
+                          "Negativebehaviour": true,
+                          "behaviourName": "Esta en mora 120",
+                          "initialValue": 214,
+                          "rating": "E",
+                          "ratingDesc": null,
+                          "totalDebtBalanceLiabilities": 12629,
+                          "debtBalance": 208,
+                          "valueBalanceOverdue": 208
+                        },
+                        {
+                          "valueMonthlyPaymentOverdue": 300,
+                          "Negativebehaviour": true,
+                          "behaviourName": "Cart. castigada",
+                          "initialValue": 300,
+                          "rating": "-",
+                          "ratingDesc": "NO REPORTA INFORMACIÓN",
+                          "totalDebtBalanceLiabilities": 12629,
+                          "debtBalance": 300,
+                          "valueBalanceOverdue": 890
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "accountType": "EDU",
+                  "accountTypeDesc": null,
+                  "user": [
+                    {
+                      "typeOfDebtor": "Principal",
+                      "account": [
+                        {
+                          "valueMonthlyPaymentOverdue": 331,
+                          "Negativebehaviour": false,
+                          "behaviourName": "Al día Mora 120",
+                          "initialValue": 10935,
+                          "rating": "AA",
+                          "ratingDesc": null,
+                          "totalDebtBalanceLiabilities": 12629,
+                          "debtBalance": 10984,
+                          "valueBalanceOverdue": 0
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "economicSectorName": "SECTOR FINANCIERO",
+              "economicSector": 1,
+              "accountType": [
+                {
+                  "accountType": "CAB",
+                  "accountTypeDesc": null,
+                  "user": [
+                    {
+                      "typeOfDebtor": "Principal",
+                      "account": [
+                        {
+                          "valueMonthlyPaymentOverdue": 32,
+                          "Negativebehaviour": true,
+                          "behaviourName": "Cart. castigada",
+                          "initialValue": 560,
+                          "rating": "E",
+                          "ratingDesc": null,
+                          "totalDebtBalanceLiabilities": 12629,
+                          "debtBalance": 841,
+                          "valueBalanceOverdue": 459
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "economicSectorName": "SECTOR TELCOS",
+              "economicSector": 4,
+              "accountType": [
+                {
+                  "accountType": "CDC",
+                  "accountTypeDesc": null,
+                  "user": [
+                    {
+                      "typeOfDebtor": "Principal",
+                      "account": [
+                        {
+                          "valueMonthlyPaymentOverdue": 115,
+                          "Negativebehaviour": false,
+                          "behaviourName": "Al día",
+                          "initialValue": 115,
+                          "rating": "-",
+                          "ratingDesc": "NO REPORTA INFORMACIÓN",
+                          "totalDebtBalanceLiabilities": 12629,
+                          "debtBalance": 0,
+                          "valueBalanceOverdue": 0
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "generalProfile": {
+          "Antiquity": {
+            "sectorXDebtor": {
+              "retailSector": "2021-07-15",
+              "financialSector": "2021-01-19",
+              "telcosSector": "2024-03-07"
+            }
+          },
+          "refinancedDebts": {
+            "retailSector": 0,
+            "cooperativeSector": 0,
+            "financialSector": 0,
+            "telcosSector": 0,
+            "totalAsCosignerAndOther": 0,
+            "totalAsPrincipal": 0
+          },
+          "RestructuredDebts": {
+            "retailSector": 0,
+            "cooperativeSector": 0,
+            "financialSector": 0,
+            "telcosSector": 0,
+            "totalAsCosignerAndOther": 0,
+            "totalAsPrincipal": 0
+          },
+          "inquiredLast6Months": {
+            "retailSector": 4,
+            "cooperativeSector": 0,
+            "financialSector": 1,
+            "telcosSector": 0,
+            "totalAsCosignerAndOther": 0,
+            "totalAsPrincipal": 0
+          },
+          "closedDebts": {
+            "retailSector": 1,
+            "cooperativeSector": 0,
+            "financialSector": 0,
+            "telcosSector": 0,
+            "totalAsCosignerAndOther": 0,
+            "totalAsPrincipal": 1
+          },
+          "disputes": {
+            "retailSector": 0,
+            "cooperativeSector": 0,
+            "financialSector": 0,
+            "telcosSector": 0,
+            "totalAsCosignerAndOther": 0,
+            "totalAsPrincipal": 0
+          },
+          "currentCredits": {
+            "retailSector": 4,
+            "cooperativeSector": 0,
+            "financialSector": 1,
+            "telcosSector": 1,
+            "totalAsCosignerAndOther": 0,
+            "totalAsPrincipal": 6
+          }
+        },
+        "debtBalanceAndOverdueVector": {
+          "hasCooperativeSector": false,
+          "hasFinancialSector": true,
+          "hasRetailSector": true,
+          "hasTelcosSector": true,
+          "debtBalanceAndOverdue": [
+            {
+              "maximumDelinquency": "C",
+              "maxDelinquencyRetailSector": "C",
+              "numCredits30": 0,
+              "numCreditsHigherOrEqual60": 1,
+              "totalValueBalanceOverdue": 890,
+              "totalDelinquencyAccounts": 1,
+              "totaldebtBalance": 300,
+              "behaviourDate": "2026-06-10"
+            },
+            {
+              "maximumDelinquency": "C",
+              "maxDelinquencyFinancialSector": "C",
+              "maxDelinquencyRetailSector": "C",
+              "numCredits30": 0,
+              "numCreditsHigherOrEqual60": 4,
+              "totalValueBalanceOverdue": 1851,
+              "totalDelinquencyAccounts": 4,
+              "totaldebtBalance": 12629,
+              "behaviourDate": "2026-05-10"
+            },
+            {
+              "maximumDelinquency": "C",
+              "maxDelinquencyFinancialSector": "C",
+              "maxDelinquencyRetailSector": "C",
+              "maxDelinquencyTelcosSector": "N",
+              "numCredits30": 0,
+              "numCreditsHigherOrEqual60": 5,
+              "totalValueBalanceOverdue": 4403,
+              "totalDelinquencyAccounts": 5,
+              "totaldebtBalance": 12783,
+              "behaviourDate": "2026-04-10"
+            },
+            {
+              "maximumDelinquency": "C",
+              "maxDelinquencyFinancialSector": "C",
+              "maxDelinquencyRetailSector": "C",
+              "maxDelinquencyTelcosSector": "N",
+              "numCredits30": 0,
+              "numCreditsHigherOrEqual60": 5,
+              "totalValueBalanceOverdue": 3972,
+              "totalDelinquencyAccounts": 5,
+              "totaldebtBalance": 12908,
+              "behaviourDate": "2026-03-10"
+            },
+            {
+              "maximumDelinquency": "C",
+              "maxDelinquencyFinancialSector": "C",
+              "maxDelinquencyRetailSector": "C",
+              "maxDelinquencyTelcosSector": "N",
+              "numCredits30": 0,
+              "numCreditsHigherOrEqual60": 4,
+              "totalValueBalanceOverdue": 1817,
+              "totalDelinquencyAccounts": 4,
+              "totaldebtBalance": 1614,
+              "behaviourDate": "2026-02-10"
+            },
+            {
+              "maximumDelinquency": "C",
+              "maxDelinquencyFinancialSector": "C",
+              "maxDelinquencyRetailSector": "C",
+              "maxDelinquencyTelcosSector": "N",
+              "numCredits30": 0,
+              "numCreditsHigherOrEqual60": 4,
+              "totalValueBalanceOverdue": 1807,
+              "totalDelinquencyAccounts": 4,
+              "totaldebtBalance": 1604,
+              "behaviourDate": "2026-01-10"
+            },
+            {
+              "maximumDelinquency": "C",
+              "maxDelinquencyFinancialSector": "C",
+              "maxDelinquencyRetailSector": "C",
+              "maxDelinquencyTelcosSector": "N",
+              "numCredits30": 0,
+              "numCreditsHigherOrEqual60": 4,
+              "totalValueBalanceOverdue": 1797,
+              "totalDelinquencyAccounts": 4,
+              "totaldebtBalance": 12879,
+              "behaviourDate": "2025-12-10"
+            },
+            {
+              "maximumDelinquency": "C",
+              "maxDelinquencyFinancialSector": "C",
+              "maxDelinquencyRetailSector": "C",
+              "maxDelinquencyTelcosSector": "N",
+              "numCredits30": 0,
+              "numCreditsHigherOrEqual60": 5,
+              "totalValueBalanceOverdue": 2203,
+              "totalDelinquencyAccounts": 5,
+              "totaldebtBalance": 10432,
+              "behaviourDate": "2025-11-10"
+            },
+            {
+              "maximumDelinquency": "C",
+              "maxDelinquencyFinancialSector": "C",
+              "maxDelinquencyRetailSector": "C",
+              "maxDelinquencyTelcosSector": "N",
+              "numCredits30": 0,
+              "numCreditsHigherOrEqual60": 5,
+              "totalValueBalanceOverdue": 2188,
+              "totalDelinquencyAccounts": 5,
+              "totaldebtBalance": 10176,
+              "behaviourDate": "2025-10-10"
+            },
+            {
+              "maximumDelinquency": "C",
+              "maxDelinquencyFinancialSector": "C",
+              "maxDelinquencyRetailSector": "C",
+              "maxDelinquencyTelcosSector": "N",
+              "numCredits30": 0,
+              "numCreditsHigherOrEqual60": 5,
+              "totalValueBalanceOverdue": 2184,
+              "totalDelinquencyAccounts": 5,
+              "totaldebtBalance": 10176,
+              "behaviourDate": "2025-09-10"
+            },
+            {
+              "maximumDelinquency": "C",
+              "maxDelinquencyFinancialSector": "C",
+              "maxDelinquencyRetailSector": "C",
+              "maxDelinquencyTelcosSector": "-",
+              "numCredits30": 0,
+              "numCreditsHigherOrEqual60": 5,
+              "totalValueBalanceOverdue": 2169,
+              "totalDelinquencyAccounts": 5,
+              "totaldebtBalance": 10372,
+              "behaviourDate": "2025-08-10"
+            },
+            {
+              "maximumDelinquency": "C",
+              "maxDelinquencyFinancialSector": "C",
+              "maxDelinquencyRetailSector": "C",
+              "maxDelinquencyTelcosSector": "-",
+              "numCredits30": 0,
+              "numCreditsHigherOrEqual60": 5,
+              "totalValueBalanceOverdue": 2150,
+              "totalDelinquencyAccounts": 5,
+              "totaldebtBalance": 10474,
+              "behaviourDate": "2025-07-10"
+            }
+          ]
+        },
+        "graphIndebtednessTrend": {
+          "series": [
+            {
+              "serieText": "Cartera bancaria",
+              "values": {
+                "value": [
+                  {
+                    "behaviourDate": "2026-05-10",
+                    "value": 110
+                  },
+                  {
+                    "behaviourDate": "2026-04-10",
+                    "value": 110
+                  },
+                  {
+                    "behaviourDate": "2026-03-10",
+                    "value": 110
+                  },
+                  {
+                    "behaviourDate": "2026-02-10",
+                    "value": 110
+                  },
+                  {
+                    "behaviourDate": "2026-01-10",
+                    "value": 110
+                  },
+                  {
+                    "behaviourDate": "2025-12-10",
+                    "value": 110
+                  },
+                  {
+                    "behaviourDate": "2025-11-10",
+                    "value": 110
+                  },
+                  {
+                    "behaviourDate": "2025-10-10",
+                    "value": 93.8
+                  },
+                  {
+                    "behaviourDate": "2025-09-10",
+                    "value": 93.8
+                  },
+                  {
+                    "behaviourDate": "2025-08-10",
+                    "value": 93.8
+                  },
+                  {
+                    "behaviourDate": "2025-07-10",
+                    "value": 93.8
+                  }
+                ]
+              }
+            },
+            {
+              "serieText": "Cartera de comunicaciones",
+              "values": {
+                "value": [
+                  {
+                    "behaviourDate": "2026-04-10",
+                    "value": 0
+                  },
+                  {
+                    "behaviourDate": "2026-03-10",
+                    "value": 0
+                  },
+                  {
+                    "behaviourDate": "2026-02-10",
+                    "value": 0
+                  },
+                  {
+                    "behaviourDate": "2026-01-10",
+                    "value": 0
+                  },
+                  {
+                    "behaviourDate": "2025-12-10",
+                    "value": 0
+                  },
+                  {
+                    "behaviourDate": "2025-11-10",
+                    "value": 0
+                  },
+                  {
+                    "behaviourDate": "2025-10-10",
+                    "value": 0
+                  },
+                  {
+                    "behaviourDate": "2025-09-10",
+                    "value": 0
+                  },
+                  {
+                    "behaviourDate": "2025-08-10",
+                    "value": 110
+                  },
+                  {
+                    "behaviourDate": "2025-07-10",
+                    "value": 110
+                  }
+                ]
+              }
+            },
+            {
+              "serieText": "Créditos de consumo",
+              "values": {
+                "value": [
+                  {
+                    "behaviourDate": "2026-06-10",
+                    "value": 100
+                  },
+                  {
+                    "behaviourDate": "2026-05-10",
+                    "value": 98.8
+                  },
+                  {
+                    "behaviourDate": "2026-04-10",
+                    "value": 98.8
+                  },
+                  {
+                    "behaviourDate": "2026-03-10",
+                    "value": 98.8
+                  },
+                  {
+                    "behaviourDate": "2026-02-10",
+                    "value": 98.8
+                  },
+                  {
+                    "behaviourDate": "2026-01-10",
+                    "value": 98.8
+                  },
+                  {
+                    "behaviourDate": "2025-12-10",
+                    "value": 98.8
+                  },
+                  {
+                    "behaviourDate": "2025-11-10",
+                    "value": 98.8
+                  },
+                  {
+                    "behaviourDate": "2025-10-10",
+                    "value": 98.8
+                  },
+                  {
+                    "behaviourDate": "2025-09-10",
+                    "value": 98.8
+                  },
+                  {
+                    "behaviourDate": "2025-08-10",
+                    "value": 98.8
+                  },
+                  {
+                    "behaviourDate": "2025-07-10",
+                    "value": 98.8
+                  }
+                ]
+              }
+            },
+            {
+              "serieText": "Cartera educación",
+              "values": {
+                "value": [
+                  {
+                    "behaviourDate": "2026-05-10",
+                    "value": 100.4
+                  },
+                  {
+                    "behaviourDate": "2026-04-10",
+                    "value": 102
+                  },
+                  {
+                    "behaviourDate": "2026-03-10",
+                    "value": 103.2
+                  },
+                  {
+                    "behaviourDate": "2025-12-10",
+                    "value": 103.2
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "vectorAnalysis": {
+        "sector": [
+          {
+            "economicSectorName": "Sector Financiero",
+            "maximumOverdue": {
+              "characterDate": [
+                {
+                  "behaviourDate": "2024-07-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2024-08-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2024-09-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2024-10-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2024-11-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2024-12-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-01-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-02-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-03-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-04-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-05-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-06-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-07-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-08-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-09-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-10-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-11-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-12-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2026-01-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2026-02-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2026-03-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2026-04-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2026-05-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2026-06-10"
+                }
+              ]
+            },
+            "account": [
+              {
+                "businessName": "NEQUI          LI",
+                "businessBureauEventName": "Cart. castigada",
+                "accountType": "CAB",
+                "accountTypeDesc": null,
+                "containsData": true,
+                "characterDate": [
+                  {
+                    "behaviourDate": "2026-06-10"
+                  },
+                  {
+                    "behaviourDate": "2026-05-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2026-04-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2026-03-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2026-02-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2026-01-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-12-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-11-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-10-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-09-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-08-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-07-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-06-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-05-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-04-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-03-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-02-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-01-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2024-12-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2024-11-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2024-10-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2024-09-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2024-08-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2024-07-10",
+                    "totalValueBalanceOverdue": "C"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "economicSectorName": "Sector Real",
+            "maximumOverdue": {
+              "characterDate": [
+                {
+                  "behaviourDate": "2024-07-10",
+                  "totalValueBalanceOverdue": 6
+                },
+                {
+                  "behaviourDate": "2024-08-10",
+                  "totalValueBalanceOverdue": 6
+                },
+                {
+                  "behaviourDate": "2024-09-10",
+                  "totalValueBalanceOverdue": 6
+                },
+                {
+                  "behaviourDate": "2024-10-10",
+                  "totalValueBalanceOverdue": 6
+                },
+                {
+                  "behaviourDate": "2024-11-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2024-12-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-01-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-02-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-03-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-04-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-05-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-06-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-07-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-08-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-09-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-10-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-11-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2025-12-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2026-01-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2026-02-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2026-03-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2026-04-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2026-05-10",
+                  "totalValueBalanceOverdue": "C"
+                },
+                {
+                  "behaviourDate": "2026-06-10",
+                  "totalValueBalanceOverdue": "C"
+                }
+              ]
+            },
+            "account": [
+              {
+                "businessName": "NOVAVENTA S A",
+                "businessBureauEventName": "Cart. castigada",
+                "accountType": "ALI",
+                "accountTypeDesc": null,
+                "containsData": true,
+                "characterDate": [
+                  {
+                    "behaviourDate": "2026-06-10"
+                  },
+                  {
+                    "behaviourDate": "2026-05-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2026-04-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2026-03-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2026-02-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2026-01-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-12-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-11-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-10-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-09-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-08-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-07-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-06-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-05-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-04-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-03-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-02-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-01-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2024-12-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2024-11-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2024-10-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2024-09-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2024-08-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2024-07-10",
+                    "totalValueBalanceOverdue": 6
+                  }
+                ]
+              },
+              {
+                "businessName": "SISTECREDITO",
+                "businessBureauEventName": "Esta en mora 120",
+                "accountType": "CON",
+                "accountTypeDesc": null,
+                "containsData": true,
+                "characterDate": [
+                  {
+                    "behaviourDate": "2026-06-10"
+                  },
+                  {
+                    "behaviourDate": "2026-05-10",
+                    "totalValueBalanceOverdue": 4
+                  },
+                  {
+                    "behaviourDate": "2026-04-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2026-03-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2026-02-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2026-01-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-12-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-11-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-10-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-09-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-08-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-07-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-06-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-05-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-04-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-03-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-02-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-01-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2024-12-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2024-11-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2024-10-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2024-09-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2024-08-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2024-07-10",
+                    "totalValueBalanceOverdue": 6
+                  }
+                ]
+              },
+              {
+                "businessName": "SOLVENTA       COLOMBIA",
+                "businessBureauEventName": "Cart. castigada",
+                "accountType": "CON",
+                "accountTypeDesc": null,
+                "containsData": true,
+                "characterDate": [
+                  {
+                    "behaviourDate": "2026-06-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2026-05-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2026-04-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2026-03-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2026-02-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2026-01-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-12-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-11-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-10-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-09-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-08-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-07-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-06-10",
+                    "totalValueBalanceOverdue": "C"
+                  },
+                  {
+                    "behaviourDate": "2025-05-10",
+                    "totalValueBalanceOverdue": 5
+                  },
+                  {
+                    "behaviourDate": "2025-04-10",
+                    "totalValueBalanceOverdue": 4
+                  },
+                  {
+                    "behaviourDate": "2025-03-10",
+                    "totalValueBalanceOverdue": 2
+                  },
+                  {
+                    "behaviourDate": "2025-02-10",
+                    "totalValueBalanceOverdue": 2
+                  },
+                  {
+                    "behaviourDate": "2025-01-10",
+                    "totalValueBalanceOverdue": 1
+                  },
+                  {
+                    "behaviourDate": "2024-12-10",
+                    "totalValueBalanceOverdue": "-"
+                  },
+                  {
+                    "behaviourDate": "2024-11-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2024-10-10",
+                    "totalValueBalanceOverdue": "-"
+                  },
+                  {
+                    "behaviourDate": "2024-09-10",
+                    "totalValueBalanceOverdue": "-"
+                  },
+                  {
+                    "behaviourDate": "2024-08-10",
+                    "totalValueBalanceOverdue": "-"
+                  },
+                  {
+                    "behaviourDate": "2024-07-10",
+                    "totalValueBalanceOverdue": "-"
+                  }
+                ]
+              },
+              {
+                "businessName": "ICETEX CENTRO",
+                "businessBureauEventName": "Al día Mora 120",
+                "accountType": "EDU",
+                "accountTypeDesc": null,
+                "containsData": true,
+                "characterDate": [
+                  {
+                    "behaviourDate": "2026-06-10"
+                  },
+                  {
+                    "behaviourDate": "2026-05-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2026-04-10",
+                    "totalValueBalanceOverdue": 3
+                  },
+                  {
+                    "behaviourDate": "2026-03-10",
+                    "totalValueBalanceOverdue": 2
+                  },
+                  {
+                    "behaviourDate": "2026-02-10",
+                    "totalValueBalanceOverdue": "-"
+                  },
+                  {
+                    "behaviourDate": "2026-01-10",
+                    "totalValueBalanceOverdue": "-"
+                  },
+                  {
+                    "behaviourDate": "2025-12-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2025-11-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-10-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-09-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-08-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-07-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-06-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-05-10",
+                    "totalValueBalanceOverdue": 6
+                  },
+                  {
+                    "behaviourDate": "2025-04-10",
+                    "totalValueBalanceOverdue": 5
+                  },
+                  {
+                    "behaviourDate": "2025-03-10",
+                    "totalValueBalanceOverdue": 4
+                  },
+                  {
+                    "behaviourDate": "2025-02-10",
+                    "totalValueBalanceOverdue": 3
+                  },
+                  {
+                    "behaviourDate": "2025-01-10",
+                    "totalValueBalanceOverdue": 2
+                  },
+                  {
+                    "behaviourDate": "2024-12-10",
+                    "totalValueBalanceOverdue": 1
+                  },
+                  {
+                    "behaviourDate": "2024-11-10",
+                    "totalValueBalanceOverdue": "-"
+                  },
+                  {
+                    "behaviourDate": "2024-10-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2024-09-10",
+                    "totalValueBalanceOverdue": 2
+                  },
+                  {
+                    "behaviourDate": "2024-08-10",
+                    "totalValueBalanceOverdue": 1
+                  },
+                  {
+                    "behaviourDate": "2024-07-10",
+                    "totalValueBalanceOverdue": "N"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "economicSectorName": "Sector Telcos",
+            "maximumOverdue": {
+              "characterDate": [
+                {
+                  "behaviourDate": "2024-07-10",
+                  "totalValueBalanceOverdue": "-"
+                },
+                {
+                  "behaviourDate": "2024-08-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2024-09-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2024-10-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2024-11-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2024-12-10",
+                  "totalValueBalanceOverdue": "-"
+                },
+                {
+                  "behaviourDate": "2025-01-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2025-02-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2025-03-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2025-04-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2025-05-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2025-06-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2025-07-10",
+                  "totalValueBalanceOverdue": "-"
+                },
+                {
+                  "behaviourDate": "2025-08-10",
+                  "totalValueBalanceOverdue": "-"
+                },
+                {
+                  "behaviourDate": "2025-09-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2025-10-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2025-11-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2025-12-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2026-01-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2026-02-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2026-03-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2026-04-10",
+                  "totalValueBalanceOverdue": "N"
+                },
+                {
+                  "behaviourDate": "2026-05-10"
+                },
+                {
+                  "behaviourDate": "2026-06-10"
+                }
+              ]
+            },
+            "account": [
+              {
+                "businessName": "TELMEX COLOMBI",
+                "businessBureauEventName": "Al día",
+                "accountType": "CDC",
+                "accountTypeDesc": null,
+                "containsData": true,
+                "characterDate": [
+                  {
+                    "behaviourDate": "2026-06-10"
+                  },
+                  {
+                    "behaviourDate": "2026-05-10"
+                  },
+                  {
+                    "behaviourDate": "2026-04-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2026-03-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2026-02-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2026-01-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2025-12-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2025-11-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2025-10-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2025-09-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2025-08-10",
+                    "totalValueBalanceOverdue": "-"
+                  },
+                  {
+                    "behaviourDate": "2025-07-10",
+                    "totalValueBalanceOverdue": "-"
+                  },
+                  {
+                    "behaviourDate": "2025-06-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2025-05-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2025-04-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2025-03-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2025-02-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2025-01-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2024-12-10",
+                    "totalValueBalanceOverdue": "-"
+                  },
+                  {
+                    "behaviourDate": "2024-11-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2024-10-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2024-09-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2024-08-10",
+                    "totalValueBalanceOverdue": "N"
+                  },
+                  {
+                    "behaviourDate": "2024-07-10",
+                    "totalValueBalanceOverdue": "-"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

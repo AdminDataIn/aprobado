@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from integrations.datacredito.dto import (
@@ -175,6 +176,8 @@ def normalizar_midecisor_pj(raw):
 
 def normalizar_historial_credito(raw):
     datos = _como_dict(raw)
+    hdc_estructura = _estructura_hdc_segura(datos)
+    hdc_resumen = extraer_resumen_hdcplus(datos)
     product_result = _path(datos, 'ReportHDCplus', 'productResult') or {}
     response_code = (
         _path(product_result, 'responseCode')
@@ -228,6 +231,8 @@ def normalizar_historial_credito(raw):
             'estado': estado,
             'response_code': response_code,
             'scores_hdc_detectados': len(scores_hdc),
+            'hdc_estructura': hdc_estructura,
+            'hdc_resumen': hdc_resumen,
         },
     )
 
@@ -367,6 +372,368 @@ def _extraer_scores_hdc(datos):
             }
         )
     return tuple(scores)
+
+
+def _estructura_hdc_segura(datos):
+    return resumir_estructura_hdc_segura(datos)
+
+
+def resumir_estructura_hdc_segura(datos):
+    report = _path(datos, 'ReportHDCplus') or {}
+    models = _lista_segura(_path(report, 'models'))
+    obligations = _lista_segura(_path(report, 'obligations'))
+    basic_information = _path(report, 'basicInformation')
+    payment_behavior_detectado = _buscar_valor(
+        datos,
+        ('paymentBehavior', 'comportamientoPago', 'payment_behavior', 'vector', 'comportamiento_pago'),
+    ) is not None
+    conteos = {
+        seccion: _contar_seccion_hdc(report, seccion)
+        for seccion in (
+            'productResult',
+            'identifyingAttributes',
+            'basicInformation',
+            'savings',
+            'checkingAccounts',
+            'currentAccounts',
+            'creditCards',
+            'financialSector',
+            'realSector',
+            'portfolio',
+            'obligations',
+            'liabilities',
+            'location',
+            'inquiryFootprints',
+            'models',
+            'paymentBehavior',
+            'globalDebt',
+            'globalIndebtedness',
+            'accounts',
+            'alerts',
+            'agregatedInfo',
+            'agregatedInfoMicrocredit',
+        )
+    }
+    return {
+        'has_ReportHDCplus': isinstance(report, Mapping) and bool(report),
+        'top_level_keys': _claves_seguras(datos),
+        'report_hdcplus_keys': _claves_seguras(report),
+        'conteos': conteos,
+        'models_detectados': len(models),
+        'obligations_detectadas': len(obligations),
+        'basic_information_detectada': basic_information is not None,
+        'payment_behavior_detectado': payment_behavior_detectado,
+        'campos_mora_detectados': _campos_detectados(
+            datos,
+            {
+                'saldoMora',
+                'saldo_mora',
+                'saldoEnMora',
+                'valorMora',
+                'mora',
+                'pastDueAmount',
+                'past_due_amount',
+            },
+        ),
+    }
+
+
+def extraer_resumen_hdcplus(datos):
+    report = _path(datos, 'ReportHDCplus') or {}
+    product_result = _path(report, 'productResult') or {}
+    liabilities = _lista_segura(_path(report, 'liabilities'))
+    savings = _lista_segura(_path(report, 'savings'))
+    global_indebtedness = _lista_segura(_path(report, 'globalIndebtedness'))
+    inquiry_footprints = _lista_segura(_path(report, 'inquiryFootprints'))
+    alerts = _lista_segura(_path(report, 'alerts'))
+    agregated_info = _path(report, 'agregatedInfo')
+    agregated_info_microcredit = _path(report, 'agregatedInfoMicrocredit')
+
+    resumen_liabilities = _resumir_liabilities_hdc(liabilities)
+    resumen_huellas = _resumir_huellas_hdc(inquiry_footprints)
+    resumen_global = _resumir_endeudamiento_global_hdc(global_indebtedness)
+    resumen_savings = _resumir_savings_hdc(savings)
+
+    return {
+        'hdc_disponible': isinstance(report, Mapping) and bool(report),
+        'response_code': _valor_limpio(_path(product_result, 'responseCode')),
+        'consulta_efectiva': _valor_limpio(_path(product_result, 'responseCode')) == '13',
+        'total_savings': resumen_savings['total_savings'],
+        'savings_activas': resumen_savings['savings_activas'],
+        'savings_cerradas': resumen_savings['savings_cerradas'],
+        'total_liabilities': resumen_liabilities['total_liabilities'],
+        'liabilities_vigentes': resumen_liabilities['liabilities_vigentes'],
+        'liabilities_al_dia': resumen_liabilities['liabilities_al_dia'],
+        'liabilities_en_mora': resumen_liabilities['liabilities_en_mora'],
+        'liabilities_castigadas': resumen_liabilities['liabilities_castigadas'],
+        'saldo_total_hdc': _decimal_a_texto(resumen_liabilities['saldo_total_hdc']),
+        'saldo_mora_hdc': _decimal_a_texto(resumen_liabilities['saldo_mora_hdc']),
+        'cuota_total_hdc': _decimal_a_texto(resumen_liabilities['cuota_total_hdc']),
+        'max_mora_dias': resumen_liabilities['max_mora_dias'],
+        'max_cuotas_vencidas': resumen_liabilities['max_cuotas_vencidas'],
+        'max_mora_categoria': resumen_liabilities['max_mora_categoria'],
+        'huellas_consulta': resumen_huellas['huellas_consulta'],
+        'huellas_ultimos_3_meses': resumen_huellas['huellas_ultimos_3_meses'],
+        'huellas_ultimos_6_meses': resumen_huellas['huellas_ultimos_6_meses'],
+        'alertas_hdc': len(alerts),
+        'alertas_codigos': _valores_unicos(alerts, ('alertCode', 'source')),
+        'sectores_detectados': sorted(set(resumen_liabilities['sectores_detectados']) | set(resumen_huellas['sectores_detectados']) | set(resumen_global['sectores_detectados'])),
+        'tipos_cartera_detectados': sorted(set(resumen_liabilities['tipos_cartera_detectados']) | set(resumen_global['tipos_cartera_detectados'])),
+        'roles_deudor_detectados': resumen_liabilities['roles_deudor_detectados'],
+        'eventos_pago_detectados': resumen_liabilities['eventos_pago_detectados'],
+        'estados_cuenta_detectados': resumen_liabilities['estados_cuenta_detectados'],
+        'endeudamiento_global_detectado': bool(global_indebtedness),
+        'endeudamiento_global_registros': len(global_indebtedness),
+        'capital_global_hdc': _decimal_a_texto(resumen_global['capital_global_hdc']),
+        'ultimo_corte_global': resumen_global['ultimo_corte_global'],
+        'resumen_agregado_detectado': isinstance(agregated_info, Mapping) and bool(agregated_info),
+        'resumen_microcredito_detectado': isinstance(agregated_info_microcredit, Mapping) and bool(agregated_info_microcredit),
+        'resumen_agregado_keys': _claves_seguras(agregated_info),
+        'resumen_microcredito_keys': _claves_seguras(agregated_info_microcredit),
+        'requiere_revision_manual_hdc': True,
+    }
+
+
+def _resumir_liabilities_hdc(liabilities):
+    total = len(liabilities)
+    al_dia = 0
+    en_mora = 0
+    castigadas = 0
+    pago_total = 0
+    saldo_total = Decimal('0')
+    saldo_mora = Decimal('0')
+    cuota_total = Decimal('0')
+    max_mora_dias = 0
+    max_cuotas_vencidas = 0
+    sectores = set()
+    tipos = set()
+    roles = set()
+    eventos = set()
+    estados = set()
+
+    for liability in liabilities:
+        if not isinstance(liability, Mapping):
+            continue
+        account = liability.get('account') or {}
+        status = liability.get('status') or {}
+        status_account = status.get('account') if isinstance(status, Mapping) else {}
+        status_payment = status.get('payment') if isinstance(status, Mapping) else {}
+        estado = _valor_limpio(_path(status_account or {}, 'businessAccountStatusDesc'))
+        evento = _valor_limpio(_path(status_payment or {}, 'businessBureauEventDesc'))
+        estado_norm = _normalizar_texto_hdc(estado)
+        evento_norm = _normalizar_texto_hdc(evento)
+
+        if estado:
+            estados.add(estado)
+        if evento:
+            eventos.add(evento)
+        _agregar_si_existe(sectores, account.get('economicSectorName'))
+        _agregar_si_existe(tipos, account.get('accountTypeDesc') or account.get('subAccountTypeDesc') or account.get('subAccountTypeName'))
+        _agregar_si_existe(roles, account.get('stateOfAccountHolderDesc') or account.get('tradeHolderIndicator'))
+
+        valores = _lista_segura(liability.get('values'))
+        saldo_obligacion = sum((_decimal(valor.get('debtBalance')) or Decimal('0')) for valor in valores if isinstance(valor, Mapping))
+        mora_obligacion = sum((_decimal(valor.get('businessValueBalanceOverdue')) or Decimal('0')) for valor in valores if isinstance(valor, Mapping))
+        cuota_obligacion = sum((_decimal(valor.get('valueMonthlyPayment')) or Decimal('0')) for valor in valores if isinstance(valor, Mapping))
+        cuotas_vencidas = max((_entero(valor.get('installmentsOverdue')) or 0) for valor in valores if isinstance(valor, Mapping)) if valores else 0
+        mora_dias = max((_entero(valor.get('delinquencyMaturation')) or 0) for valor in valores if isinstance(valor, Mapping)) if valores else 0
+        saldo_total += saldo_obligacion
+        saldo_mora += mora_obligacion
+        cuota_total += cuota_obligacion
+        max_cuotas_vencidas = max(max_cuotas_vencidas, cuotas_vencidas)
+        max_mora_dias = max(max_mora_dias, mora_dias)
+
+        es_castigada = 'CASTIG' in estado_norm or 'CASTIG' in evento_norm
+        es_pago_total = 'PAGO TOTAL' in estado_norm
+        es_mora = (
+            'MORA' in estado_norm
+            or 'MORA' in evento_norm
+            or mora_obligacion > 0
+            or cuotas_vencidas > 0
+            or mora_dias > 0
+        )
+        if es_castigada:
+            castigadas += 1
+        if es_mora:
+            en_mora += 1
+        if es_pago_total:
+            pago_total += 1
+        if not es_castigada and not es_mora and ('AL DIA' in estado_norm or 'AL DIA' in evento_norm):
+            al_dia += 1
+
+    return {
+        'total_liabilities': total,
+        'liabilities_vigentes': max(total - pago_total, 0),
+        'liabilities_al_dia': al_dia,
+        'liabilities_en_mora': en_mora,
+        'liabilities_castigadas': castigadas,
+        'saldo_total_hdc': saldo_total,
+        'saldo_mora_hdc': saldo_mora,
+        'cuota_total_hdc': cuota_total,
+        'max_mora_dias': max_mora_dias,
+        'max_cuotas_vencidas': max_cuotas_vencidas,
+        'max_mora_categoria': _categoria_mora(max_mora_dias=max_mora_dias, castigadas=castigadas),
+        'sectores_detectados': sorted(sectores),
+        'tipos_cartera_detectados': sorted(tipos),
+        'roles_deudor_detectados': sorted(roles),
+        'eventos_pago_detectados': sorted(eventos),
+        'estados_cuenta_detectados': sorted(estados),
+    }
+
+
+def _resumir_savings_hdc(savings):
+    activas = 0
+    cerradas = 0
+    for item in savings:
+        if not isinstance(item, Mapping):
+            continue
+        estado = _normalizar_texto_hdc(
+            _buscar_valor(item, ('businessAccountStatusDesc', 'accountStatusDesc', 'statusDesc', 'status'))
+        )
+        if 'ACTIV' in estado or 'AL DIA' in estado or 'VIGENT' in estado:
+            activas += 1
+        if 'CERR' in estado or 'SALD' in estado or 'CANCEL' in estado:
+            cerradas += 1
+    return {
+        'total_savings': len(savings),
+        'savings_activas': activas,
+        'savings_cerradas': cerradas,
+    }
+
+
+def _resumir_huellas_hdc(huellas):
+    fechas = [_parsear_fecha_hdc(huella.get('inquiryDate')) for huella in huellas if isinstance(huella, Mapping)]
+    fechas = [fecha for fecha in fechas if fecha is not None]
+    referencia = max(fechas) if fechas else date.today()
+    sectores = set()
+    for huella in huellas:
+        if not isinstance(huella, Mapping):
+            continue
+        _agregar_si_existe(sectores, huella.get('economicSectorName'))
+    return {
+        'huellas_consulta': len(huellas),
+        'huellas_ultimos_3_meses': sum(1 for fecha in fechas if fecha >= referencia - timedelta(days=90)),
+        'huellas_ultimos_6_meses': sum(1 for fecha in fechas if fecha >= referencia - timedelta(days=180)),
+        'sectores_detectados': sorted(sectores),
+    }
+
+
+def _resumir_endeudamiento_global_hdc(registros):
+    capital = Decimal('0')
+    sectores = set()
+    tipos = set()
+    fechas = []
+    for registro in registros:
+        if not isinstance(registro, Mapping):
+            continue
+        capital += _decimal(registro.get('capitalValue')) or Decimal('0')
+        _agregar_si_existe(sectores, registro.get('sourceGlobalIndebtednessDesc'))
+        _agregar_si_existe(tipos, registro.get('typeOfCreditDesc'))
+        fecha = _parsear_fecha_hdc(registro.get('cutoffDate'))
+        if fecha:
+            fechas.append(fecha)
+    return {
+        'capital_global_hdc': capital,
+        'sectores_detectados': sorted(sectores),
+        'tipos_cartera_detectados': sorted(tipos),
+        'ultimo_corte_global': max(fechas).isoformat() if fechas else None,
+    }
+
+
+def _valores_unicos(items, claves):
+    valores = set()
+    for item in items:
+        if not isinstance(item, Mapping):
+            continue
+        for clave in claves:
+            _agregar_si_existe(valores, item.get(clave))
+    return sorted(valores)
+
+
+def _agregar_si_existe(conjunto, valor):
+    valor = _valor_limpio(valor)
+    if valor:
+        conjunto.add(valor)
+
+
+def _categoria_mora(*, max_mora_dias, castigadas):
+    if castigadas:
+        return 'castigada'
+    if max_mora_dias >= 120:
+        return 'mora_120_o_mas'
+    if max_mora_dias >= 90:
+        return 'mora_90'
+    if max_mora_dias >= 60:
+        return 'mora_60'
+    if max_mora_dias >= 30:
+        return 'mora_30'
+    return None
+
+
+def _parsear_fecha_hdc(valor):
+    texto = _valor_limpio(valor)
+    if not texto:
+        return None
+    texto = texto[:10]
+    for formato in ('%Y-%m-%d', '%d/%m/%Y', '%Y/%m/%d', '%d-%m-%Y'):
+        try:
+            return datetime.strptime(texto, formato).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _normalizar_texto_hdc(valor):
+    texto = _valor_limpio(valor)
+    if not texto:
+        return ''
+    reemplazos = str.maketrans('ÁÉÍÓÚÜÑ', 'AEIOUUN')
+    return texto.upper().translate(reemplazos)
+
+
+def _decimal_a_texto(valor):
+    if isinstance(valor, Decimal):
+        return str(valor.quantize(Decimal('1'))) if valor == valor.to_integral_value() else str(valor)
+    return str(valor) if valor is not None else None
+
+
+def _claves_seguras(valor):
+    if not isinstance(valor, Mapping):
+        return []
+    return sorted(str(clave) for clave in valor.keys())
+
+
+def _contar_seccion_hdc(report, seccion):
+    if not isinstance(report, Mapping):
+        return 0
+    valor = report.get(seccion)
+    if isinstance(valor, list):
+        return len(valor)
+    if isinstance(valor, Mapping):
+        return len(valor)
+    return 1 if valor is not None else 0
+
+
+def _lista_segura(valor):
+    return valor if isinstance(valor, list) else []
+
+
+def _campos_detectados(datos, nombres):
+    encontrados = set()
+    nombres_normalizados = {str(nombre).lower() for nombre in nombres}
+
+    def recorrer(valor):
+        if isinstance(valor, Mapping):
+            for clave, subvalor in valor.items():
+                if str(clave).lower() in nombres_normalizados:
+                    encontrados.add(str(clave))
+                recorrer(subvalor)
+        elif isinstance(valor, list):
+            for item in valor:
+                recorrer(item)
+
+    recorrer(datos)
+    return sorted(encontrados)
 
 
 def _iterar_mappings(valor):

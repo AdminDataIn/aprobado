@@ -21,7 +21,6 @@ def _consultar_midecisor(entrada, tipo_persona, session=None):
     headers = {
         'Authorization': token.authorization_header,
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
     }
     payload = entrada.como_payload()
 

@@ -229,6 +229,8 @@ def serializar_resultado_normalizado(resultado):
         'alertas_resumen': list(resultado.alertas_resumen),
         'requiere_revision_manual': resultado.requiere_revision_manual,
         'requiere_revision_cumplimiento': resultado.requiere_revision_cumplimiento,
+        'hdc_estructura': (resultado.metadata_segura or {}).get('hdc_estructura'),
+        'hdc_resumen': (resultado.metadata_segura or {}).get('hdc_resumen'),
         'codigo_respuesta': resultado.codigo_respuesta,
         'response_code': resultado.response_code,
         'con_informacion': resultado.con_informacion,
@@ -279,6 +281,8 @@ def resultado_desde_snapshot(snapshot):
             'reutilizado': True,
             'servicio': snapshot.servicio,
             'ambiente': snapshot.ambiente,
+            'hdc_estructura': datos.get('hdc_estructura'),
+            'hdc_resumen': datos.get('hdc_resumen'),
         },
     )
 
@@ -322,12 +326,13 @@ def _consultar_y_normalizar(*, servicio, tipo_documento, numero_documento, apell
         )
         return raw, normalizar_midecisor_pn(raw)
     if servicio == SERVICIO_HISTORIAL:
+        configuracion = obtener_configuracion_datacredito()
         raw = historial_client.consultar_historial_credito(
             EntradaHistorialCredito(
                 tipo_identificacion=tipo_documento,
                 numero_identificacion=numero_documento,
                 apellido=apellido,
-                fecha_hora=timezone.now().isoformat(),
+                parametros=configuracion.parametros_historial,
             )
         )
         return raw, normalizar_historial_credito(raw)

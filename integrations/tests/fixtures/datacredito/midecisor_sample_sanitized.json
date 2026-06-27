@@ -1,0 +1,288 @@
+{
+  "status": "ACCEPTED",
+  "content": {
+    "status": "202 ACCEPTED",
+    "infoTransaccion": {
+      "resultado": "",
+      "msjExcepcion": "",
+      "diaConsulta": "27",
+      "mesConsulta": "6",
+      "anioConsulta": "2026",
+      "horaConsulta": "03:35:50",
+      "tipoIdDigitado": "CC",
+      "validacionSinCamaras": null,
+      "codigosRespuesta": [
+        {
+          "clave": "HC",
+          "valor": "13"
+        },
+        {
+          "clave": "TX",
+          "valor": "01"
+        }
+      ]
+    },
+    "respuesta": {
+      "validacion": {
+        "datosBasicos": {
+          "conInformacion": true,
+          "msjExcepcion": "",
+          "tipoDocumento": "CÉDULA DE CIUDADANÍA",
+          "estadoDocumento": "Vigente",
+          "rangoEdad": "36-45",
+          "nacionalidad": "-"
+        },
+        "conInformacion": true,
+        "msjExcepcion": null
+      },
+      "comportamientoCrediticio": {
+        "evolucionSaldoCuotaPN": {
+          "trimestres": [
+            {
+              "trimestre": "2025-03",
+              "saldoTotal": "83.0",
+              "cuotaTotal": "247.0"
+            },
+            {
+              "trimestre": "2025-06",
+              "saldoTotal": "175.0",
+              "cuotaTotal": "196.0"
+            },
+            {
+              "trimestre": "2025-09",
+              "saldoTotal": "3926.0",
+              "cuotaTotal": "2318.0"
+            },
+            {
+              "trimestre": "2025-12",
+              "saldoTotal": "14444.0",
+              "cuotaTotal": "1294.0"
+            },
+            {
+              "trimestre": "2026-03",
+              "saldoTotal": "25762.0",
+              "cuotaTotal": "2232.0"
+            },
+            {
+              "trimestre": "2026-06",
+              "saldoTotal": "24656.0",
+              "cuotaTotal": "3847.0"
+            }
+          ],
+          "conInformacion": true,
+          "msjExcepcion": ""
+        },
+        "evolucionRoPN": {
+          "conInformacion": true,
+          "msjExcepcion": null,
+          "trimestres": [
+            {
+              "trimestre": "2025-03",
+              "saldoTotal": "83.0",
+              "cupoTotal": "47000.0",
+              "porcentajeDeuda": "0"
+            },
+            {
+              "trimestre": "2025-06",
+              "saldoTotal": "175.0",
+              "cupoTotal": "52000.0",
+              "porcentajeDeuda": "0"
+            },
+            {
+              "trimestre": "2025-09",
+              "saldoTotal": "3926.0",
+              "cupoTotal": "47000.0",
+              "porcentajeDeuda": "8"
+            },
+            {
+              "trimestre": "2025-12",
+              "saldoTotal": "14444.0",
+              "cupoTotal": "61875.0",
+              "porcentajeDeuda": "23"
+            },
+            {
+              "trimestre": "2026-03",
+              "saldoTotal": "25762.0",
+              "cupoTotal": "83875.0",
+              "porcentajeDeuda": "31"
+            },
+            {
+              "trimestre": "2026-06",
+              "saldoTotal": "24656.0",
+              "cupoTotal": "61875.0",
+              "porcentajeDeuda": "40"
+            }
+          ]
+        },
+        "comportamientoPago": {
+          "conInformacion": true,
+          "msjExcepcion": null,
+          "vectorComportamiento": [
+            {
+              "anioMes": "2025-6",
+              "comportamiento": "N"
+            },
+            {
+              "anioMes": "2025-7",
+              "comportamiento": "N"
+            },
+            {
+              "anioMes": "2025-8",
+              "comportamiento": "N"
+            },
+            {
+              "anioMes": "2025-9",
+              "comportamiento": "N"
+            },
+            {
+              "anioMes": "2025-10",
+              "comportamiento": "N"
+            },
+            {
+              "anioMes": "2025-11",
+              "comportamiento": "N"
+            },
+            {
+              "anioMes": "2025-12",
+              "comportamiento": "N"
+            },
+            {
+              "anioMes": "2026-1",
+              "comportamiento": "N"
+            },
+            {
+              "anioMes": "2026-2",
+              "comportamiento": "N"
+            },
+            {
+              "anioMes": "2026-3",
+              "comportamiento": "N"
+            },
+            {
+              "anioMes": "2026-4",
+              "comportamiento": "N"
+            },
+            {
+              "anioMes": "2026-5",
+              "comportamiento": "N"
+            }
+          ]
+        },
+        "indicadoresValores": {
+          "conInformacion": true,
+          "msjExcepcion": "",
+          "creditosVigentes": "5",
+          "creditosCerrados": "6",
+          "totalPrincipal": "11",
+          "totalCodeudorOtros": "0",
+          "valorInicial": "61875",
+          "saldoActual": "24656",
+          "valorCuota": "3847",
+          "saldoMora": "0",
+          "porcentajeDeuda": "39.8",
+          "sectores": [
+            {
+              "sector": "Sector Financiero",
+              "creditosVigentes": "1",
+              "creditosCerrados": "1",
+              "totalPrincipal": "2",
+              "totalCodeudorOtros": "0",
+              "valorInicial": "24000",
+              "saldoActual": "0",
+              "valorCuota": "161",
+              "saldoMora": "0",
+              "porcentajeDeuda": "0.0"
+            },
+            {
+              "sector": "Sector Real",
+              "creditosVigentes": "1",
+              "creditosCerrados": "2",
+              "totalPrincipal": "3",
+              "totalCodeudorOtros": "0",
+              "valorInicial": "23000",
+              "saldoActual": "13000",
+              "valorCuota": "2939",
+              "saldoMora": "0",
+              "porcentajeDeuda": "56.5"
+            },
+            {
+              "sector": "Sector Cooperativo",
+              "creditosVigentes": "1",
+              "creditosCerrados": "2",
+              "totalPrincipal": "3",
+              "totalCodeudorOtros": "0",
+              "valorInicial": "14875",
+              "saldoActual": "11656",
+              "valorCuota": "747",
+              "saldoMora": "0",
+              "porcentajeDeuda": "78.4"
+            },
+            {
+              "sector": "Sector Telcos",
+              "creditosVigentes": "2",
+              "creditosCerrados": "1",
+              "totalPrincipal": "3",
+              "totalCodeudorOtros": "0",
+              "valorInicial": "0",
+              "saldoActual": "0",
+              "valorCuota": "0",
+              "saldoMora": "0",
+              "porcentajeDeuda": "0.0"
+            }
+          ]
+        },
+        "conInformacion": true,
+        "msjExcepcion": null
+      },
+      "informacionRiesgo": {
+        "conInformacion": true,
+        "msjExcepcion": "",
+        "score": "837",
+        "txtProbabilidad": "La probabilidad de que las personas de este nivel de riesgo pague oportunamente sus obligaciones crediticias en los próximos 12 meses es ALTA.",
+        "viabilidad": "ALTA",
+        "ratingRecaudos": "A",
+        "txtRecaudos": "Este tipo de clientes suele cumplir con sus obligaciones solo con el envío de la factura.",
+        "montoSugerido": "0",
+        "alertas": [
+          {
+            "alerta": "No se encuentra coincidencia con listas restrictivas de id consultado al 2026-06-26",
+            "colocacion": "2026-06-26",
+            "modificacion": "2026-06-26"
+          }
+        ]
+      },
+      "endeudamiento": {
+        "conInformacion": true,
+        "msjExcepcion": "",
+        "ingreso": "5503000.0",
+        "porcentajeCuotaVsIngreso": "69.9"
+      },
+      "sugerencias": {
+        "conInformacion": true,
+        "msjExcepcion": "",
+        "vectorSugerencias": [
+          {
+            "titulo": "Solicita documentación adicional si tu cliente es empleado",
+            "sugerencia": [
+              {
+                "icono": "",
+                "descripcion": "Carta o certificado laboral donde podrás validar: Tipo de contrato, tiempo de vinculación a la empresa y salario"
+              }
+            ]
+          },
+          {
+            "titulo": "Solicita documentación adicional si tu cliente es independiente",
+            "sugerencia": [
+              {
+                "icono": "",
+                "descripcion": "Certificado de ingresos expedido por contador público de las últimas 3 facturas de servicios públicos"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "response": "Consulta exitosa",
+  "message": null
+}
