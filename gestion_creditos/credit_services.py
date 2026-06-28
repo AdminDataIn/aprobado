@@ -619,132 +619,9 @@ def activar_credito(credito):
     Raises:
         ValueError: Si faltan campos críticos (monto_aprobado o plazo)
     """
-    logger.info(f"Iniciando activación del crédito {credito.numero_credito} (ID: {credito.id})")
+    from gestion_creditos.services.credit_activation import activar_credito as activar_credito_servicio
 
-    # ✅ Validar campos críticos
-    if not credito.monto_aprobado or not credito.plazo:
-        error_msg = f"No se puede activar el crédito {credito.numero_credito}: falta monto_aprobado o plazo"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
-
-    # ✅ Determinar tasa de interés según la línea de crédito
-    if credito.tasa_interes:
-        # Si ya tiene tasa asignada, usarla
-        tasa_interes = credito.tasa_interes
-    else:
-        # Asignar tasa según la línea
-        tasa_interes = obtener_tasa_credito(credito.linea)
-
-    plazo_aplicado = obtener_plazo_credito_aplicado(credito)
-    tasa_interes = obtener_tasa_credito_aplicada(credito, tasa_interes)
-
-    # ✅ Calcular componentes financieros
-    comision = credito.comision or (credito.monto_aprobado * Decimal('0.10'))
-    iva_comision = credito.iva_comision or (comision * Decimal('0.19'))
-
-    # El capital financiado incluye monto + comisión + IVA (esto se paga en cuotas)
-    capital_financiado = credito.monto_aprobado + comision + iva_comision
-
-    usar_condiciones_historicas = (
-        credito.tipo_regla_credito == Credito.TipoReglaCredito.ESPECIAL
-        and credito.valor_cuota is not None
-        and credito.total_a_pagar is not None
-    )
-
-    # ✅ Calcular o respetar cuota mensual
-    tasa_mensual = tasa_interes / Decimal(100)
-    if usar_condiciones_historicas:
-        valor_cuota = credito.valor_cuota
-        total_a_pagar = credito.total_a_pagar
-    else:
-        if tasa_mensual > 0:
-            # Fórmula de amortización francesa: C = P * [i(1+i)^n] / [(1+i)^n - 1]
-            factor = (tasa_mensual * (1 + tasa_mensual) ** plazo_aplicado) / (((1 + tasa_mensual) ** plazo_aplicado) - 1)
-            valor_cuota = capital_financiado * factor
-        else:
-            # Caso sin interés (división simple del capital financiado)
-            valor_cuota = capital_financiado / plazo_aplicado
-
-        # Total a pagar es la suma de todas las cuotas
-        total_a_pagar = valor_cuota * plazo_aplicado
-
-    # ✅ Actualizar campos financieros en el crédito
-    credito.tasa_interes = tasa_interes
-    credito.plazo = plazo_aplicado
-    credito.comision = comision
-    credito.iva_comision = iva_comision
-    credito.total_a_pagar = total_a_pagar
-    credito.valor_cuota = valor_cuota
-
-    # saldo_pendiente: Capital financiado total pendiente (incluye comisión + IVA)
-    credito.saldo_pendiente = capital_financiado
-
-    # capital_pendiente: Solo el monto aprobado original (para mostrar al usuario cuánto del monto solicitado ha pagado)
-    credito.capital_pendiente = credito.monto_aprobado
-
-    # ✅ Calcular fecha de primer pago
-    hoy = timezone.now().date()
-    credito.fecha_proximo_pago = obtener_fecha_primera_cuota_credito(credito, hoy)
-
-    if not credito.fecha_desembolso:
-        credito.fecha_desembolso = timezone.now()
-    credito.save()
-
-    # ✅ Generar tabla de amortización
-    # La tabla amortiza el capital_financiado completo (no solo monto_aprobado)
-    saldo_capital_restante = capital_financiado  # ✅ CORRECCIÓN: Amortizar el capital financiado total
-    fecha_cuota = credito.fecha_proximo_pago
-    dia_ancla = obtener_dia_ancla_vencimiento(credito, fecha_cuota)
-
-    cuotas = []
-    for i in range(1, plazo_aplicado + 1):
-        # Calcular interés sobre el saldo restante
-        interes_a_pagar = saldo_capital_restante * tasa_mensual
-        capital_a_pagar = credito.valor_cuota - interes_a_pagar
-
-        # Ajuste para la última cuota para evitar diferencias por redondeo
-        if i == plazo_aplicado:
-            capital_a_pagar = saldo_capital_restante
-            interes_a_pagar = credito.valor_cuota - capital_a_pagar
-            if interes_a_pagar < 0:
-                interes_a_pagar = Decimal('0.00')
-                capital_a_pagar = credito.valor_cuota
-
-        # Actualizar saldo restante
-        saldo_capital_restante -= capital_a_pagar
-
-        # Asegurar que no quede negativo por redondeo
-        if saldo_capital_restante < 0:
-            saldo_capital_restante = Decimal('0.00')
-
-        # Crear cuota en la tabla de amortización
-        cuotas.append(
-            CuotaAmortizacion(
-                credito=credito,
-                numero_cuota=i,
-                fecha_vencimiento=fecha_cuota,
-                capital_a_pagar=capital_a_pagar,
-                interes_a_pagar=interes_a_pagar,
-                valor_cuota=credito.valor_cuota,
-                saldo_capital_pendiente=saldo_capital_restante
-            )
-        )
-
-        # Avanzar a la siguiente fecha de cuota
-        if credito.linea == Credito.LineaCredito.LIBRANZA:
-            fecha_cuota = sumar_meses_con_dia_ancla(fecha_cuota, 1, dia_ancla)
-        else:
-            fecha_cuota += relativedelta(months=1)
-
-    if cuotas:
-        CuotaAmortizacion.objects.bulk_create(cuotas, ignore_conflicts=True)
-
-    logger.info(
-        f"Crédito {credito.numero_credito} activado exitosamente. "
-        f"Línea: {credito.get_linea_display()}, Tasa: {tasa_interes}% mensual, "
-        f"Cuota: ${valor_cuota:,.2f}, Plazo: {credito.plazo} meses, "
-        f"Total a pagar: ${total_a_pagar:,.2f}"
-    )
+    return activar_credito_servicio(credito)
 
 def _reverse_url_safe(view_name, *, urlconf=None, fallback=None, kwargs=None):
     try:
@@ -1437,65 +1314,11 @@ def obtener_resumen_pagos_credito(credito, historial_pagos=None):
     reflejar correctamente créditos especiales legacy cuyos pagos históricos se
     cargaron marcando cuotas como pagadas, sin crear registros en HistorialPago.
     """
-    cuotas = list(credito.tabla_amortizacion.all().order_by('numero_cuota'))
-    plazo_total = credito.plazo or len(cuotas) or 0
+    from gestion_creditos.services.credit_recalculation import (
+        obtener_resumen_pagos_credito as obtener_resumen_pagos_credito_servicio,
+    )
 
-    if cuotas:
-        cuotas_pagadas = sum(1 for cuota in cuotas if cuota.pagada)
-        cuotas_restantes = max(len(cuotas) - cuotas_pagadas, 0)
-
-        total_pagado = Decimal('0.00')
-        saldo_pendiente = Decimal('0.00')
-        for cuota in cuotas:
-            ya_pagado = cuota.monto_pagado or Decimal('0.00')
-            if cuota.pagada and cuota.monto_pagado is None:
-                ya_pagado = cuota.valor_cuota or Decimal('0.00')
-
-            total_pagado += ya_pagado
-
-            restante_cuota = (cuota.valor_cuota or Decimal('0.00')) - ya_pagado
-            if restante_cuota > 0:
-                saldo_pendiente += restante_cuota
-
-        capital_pendiente = sum(
-            (cuota.capital_a_pagar or Decimal('0.00'))
-            for cuota in cuotas
-            if not cuota.pagada
-        )
-
-        proxima_cuota = next((cuota for cuota in cuotas if not cuota.pagada), None)
-
-        return {
-            'cuotas_pagadas': cuotas_pagadas,
-            'cuotas_restantes': cuotas_restantes,
-            'total_pagado': total_pagado,
-            'saldo_pendiente': saldo_pendiente,
-            'capital_pendiente': capital_pendiente,
-            'fecha_proximo_pago': proxima_cuota.fecha_vencimiento if proxima_cuota else None,
-            'plazo_total': plazo_total,
-            'fuente': 'tabla_amortizacion',
-        }
-
-    if historial_pagos is None:
-        historial_pagos = HistorialPago.objects.filter(
-            credito=credito,
-            estado=HistorialPago.EstadoPago.EXITOSO,
-        )
-
-    total_pagado = historial_pagos.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
-    cuotas_pagadas = historial_pagos.count()
-    cuotas_restantes = max(plazo_total - cuotas_pagadas, 0)
-
-    return {
-        'cuotas_pagadas': cuotas_pagadas,
-        'cuotas_restantes': cuotas_restantes,
-        'total_pagado': total_pagado,
-        'saldo_pendiente': credito.saldo_pendiente or Decimal('0.00'),
-        'capital_pendiente': credito.capital_pendiente or Decimal('0.00'),
-        'fecha_proximo_pago': credito.fecha_proximo_pago,
-        'plazo_total': plazo_total,
-        'fuente': 'historial_pagos',
-    }
+    return obtener_resumen_pagos_credito_servicio(credito, historial_pagos=historial_pagos)
 
 
 def recalcular_credito_desde_tabla_amortizacion(credito, persist=False):
@@ -1505,20 +1328,11 @@ def recalcular_credito_desde_tabla_amortizacion(credito, persist=False):
     Útil para créditos legacy o especiales donde la tabla ya representa la
     historia real y se necesita alinear los campos persistidos del crédito.
     """
-    resumen = obtener_resumen_pagos_credito(credito)
+    from gestion_creditos.services.credit_recalculation import (
+        recalcular_credito_desde_tabla_amortizacion as recalcular_credito_servicio,
+    )
 
-    if persist:
-        credito.saldo_pendiente = resumen['saldo_pendiente']
-        credito.capital_pendiente = resumen['capital_pendiente']
-        credito.fecha_proximo_pago = resumen['fecha_proximo_pago']
-        credito.estado = (
-            Credito.EstadoCredito.PAGADO
-            if resumen['cuotas_restantes'] == 0
-            else Credito.EstadoCredito.ACTIVO
-        )
-        credito.save(update_fields=['saldo_pendiente', 'capital_pendiente', 'fecha_proximo_pago', 'estado'])
-
-    return resumen
+    return recalcular_credito_servicio(credito, persist=persist)
 
 
 def recalcular_credito_especial_sin_iva_comision(credito, *, persist=False):

@@ -27,6 +27,7 @@ urlpatterns = [
     path('adelantos-nomina/', views.admin_adelantos_nomina_view, name='adelantos_nomina'),
     path('creditos/', views.admin_creditos_activos_view, name='creditos_activos'),
     path('cartera/', views.admin_cartera_view, name='cartera_mora'),
+    path('riesgo/diagnostico/', views.admin_risk_diagnostic_view, name='risk_diagnostic'),
     path('prestadores/riesgo/', bandeja_riesgo_prestadores_view, name='prestadores_riesgo'),
     path('prestadores/riesgo/<int:audit_id>/', detalle_riesgo_prestador_view, name='prestadores_riesgo_detalle'),
     path(

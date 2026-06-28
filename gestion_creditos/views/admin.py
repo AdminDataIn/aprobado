@@ -1,10 +1,13 @@
 from .common import *
 from .common import _build_capacidad_descuento_context
+from django import forms
 from gestion_creditos.models import DetalleContablePago
 from gestion_creditos.services.advisors import filter_creditos_by_asesor
 from libranza.services.special_case_audit import create_special_case_audit
 from libranza.services.special_case_originator import SpecialCaseOriginationError, originate_special_case_libranza
 from libranza.services.special_cases import SpecialCaseSimulationInput, SpecialCaseSimulationError, simulate_special_case_libranza
+from risk.services.portfolio_takeover import evaluar_recogida_cartera
+from risk.services.second_credit import evaluar_elegibilidad_segundo_credito
 
 
 def _admin_empresas_choices():
@@ -23,6 +26,86 @@ def _request_ip_address(request):
     if forwarded_for:
         return forwarded_for.split(',')[0].strip()
     return request.META.get('REMOTE_ADDR')
+
+
+class DiagnosticoRiesgoInternoForm(forms.Form):
+    ESCENARIO_SEGUNDO_CREDITO = 'second_credit'
+    ESCENARIO_RECOGIDA_CARTERA = 'portfolio_takeover'
+
+    document_number = forms.CharField(
+        label='Numero de documento',
+        max_length=30,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+    )
+    requested_amount = forms.DecimalField(
+        label='Monto solicitado',
+        min_value=Decimal('0.01'),
+        decimal_places=2,
+        max_digits=14,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+    )
+    projected_monthly_payment = forms.DecimalField(
+        label='Cuota proyectada',
+        min_value=Decimal('0.00'),
+        required=False,
+        decimal_places=2,
+        max_digits=14,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+    )
+    monthly_income = forms.DecimalField(
+        label='Ingreso mensual',
+        min_value=Decimal('0.00'),
+        required=False,
+        decimal_places=2,
+        max_digits=14,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+    )
+    scenario = forms.ChoiceField(
+        label='Escenario',
+        choices=(
+            (ESCENARIO_SEGUNDO_CREDITO, 'Segundo credito'),
+            (ESCENARIO_RECOGIDA_CARTERA, 'Recogida de cartera'),
+        ),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+
+def _resultado_cliente_no_encontrado(numero_documento, escenario):
+    return {
+        'eligible': False,
+        'reason': 'cliente_no_encontrado',
+        'scenario': escenario,
+        'document_number': numero_documento,
+    }
+
+
+def _ejecutar_diagnostico_riesgo_interno(datos):
+    numero_documento = datos['document_number'].strip()
+    usuario = User.objects.filter(username=numero_documento).first()
+    escenario = datos['scenario']
+    if not usuario:
+        return _resultado_cliente_no_encontrado(numero_documento, escenario)
+
+    if escenario == DiagnosticoRiesgoInternoForm.ESCENARIO_RECOGIDA_CARTERA:
+        resultado = evaluar_recogida_cartera(
+            cliente_id=usuario.id,
+            monto_solicitado=datos['requested_amount'],
+            linea_credito=Credito.LineaCredito.LIBRANZA,
+        )
+    else:
+        resultado = evaluar_elegibilidad_segundo_credito(
+            cliente_id=usuario.id,
+            linea_credito=Credito.LineaCredito.LIBRANZA,
+            ingreso_mensual=datos.get('monthly_income'),
+            cuota_proyectada=datos.get('projected_monthly_payment'),
+        )
+
+    resultado.update({
+        'customer_id': usuario.id,
+        'scenario': escenario,
+        'document_number': numero_documento,
+    })
+    return resultado
 
 
 def _build_admin_solicitudes_queryset(request, forced_linea=None):
@@ -243,6 +326,28 @@ def admin_dashboard_export_view(request):
     )
     workbook.save(response)
     return response
+
+
+@staff_member_required
+@permission_required('gestion_creditos.can_run_risk_diagnostic', raise_exception=True)
+def admin_risk_diagnostic_view(request):
+    """Diagnostico interno read-only para segundo credito y recogida de cartera."""
+    resultado = None
+    if request.method == 'POST':
+        form = DiagnosticoRiesgoInternoForm(request.POST)
+        if form.is_valid():
+            resultado = _ejecutar_diagnostico_riesgo_interno(form.cleaned_data)
+    else:
+        form = DiagnosticoRiesgoInternoForm()
+
+    return render(
+        request,
+        'gestion_creditos/admin_risk_diagnostic.html',
+        {
+            'form': form,
+            'result': resultado,
+        },
+    )
 
 
 @staff_member_required
