@@ -1,8 +1,10 @@
 from .common import *
 from .common import _build_capacidad_descuento_context, _obtener_decision_pagador
+from django.core.exceptions import PermissionDenied
 from django.db.models import OuterRef
 from ..models import CreditoLibranza, CuotaAmortizacion, VinculoLaboralEmpresa
 from ..forms import EmployeeDirectUpdateForm
+from ..services.aprobacion_pagador_libranza import decidir_solicitud_libranza_por_pagador
 from ..services.pagador_collaborators_service import (
     build_pagador_collaborators_context,
     build_pagador_employee_detail_context,
@@ -216,6 +218,7 @@ def _get_pagador_per_page(request):
 def _pagador_estado_priority_expression():
     return Case(
         When(estado=Credito.EstadoCredito.EN_REVISION, then=Value(10)),
+        When(estado=Credito.EstadoCredito.PENDIENTE_APROBACION_FINAL, then=Value(15)),
         When(estado=Credito.EstadoCredito.PENDIENTE_FIRMA, then=Value(20)),
         When(estado=Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA, then=Value(30)),
         When(estado=Credito.EstadoCredito.ACTIVO, then=Value(40)),
@@ -393,6 +396,7 @@ def _build_pagador_estado_resumen(base_queryset):
     estado_labels = dict(Credito.EstadoCredito.choices)
     order = [
         Credito.EstadoCredito.EN_REVISION,
+        Credito.EstadoCredito.PENDIENTE_APROBACION_FINAL,
         Credito.EstadoCredito.PENDIENTE_FIRMA,
         Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA,
         Credito.EstadoCredito.ACTIVO,
@@ -440,7 +444,12 @@ def _build_pagador_dashboard_context(request, *, forced_linea=None):
     query_params = request.GET.copy()
     query_params.pop('page', None)
     errores_pago_masivo = request.session.pop('errores_pago_masivo', None)
-    solicitudes_pendientes = creditos_base.filter(estado=Credito.EstadoCredito.EN_REVISION)
+    solicitudes_pendientes = creditos_base.filter(
+        estado__in=[
+            Credito.EstadoCredito.EN_REVISION,
+            Credito.EstadoCredito.PENDIENTE_APROBACION_FINAL,
+        ]
+    )
     pagadores_activos = (
         PerfilPagador.objects
         .select_related('usuario')
@@ -524,7 +533,11 @@ def pagador_dashboard_view(request):
 
     # Solicitudes pendientes de validaci?n por parte del pagador.
     solicitudes_pendientes = creditos_empresa.filter(
-        estado__in=[Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION]
+        estado__in=[
+            Credito.EstadoCredito.SOLICITUD,
+            Credito.EstadoCredito.EN_REVISION,
+            Credito.EstadoCredito.PENDIENTE_APROBACION_FINAL,
+        ]
     )
 
     context = {
@@ -574,7 +587,11 @@ def pagador_adelantos_dashboard_view(request):
     errores_pago_masivo = request.session.pop('errores_pago_masivo', None)
     obligaciones_pendientes, total_obligaciones_sugerido = _build_pagador_obligaciones_context(empresa)
     solicitudes_pendientes = creditos_empresa.filter(
-        estado__in=[Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION]
+        estado__in=[
+            Credito.EstadoCredito.SOLICITUD,
+            Credito.EstadoCredito.EN_REVISION,
+            Credito.EstadoCredito.PENDIENTE_APROBACION_FINAL,
+        ]
     )
 
     context = {
@@ -942,7 +959,11 @@ def pagador_decidir_solicitud_view(request, credito_id):
         linea__in=[Credito.LineaCredito.LIBRANZA, Credito.LineaCredito.ADELANTO_NOMINA],
     )
 
-    if credito.estado not in [Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION]:
+    if credito.estado not in [
+        Credito.EstadoCredito.SOLICITUD,
+        Credito.EstadoCredito.EN_REVISION,
+        Credito.EstadoCredito.PENDIENTE_APROBACION_FINAL,
+    ]:
         messages.info(request, "Esta solicitud ya no admite decisiones del pagador.")
         return redirect('pagador:dashboard')
 
@@ -958,58 +979,21 @@ def pagador_decidir_solicitud_view(request, credito_id):
         return redirect('pagador:dashboard')
 
     try:
-        with transaction.atomic():
-            credito = (
-                Credito.objects
-                .select_for_update()
-                .get(id=credito.id)
-            )
-
-            decision_existente = _obtener_decision_pagador(credito)
-            if decision_existente:
-                estado_actual = (
-                    "aprobada"
-                    if decision_existente.estado_nuevo == Credito.EstadoCredito.APROBADO_PAGADOR
-                    else "rechazada"
-                )
-                messages.info(request, f"La decision del pagador ya fue registrada como {estado_actual}.")
-                return redirect('pagador:dashboard')
-
-            if credito.estado not in [Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION]:
-                messages.info(request, "Esta solicitud ya cambio de estado y no admite una nueva decision.")
-                return redirect('pagador:dashboard')
-
-            if action == 'approve':
-                if credito.monto_aprobado is None:
-                    credito.monto_aprobado = credito.monto_solicitado
-                if credito.plazo is None:
-                    credito.plazo = credito.plazo_solicitado
-                credito.save(update_fields=['monto_aprobado', 'plazo'])
-
-                motivo_final = motivo or "Aprobado por pagador y enviado directamente a firma."
-                credit_services.gestionar_cambio_estado_credito(
-                    credito=credito,
-                    nuevo_estado=Credito.EstadoCredito.APROBADO_PAGADOR,
-                    usuario_modificacion=request.user,
-                    motivo=motivo_final
-                )
-                credit_services.preparar_documento_para_firma(
-                    credito=credito,
-                    usuario_modificacion=request.user
-                )
-                messages.success(
-                    request,
-                    f"Solicitud {credito.numero_credito} aprobada por pagador y enviada a firma."
-                )
-            else:
-                motivo_final = motivo or "Rechazado por pagador."
-                credit_services.gestionar_cambio_estado_credito(
-                    credito=credito,
-                    nuevo_estado=Credito.EstadoCredito.RECHAZADO,
-                    usuario_modificacion=request.user,
-                    motivo=motivo_final
-                )
-                messages.warning(request, f"Credito {credito.numero_credito} rechazado.")
+        resultado = decidir_solicitud_libranza_por_pagador(
+            credito=credito,
+            empresa=empresa,
+            usuario=request.user,
+            accion=action,
+            observacion=motivo,
+        )
+        if resultado.estado_resultante == Credito.EstadoCredito.RECHAZADO:
+            messages.warning(request, resultado.mensaje)
+        elif resultado.requiere_aprobacion_final:
+            messages.info(request, resultado.mensaje)
+        else:
+            messages.success(request, resultado.mensaje)
+    except (PermissionDenied, ValidationError) as e:
+        messages.error(request, str(e))
     except Exception as e:
         messages.error(request, f"Ocurrio un error al procesar la solicitud: {e}")
         logger.error(f"Error al decidir solicitud {credito.id} por pagador: {e}", exc_info=True)

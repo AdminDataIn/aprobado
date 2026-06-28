@@ -110,7 +110,8 @@
             </div>
 
             <div class="d-flex flex-column gap-4">
-                {% if credito.estado == 'EN_REVISION' and not pagador_decision %}
+                {% if credito.estado == 'EN_REVISION' or credito.estado == 'PENDIENTE_APROBACION_FINAL' %}
+                {% if not pagador_decision %}
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title"><i class="bi bi-check2-circle me-2"></i>Decidir Solicitud</h3>
@@ -138,6 +139,7 @@
                         </form>
                     </div>
                 </div>
+                {% endif %}
                 {% endif %}
                 {% if capacidad_descuento %}
                 <div class="card">
@@ -196,7 +198,7 @@
                         <h3 class="card-title"><i class="bi bi-file-text me-2"></i>Resumen del Crédito</h3>
                     </div>
                     <div class="card-content">
-                        {% if credito.estado == 'EN_REVISION' or credito.estado == 'PENDIENTE_FIRMA' or credito.estado == 'PENDIENTE_TRANSFERENCIA' %}
+                        {% if credito.estado == 'EN_REVISION' or credito.estado == 'PENDIENTE_APROBACION_FINAL' or credito.estado == 'PENDIENTE_FIRMA' or credito.estado == 'PENDIENTE_TRANSFERENCIA' %}
                         {% if pagador_aprobado %}
                         <div class="alert alert-success text-center">
                             <i class="bi bi-check-circle-fill me-2"></i>

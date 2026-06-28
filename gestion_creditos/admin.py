@@ -7,7 +7,7 @@ from django.utils.html import format_html
 from django.template.response import TemplateResponse
 from django.core.exceptions import ValidationError
 from .models import (
-    AsesorComercial, Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago, WompiIntent, LotePagoEmpresa,
+    AprobacionPagadorLibranza, AsesorComercial, Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago, WompiIntent, LotePagoEmpresa,
     CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, ImagenNegocio, Notificacion,
     Pagare, ZapSignWebhookLog, MarketplaceItem, MarketplaceItemHistorialEstado,
     MarketplacePedido, MarketplacePedidoItem, MarketplacePago, MarketplaceDireccionEntrega,
@@ -314,12 +314,15 @@ class EmpresaAdmin(admin.ModelAdmin):
         'telefono_contacto',
         'marketplace_fee_percent',
         'pagos_habilitados',
+        'requiere_doble_aprobacion_libranza',
     )
     search_fields = ('nombre', 'slug', 'nit', 'correo_contacto')
     list_filter = (
         'tipo_empresa',
         'convenio_activo',
         'pagos_habilitados',
+        'requiere_doble_aprobacion_libranza',
+        'requiere_aprobadores_distintos_libranza',
         'departamento',
         'municipio',
         EmpresaReferidaFilter,
@@ -346,6 +349,13 @@ class EmpresaAdmin(admin.ModelAdmin):
             ),
             'description': 'Usa "Logo" como fuente única para marketplace y para la sección de empresas que confían '
                            'en nosotros. La presentación se controla desde frontend.',
+        }),
+        ('Aprobacion de libranza por pagador', {
+            'fields': (
+                'requiere_doble_aprobacion_libranza',
+                'requiere_aprobadores_distintos_libranza',
+            ),
+            'description': 'Si la doble aprobacion esta activa, la empresa debe registrar una aprobacion nivel 1 y una aprobacion final antes de enviar el credito a firma.',
         }),
         ('Geografia y presencia nacional', {
             'fields': (
@@ -376,6 +386,29 @@ class EmpresaAdmin(admin.ModelAdmin):
             asesor.cedula,
         )
     asesor_actual_resumen.short_description = 'Ejecutivo vinculado'
+
+
+@admin.register(AprobacionPagadorLibranza)
+class AprobacionPagadorLibranzaAdmin(admin.ModelAdmin):
+    list_display = ('credito', 'empresa', 'nivel', 'decision', 'usuario', 'created_at')
+    list_filter = ('nivel', 'decision', 'empresa', 'created_at')
+    search_fields = (
+        'credito__numero_credito',
+        'empresa__nombre',
+        'usuario__username',
+        'usuario__email',
+    )
+    readonly_fields = ('credito', 'empresa', 'nivel', 'decision', 'usuario', 'observacion', 'created_at')
+    ordering = ('-created_at',)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(AsesorComercial)

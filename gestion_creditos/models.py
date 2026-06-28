@@ -131,6 +131,14 @@ class Empresa(models.Model):
     mp_access_token = models.CharField(max_length=255, blank=True)
     marketplace_fee_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('10.00'))
     pagos_habilitados = models.BooleanField(default=False)
+    requiere_doble_aprobacion_libranza = models.BooleanField(
+        default=False,
+        help_text='Si esta activo, las solicitudes de libranza requieren aprobacion nivel 1 y aprobacion final de empresa.',
+    )
+    requiere_aprobadores_distintos_libranza = models.BooleanField(
+        default=True,
+        help_text='Si esta activo, un mismo usuario pagador no puede aprobar nivel 1 y aprobacion final.',
+    )
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -466,6 +474,7 @@ class Credito(models.Model):
     class EstadoCredito(models.TextChoices):
         SOLICITUD = 'SOLICITUD', 'Solicitud'
         EN_REVISION = 'EN_REVISION', 'En Revisión'
+        PENDIENTE_APROBACION_FINAL = 'PENDIENTE_APROBACION_FINAL', 'Pendiente aprobacion final empresa'
         APROBADO_PAGADOR = 'APROBADO_PAGADOR', 'Aprobado por Pagador'
         APROBADO = 'APROBADO', 'Aprobado'
         RECHAZADO = 'RECHAZADO', 'Rechazado'
@@ -1341,6 +1350,41 @@ class WompiIntent(models.Model):
 
     def __str__(self):
         return f"WompiIntent {self.referencia} - {self.status}"
+
+
+#? ----- Auditoria de aprobacion empresa/pagador -----
+class AprobacionPagadorLibranza(models.Model):
+    class Nivel(models.TextChoices):
+        NIVEL_1 = 'NIVEL_1', 'Aprobacion nivel 1'
+        FINAL = 'FINAL', 'Aprobacion final'
+
+    class Decision(models.TextChoices):
+        APROBADO = 'APROBADO', 'Aprobado'
+        RECHAZADO = 'RECHAZADO', 'Rechazado'
+
+    credito = models.ForeignKey(Credito, on_delete=models.CASCADE, related_name='aprobaciones_pagador_libranza')
+    empresa = models.ForeignKey(Empresa, on_delete=models.PROTECT, related_name='aprobaciones_libranza')
+    nivel = models.CharField(max_length=16, choices=Nivel.choices)
+    decision = models.CharField(max_length=16, choices=Decision.choices)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='aprobaciones_pagador_libranza',
+    )
+    observacion = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Aprobacion pagador libranza'
+        verbose_name_plural = 'Aprobaciones pagador libranza'
+        indexes = [
+            models.Index(fields=['credito', 'nivel', 'decision'], name='aprob_pag_cred_niv_dec_idx'),
+            models.Index(fields=['empresa', '-created_at'], name='aprob_pag_emp_fecha_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.credito.numero_credito} - {self.nivel} - {self.decision}"
 
 
 #? ----- Modelo de historial de estados -----

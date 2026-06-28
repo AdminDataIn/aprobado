@@ -10,6 +10,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from gestion_creditos.models import (
+    AprobacionPagadorLibranza,
     Credito,
     CreditoLibranza,
     CuotaAmortizacion,
@@ -608,3 +609,157 @@ class PagadorDashboardTest(TestCase):
         self.assertRedirects(response, reverse('pagador:dashboard'), fetch_redirect_response=False)
         cambio_estado_mock.assert_called_once()
         preparar_mock.assert_called_once()
+        self.assertTrue(
+            AprobacionPagadorLibranza.objects.filter(
+                credito=credito,
+                nivel=AprobacionPagadorLibranza.Nivel.FINAL,
+                decision=AprobacionPagadorLibranza.Decision.APROBADO,
+            ).exists()
+        )
+
+    @patch('gestion_creditos.views.pagador.credit_services.preparar_documento_para_firma')
+    def test_doble_aprobacion_primer_nivel_no_envia_a_firma(self, preparar_mock):
+        self.empresa.requiere_doble_aprobacion_libranza = True
+        self.empresa.save(update_fields=['requiere_doble_aprobacion_libranza'])
+        perfil = self.user.perfil_pagador
+        perfil.nivel_aprobacion_libranza = PerfilPagador.NivelAprobacionLibranza.NIVEL_1
+        perfil.save(update_fields=['nivel_aprobacion_libranza'])
+        credito = self._crear_credito_libranza('CR-PAG-DOB-1', estado=Credito.EstadoCredito.EN_REVISION)
+
+        response = self.client.post(
+            reverse('pagador:decidir_solicitud', args=[credito.id]),
+            {'action': 'approve', 'motivo': 'Aprobacion nivel 1'},
+        )
+
+        self.assertRedirects(response, reverse('pagador:dashboard'), fetch_redirect_response=False)
+        credito.refresh_from_db()
+        self.assertEqual(credito.estado, Credito.EstadoCredito.PENDIENTE_APROBACION_FINAL)
+        preparar_mock.assert_not_called()
+        self.assertTrue(
+            AprobacionPagadorLibranza.objects.filter(
+                credito=credito,
+                nivel=AprobacionPagadorLibranza.Nivel.NIVEL_1,
+                decision=AprobacionPagadorLibranza.Decision.APROBADO,
+                usuario=self.user,
+            ).exists()
+        )
+        self.assertEqual(HistorialPago.objects.filter(credito=credito).count(), 0)
+        self.assertEqual(Pagare.objects.filter(credito=credito).count(), 0)
+
+    @patch('gestion_creditos.views.pagador.credit_services.preparar_documento_para_firma')
+    def test_doble_aprobacion_final_envia_a_firma(self, preparar_mock):
+        self.empresa.requiere_doble_aprobacion_libranza = True
+        self.empresa.save(update_fields=['requiere_doble_aprobacion_libranza'])
+        perfil = self.user.perfil_pagador
+        perfil.nivel_aprobacion_libranza = PerfilPagador.NivelAprobacionLibranza.NIVEL_1
+        perfil.save(update_fields=['nivel_aprobacion_libranza'])
+        credito = self._crear_credito_libranza('CR-PAG-DOB-2', estado=Credito.EstadoCredito.EN_REVISION)
+        self.client.post(
+            reverse('pagador:decidir_solicitud', args=[credito.id]),
+            {'action': 'approve', 'motivo': 'Aprobacion nivel 1'},
+        )
+        usuario_final = User.objects.create_user(
+            username='pagador-final',
+            email='pagador-final@aprobado.test',
+            password='123456',
+        )
+        PerfilPagador.objects.create(
+            usuario=usuario_final,
+            empresa=self.empresa,
+            es_pagador=True,
+            nivel_aprobacion_libranza=PerfilPagador.NivelAprobacionLibranza.FINAL,
+        )
+        self.client.logout()
+        self.client.login(username='pagador-final', password='123456')
+
+        response = self.client.post(
+            reverse('pagador:decidir_solicitud', args=[credito.id]),
+            {'action': 'approve', 'motivo': 'Aprobacion final'},
+        )
+
+        self.assertRedirects(response, reverse('pagador:dashboard'), fetch_redirect_response=False)
+        credito.refresh_from_db()
+        self.assertEqual(credito.estado, Credito.EstadoCredito.APROBADO_PAGADOR)
+        preparar_mock.assert_called_once()
+        self.assertTrue(
+            AprobacionPagadorLibranza.objects.filter(
+                credito=credito,
+                nivel=AprobacionPagadorLibranza.Nivel.FINAL,
+                decision=AprobacionPagadorLibranza.Decision.APROBADO,
+                usuario=usuario_final,
+            ).exists()
+        )
+
+    @patch('gestion_creditos.views.pagador.credit_services.preparar_documento_para_firma')
+    def test_doble_aprobacion_no_permite_mismo_usuario_en_final(self, preparar_mock):
+        self.empresa.requiere_doble_aprobacion_libranza = True
+        self.empresa.requiere_aprobadores_distintos_libranza = True
+        self.empresa.save(update_fields=['requiere_doble_aprobacion_libranza', 'requiere_aprobadores_distintos_libranza'])
+        perfil = self.user.perfil_pagador
+        perfil.nivel_aprobacion_libranza = PerfilPagador.NivelAprobacionLibranza.AMBOS
+        perfil.save(update_fields=['nivel_aprobacion_libranza'])
+        credito = self._crear_credito_libranza('CR-PAG-DOB-3', estado=Credito.EstadoCredito.EN_REVISION)
+        self.client.post(
+            reverse('pagador:decidir_solicitud', args=[credito.id]),
+            {'action': 'approve', 'motivo': 'Aprobacion nivel 1'},
+        )
+
+        response = self.client.post(
+            reverse('pagador:decidir_solicitud', args=[credito.id]),
+            {'action': 'approve', 'motivo': 'Intento final mismo usuario'},
+        )
+
+        self.assertRedirects(response, reverse('pagador:dashboard'), fetch_redirect_response=False)
+        credito.refresh_from_db()
+        self.assertEqual(credito.estado, Credito.EstadoCredito.PENDIENTE_APROBACION_FINAL)
+        preparar_mock.assert_not_called()
+        self.assertFalse(
+            AprobacionPagadorLibranza.objects.filter(
+                credito=credito,
+                nivel=AprobacionPagadorLibranza.Nivel.FINAL,
+            ).exists()
+        )
+
+    @patch('gestion_creditos.views.pagador.credit_services.preparar_documento_para_firma')
+    def test_doble_aprobacion_rechazo_final_no_envia_a_firma(self, preparar_mock):
+        self.empresa.requiere_doble_aprobacion_libranza = True
+        self.empresa.save(update_fields=['requiere_doble_aprobacion_libranza'])
+        perfil = self.user.perfil_pagador
+        perfil.nivel_aprobacion_libranza = PerfilPagador.NivelAprobacionLibranza.NIVEL_1
+        perfil.save(update_fields=['nivel_aprobacion_libranza'])
+        credito = self._crear_credito_libranza('CR-PAG-DOB-4', estado=Credito.EstadoCredito.EN_REVISION)
+        self.client.post(
+            reverse('pagador:decidir_solicitud', args=[credito.id]),
+            {'action': 'approve', 'motivo': 'Aprobacion nivel 1'},
+        )
+        usuario_final = User.objects.create_user(
+            username='pagador-final-rechaza',
+            email='pagador-final-rechaza@aprobado.test',
+            password='123456',
+        )
+        PerfilPagador.objects.create(
+            usuario=usuario_final,
+            empresa=self.empresa,
+            es_pagador=True,
+            nivel_aprobacion_libranza=PerfilPagador.NivelAprobacionLibranza.FINAL,
+        )
+        self.client.logout()
+        self.client.login(username='pagador-final-rechaza', password='123456')
+
+        response = self.client.post(
+            reverse('pagador:decidir_solicitud', args=[credito.id]),
+            {'action': 'reject', 'motivo': 'No cumple politica interna'},
+        )
+
+        self.assertRedirects(response, reverse('pagador:dashboard'), fetch_redirect_response=False)
+        credito.refresh_from_db()
+        self.assertEqual(credito.estado, Credito.EstadoCredito.RECHAZADO)
+        preparar_mock.assert_not_called()
+        self.assertTrue(
+            AprobacionPagadorLibranza.objects.filter(
+                credito=credito,
+                nivel=AprobacionPagadorLibranza.Nivel.FINAL,
+                decision=AprobacionPagadorLibranza.Decision.RECHAZADO,
+                usuario=usuario_final,
+            ).exists()
+        )
