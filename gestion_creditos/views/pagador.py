@@ -1,6 +1,11 @@
 from .common import *
 from .common import _build_capacidad_descuento_context, _obtener_decision_pagador
 from ..models import CuotaAmortizacion
+from django.core.exceptions import PermissionDenied
+from ..services.aprobacion_pagador_libranza import (
+    decidir_solicitud_libranza_por_pagador,
+    puede_decidir_solicitud_libranza_por_pagador,
+)
 
 
 @login_required(login_url='/pagador/login/')
@@ -78,6 +83,7 @@ def _get_pagador_per_page(request):
 def _pagador_estado_priority_expression():
     return Case(
         When(estado=Credito.EstadoCredito.EN_REVISION, then=Value(10)),
+        When(estado=Credito.EstadoCredito.PENDIENTE_APROBACION_FINAL, then=Value(15)),
         When(estado=Credito.EstadoCredito.PENDIENTE_FIRMA, then=Value(20)),
         When(estado=Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA, then=Value(30)),
         When(estado=Credito.EstadoCredito.ACTIVO, then=Value(40)),
@@ -89,7 +95,7 @@ def _pagador_estado_priority_expression():
 
 def _build_pagador_creditos_queryset(empresa, search_query='', estado_filter='', sort_by='estado_operativo', forced_linea=None):
     total_pagado_subquery = HistorialPago.objects.filter(
-        credito_id=F('pk'),
+        credito_id=OuterRef('pk'),
         estado=HistorialPago.EstadoPago.EXITOSO
     ).values('credito_id').annotate(total=Sum('monto')).values('total')
 
@@ -192,7 +198,7 @@ def _build_pagador_creditos_queryset(empresa, search_query='', estado_filter='',
     return creditos_empresa.distinct()
 
 
-def _attach_pagador_payment_context(creditos_page):
+def _attach_pagador_payment_context(creditos_page, usuario=None):
     creditos = list(creditos_page.object_list)
     cuotas = (
         CuotaAmortizacion.objects.filter(credito__in=creditos, pagada=False)
@@ -244,6 +250,14 @@ def _attach_pagador_payment_context(creditos_page):
         credito.puede_pagar_obligacion = (
             credito.estado in [Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]
             and credito.monto_sugerido_pagador > Decimal('0.00')
+        )
+        credito.puede_decidir_pagador_libranza = (
+            puede_decidir_solicitud_libranza_por_pagador(credito, usuario)
+            if usuario and credito.estado in [
+                Credito.EstadoCredito.EN_REVISION,
+                Credito.EstadoCredito.PENDIENTE_APROBACION_FINAL,
+            ]
+            else False
         )
         if credito.puede_pagar_obligacion:
             total_visible += credito.monto_sugerido_pagador
@@ -297,7 +311,10 @@ def _build_pagador_dashboard_context(request, *, forced_linea=None):
 
     paginator = Paginator(creditos_filtrados, per_page)
     creditos_page = paginator.get_page(request.GET.get('page'))
-    creditos_page, total_visible_pagable, creditos_con_pago_directo = _attach_pagador_payment_context(creditos_page)
+    creditos_page, total_visible_pagable, creditos_con_pago_directo = _attach_pagador_payment_context(
+        creditos_page,
+        request.user,
+    )
 
     query_params = request.GET.copy()
     query_params.pop('page', None)
@@ -505,6 +522,7 @@ def pagador_detalle_credito_view(request, credito_id):
     saldo_pendiente = resumen_pagos['saldo_pendiente']
     pagador_decision = _obtener_decision_pagador(credito)
     capacidad_descuento = _build_capacidad_descuento_context(credito)
+    puede_decidir_pagador_libranza = puede_decidir_solicitud_libranza_por_pagador(credito, request.user)
 
     context = {
         'credito': credito,
@@ -519,6 +537,7 @@ def pagador_detalle_credito_view(request, credito_id):
         'pagador_rechazado': bool(pagador_decision and pagador_decision.estado_nuevo == Credito.EstadoCredito.RECHAZADO),
         'empresa_credito': credito.empresa_relacionada,
         'capacidad_descuento': capacidad_descuento,
+        'puede_decidir_pagador_libranza': puede_decidir_pagador_libranza,
         'pago_offline_form': PagoCreditoOfflineForm(initial={
             'monto': monto_sugerido,
             'nota': 'Pago registrado por la empresa para esta cuota.',
@@ -728,7 +747,11 @@ def pagador_decidir_solicitud_view(request, credito_id):
         linea__in=[Credito.LineaCredito.LIBRANZA, Credito.LineaCredito.ADELANTO_NOMINA],
     )
 
-    if credito.estado not in [Credito.EstadoCredito.SOLICITUD, Credito.EstadoCredito.EN_REVISION]:
+    if credito.estado not in [
+        Credito.EstadoCredito.SOLICITUD,
+        Credito.EstadoCredito.EN_REVISION,
+        Credito.EstadoCredito.PENDIENTE_APROBACION_FINAL,
+    ]:
         messages.info(request, "Esta solicitud ya no admite decisiones del pagador.")
         return redirect('pagador:dashboard')
 
@@ -741,6 +764,25 @@ def pagador_decidir_solicitud_view(request, credito_id):
 
     if action not in ['approve', 'reject']:
         messages.error(request, "Accion no valida.")
+        return redirect('pagador:dashboard')
+
+    if credito.linea == Credito.LineaCredito.LIBRANZA:
+        try:
+            resultado = decidir_solicitud_libranza_por_pagador(
+                credito=credito,
+                usuario=request.user,
+                accion=action,
+                observacion=motivo,
+            )
+            if resultado.estado_resultante == Credito.EstadoCredito.RECHAZADO:
+                messages.warning(request, resultado.mensaje)
+            else:
+                messages.success(request, resultado.mensaje)
+        except (PermissionDenied, ValidationError) as e:
+            messages.error(request, e.messages[0] if hasattr(e, 'messages') else str(e))
+        except Exception as e:
+            messages.error(request, f"Ocurrio un error al procesar la solicitud: {e}")
+            logger.error(f"Error al decidir solicitud {credito.id} por pagador: {e}", exc_info=True)
         return redirect('pagador:dashboard')
 
     try:

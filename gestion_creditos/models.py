@@ -124,6 +124,14 @@ class Empresa(models.Model):
     mp_access_token = models.CharField(max_length=255, blank=True)
     marketplace_fee_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('10.00'))
     pagos_habilitados = models.BooleanField(default=False)
+    requiere_doble_aprobacion_libranza = models.BooleanField(
+        default=False,
+        verbose_name='Requiere doble aprobacion libranza',
+    )
+    requiere_aprobadores_distintos_libranza = models.BooleanField(
+        default=True,
+        verbose_name='Requiere aprobadores distintos en libranza',
+    )
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -458,6 +466,7 @@ class Credito(models.Model):
 
     class EstadoCredito(models.TextChoices):
         SOLICITUD = 'SOLICITUD', 'Solicitud'
+        PENDIENTE_APROBACION_FINAL = 'PENDIENTE_APROBACION_FINAL', 'Pendiente aprobacion final'
         EN_REVISION = 'EN_REVISION', 'En Revisión'
         APROBADO_PAGADOR = 'APROBADO_PAGADOR', 'Aprobado por Pagador'
         APROBADO = 'APROBADO', 'Aprobado'
@@ -1016,6 +1025,48 @@ class CreditoLibranza(models.Model):
     @property
     def nombre_completo(self):
         return build_full_name_upper(self.nombres, self.apellidos)
+
+
+class AprobacionPagadorLibranza(models.Model):
+    class Nivel(models.TextChoices):
+        NIVEL_1 = 'NIVEL_1', 'Nivel 1'
+        FINAL = 'FINAL', 'Final'
+
+    class Decision(models.TextChoices):
+        APROBADO = 'APROBADO', 'Aprobado'
+        RECHAZADO = 'RECHAZADO', 'Rechazado'
+
+    credito = models.ForeignKey(
+        Credito,
+        on_delete=models.CASCADE,
+        related_name='aprobaciones_pagador_libranza',
+    )
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.CASCADE,
+        related_name='aprobaciones_pagador_libranza',
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='aprobaciones_pagador_libranza',
+    )
+    nivel = models.CharField(max_length=20, choices=Nivel.choices)
+    decision = models.CharField(max_length=20, choices=Decision.choices)
+    observacion = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Aprobacion pagador libranza'
+        verbose_name_plural = 'Aprobaciones pagador libranza'
+        indexes = [
+            models.Index(fields=['credito', 'nivel', 'decision'], name='apr_pag_lib_cred_niv_dec_idx'),
+            models.Index(fields=['empresa', '-created_at'], name='apr_pag_lib_emp_fecha_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.credito.numero_credito} - {self.get_nivel_display()} - {self.get_decision_display()}"
 
 
 class VinculoLaboralEmpresa(models.Model):

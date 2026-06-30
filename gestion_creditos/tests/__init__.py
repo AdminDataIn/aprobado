@@ -1,0 +1,1 @@
+from .test_pagador_dashboard import PagadorDashboardTest as DobleAprobacionPagadorLibranzaTest

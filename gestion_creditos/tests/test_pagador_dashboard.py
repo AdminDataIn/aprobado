@@ -6,7 +6,14 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from gestion_creditos.models import Credito, CreditoLibranza, CuotaAmortizacion, Empresa, HistorialPago
+from gestion_creditos.models import (
+    AprobacionPagadorLibranza,
+    Credito,
+    CreditoLibranza,
+    CuotaAmortizacion,
+    Empresa,
+    HistorialPago,
+)
 from usuarios.models import PerfilPagador
 
 
@@ -150,8 +157,8 @@ class PagadorDashboardTest(TestCase):
         self.assertContains(response, 'Cuota 2')
         self.assertContains(response, 'value="100.00"', html=False)
 
-    @patch('gestion_creditos.views.pagador.credit_services.preparar_documento_para_firma')
-    @patch('gestion_creditos.views.pagador.credit_services.gestionar_cambio_estado_credito')
+    @patch('gestion_creditos.services.aprobacion_pagador_libranza.credit_services.preparar_documento_para_firma')
+    @patch('gestion_creditos.services.aprobacion_pagador_libranza.credit_services.gestionar_cambio_estado_credito')
     def test_decision_pagador_aprueba_solicitud_sin_error_de_bloqueo(self, cambio_estado_mock, preparar_mock):
         credito = self._crear_credito_libranza('CR-PAG-DEC', estado=Credito.EstadoCredito.EN_REVISION)
 
@@ -163,3 +170,212 @@ class PagadorDashboardTest(TestCase):
         self.assertRedirects(response, reverse('pagador:dashboard'), fetch_redirect_response=False)
         cambio_estado_mock.assert_called_once()
         preparar_mock.assert_called_once()
+
+    def _crear_pagador(self, username, empresa=None, nivel=None):
+        empresa = empresa or self.empresa
+        user = User.objects.create_user(
+            username=username,
+            email=f'{username}@aprobado.test',
+            password='123456',
+        )
+        PerfilPagador.objects.create(
+            usuario=user,
+            empresa=empresa,
+            es_pagador=True,
+            nivel_aprobacion_libranza=nivel or PerfilPagador.NivelAprobacionLibranza.AMBOS,
+        )
+        return user
+
+    def _post_decision(self, credito, usuario, action='approve', motivo='Revision pagador'):
+        self.client.force_login(usuario)
+        return self.client.post(
+            reverse('pagador:decidir_solicitud', args=[credito.id]),
+            {'action': action, 'motivo': motivo},
+        )
+
+    @patch('gestion_creditos.services.aprobacion_pagador_libranza.credit_services.preparar_documento_para_firma')
+    def test_empresa_normal_conserva_aprobacion_unica(self, preparar_mock):
+        credito = self._crear_credito_libranza('CR-PAG-NORMAL', estado=Credito.EstadoCredito.EN_REVISION)
+
+        response = self._post_decision(credito, self.user, action='approve')
+
+        self.assertRedirects(response, reverse('pagador:dashboard'), fetch_redirect_response=False)
+        credito.refresh_from_db()
+        self.assertEqual(credito.estado, Credito.EstadoCredito.APROBADO_PAGADOR)
+        preparar_mock.assert_called_once()
+        self.assertEqual(AprobacionPagadorLibranza.objects.filter(credito=credito).count(), 1)
+
+    @patch('gestion_creditos.services.aprobacion_pagador_libranza.credit_services.preparar_documento_para_firma')
+    def test_doble_aprobacion_nivel_1_deja_pendiente_final_sin_firma(self, preparar_mock):
+        self.empresa.requiere_doble_aprobacion_libranza = True
+        self.empresa.save(update_fields=['requiere_doble_aprobacion_libranza'])
+        nivel_1 = self._crear_pagador(
+            'pagador-nivel-1',
+            nivel=PerfilPagador.NivelAprobacionLibranza.NIVEL_1,
+        )
+        credito = self._crear_credito_libranza('CR-PAG-N1', estado=Credito.EstadoCredito.EN_REVISION)
+
+        response = self._post_decision(credito, nivel_1, action='approve')
+
+        self.assertRedirects(response, reverse('pagador:dashboard'), fetch_redirect_response=False)
+        credito.refresh_from_db()
+        self.assertEqual(credito.estado, Credito.EstadoCredito.PENDIENTE_APROBACION_FINAL)
+        preparar_mock.assert_not_called()
+        aprobacion = AprobacionPagadorLibranza.objects.get(credito=credito)
+        self.assertEqual(aprobacion.nivel, AprobacionPagadorLibranza.Nivel.NIVEL_1)
+        self.assertEqual(aprobacion.decision, AprobacionPagadorLibranza.Decision.APROBADO)
+
+    @patch('gestion_creditos.services.aprobacion_pagador_libranza.credit_services.preparar_documento_para_firma')
+    def test_doble_aprobacion_final_continua_flujo_existente(self, preparar_mock):
+        self.empresa.requiere_doble_aprobacion_libranza = True
+        self.empresa.save(update_fields=['requiere_doble_aprobacion_libranza'])
+        nivel_1 = self._crear_pagador(
+            'pagador-nivel-1-final',
+            nivel=PerfilPagador.NivelAprobacionLibranza.NIVEL_1,
+        )
+        final = self._crear_pagador(
+            'pagador-final',
+            nivel=PerfilPagador.NivelAprobacionLibranza.FINAL,
+        )
+        credito = self._crear_credito_libranza('CR-PAG-FIN', estado=Credito.EstadoCredito.EN_REVISION)
+
+        self._post_decision(credito, nivel_1, action='approve')
+        response = self._post_decision(credito, final, action='approve')
+
+        self.assertRedirects(response, reverse('pagador:dashboard'), fetch_redirect_response=False)
+        credito.refresh_from_db()
+        self.assertEqual(credito.estado, Credito.EstadoCredito.APROBADO_PAGADOR)
+        preparar_mock.assert_called_once()
+        self.assertEqual(AprobacionPagadorLibranza.objects.filter(credito=credito).count(), 2)
+        self.assertTrue(
+            AprobacionPagadorLibranza.objects.filter(
+                credito=credito,
+                nivel=AprobacionPagadorLibranza.Nivel.FINAL,
+                decision=AprobacionPagadorLibranza.Decision.APROBADO,
+            ).exists()
+        )
+
+    @patch('gestion_creditos.services.aprobacion_pagador_libranza.credit_services.preparar_documento_para_firma')
+    def test_mismo_usuario_bloqueado_si_empresa_exige_aprobadores_distintos(self, preparar_mock):
+        self.empresa.requiere_doble_aprobacion_libranza = True
+        self.empresa.requiere_aprobadores_distintos_libranza = True
+        self.empresa.save(update_fields=[
+            'requiere_doble_aprobacion_libranza',
+            'requiere_aprobadores_distintos_libranza',
+        ])
+        credito = self._crear_credito_libranza('CR-PAG-DIST', estado=Credito.EstadoCredito.EN_REVISION)
+
+        self._post_decision(credito, self.user, action='approve')
+        self._post_decision(credito, self.user, action='approve')
+
+        credito.refresh_from_db()
+        self.assertEqual(credito.estado, Credito.EstadoCredito.PENDIENTE_APROBACION_FINAL)
+        preparar_mock.assert_not_called()
+        self.assertFalse(
+            AprobacionPagadorLibranza.objects.filter(
+                credito=credito,
+                nivel=AprobacionPagadorLibranza.Nivel.FINAL,
+            ).exists()
+        )
+
+    @patch('gestion_creditos.services.aprobacion_pagador_libranza.credit_services.preparar_documento_para_firma')
+    def test_final_no_puede_decidir_en_revision_en_doble_aprobacion(self, preparar_mock):
+        self.empresa.requiere_doble_aprobacion_libranza = True
+        self.empresa.save(update_fields=['requiere_doble_aprobacion_libranza'])
+        final = self._crear_pagador(
+            'pagador-final-sin-n1',
+            nivel=PerfilPagador.NivelAprobacionLibranza.FINAL,
+        )
+        credito = self._crear_credito_libranza('CR-PAG-WRONG', estado=Credito.EstadoCredito.EN_REVISION)
+
+        self._post_decision(credito, final, action='approve')
+
+        credito.refresh_from_db()
+        self.assertEqual(credito.estado, Credito.EstadoCredito.EN_REVISION)
+        preparar_mock.assert_not_called()
+        self.assertEqual(AprobacionPagadorLibranza.objects.filter(credito=credito).count(), 0)
+
+    @patch('gestion_creditos.services.aprobacion_pagador_libranza.credit_services.preparar_documento_para_firma')
+    def test_nivel_1_no_puede_decidir_pendiente_aprobacion_final(self, preparar_mock):
+        self.empresa.requiere_doble_aprobacion_libranza = True
+        self.empresa.save(update_fields=['requiere_doble_aprobacion_libranza'])
+        nivel_1_inicial = self._crear_pagador(
+            'pagador-nivel-1-inicial',
+            nivel=PerfilPagador.NivelAprobacionLibranza.NIVEL_1,
+        )
+        nivel_1_otro = self._crear_pagador(
+            'pagador-nivel-1-otro',
+            nivel=PerfilPagador.NivelAprobacionLibranza.NIVEL_1,
+        )
+        credito = self._crear_credito_libranza('CR-PAG-N1-BLOCK', estado=Credito.EstadoCredito.EN_REVISION)
+
+        self._post_decision(credito, nivel_1_inicial, action='approve')
+        self._post_decision(credito, nivel_1_otro, action='approve')
+
+        credito.refresh_from_db()
+        self.assertEqual(credito.estado, Credito.EstadoCredito.PENDIENTE_APROBACION_FINAL)
+        preparar_mock.assert_not_called()
+        self.assertFalse(
+            AprobacionPagadorLibranza.objects.filter(
+                credito=credito,
+                nivel=AprobacionPagadorLibranza.Nivel.FINAL,
+            ).exists()
+        )
+
+    def test_final_no_ve_accion_dashboard_ni_detalle_en_revision(self):
+        self.empresa.requiere_doble_aprobacion_libranza = True
+        self.empresa.save(update_fields=['requiere_doble_aprobacion_libranza'])
+        final = self._crear_pagador(
+            'pagador-final-ui',
+            nivel=PerfilPagador.NivelAprobacionLibranza.FINAL,
+        )
+        credito = self._crear_credito_libranza('CR-PAG-FINAL-UI', estado=Credito.EstadoCredito.EN_REVISION)
+        self.client.force_login(final)
+
+        dashboard = self.client.get(reverse('pagador:dashboard'))
+        detalle = self.client.get(reverse('pagador:credito_detalle', args=[credito.id]))
+
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertEqual(detalle.status_code, 200)
+        self.assertNotContains(dashboard, f'decisionModal-{credito.id}')
+        self.assertNotContains(detalle, reverse('pagador:decidir_solicitud', args=[credito.id]))
+
+    def test_nivel_1_no_ve_accion_dashboard_ni_detalle_en_pendiente_final(self):
+        self.empresa.requiere_doble_aprobacion_libranza = True
+        self.empresa.save(update_fields=['requiere_doble_aprobacion_libranza'])
+        nivel_1_inicial = self._crear_pagador(
+            'pagador-nivel-1-ui-inicial',
+            nivel=PerfilPagador.NivelAprobacionLibranza.NIVEL_1,
+        )
+        nivel_1_otro = self._crear_pagador(
+            'pagador-nivel-1-ui-otro',
+            nivel=PerfilPagador.NivelAprobacionLibranza.NIVEL_1,
+        )
+        credito = self._crear_credito_libranza('CR-PAG-N1-UI', estado=Credito.EstadoCredito.EN_REVISION)
+        self._post_decision(credito, nivel_1_inicial, action='approve')
+        self.client.force_login(nivel_1_otro)
+
+        dashboard = self.client.get(reverse('pagador:dashboard'))
+        detalle = self.client.get(reverse('pagador:credito_detalle', args=[credito.id]))
+
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertEqual(detalle.status_code, 200)
+        self.assertNotContains(dashboard, f'decisionModal-{credito.id}')
+        self.assertNotContains(detalle, reverse('pagador:decidir_solicitud', args=[credito.id]))
+
+    @patch('gestion_creditos.services.aprobacion_pagador_libranza.credit_services.preparar_documento_para_firma')
+    def test_usuario_de_otra_empresa_no_aprueba(self, preparar_mock):
+        otra_empresa = Empresa.objects.create(
+            nombre='Empresa externa pagador',
+            tipo_empresa=Empresa.TipoEmpresa.MIXTA,
+            convenio_activo=True,
+        )
+        externo = self._crear_pagador('pagador-externo', empresa=otra_empresa)
+        credito = self._crear_credito_libranza('CR-PAG-EXT', estado=Credito.EstadoCredito.EN_REVISION)
+
+        self._post_decision(credito, externo, action='approve')
+
+        credito.refresh_from_db()
+        self.assertEqual(credito.estado, Credito.EstadoCredito.EN_REVISION)
+        preparar_mock.assert_not_called()
+        self.assertEqual(AprobacionPagadorLibranza.objects.filter(credito=credito).count(), 0)

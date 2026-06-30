@@ -13,7 +13,7 @@ from .models import (
     MarketplacePedido, MarketplacePedidoItem, MarketplacePago, MarketplaceDireccionEntrega,
     MarketplaceLiquidacionEmpresa, InvestorAccount, InvestmentPosition, InvestmentCashflow,
     InvestmentReturnSnapshot, InvestmentEvent, VinculoLaboralEmpresa, CreditoAdelantoNomina,
-    PagoComisionEjecutivo,
+    PagoComisionEjecutivo, AprobacionPagadorLibranza,
 )
 from django.utils import timezone
 from datetime import timedelta
@@ -312,9 +312,17 @@ class EmpresaAdmin(admin.ModelAdmin):
         'telefono_contacto',
         'marketplace_fee_percent',
         'pagos_habilitados',
+        'requiere_doble_aprobacion_libranza',
     )
     search_fields = ('nombre', 'slug', 'nit', 'correo_contacto')
-    list_filter = ('tipo_empresa', 'convenio_activo', 'pagos_habilitados', EmpresaReferidaFilter, 'asesor_comercial')
+    list_filter = (
+        'tipo_empresa',
+        'convenio_activo',
+        'pagos_habilitados',
+        'requiere_doble_aprobacion_libranza',
+        EmpresaReferidaFilter,
+        'asesor_comercial',
+    )
     readonly_fields = ('asesor_actual_resumen',)
     fieldsets = (
         ('Informacion base', {
@@ -337,6 +345,12 @@ class EmpresaAdmin(admin.ModelAdmin):
             'description': 'Usa "Logo" como fuente única para marketplace y para la sección de empresas que confían '
                            'en nosotros. La presentación se controla desde frontend.',
         }),
+        ('Aprobacion pagador libranza', {
+            'fields': (
+                'requiere_doble_aprobacion_libranza',
+                'requiere_aprobadores_distintos_libranza',
+            ),
+        }),
     )
 
     def referido_display(self, obj):
@@ -358,6 +372,23 @@ class EmpresaAdmin(admin.ModelAdmin):
             asesor.cedula,
         )
     asesor_actual_resumen.short_description = 'Ejecutivo vinculado'
+
+
+@admin.register(AprobacionPagadorLibranza)
+class AprobacionPagadorLibranzaAdmin(admin.ModelAdmin):
+    list_display = ('credito', 'empresa', 'usuario', 'nivel', 'decision', 'created_at')
+    list_filter = ('nivel', 'decision', 'empresa', 'created_at')
+    search_fields = ('credito__numero_credito', 'empresa__nombre', 'usuario__username', 'usuario__email')
+    readonly_fields = ('credito', 'empresa', 'usuario', 'nivel', 'decision', 'observacion', 'created_at')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(AsesorComercial)

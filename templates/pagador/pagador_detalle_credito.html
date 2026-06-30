@@ -110,13 +110,23 @@
             </div>
 
             <div class="d-flex flex-column gap-4">
-                {% if credito.estado == 'EN_REVISION' and not pagador_decision %}
+                {% if puede_decidir_pagador_libranza %}
+                {% if not pagador_decision %}
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title"><i class="bi bi-check2-circle me-2"></i>Decidir Solicitud</h3>
+                        <h3 class="card-title">
+                            <i class="bi bi-check2-circle me-2"></i>
+                            {% if credito.estado == 'PENDIENTE_APROBACION_FINAL' %}Aprobacion final{% else %}Decidir Solicitud{% endif %}
+                        </h3>
                     </div>
                     <div class="card-content">
-                        <p class="text-muted">Revise la solicitud y confirme si desea aprobarla o rechazarla.</p>
+                        <p class="text-muted">
+                            {% if credito.estado == 'PENDIENTE_APROBACION_FINAL' %}
+                                Revise la solicitud y confirme la aprobacion final o rechazo.
+                            {% else %}
+                                Revise la solicitud y confirme si desea aprobarla o rechazarla.
+                            {% endif %}
+                        </p>
                         <form method="post" action="{% url 'pagador:decidir_solicitud' credito.id %}">
                             {% csrf_token %}
                             <div class="form-group mb-3">
@@ -132,12 +142,13 @@
                                 <button type="submit" name="action" value="approve" class="btn btn-success btn-decision"
                                         data-loader-type="check" data-loader-text="Aprobando solicitud...">
                                     <i class="bi bi-check-circle"></i>
-                                    <span>Aprobado</span>
+                                    <span>{% if credito.estado == 'PENDIENTE_APROBACION_FINAL' %}Aprobacion final{% else %}Aprobado{% endif %}</span>
                                 </button>
                             </div>
                         </form>
                     </div>
                 </div>
+                {% endif %}
                 {% endif %}
                 {% if capacidad_descuento %}
                 <div class="card">
@@ -196,7 +207,7 @@
                         <h3 class="card-title"><i class="bi bi-file-text me-2"></i>Resumen del Crédito</h3>
                     </div>
                     <div class="card-content">
-                        {% if credito.estado == 'EN_REVISION' or credito.estado == 'PENDIENTE_FIRMA' or credito.estado == 'PENDIENTE_TRANSFERENCIA' %}
+                        {% if credito.estado == 'EN_REVISION' or credito.estado == 'PENDIENTE_APROBACION_FINAL' or credito.estado == 'PENDIENTE_FIRMA' or credito.estado == 'PENDIENTE_TRANSFERENCIA' %}
                         {% if pagador_aprobado %}
                         <div class="alert alert-success text-center">
                             <i class="bi bi-check-circle-fill me-2"></i>
@@ -218,7 +229,13 @@
                         {% else %}
                         <div class="alert alert-info text-center">
                             <i class="bi bi-hourglass-split me-2"></i>
-                            <strong>Solicitud pendiente de aprobación</strong>
+                            <strong>
+                                {% if credito.estado == 'PENDIENTE_APROBACION_FINAL' %}
+                                    Solicitud pendiente de aprobacion final
+                                {% else %}
+                                    Solicitud pendiente de aprobación
+                                {% endif %}
+                            </strong>
                             <p class="mb-0 mt-2">Esta solicitud requiere tu decisión como pagador. Revisa el monto y el plazo antes de aprobar o rechazar.</p>
                         </div>
                         {% endif %}

@@ -140,8 +140,8 @@ class UserAdmin(DjangoUserAdmin):
 
 @admin.register(PerfilPagador)
 class PerfilPagadorAdmin(admin.ModelAdmin):
-    list_display = ('usuario', 'empresa', 'es_pagador', 'usuario_activo')
-    list_filter = ('empresa', 'es_pagador')
+    list_display = ('usuario', 'empresa', 'es_pagador', 'nivel_aprobacion_libranza', 'usuario_activo')
+    list_filter = ('empresa', 'es_pagador', 'nivel_aprobacion_libranza')
     search_fields = ('usuario__username', 'usuario__email', 'empresa__nombre')
     actions = ['reenviar_invitacion_activacion']
 

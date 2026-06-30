@@ -7,9 +7,20 @@ from django.utils import timezone
 
 #! MODELO DE PERFIL DE PAGADOR PARA EL USUARIO ADMIN DE PAGOS
 class PerfilPagador(models.Model):
+    class NivelAprobacionLibranza(models.TextChoices):
+        NIVEL_1 = 'NIVEL_1', 'Nivel 1'
+        FINAL = 'FINAL', 'Final'
+        AMBOS = 'AMBOS', 'Ambos'
+
     usuario = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='perfil_pagador')
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
     es_pagador = models.BooleanField(default=True)
+    nivel_aprobacion_libranza = models.CharField(
+        max_length=20,
+        choices=NivelAprobacionLibranza.choices,
+        default=NivelAprobacionLibranza.AMBOS,
+        verbose_name='Nivel aprobacion libranza',
+    )
 
     def __str__(self):
         return f"Pagador: {self.usuario.username} de {self.empresa.nombre}"
