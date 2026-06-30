@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 import io
 
@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.management import call_command
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from gestion_creditos.models import Credito, CreditoLibranza, CuotaAmortizacion, Empresa
 from gestion_creditos.services.pagador_notifications import (
@@ -76,7 +77,7 @@ class PagadorNotificationsTest(TestCase):
         self.cuota = CuotaAmortizacion.objects.create(
             credito=self.credito,
             numero_cuota=1,
-            fecha_vencimiento=date(2026, 4, 30),
+            fecha_vencimiento=date(2026, 5, 1),
             capital_a_pagar=Decimal('200000.00'),
             interes_a_pagar=Decimal('38915.48'),
             valor_cuota=Decimal('238915.48'),
@@ -103,8 +104,153 @@ class PagadorNotificationsTest(TestCase):
         self.assertEqual(resultado['status'], 'ready')
         self.assertEqual(resultado['window'], 'catchup_day_after')
         self.assertEqual(resultado['fecha_corte'], date(2026, 4, 30))
+        self.assertEqual(resultado['fecha_inicio_vencimiento'], date(2026, 5, 1))
+        self.assertEqual(resultado['fecha_fin_vencimiento'], date(2026, 5, 1))
         self.assertEqual(len(resultado['batches']), 1)
         self.assertEqual(resultado['batches'][0]['destinatarios'], ['pagador@empresa.test', 'nomina@empresa.test'])
+
+    def test_preparar_lotes_incluye_cuota_del_dia_siguiente_al_cierre(self):
+        self.cuota.fecha_vencimiento = date(2026, 7, 1)
+        self.cuota.save(update_fields=['fecha_vencimiento'])
+
+        resultado = preparar_lotes_resumen_pagador(
+            fecha_referencia=date(2026, 6, 30),
+            exigir_ventana_mensual=True,
+        )
+
+        self.assertEqual(resultado['status'], 'ready')
+        self.assertEqual(resultado['window'], 'month_end')
+        self.assertEqual(resultado['fecha_inicio_vencimiento'], date(2026, 7, 1))
+        self.assertEqual(len(resultado['batches']), 1)
+        self.assertEqual(resultado['batches'][0]['cuotas'], [self.cuota])
+
+    def test_preparar_lotes_no_incluye_cuota_vencida_el_mismo_cierre(self):
+        self.cuota.fecha_vencimiento = date(2026, 6, 30)
+        self.cuota.save(update_fields=['fecha_vencimiento'])
+
+        resultado = preparar_lotes_resumen_pagador(
+            fecha_referencia=date(2026, 6, 30),
+            exigir_ventana_mensual=True,
+        )
+
+        self.assertEqual(resultado['status'], 'ready')
+        self.assertEqual(resultado['diagnostics']['cuotas_evaluadas'], 0)
+        self.assertEqual(len(resultado['batches']), 0)
+
+    def test_preparar_lotes_no_reenvia_en_catchup_si_ya_notifico_cierre(self):
+        self.cuota.fecha_vencimiento = date(2026, 7, 1)
+        self.cuota.fecha_ultimo_recordatorio_pagador = timezone.make_aware(datetime(2026, 6, 30, 8, 0))
+        self.cuota.save(update_fields=['fecha_vencimiento', 'fecha_ultimo_recordatorio_pagador'])
+
+        resultado = preparar_lotes_resumen_pagador(
+            fecha_referencia=date(2026, 7, 1),
+            exigir_ventana_mensual=True,
+        )
+
+        self.assertEqual(resultado['status'], 'ready')
+        self.assertEqual(resultado['window'], 'catchup_day_after')
+        self.assertEqual(resultado['diagnostics']['cuotas_evaluadas'], 1)
+        self.assertEqual(resultado['diagnostics']['cuotas_omitidas_ya_enviadas'], 1)
+        self.assertEqual(len(resultado['batches']), 0)
+
+    def test_empresa_sin_destinatarios_no_genera_envio(self):
+        empresa_sin_destinatarios = Empresa.objects.create(
+            nombre='Empresa sin destinatarios',
+            convenio_activo=True,
+            tipo_empresa=Empresa.TipoEmpresa.MIXTA,
+        )
+        usuario = User.objects.create_user(username='sin-destino', email='sin-destino@aprobado.test')
+        credito = Credito.objects.create(
+            usuario=usuario,
+            linea=Credito.LineaCredito.LIBRANZA,
+            estado=Credito.EstadoCredito.ACTIVO,
+            numero_credito='CR-SIN-DEST',
+            monto_solicitado=Decimal('500000.00'),
+            monto_aprobado=Decimal('500000.00'),
+            plazo_solicitado=2,
+            plazo=2,
+            valor_cuota=Decimal('250000.00'),
+            saldo_pendiente=Decimal('250000.00'),
+            capital_pendiente=Decimal('250000.00'),
+            total_a_pagar=Decimal('500000.00'),
+        )
+        CreditoLibranza.objects.create(
+            credito=credito,
+            empresa=empresa_sin_destinatarios,
+            direccion='Calle 2',
+            telefono='3000000000',
+            correo_electronico='usuario@empresa.test',
+            cedula='100000002',
+            nombres='Usuario',
+            apellidos='Sin destino',
+        )
+        CuotaAmortizacion.objects.create(
+            credito=credito,
+            numero_cuota=1,
+            fecha_vencimiento=date(2026, 7, 1),
+            capital_a_pagar=Decimal('250000.00'),
+            interes_a_pagar=Decimal('0.00'),
+            valor_cuota=Decimal('250000.00'),
+            saldo_capital_pendiente=Decimal('0.00'),
+            pagada=False,
+            monto_pagado=Decimal('0.00'),
+        )
+
+        resultado = preparar_lotes_resumen_pagador(
+            fecha_referencia=date(2026, 6, 30),
+            exigir_ventana_mensual=True,
+        )
+
+        self.assertEqual(resultado['diagnostics']['empresas_con_cuotas'], 1)
+        self.assertEqual(resultado['diagnostics']['empresas_con_envio'], 0)
+        self.assertEqual(resultado['diagnostics']['empresas_sin_destinatarios'], ['Empresa sin destinatarios'])
+        self.assertEqual(resultado['batches'], [])
+
+    def test_respeta_pagada_estado_y_linea_permitida(self):
+        self.cuota.fecha_vencimiento = date(2026, 7, 1)
+        self.cuota.save(update_fields=['fecha_vencimiento'])
+        credito_pagado = Credito.objects.create(
+            usuario=self.empleado,
+            linea=Credito.LineaCredito.LIBRANZA,
+            estado=Credito.EstadoCredito.ACTIVO,
+            numero_credito='CR-PAGADA',
+            monto_solicitado=Decimal('500000.00'),
+            monto_aprobado=Decimal('500000.00'),
+            plazo_solicitado=2,
+            plazo=2,
+            valor_cuota=Decimal('250000.00'),
+        )
+        CreditoLibranza.objects.create(
+            credito=credito_pagado,
+            empresa=self.empresa,
+            direccion='Calle 3',
+            telefono='3000000000',
+            correo_electronico='empleado@empresa.test',
+            cedula='100000003',
+            nombres='Empleado',
+            apellidos='Pagado',
+        )
+        CuotaAmortizacion.objects.create(
+            credito=credito_pagado,
+            numero_cuota=1,
+            fecha_vencimiento=date(2026, 7, 1),
+            capital_a_pagar=Decimal('250000.00'),
+            interes_a_pagar=Decimal('0.00'),
+            valor_cuota=Decimal('250000.00'),
+            saldo_capital_pendiente=Decimal('0.00'),
+            pagada=True,
+            monto_pagado=Decimal('250000.00'),
+        )
+        self.credito.estado = Credito.EstadoCredito.ACTIVO
+        self.credito.save(update_fields=['estado'])
+
+        resultado = preparar_lotes_resumen_pagador(
+            fecha_referencia=date(2026, 6, 30),
+            exigir_ventana_mensual=True,
+        )
+
+        self.assertEqual(resultado['diagnostics']['cuotas_evaluadas'], 1)
+        self.assertEqual(resultado['batches'][0]['cuotas'], [self.cuota])
 
     def test_envio_de_prueba_usa_destinatario_controlado_y_no_marca_cuota(self):
         resultado = enviar_resumenes_pagador(
@@ -149,7 +295,8 @@ class PagadorNotificationsTest(TestCase):
 
         html = mail.outbox[0].alternatives[0][0]
         self.assertIn('Ir al panel del pagador', html)
-        self.assertIn('Resumen mensual de obligaciones', html)
+        self.assertIn('Obligaciones próximas a vencer', html)
+        self.assertIn('cuotas próximas a vencer', html)
         self.assertNotIn('Se envía una sola vez al cierre de mes', html)
         self.assertNotIn('solo al pagador y a los correos internos', html)
 

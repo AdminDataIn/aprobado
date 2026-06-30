@@ -1,6 +1,6 @@
 {% extends "emails/base_email.html" %}
 
-{% block title %}Resumen mensual de obligaciones - Aprobado{% endblock %}
+{% block title %}Obligaciones próximas a vencer - Aprobado{% endblock %}
 
 {% block email_content %}
 <div class="email-header">
@@ -13,20 +13,24 @@
 <div class="status-badge badge-blue">Resumen pagador</div>
 
 <div class="email-content">
-    <h1 class="greeting">Resumen mensual de obligaciones</h1>
+    <h1 class="greeting">Obligaciones próximas a vencer</h1>
     <p class="subtitle">
         Empresa: <strong>{{ empresa.nombre }}</strong><br>
-        Fecha de corte: <strong>{{ fecha_corte|date:"d/m/Y" }}</strong>
+        {% if fecha_inicio_vencimiento and fecha_fin_vencimiento %}
+        Vencimiento: <strong>{{ fecha_inicio_vencimiento|date:"d/m/Y" }}</strong>
+        {% else %}
+        Fecha de referencia: <strong>{{ fecha_corte|date:"d/m/Y" }}</strong>
+        {% endif %}
     </p>
 
     <div class="info-card">
         <p class="info-label">Total estimado a gestionar</p>
         <p class="info-amount">${{ total|floatformat:2 }}</p>
-        <p class="info-sublabel">{{ items|length }} cuotas pendientes incluidas en este corte.</p>
+        <p class="info-sublabel">{{ items|length }} cuotas próximas a vencer incluidas.</p>
     </div>
 
     <p class="subtitle" style="margin-bottom: 20px;">
-        Revisa el detalle de cuotas pendientes y gestiona el pago correspondiente desde tu panel.
+        Revisa el detalle de obligaciones próximas a vencer y prepara el pago correspondiente desde tu panel.
     </p>
 
     <table class="info-table" style="margin-top: 0; margin-bottom: 24px;">

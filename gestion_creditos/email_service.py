@@ -655,7 +655,14 @@ def enviar_resumen_pago_masivo_pagador(*, lote, pagos_aplicados, monto_total, pa
         return False
 
 
-def preparar_resumen_cuotas_pendientes_pagador(*, empresa, cuotas, fecha_corte):
+def preparar_resumen_cuotas_pendientes_pagador(
+    *,
+    empresa,
+    cuotas,
+    fecha_corte,
+    fecha_inicio_vencimiento=None,
+    fecha_fin_vencimiento=None,
+):
     from usuarios.models import PerfilPagador
 
     if not cuotas:
@@ -667,6 +674,8 @@ def preparar_resumen_cuotas_pendientes_pagador(*, empresa, cuotas, fecha_corte):
             'items': [],
             'total': Decimal('0.00'),
             'fecha_corte': fecha_corte,
+            'fecha_inicio_vencimiento': fecha_inicio_vencimiento,
+            'fecha_fin_vencimiento': fecha_fin_vencimiento,
         }
 
     destinatarios = []
@@ -692,6 +701,8 @@ def preparar_resumen_cuotas_pendientes_pagador(*, empresa, cuotas, fecha_corte):
     context = {
         'empresa': empresa,
         'fecha_corte': fecha_corte,
+        'fecha_inicio_vencimiento': fecha_inicio_vencimiento,
+        'fecha_fin_vencimiento': fecha_fin_vencimiento,
         'items': items,
         'total': total,
     }
@@ -707,6 +718,8 @@ def preparar_resumen_cuotas_pendientes_pagador(*, empresa, cuotas, fecha_corte):
         'items': items,
         'total': total,
         'fecha_corte': fecha_corte,
+        'fecha_inicio_vencimiento': fecha_inicio_vencimiento,
+        'fecha_fin_vencimiento': fecha_fin_vencimiento,
         'context': context,
     }
 
@@ -716,6 +729,8 @@ def enviar_resumen_cuotas_pendientes_pagador(
     empresa,
     cuotas,
     fecha_corte,
+    fecha_inicio_vencimiento=None,
+    fecha_fin_vencimiento=None,
     destinatarios_override=None,
     cc_override=None,
 ):
@@ -723,6 +738,8 @@ def enviar_resumen_cuotas_pendientes_pagador(
         empresa=empresa,
         cuotas=cuotas,
         fecha_corte=fecha_corte,
+        fecha_inicio_vencimiento=fecha_inicio_vencimiento,
+        fecha_fin_vencimiento=fecha_fin_vencimiento,
     )
     destinatarios = (
         list(destinatarios_override)
@@ -741,13 +758,13 @@ def enviar_resumen_cuotas_pendientes_pagador(
     )
     body = (
         f"Empresa: {empresa.nombre}\n"
-        f"Fecha de corte: {fecha_corte:%d/%m/%Y}\n"
-        f"Cuotas incluidas: {len(payload['items'])}\n"
+        f"Fecha de referencia: {fecha_corte:%d/%m/%Y}\n"
+        f"Cuotas proximas a vencer: {len(payload['items'])}\n"
         f"Total estimado: ${payload['total']:,.2f}\n"
     )
     try:
         email = EmailMultiAlternatives(
-            subject=f"Resumen mensual de obligaciones - {empresa.nombre}",
+            subject=f"Resumen de obligaciones proximas a vencer - {empresa.nombre}",
             body=body,
             from_email=settings.DEFAULT_FROM_EMAIL,
             to=destinatarios,
@@ -756,7 +773,7 @@ def enviar_resumen_cuotas_pendientes_pagador(
         email.attach_alternative(html_content, 'text/html')
         email.send()
         logger.info(
-            "Resumen mensual al pagador enviado | empresa=%s destinatarios=%s cc=%s cuotas=%s total=%s",
+            "Resumen de obligaciones proximas a vencer enviado | empresa=%s destinatarios=%s cc=%s cuotas=%s total=%s",
             empresa.nombre,
             destinatarios,
             internos,
@@ -765,7 +782,7 @@ def enviar_resumen_cuotas_pendientes_pagador(
         )
         return True
     except Exception as exc:
-        logger.error("Error al enviar resumen mensual de cuotas al pagador: %s", exc)
+        logger.error("Error al enviar resumen de cuotas proximas a vencer al pagador: %s", exc)
         return False
 
 
