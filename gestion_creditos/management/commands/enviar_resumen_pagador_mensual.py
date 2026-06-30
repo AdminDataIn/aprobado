@@ -10,7 +10,7 @@ from gestion_creditos.services.pagador_notifications import (
 
 
 class Command(BaseCommand):
-    help = 'Prueba o ejecuta el resumen mensual de obligaciones para pagadores.'
+    help = 'Prueba o ejecuta el resumen mensual de obligaciones proximas a vencer para pagadores.'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -62,6 +62,12 @@ class Command(BaseCommand):
             exigir_ventana_mensual=exigir_ventana,
         )
         if prepared['status'] != 'ready':
+            self.stdout.write(
+                f"Fecha de referencia: {prepared.get('fecha_referencia')} | "
+                f"ventana: {prepared.get('window')} | "
+                f"vencimiento inicio: {prepared.get('fecha_inicio_vencimiento')} | "
+                f"vencimiento fin: {prepared.get('fecha_fin_vencimiento')}"
+            )
             self.stdout.write(self.style.WARNING(f"Sin envio: {prepared['reason']}"))
             return
 
@@ -70,18 +76,31 @@ class Command(BaseCommand):
             batches = [batch for batch in batches if batch['empresa'].id == empresa_id]
 
         if not batches:
+            diagnostics = prepared.get('diagnostics', {})
+            self.stdout.write(
+                f"Fecha de referencia: {prepared['fecha_referencia']} | "
+                f"ventana: {prepared['window']} | "
+                f"vencimiento inicio: {prepared['fecha_inicio_vencimiento']} | "
+                f"vencimiento fin: {prepared['fecha_fin_vencimiento']}"
+            )
+            self.stdout.write(
+                f"Cuotas evaluadas: {diagnostics.get('cuotas_evaluadas', 0)} | "
+                f"Empresas con cuotas: {diagnostics.get('empresas_con_cuotas', 0)} | "
+                f"Empresas con envio: 0"
+            )
             self.stdout.write(self.style.WARNING('No hay empresas elegibles para enviar.'))
             return
 
         self.stdout.write(
             f"Fecha de referencia: {prepared['fecha_referencia']} | "
-            f"fecha de corte: {prepared['fecha_corte']} | "
-            f"ventana: {prepared['window']}"
+            f"ventana: {prepared['window']} | "
+            f"vencimiento inicio: {prepared['fecha_inicio_vencimiento']} | "
+            f"vencimiento fin: {prepared['fecha_fin_vencimiento']}"
         )
         self.stdout.write(
             f"Cuotas evaluadas: {prepared['diagnostics']['cuotas_evaluadas']} | "
             f"Empresas con cuotas: {prepared['diagnostics']['empresas_con_cuotas']} | "
-            f"Empresas con envio: {prepared['diagnostics']['empresas_con_envio']}"
+            f"Empresas con envio: {len(batches)}"
         )
         if prepared['diagnostics']['empresas_sin_destinatarios']:
             self.stdout.write(
@@ -94,7 +113,7 @@ class Command(BaseCommand):
         for batch in batches:
             self.stdout.write(
                 f"- Empresa #{batch['empresa'].id} {batch['empresa'].nombre}: "
-                f"{len(batch['cuotas'])} cuotas, total ${batch['total']:,.2f}"
+                f"{len(batch['cuotas'])} cuotas proximas a vencer, total ${batch['total']:,.2f}"
             )
 
         if options.get('dry_run'):

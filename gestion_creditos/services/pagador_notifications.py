@@ -30,6 +30,33 @@ def resolver_fecha_corte_resumen_pagador(fecha_referencia):
     return None, 'not_month_end'
 
 
+def resolver_ventana_vencimiento_resumen_pagador(fecha_referencia):
+    if es_ultimo_dia_del_mes(fecha_referencia):
+        fecha_vencimiento = fecha_referencia + timedelta(days=1)
+        return {
+            'fecha_corte': fecha_referencia,
+            'window': 'month_end',
+            'fecha_inicio_vencimiento': fecha_vencimiento,
+            'fecha_fin_vencimiento': fecha_vencimiento,
+        }
+
+    ayer = fecha_referencia - timedelta(days=1)
+    if es_ultimo_dia_del_mes(ayer):
+        return {
+            'fecha_corte': ayer,
+            'window': 'catchup_day_after',
+            'fecha_inicio_vencimiento': fecha_referencia,
+            'fecha_fin_vencimiento': fecha_referencia,
+        }
+
+    return {
+        'fecha_corte': None,
+        'window': 'not_month_end',
+        'fecha_inicio_vencimiento': None,
+        'fecha_fin_vencimiento': None,
+    }
+
+
 def preparar_lotes_resumen_pagador(
     *,
     fecha_referencia=None,
@@ -42,23 +69,37 @@ def preparar_lotes_resumen_pagador(
             'status': 'skipped',
             'reason': 'disabled',
             'fecha_referencia': fecha_referencia,
+            'fecha_corte': None,
+            'fecha_inicio_vencimiento': None,
+            'fecha_fin_vencimiento': None,
+            'window': 'disabled',
             'batches': [],
         }
 
-    fecha_corte, ventana = resolver_fecha_corte_resumen_pagador(fecha_referencia)
+    ventana_data = resolver_ventana_vencimiento_resumen_pagador(fecha_referencia)
+    fecha_corte = ventana_data['fecha_corte']
+    ventana = ventana_data['window']
+    fecha_inicio_vencimiento = ventana_data['fecha_inicio_vencimiento']
+    fecha_fin_vencimiento = ventana_data['fecha_fin_vencimiento']
     if exigir_ventana_mensual and not fecha_corte:
         return {
             'status': 'skipped',
             'reason': 'not_month_end',
             'fecha_referencia': fecha_referencia,
+            'fecha_corte': None,
+            'fecha_inicio_vencimiento': fecha_inicio_vencimiento,
+            'fecha_fin_vencimiento': fecha_fin_vencimiento,
+            'window': ventana,
             'batches': [],
         }
 
     fecha_corte = fecha_corte or fecha_referencia
+    fecha_inicio_vencimiento = fecha_inicio_vencimiento or fecha_referencia
+    fecha_fin_vencimiento = fecha_fin_vencimiento or fecha_inicio_vencimiento
     cuotas = (
         CuotaAmortizacion.objects.filter(
             pagada=False,
-            fecha_vencimiento__lte=fecha_corte,
+            fecha_vencimiento__range=(fecha_inicio_vencimiento, fecha_fin_vencimiento),
             credito__linea__in=[
                 Credito.LineaCredito.LIBRANZA,
                 Credito.LineaCredito.ADELANTO_NOMINA,
@@ -80,13 +121,15 @@ def preparar_lotes_resumen_pagador(
     cuotas_evaluadas = 0
     cuotas_omitidas_ya_enviadas = 0
     cuotas_sin_empresa = 0
+    fecha_inicio_idempotencia = fecha_inicio_vencimiento - timedelta(days=1)
+    fecha_fin_idempotencia = fecha_fin_vencimiento
 
     for cuota in cuotas:
         cuotas_evaluadas += 1
         ultima = cuota.fecha_ultimo_recordatorio_pagador
         if ultima:
             ultima_fecha = timezone.localtime(ultima).date()
-            if ultima_fecha.month == fecha_corte.month and ultima_fecha.year == fecha_corte.year:
+            if fecha_inicio_idempotencia <= ultima_fecha <= fecha_fin_idempotencia:
                 cuotas_omitidas_ya_enviadas += 1
                 continue
 
@@ -105,6 +148,8 @@ def preparar_lotes_resumen_pagador(
             empresa=data['empresa'],
             cuotas=data['cuotas'],
             fecha_corte=fecha_corte,
+            fecha_inicio_vencimiento=fecha_inicio_vencimiento,
+            fecha_fin_vencimiento=fecha_fin_vencimiento,
         )
         if not payload['destinatarios']:
             empresas_sin_destinatarios.append(data['empresa'].nombre)
@@ -112,10 +157,12 @@ def preparar_lotes_resumen_pagador(
         batches.append(payload)
 
     logger.info(
-        'Resumen pagador preparado | fecha_referencia=%s fecha_corte=%s ventana=%s cuotas=%s batches=%s sin_destinatarios=%s omitidas_ya_enviadas=%s sin_empresa=%s',
+        'Resumen pagador preparado | fecha_referencia=%s fecha_corte=%s ventana=%s vencimiento_inicio=%s vencimiento_fin=%s cuotas=%s batches=%s sin_destinatarios=%s omitidas_ya_enviadas=%s sin_empresa=%s',
         fecha_referencia,
         fecha_corte,
         ventana,
+        fecha_inicio_vencimiento,
+        fecha_fin_vencimiento,
         cuotas_evaluadas,
         len(batches),
         len(empresas_sin_destinatarios),
@@ -127,6 +174,8 @@ def preparar_lotes_resumen_pagador(
         'status': 'ready',
         'fecha_referencia': fecha_referencia,
         'fecha_corte': fecha_corte,
+        'fecha_inicio_vencimiento': fecha_inicio_vencimiento,
+        'fecha_fin_vencimiento': fecha_fin_vencimiento,
         'window': ventana,
         'batches': batches,
         'diagnostics': {
@@ -179,6 +228,8 @@ def enviar_resumenes_pagador(
             empresa=empresa,
             cuotas=batch['cuotas'],
             fecha_corte=prepared['fecha_corte'],
+            fecha_inicio_vencimiento=prepared['fecha_inicio_vencimiento'],
+            fecha_fin_vencimiento=prepared['fecha_fin_vencimiento'],
             destinatarios_override=destinatarios_override,
             cc_override=cc_override,
         )
@@ -203,6 +254,8 @@ def enviar_resumenes_pagador(
         'status': 'success',
         'fecha_referencia': prepared['fecha_referencia'],
         'fecha_corte': prepared['fecha_corte'],
+        'fecha_inicio_vencimiento': prepared['fecha_inicio_vencimiento'],
+        'fecha_fin_vencimiento': prepared['fecha_fin_vencimiento'],
         'window': prepared['window'],
         'empresas_evaluadas': empresas_filtradas,
         'empresas_notificadas': enviados,
