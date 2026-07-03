@@ -789,7 +789,7 @@ def pagador_decidir_solicitud_view(request, credito_id):
         with transaction.atomic():
             credito = (
                 Credito.objects
-                .select_for_update()
+                .select_for_update(of=('self',))
                 .get(id=credito.id)
             )
 

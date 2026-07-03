@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+import inspect
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -14,6 +15,7 @@ from gestion_creditos.models import (
     Empresa,
     HistorialPago,
 )
+from gestion_creditos.services import aprobacion_pagador_libranza
 from usuarios.models import PerfilPagador
 
 
@@ -170,6 +172,12 @@ class PagadorDashboardTest(TestCase):
         self.assertRedirects(response, reverse('pagador:dashboard'), fetch_redirect_response=False)
         cambio_estado_mock.assert_called_once()
         preparar_mock.assert_called_once()
+
+    def test_servicio_bloquea_solo_credito_sin_select_related_nullable(self):
+        fuente = inspect.getsource(aprobacion_pagador_libranza.decidir_solicitud_libranza_por_pagador)
+
+        self.assertIn("select_for_update(of=('self',))", fuente)
+        self.assertNotIn('select_related', fuente)
 
     def _crear_pagador(self, username, empresa=None, nivel=None):
         empresa = empresa or self.empresa

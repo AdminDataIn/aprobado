@@ -195,9 +195,8 @@ def decidir_solicitud_libranza_por_pagador(credito, usuario, accion, observacion
 
     credito = (
         Credito.objects
-        .select_for_update()
-        .select_related('detalle_libranza__empresa')
-        .get(id=credito.id)
+        .select_for_update(of=('self',))
+        .get(pk=credito.pk)
     )
 
     if credito.linea != Credito.LineaCredito.LIBRANZA:
