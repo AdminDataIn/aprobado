@@ -597,6 +597,40 @@ def pagador_registrar_pago_offline_view(request, credito_id):
 
 
 @login_required(login_url='/pagador/login/')
+@pagador_required
+@require_http_methods(["GET"])
+def pagador_comprobante_pago_view(request, pago_id):
+    empresa = request.empresa
+    pago = get_object_or_404(
+        HistorialPago.objects.select_related(
+            'empresa_origen',
+            'lote_pago',
+            'credito__detalle_libranza',
+            'credito__detalle_adelanto_nomina__vinculo_laboral__empresa',
+        ),
+        id=pago_id,
+    )
+
+    credito_empresa = pago.credito.empresa_relacionada if pago.credito_id else None
+    lote_empresa_id = pago.lote_pago.empresa_id if pago.lote_pago_id else None
+    if pago.empresa_origen_id != empresa.id and credito_empresa != empresa and lote_empresa_id != empresa.id:
+        raise Http404("Comprobante no encontrado.")
+
+    archivo = pago.comprobante or (pago.lote_pago.comprobante if pago.lote_pago_id else None)
+    if not archivo:
+        raise Http404("Comprobante no encontrado.")
+
+    content_type = mimetypes.guess_type(archivo.name)[0] or 'application/octet-stream'
+    filename = os.path.basename(archivo.name)
+    return FileResponse(
+        archivo.open('rb'),
+        as_attachment=False,
+        filename=filename,
+        content_type=content_type,
+    )
+
+
+@login_required(login_url='/pagador/login/')
 @require_POST
 @pagador_required
 def pagador_pagar_obligaciones_seleccionadas_view(request):
@@ -657,6 +691,9 @@ def pagador_pagar_obligaciones_seleccionadas_view(request):
             request,
             f'Se aplicaron {len(pagos_aplicados)} obligaciones por un total de ${total_aplicado:,.2f}.'
         )
+    except ValidationError as exc:
+        for error in exc.messages:
+            messages.error(request, error)
     except Exception as exc:
         logger.exception('Error al aplicar obligaciones seleccionadas para empresa %s', empresa.nombre)
         messages.error(request, f'No fue posible aplicar las obligaciones seleccionadas: {exc}')

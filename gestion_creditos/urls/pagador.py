@@ -30,6 +30,7 @@ urlpatterns = [
     path('empleados/reconciliar/', views.pagador_reconciliar_empleados_view, name='reconciliar_empleados'),
     path('credito/<int:credito_id>/', views.pagador_detalle_credito_view, name='credito_detalle'),
     path('credito/<int:credito_id>/registrar-pago-offline/', views.pagador_registrar_pago_offline_view, name='registrar_pago_offline'),
+    path('pago/<int:pago_id>/comprobante/', views.pagador_comprobante_pago_view, name='comprobante_pago'),
     path('obligaciones/pagar/', views.pagador_pagar_obligaciones_seleccionadas_view, name='pagar_obligaciones'),
     path('credito/<int:credito_id>/decision/', views.pagador_decidir_solicitud_view, name='decidir_solicitud'),
 

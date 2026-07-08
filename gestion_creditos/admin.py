@@ -756,9 +756,17 @@ class MarketplaceLiquidacionEmpresaAdmin(admin.ModelAdmin):
 
 @admin.register(HistorialPago)
 class HistorialPagoAdmin(admin.ModelAdmin):
-    list_display = ('credito', 'fecha_aplicacion', 'monto', 'estado', 'metodo_pago', 'origen_registro', 'referencia_pago')
+    list_display = ('credito', 'fecha_aplicacion', 'monto', 'estado', 'metodo_pago', 'origen_registro', 'referencia_pago', 'soporte_pago')
     list_filter = ('estado', 'metodo_pago', 'origen_registro', 'fecha_aplicacion')
     search_fields = ('credito__numero_credito', 'referencia_pago')
+
+    @admin.display(description='Soporte')
+    def soporte_pago(self, obj):
+        if obj.comprobante:
+            return format_html('<a href="{}" target="_blank" rel="noopener">Ver soporte</a>', obj.comprobante.url)
+        if obj.lote_pago_id and obj.lote_pago.comprobante:
+            return format_html('<a href="{}" target="_blank" rel="noopener">Ver lote</a>', obj.lote_pago.comprobante.url)
+        return '-'
 
 
 @admin.register(LotePagoEmpresa)
