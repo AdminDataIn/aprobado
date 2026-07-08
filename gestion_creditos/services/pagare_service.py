@@ -28,6 +28,11 @@ MESES_ESPANOL = {
     9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre'
 }
 
+PAGARE_TEMPLATES = {
+    '1.0': 'pagares/pagare_v1.0.html',
+    '2.0': 'pagares/pagare_v2.0.html',
+}
+
 
 def _fecha_en_espanol(fecha):
     """Formatea una fecha en español: 'dd de mes de yyyy'"""
@@ -40,6 +45,15 @@ def _fecha_en_espanol(fecha):
 def _mes_en_espanol(fecha):
     """Retorna el nombre del mes en español"""
     return MESES_ESPANOL.get(fecha.month, '')
+
+
+def _get_pagare_template_version():
+    version = str(getattr(settings, 'PAGARE_TEMPLATE_VERSION', '1.0') or '1.0').strip()
+    return version if version in PAGARE_TEMPLATES else '1.0'
+
+
+def _get_pagare_template_name(version):
+    return PAGARE_TEMPLATES.get(version, PAGARE_TEMPLATES['1.0'])
 
 
 def generar_pagare_pdf(credito, usuario_creador=None, forzar_regeneracion=False):
@@ -87,7 +101,8 @@ def generar_pagare_pdf(credito, usuario_creador=None, forzar_regeneracion=False)
     pagare_nuevo = pagare_existente is None
 
     try:
-        contexto = _preparar_contexto_pagare(credito, detalle, pagare.numero_pagare)
+        version_plantilla = _get_pagare_template_version()
+        contexto = _preparar_contexto_pagare(credito, detalle, pagare.numero_pagare, version_plantilla=version_plantilla)
         contexto_hash = _fingerprint_contexto_pagare(contexto)
         hash_anterior = ((pagare.evidencias or {}).get('contexto_pagare_hash') if pagare else None)
 
@@ -109,7 +124,7 @@ def generar_pagare_pdf(credito, usuario_creador=None, forzar_regeneracion=False)
         ):
             return pagare
 
-        html_string = render_to_string('pagares/pagare_v1.0.html', contexto)
+        html_string = render_to_string(_get_pagare_template_name(version_plantilla), contexto)
 
         pdf_bytes = HTML(string=html_string).write_pdf()
         hash_pdf = hashlib.sha256(pdf_bytes).hexdigest()
@@ -125,7 +140,7 @@ def generar_pagare_pdf(credito, usuario_creador=None, forzar_regeneracion=False)
 
         pagare.archivo_pdf.name = ruta_relativa
         pagare.hash_pdf = hash_pdf
-        pagare.version_plantilla = '1.0'
+        pagare.version_plantilla = version_plantilla
         evidencias = dict(pagare.evidencias or {})
         evidencias['contexto_pagare_hash'] = contexto_hash
         evidencias['contexto_pagare_generado_en'] = timezone.now().isoformat()
@@ -164,7 +179,7 @@ def _crear_pagare_base(credito, usuario_creador=None):
     )
 
 
-def _preparar_contexto_pagare(credito, detalle, numero_pagare):
+def _preparar_contexto_pagare(credito, detalle, numero_pagare, version_plantilla=None):
     """
     Prepara el contexto de datos para renderizar la plantilla del pagare.
     """
@@ -206,26 +221,19 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
     else:
         valor_cuota = Decimal(str(valor_cuota)).quantize(Decimal('0.01'))
 
-    hoy = timezone.localdate()
-    fecha_expedicion = _fecha_en_espanol(hoy)
-    fecha_primer_pago = credito.fecha_proximo_pago or obtener_fecha_primera_cuota_credito(credito, hoy)
+    fecha_firma = timezone.localdate()
+    fecha_expedicion = _fecha_en_espanol(fecha_firma)
+    fecha_primer_pago = credito.fecha_proximo_pago or obtener_fecha_primera_cuota_credito(credito, fecha_firma)
     fecha_vencimiento = _calcular_fecha_vencimiento(fecha_primer_pago, credito.plazo or 0)
 
     plazo_cuotas = credito.plazo or 0
     plazo_cuotas_letras = numero_a_letras_simple(plazo_cuotas) if plazo_cuotas else "cero"
     periodicidad = "mensuales"
 
-    # Obtener ciudad del deudor o usar Villavicencio por defecto
-    if credito.linea == Credito.LineaCredito.LIBRANZA:
-        ciudad_deudor = getattr(detalle, 'ciudad', "Villavicencio")
-    elif credito.linea == Credito.LineaCredito.ADELANTO_NOMINA:
-        ciudad_deudor = "Villavicencio"
-    else:
-        # Para emprendimiento, extraer de la dirección o usar default
-        ciudad_deudor = "Villavicencio"
-
-    lugar_expedicion = "Villavicencio, Meta, Colombia"
-    lugar_pago = f"{ciudad_deudor}, Meta, Colombia"
+    ciudad_deudor = _resolver_ciudad_firma(credito, detalle)
+    ciudad_visible = ciudad_deudor or '________________'
+    lugar_expedicion = ciudad_visible
+    lugar_pago = ciudad_visible
 
     # Calcular otros conceptos (comision + IVA)
     otros_conceptos = (comision or Decimal('0.00')) + (iva_comision or Decimal('0.00'))
@@ -238,20 +246,32 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
 
     # Fecha actual en partes (en español).
     # Se pasan como string para evitar localización numérica ("2.026").
-    dia_actual = str(hoy.day)
-    mes_actual = _mes_en_espanol(hoy)
-    anio_actual = str(hoy.year)
+    dia_actual = str(fecha_firma.day)
+    mes_actual = _mes_en_espanol(fecha_firma)
+    anio_actual = str(fecha_firma.year)
+    fecha_firma_texto = _fecha_en_espanol(fecha_firma)
+    modalidad_descuento = _resolver_modalidad_descuento(credito)
+    tipo_documento_deudor = getattr(detalle, 'tipo_documento', '') or 'C.C.'
+    representante_legal = getattr(settings, 'APROBADO_REPRESENTANTE_LEGAL', '') or 'Representante legal'
+    version_plantilla = version_plantilla or _get_pagare_template_version()
+    membrete_path = Path(settings.BASE_DIR) / 'static' / 'images' / 'membrete_aprobado.jpg'
 
     return {
         'numero_pagare': numero_pagare,
         'deudor_nombres': nombre_deudor,
         'ciudad_domicilio': ciudad_deudor,
+        'ciudad_domicilio_visible': ciudad_visible,
+        'tipo_documento_deudor': tipo_documento_deudor,
         'cedula_deudor': cedula_deudor,
         'telefono_deudor': telefono_deudor,
         'direccion_deudor': direccion_deudor,
         'email_deudor': email_deudor,
         'acreedor_nombre': nombre_acreedor,
         'acreedor_detalle': f"(NIT {nit_acreedor})",
+        'beneficiario_razon_social': nombre_acreedor,
+        'beneficiario_nit': nit_acreedor,
+        'beneficiario_representante_legal': representante_legal,
+        'beneficiario_domicilio': getattr(settings, 'APROBADO_DOMICILIO', '') or '________________',
         'capital_valor': formatear_cop(monto_base),
         'intereses_valor': formatear_cop(intereses_totales),
         'otros_conceptos_valor': formatear_cop(otros_conceptos) if otros_conceptos > 0 else '',
@@ -262,12 +282,18 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
         'fecha_expedicion': fecha_expedicion,
         'fecha_vencimiento': _fecha_en_espanol(fecha_vencimiento),
         'fecha_primer_pago': _fecha_en_espanol(fecha_primer_pago),
+        'fecha_ultimo_pago': _fecha_en_espanol(fecha_vencimiento),
+        'fecha_firma_texto': fecha_firma_texto,
         'lugar_expedicion': lugar_expedicion,
         'lugar_pago': lugar_pago,
         'ciudad_firma': ciudad_deudor,
+        'ciudad_firma_visible': ciudad_visible,
         'plazo_cuotas': plazo_cuotas,
         'plazo_cuotas_letras': plazo_cuotas_letras,
         'periodicidad': periodicidad,
+        'modalidad_descuento': modalidad_descuento,
+        'pagare_template_version': version_plantilla,
+        'membrete_url': membrete_path.as_uri() if membrete_path.exists() else '',
         # Fechas en partes (en español)
         # Para el texto inicial del pagaré usamos fecha de suscripción.
         # Esto alinea ambas páginas con la fecha real de firma del documento.
@@ -278,6 +304,49 @@ def _preparar_contexto_pagare(credito, detalle, numero_pagare):
         'mes_firma': mes_actual,
         'anio_firma': anio_actual,
     }
+
+
+def _resolver_ciudad_firma(credito, detalle):
+    candidatos = []
+
+    if credito.linea == Credito.LineaCredito.LIBRANZA:
+        empresa = getattr(detalle, 'empresa', None)
+        candidatos.extend([
+            getattr(detalle, 'ciudad', ''),
+            getattr(detalle, 'ciudad_residencia', ''),
+            getattr(detalle, 'ciudad_expedicion', ''),
+            getattr(empresa, 'ciudad', ''),
+            getattr(empresa, 'municipio', ''),
+        ])
+    elif credito.linea == Credito.LineaCredito.ADELANTO_NOMINA:
+        vinculo = getattr(detalle, 'vinculo_laboral', None)
+        empresa = getattr(vinculo, 'empresa', None)
+        candidatos.extend([
+            getattr(vinculo, 'ciudad', ''),
+            getattr(vinculo, 'ciudad_residencia', ''),
+            getattr(empresa, 'ciudad', ''),
+            getattr(empresa, 'municipio', ''),
+        ])
+    else:
+        candidatos.extend([
+            getattr(detalle, 'ciudad', ''),
+            getattr(detalle, 'ciudad_residencia', ''),
+            getattr(detalle, 'ciudad_expedicion', ''),
+        ])
+
+    for candidato in candidatos:
+        ciudad = str(candidato or '').strip()
+        if ciudad:
+            return ciudad
+    return ''
+
+
+def _resolver_modalidad_descuento(credito):
+    if credito.linea == Credito.LineaCredito.LIBRANZA:
+        return 'Descuento por libranza autorizado al pagador'
+    if credito.linea == Credito.LineaCredito.ADELANTO_NOMINA:
+        return 'Descuento por adelanto de nomina autorizado al pagador'
+    return 'Pago directo del deudor'
 
 
 def _obtener_tasa_interes(credito):
