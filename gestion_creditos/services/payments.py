@@ -1,5 +1,8 @@
+import hashlib
+from datetime import timedelta
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db.models import Q
 from django.utils import timezone
@@ -53,6 +56,18 @@ def aplicar_pago_obligaciones_seleccionadas(
 ):
     from gestion_creditos import credit_services
 
+    fecha_aplicacion = timezone.now()
+    firma_pago = _construir_firma_pago_obligaciones(
+        empresa=empresa,
+        obligaciones=obligaciones,
+        fecha=fecha_aplicacion,
+    )
+    if _existe_pago_obligaciones_duplicado(empresa=empresa, firma_pago=firma_pago, fecha=fecha_aplicacion):
+        raise ValidationError(
+            'Ya existe un pago registrado hoy para las mismas obligaciones y montos. '
+            'Revisa el historial antes de intentarlo nuevamente.'
+        )
+
     pagos_aplicados = []
     proof_bytes = None
     proof_name = None
@@ -63,7 +78,7 @@ def aplicar_pago_obligaciones_seleccionadas(
     for item in obligaciones:
         credito = item['credito']
         referencia = (
-            f"DIR-{credito.id}-{timezone.now().strftime('%Y%m%d%H%M%S%f')}"
+            f"PAGADOR-{empresa.id}-{fecha_aplicacion:%Y%m%d}-{firma_pago}-{credito.id}-{fecha_aplicacion:%H%M%S%f}"
         )
         proof_copy = None
         if proof_bytes is not None:
@@ -79,9 +94,32 @@ def aplicar_pago_obligaciones_seleccionadas(
             empresa=empresa,
             comprobante=proof_copy,
             notas=nota,
-            fecha_aplicacion=timezone.now(),
+            fecha_aplicacion=fecha_aplicacion,
         )
         if created:
             pagos_aplicados.append(pago)
 
     return pagos_aplicados
+
+
+def _construir_firma_pago_obligaciones(*, empresa, obligaciones, fecha):
+    partes = []
+    for item in obligaciones:
+        credito = item['credito']
+        monto = Decimal(item['monto']).quantize(Decimal('0.01'))
+        partes.append(f'{credito.id}:{monto}')
+    base = f'{empresa.id}|{fecha:%Y-%m-%d}|{";".join(sorted(partes))}'
+    return hashlib.sha256(base.encode('utf-8')).hexdigest()[:16]
+
+
+def _existe_pago_obligaciones_duplicado(*, empresa, firma_pago, fecha):
+    inicio_dia = fecha.replace(hour=0, minute=0, second=0, microsecond=0)
+    fin_dia = inicio_dia + timedelta(days=1)
+    return HistorialPago.objects.filter(
+        empresa_origen=empresa,
+        origen_registro=HistorialPago.OrigenRegistro.REGISTRO_MANUAL_PAGADOR,
+        estado=HistorialPago.EstadoPago.EXITOSO,
+        fecha_aplicacion__gte=inicio_dia,
+        fecha_aplicacion__lt=fin_dia,
+        referencia_pago__contains=firma_pago,
+    ).exists()

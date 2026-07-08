@@ -4,6 +4,7 @@ import inspect
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
@@ -85,6 +86,9 @@ class PagadorDashboardTest(TestCase):
         )
         return credito
 
+    def _comprobante_prueba(self, nombre='comprobante.pdf'):
+        return SimpleUploadedFile(nombre, b'%PDF-1.4 comprobante de prueba', content_type='application/pdf')
+
     def test_dashboard_principal_muestra_pago_directo_en_la_tabla(self):
         self._crear_credito_libranza('CR-PAG-001', estado=Credito.EstadoCredito.ACTIVO)
         self._crear_credito_libranza('CR-PAG-002', estado=Credito.EstadoCredito.EN_REVISION)
@@ -108,6 +112,42 @@ class PagadorDashboardTest(TestCase):
         self.assertContains(response, 'per_page=10')
         self.assertContains(response, 'search=Empleado')
 
+    def test_dashboard_permite_navegar_a_pagina_tres(self):
+        for index in range(25):
+            self._crear_credito_libranza(f'CR-PAG-P3-{index:03d}', estado=Credito.EstadoCredito.ACTIVO)
+
+        response = self.client.get(reverse('pagador:dashboard'), {'per_page': 10, 'creditos_page': 3})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['creditos'].number, 3)
+        self.assertEqual(response.context['creditos'].paginator.num_pages, 3)
+        self.assertContains(response, 'Página 3 de 3')
+
+    def test_dashboard_parametro_page_legacy_sigue_funcionando(self):
+        for index in range(25):
+            self._crear_credito_libranza(f'CR-PAG-LEG-{index:03d}', estado=Credito.EstadoCredito.ACTIVO)
+
+        response = self.client.get(reverse('pagador:dashboard'), {'per_page': 10, 'page': 3})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['creditos'].number, 3)
+
+    def test_dashboard_link_siguiente_usa_parametro_creditos_y_preserva_filtros(self):
+        for index in range(25):
+            self._crear_credito_libranza(f'CR-PAG-LINK-{index:03d}', estado=Credito.EstadoCredito.ACTIVO)
+
+        response = self.client.get(
+            reverse('pagador:dashboard'),
+            {'per_page': 10, 'creditos_page': 2, 'search': 'Empleado', 'sort_by': 'cliente_nombre'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['creditos'].number, 2)
+        self.assertContains(response, 'creditos_page=3', html=False)
+        self.assertContains(response, 'per_page=10', html=False)
+        self.assertContains(response, 'search=Empleado', html=False)
+        self.assertContains(response, 'sort_by=cliente_nombre', html=False)
+
     def test_pago_directo_redirige_al_siguiente_contexto(self):
         credito = self._crear_credito_libranza('CR-PAG-900', estado=Credito.EstadoCredito.ACTIVO)
 
@@ -116,7 +156,8 @@ class PagadorDashboardTest(TestCase):
             {
                 'obligaciones': [str(credito.id)],
                 f'monto_{credito.id}': '100.00',
-                'metodo_pago': HistorialPago.MetodoPago.TRANSFERENCIA_DIRECTA,
+                'metodo_pago': HistorialPago.MetodoPago.OFFLINE_MANUAL,
+                'comprobante': self._comprobante_prueba(),
                 'nota': 'Pago directo desde tabla',
                 'next': '/pagador/adelantos/?page=2&per_page=10',
                 'origen': 'adelantos',
@@ -124,6 +165,117 @@ class PagadorDashboardTest(TestCase):
         )
 
         self.assertRedirects(response, '/pagador/adelantos/?page=2&per_page=10', fetch_redirect_response=False)
+
+    def test_pago_directo_requiere_comprobante(self):
+        credito = self._crear_credito_libranza('CR-PAG-SOP', estado=Credito.EstadoCredito.ACTIVO)
+
+        response = self.client.post(
+            reverse('pagador:pagar_obligaciones'),
+            {
+                'obligaciones': [str(credito.id)],
+                f'monto_{credito.id}': '100.00',
+                'metodo_pago': HistorialPago.MetodoPago.OFFLINE_MANUAL,
+                'nota': 'Pago sin soporte',
+            },
+        )
+
+        self.assertRedirects(response, reverse('pagador:dashboard'), fetch_redirect_response=False)
+        self.assertFalse(HistorialPago.objects.filter(credito=credito).exists())
+
+    def test_pago_directo_no_muestra_transferencia_directa(self):
+        self._crear_credito_libranza('CR-PAG-MET', estado=Credito.EstadoCredito.ACTIVO)
+
+        response = self.client.get(reverse('pagador:dashboard'))
+        detalle = self.client.get(reverse('pagador:credito_detalle', args=[Credito.objects.get(numero_credito='CR-PAG-MET').id]))
+
+        self.assertNotContains(response, 'Transferencia directa')
+        self.assertNotContains(detalle, 'Transferencia directa')
+        self.assertContains(response, 'Registro offline manual')
+
+    def test_pagador_puede_ver_comprobante_de_su_empresa(self):
+        credito = self._crear_credito_libranza('CR-PAG-COMP', estado=Credito.EstadoCredito.ACTIVO)
+        self.client.post(
+            reverse('pagador:pagar_obligaciones'),
+            {
+                'obligaciones': [str(credito.id)],
+                f'monto_{credito.id}': '100.00',
+                'metodo_pago': HistorialPago.MetodoPago.OFFLINE_MANUAL,
+                'comprobante': self._comprobante_prueba('soporte-propio.pdf'),
+                'nota': 'Pago con soporte',
+            },
+        )
+        pago = HistorialPago.objects.get(credito=credito)
+
+        response = self.client.get(reverse('pagador:comprobante_pago', args=[pago.id]))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_admin_staff_ve_soporte_de_pago(self):
+        credito = self._crear_credito_libranza('CR-PAG-ADM', estado=Credito.EstadoCredito.ACTIVO)
+        self.client.post(
+            reverse('pagador:pagar_obligaciones'),
+            {
+                'obligaciones': [str(credito.id)],
+                f'monto_{credito.id}': '100.00',
+                'metodo_pago': HistorialPago.MetodoPago.OFFLINE_MANUAL,
+                'comprobante': self._comprobante_prueba('soporte-admin.pdf'),
+                'nota': 'Pago con soporte admin',
+            },
+        )
+        admin = User.objects.create_superuser(
+            username='admin-soporte',
+            email='admin-soporte@aprobado.test',
+            password='123456',
+        )
+        self.client.force_login(admin)
+
+        response = self.client.get(reverse('admin:gestion_creditos_historialpago_changelist'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Ver soporte')
+
+    def test_pagador_no_puede_ver_comprobante_de_otra_empresa(self):
+        credito = self._crear_credito_libranza('CR-PAG-OTRA', estado=Credito.EstadoCredito.ACTIVO)
+        self.client.post(
+            reverse('pagador:pagar_obligaciones'),
+            {
+                'obligaciones': [str(credito.id)],
+                f'monto_{credito.id}': '100.00',
+                'metodo_pago': HistorialPago.MetodoPago.OFFLINE_MANUAL,
+                'comprobante': self._comprobante_prueba('soporte-ajeno.pdf'),
+                'nota': 'Pago con soporte',
+            },
+        )
+        pago = HistorialPago.objects.get(credito=credito)
+        otra_empresa = Empresa.objects.create(nombre='Otra empresa', tipo_empresa=Empresa.TipoEmpresa.MIXTA, convenio_activo=True)
+        otro_pagador = self._crear_pagador('pagador-ajeno', empresa=otra_empresa)
+        self.client.force_login(otro_pagador)
+
+        response = self.client.get(reverse('pagador:comprobante_pago', args=[pago.id]))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_pago_directo_bloquea_duplicado_mismo_dia(self):
+        credito = self._crear_credito_libranza('CR-PAG-DUP', estado=Credito.EstadoCredito.ACTIVO)
+        payload = {
+            'obligaciones': [str(credito.id)],
+            f'monto_{credito.id}': '100.00',
+            'metodo_pago': HistorialPago.MetodoPago.OFFLINE_MANUAL,
+            'nota': 'Pago duplicado',
+        }
+
+        primera = self.client.post(
+            reverse('pagador:pagar_obligaciones'),
+            {**payload, 'comprobante': self._comprobante_prueba('soporte-1.pdf')},
+        )
+        segunda = self.client.post(
+            reverse('pagador:pagar_obligaciones'),
+            {**payload, 'comprobante': self._comprobante_prueba('soporte-2.pdf')},
+        )
+
+        self.assertRedirects(primera, reverse('pagador:dashboard'), fetch_redirect_response=False)
+        self.assertRedirects(segunda, reverse('pagador:dashboard'), fetch_redirect_response=False)
+        self.assertEqual(HistorialPago.objects.filter(credito=credito).count(), 1)
 
     def test_detalle_credito_carga_sin_nameerror(self):
         credito = self._crear_credito_libranza('CR-PAG-DET', estado=Credito.EstadoCredito.ACTIVO)

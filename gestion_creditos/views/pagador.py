@@ -70,6 +70,7 @@ def pagador_reconciliar_empleados_view(request):
 
 PAGADOR_PER_PAGE_CHOICES = (10, 20, 50)
 PAGADOR_ROUNDING_RESIDUAL_THRESHOLD = Decimal('2.00')
+PAGADOR_CREDITOS_PAGE_PARAM = 'creditos_page'
 
 
 def _get_pagador_per_page(request):
@@ -309,14 +310,16 @@ def _build_pagador_dashboard_context(request, *, forced_linea=None):
     creditos_filtrados = creditos_base.filter(estado=estado_filter) if estado_filter else creditos_base
     total_registros = creditos_filtrados.values('id').distinct().count()
 
+    pagina_creditos = request.GET.get(PAGADOR_CREDITOS_PAGE_PARAM) or request.GET.get('page')
     paginator = Paginator(creditos_filtrados, per_page)
-    creditos_page = paginator.get_page(request.GET.get('page'))
+    creditos_page = paginator.get_page(pagina_creditos)
     creditos_page, total_visible_pagable, creditos_con_pago_directo = _attach_pagador_payment_context(
         creditos_page,
         request.user,
     )
 
     query_params = request.GET.copy()
+    query_params.pop(PAGADOR_CREDITOS_PAGE_PARAM, None)
     query_params.pop('page', None)
     errores_pago_masivo = request.session.pop('errores_pago_masivo', None)
     solicitudes_pendientes = creditos_base.filter(estado=Credito.EstadoCredito.EN_REVISION)
@@ -335,6 +338,7 @@ def _build_pagador_dashboard_context(request, *, forced_linea=None):
         'sort_by': sort_by,
         'per_page': per_page,
         'per_page_choices': PAGADOR_PER_PAGE_CHOICES,
+        'page_param': PAGADOR_CREDITOS_PAGE_PARAM,
         'estados_choices': [choice for choice in Credito.EstadoCredito.choices if choice[0] not in ['RECHAZADO', 'SOLICITUD']],
         'estado_resumen': estado_resumen,
         'dashboard_title': 'Adelantos de nómina' if forced_linea == Credito.LineaCredito.ADELANTO_NOMINA else 'Créditos y solicitudes',
@@ -597,6 +601,40 @@ def pagador_registrar_pago_offline_view(request, credito_id):
 
 
 @login_required(login_url='/pagador/login/')
+@pagador_required
+@require_http_methods(["GET"])
+def pagador_comprobante_pago_view(request, pago_id):
+    empresa = request.empresa
+    pago = get_object_or_404(
+        HistorialPago.objects.select_related(
+            'empresa_origen',
+            'lote_pago',
+            'credito__detalle_libranza',
+            'credito__detalle_adelanto_nomina__vinculo_laboral__empresa',
+        ),
+        id=pago_id,
+    )
+
+    credito_empresa = pago.credito.empresa_relacionada if pago.credito_id else None
+    lote_empresa_id = pago.lote_pago.empresa_id if pago.lote_pago_id else None
+    if pago.empresa_origen_id != empresa.id and credito_empresa != empresa and lote_empresa_id != empresa.id:
+        raise Http404("Comprobante no encontrado.")
+
+    archivo = pago.comprobante or (pago.lote_pago.comprobante if pago.lote_pago_id else None)
+    if not archivo:
+        raise Http404("Comprobante no encontrado.")
+
+    content_type = mimetypes.guess_type(archivo.name)[0] or 'application/octet-stream'
+    filename = os.path.basename(archivo.name)
+    return FileResponse(
+        archivo.open('rb'),
+        as_attachment=False,
+        filename=filename,
+        content_type=content_type,
+    )
+
+
+@login_required(login_url='/pagador/login/')
 @require_POST
 @pagador_required
 def pagador_pagar_obligaciones_seleccionadas_view(request):
@@ -657,6 +695,9 @@ def pagador_pagar_obligaciones_seleccionadas_view(request):
             request,
             f'Se aplicaron {len(pagos_aplicados)} obligaciones por un total de ${total_aplicado:,.2f}.'
         )
+    except ValidationError as exc:
+        for error in exc.messages:
+            messages.error(request, error)
     except Exception as exc:
         logger.exception('Error al aplicar obligaciones seleccionadas para empresa %s', empresa.nombre)
         messages.error(request, f'No fue posible aplicar las obligaciones seleccionadas: {exc}')

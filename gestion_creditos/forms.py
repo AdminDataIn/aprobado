@@ -683,19 +683,19 @@ class PagoCreditoOfflineForm(forms.Form):
     metodo_pago = forms.ChoiceField(
         label='Metodo de pago',
         choices=[
-            (HistorialPago.MetodoPago.TRANSFERENCIA_DIRECTA, 'Transferencia directa'),
             (HistorialPago.MetodoPago.OFFLINE_MANUAL, 'Registro offline manual'),
         ],
-        initial=HistorialPago.MetodoPago.TRANSFERENCIA_DIRECTA,
+        initial=HistorialPago.MetodoPago.OFFLINE_MANUAL,
         widget=forms.Select(attrs={'class': 'form-select'}),
     )
     comprobante = forms.FileField(
-        label='Comprobante (opcional)',
-        required=False,
+        label='Comprobante de pago',
+        required=True,
         validators=[FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'webp'])],
         widget=forms.FileInput(attrs={
             'class': 'form-control',
             'accept': '.pdf,.jpg,.jpeg,.png,.webp',
+            'required': 'required',
         }),
     )
     nota = forms.CharField(
@@ -710,6 +710,8 @@ class PagoCreditoOfflineForm(forms.Form):
 
     def clean_comprobante(self):
         comprobante = self.cleaned_data.get('comprobante')
+        if not comprobante:
+            raise forms.ValidationError('Debes adjuntar el comprobante de pago.')
         if comprobante and comprobante.size > 8 * 1024 * 1024:
             raise forms.ValidationError('El comprobante no debe superar 8MB.')
         return comprobante
@@ -719,19 +721,19 @@ class PagoObligacionesSeleccionadasForm(forms.Form):
     metodo_pago = forms.ChoiceField(
         label='Metodo de pago',
         choices=[
-            (HistorialPago.MetodoPago.TRANSFERENCIA_DIRECTA, 'Transferencia directa'),
             (HistorialPago.MetodoPago.OFFLINE_MANUAL, 'Registro offline manual'),
         ],
-        initial=HistorialPago.MetodoPago.TRANSFERENCIA_DIRECTA,
+        initial=HistorialPago.MetodoPago.OFFLINE_MANUAL,
         widget=forms.Select(attrs={'class': 'form-select'}),
     )
     comprobante = forms.FileField(
-        label='Comprobante (opcional)',
-        required=False,
+        label='Comprobante de pago',
+        required=True,
         validators=[FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'webp'])],
         widget=forms.FileInput(attrs={
             'class': 'form-control',
             'accept': '.pdf,.jpg,.jpeg,.png,.webp',
+            'required': 'required',
         }),
     )
     nota = forms.CharField(
@@ -746,6 +748,8 @@ class PagoObligacionesSeleccionadasForm(forms.Form):
 
     def clean_comprobante(self):
         comprobante = self.cleaned_data.get('comprobante')
+        if not comprobante:
+            raise forms.ValidationError('Debes adjuntar el comprobante de pago.')
         if comprobante and comprobante.size > 8 * 1024 * 1024:
             raise forms.ValidationError('El comprobante no debe superar 8MB.')
         return comprobante
@@ -792,11 +796,15 @@ class PagoMasivoEmpresaConfirmForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['notas'].required = True
+        self.fields['comprobante'].required = True
         self.fields['notas'].help_text = 'Describe brevemente a qué pago corresponde esta carga y cómo fue confirmada.'
-        self.fields['comprobante'].help_text = 'Opcional, pero recomendado cuando la empresa ya cuenta con soporte del pago.'
+        self.fields['comprobante'].help_text = 'Adjunta el soporte del pago confirmado por la empresa.'
+        self.fields['comprobante'].widget.attrs['required'] = 'required'
 
     def clean_comprobante(self):
         comprobante = self.cleaned_data.get('comprobante')
+        if not comprobante:
+            raise forms.ValidationError('Debes adjuntar el comprobante de pago.')
         if comprobante and comprobante.size > 8 * 1024 * 1024:
             raise forms.ValidationError('El comprobante no debe superar 8MB.')
         return comprobante

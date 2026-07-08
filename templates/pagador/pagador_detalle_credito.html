@@ -86,9 +86,9 @@
                                 <td class="text-end amount-display" data-label="Monto">${{ pago.monto|intcomma }}</td>
                                 <td class="text-center" data-label="Soporte">
                                     {% if pago.comprobante %}
-                                    <a href="{{ pago.comprobante.url }}" class="btn btn-sm btn-outline-primary" target="_blank">Ver</a>
+                                    <a href="{% url 'pagador:comprobante_pago' pago.id %}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">Ver</a>
                                     {% elif pago.lote_pago and pago.lote_pago.comprobante %}
-                                    <a href="{{ pago.lote_pago.comprobante.url }}" class="btn btn-sm btn-outline-primary" target="_blank">Carga</a>
+                                    <a href="{% url 'pagador:comprobante_pago' pago.id %}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">Carga</a>
                                     {% else %}
                                     <span class="text-muted">-</span>
                                     {% endif %}
@@ -446,13 +446,12 @@
                                         <div class="col-md-6">
                                             <label for="id_metodo_pago_offline" class="form-label">Método</label>
                                             <select class="form-select" id="id_metodo_pago_offline" name="metodo_pago">
-                                                <option value="TRANSFERENCIA_DIRECTA">Transferencia directa</option>
                                                 <option value="OFFLINE_MANUAL">Registro offline manual</option>
                                             </select>
                                         </div>
                                         <div class="col-md-6">
-                                            <label for="id_comprobante_pago_offline" class="form-label">Comprobante (opcional)</label>
-                                            <input type="file" class="form-control" id="id_comprobante_pago_offline" name="comprobante" accept=".pdf,.jpg,.jpeg,.png,.webp">
+                                            <label for="id_comprobante_pago_offline" class="form-label">Comprobante de pago</label>
+                                            <input type="file" class="form-control" id="id_comprobante_pago_offline" name="comprobante" accept=".pdf,.jpg,.jpeg,.png,.webp" required>
                                         </div>
                                         <div class="col-12">
                                             <label for="id_nota_pago_offline" class="form-label">Motivo o contexto del pago</label>
