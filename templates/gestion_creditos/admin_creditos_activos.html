@@ -228,7 +228,7 @@
                 <ul class="pagination">
                     {% if creditos.has_previous %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ creditos.previous_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">
+                        <a class="page-link" href="?page={{ creditos.previous_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">
                             Anterior
                         </a>
                     </li>
@@ -238,7 +238,7 @@
                     </li>
                     {% if creditos.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ creditos.next_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">
+                        <a class="page-link" href="?page={{ creditos.next_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">
                             Siguiente
                         </a>
                     </li>
