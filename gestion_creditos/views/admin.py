@@ -326,8 +326,11 @@ def admin_creditos_activos_view(request):
     ).order_by('-fecha_solicitud')
 
     paginator = Paginator(creditos, 20)
-    page_number = request.GET.get('page')
+    page_values = request.GET.getlist('page')
+    page_number = page_values[0] if page_values else None
     creditos_page = paginator.get_page(page_number)
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
 
     context = {
         'creditos': creditos_page,
@@ -340,6 +343,7 @@ def admin_creditos_activos_view(request):
         'search': request.GET.get('search', ''),
         'lineas_choices': Credito.LineaCredito.choices,
         'empresas_choices': _admin_empresas_choices(),
+        'querystring_without_page': query_params.urlencode(),
     }
 
     return render(request, 'gestion_creditos/admin_creditos_activos.html', context)

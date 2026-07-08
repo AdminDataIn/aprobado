@@ -24,6 +24,29 @@ class AdminViewsSmokeTest(TestCase):
         )
         self.client.login(username='staff-admin', password='123456')
 
+    def _crear_creditos_activos_admin(self, cantidad, prefijo='CR-ADMIN-PAG'):
+        usuario = User.objects.create_user(
+            username=f'{prefijo.lower()}-user',
+            email=f'{prefijo.lower()}@aprobado.test',
+            password='123456',
+        )
+        for index in range(cantidad):
+            Credito.objects.create(
+                usuario=usuario,
+                numero_credito=f'{prefijo}-{index:03d}',
+                linea=Credito.LineaCredito.LIBRANZA,
+                estado=Credito.EstadoCredito.ACTIVO,
+                monto_solicitado=Decimal('1000000.00'),
+                monto_aprobado=Decimal('1000000.00'),
+                plazo_solicitado=12,
+                plazo=12,
+                saldo_pendiente=Decimal('500000.00'),
+                capital_pendiente=Decimal('500000.00'),
+                total_a_pagar=Decimal('500000.00'),
+                valor_cuota=Decimal('100000.00'),
+                fecha_solicitud=timezone.now() - timedelta(minutes=index),
+            )
+
     def test_paginas_admin_principales_responden(self):
         for url_name in [
             'gestion:dashboard',
@@ -101,3 +124,35 @@ class AdminViewsSmokeTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Total recaudado')
         self.assertContains(response, 'Capital recuperado')
+
+    def test_admin_creditos_activos_responde_pagina_tres(self):
+        self._crear_creditos_activos_admin(45)
+
+        response = self.client.get(reverse('gestion:creditos_activos'), {'page': 3})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['creditos'].number, 3)
+        self.assertEqual(response.context['creditos'].paginator.num_pages, 3)
+
+    def test_admin_creditos_activos_no_duplica_page_y_preserva_filtros(self):
+        self._crear_creditos_activos_admin(45, prefijo='CR-ADMIN-FILTRO')
+
+        response = self.client.get(
+            reverse('gestion:creditos_activos'),
+            {'page': 2, 'search': 'CR-ADMIN-FILTRO', 'linea': Credito.LineaCredito.LIBRANZA},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'page=3&search=CR-ADMIN-FILTRO&amp;linea=LIBRANZA', html=False)
+        self.assertNotContains(response, 'page=3&amp;page=2', html=False)
+
+    def test_admin_creditos_activos_url_malformada_usa_primer_page(self):
+        self._crear_creditos_activos_admin(45, prefijo='CR-ADMIN-DUP')
+
+        response = self.client.get(
+            f"{reverse('gestion:creditos_activos')}?page=3&page=2&search=CR-ADMIN-DUP"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['creditos'].number, 3)
+        self.assertNotContains(response, 'page=2&amp;page=3', html=False)
