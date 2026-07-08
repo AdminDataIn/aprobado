@@ -70,6 +70,7 @@ def pagador_reconciliar_empleados_view(request):
 
 PAGADOR_PER_PAGE_CHOICES = (10, 20, 50)
 PAGADOR_ROUNDING_RESIDUAL_THRESHOLD = Decimal('2.00')
+PAGADOR_CREDITOS_PAGE_PARAM = 'creditos_page'
 
 
 def _get_pagador_per_page(request):
@@ -309,14 +310,16 @@ def _build_pagador_dashboard_context(request, *, forced_linea=None):
     creditos_filtrados = creditos_base.filter(estado=estado_filter) if estado_filter else creditos_base
     total_registros = creditos_filtrados.values('id').distinct().count()
 
+    pagina_creditos = request.GET.get(PAGADOR_CREDITOS_PAGE_PARAM) or request.GET.get('page')
     paginator = Paginator(creditos_filtrados, per_page)
-    creditos_page = paginator.get_page(request.GET.get('page'))
+    creditos_page = paginator.get_page(pagina_creditos)
     creditos_page, total_visible_pagable, creditos_con_pago_directo = _attach_pagador_payment_context(
         creditos_page,
         request.user,
     )
 
     query_params = request.GET.copy()
+    query_params.pop(PAGADOR_CREDITOS_PAGE_PARAM, None)
     query_params.pop('page', None)
     errores_pago_masivo = request.session.pop('errores_pago_masivo', None)
     solicitudes_pendientes = creditos_base.filter(estado=Credito.EstadoCredito.EN_REVISION)
@@ -335,6 +338,7 @@ def _build_pagador_dashboard_context(request, *, forced_linea=None):
         'sort_by': sort_by,
         'per_page': per_page,
         'per_page_choices': PAGADOR_PER_PAGE_CHOICES,
+        'page_param': PAGADOR_CREDITOS_PAGE_PARAM,
         'estados_choices': [choice for choice in Credito.EstadoCredito.choices if choice[0] not in ['RECHAZADO', 'SOLICITUD']],
         'estado_resumen': estado_resumen,
         'dashboard_title': 'Adelantos de nómina' if forced_linea == Credito.LineaCredito.ADELANTO_NOMINA else 'Créditos y solicitudes',

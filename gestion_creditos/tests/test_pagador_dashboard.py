@@ -112,6 +112,42 @@ class PagadorDashboardTest(TestCase):
         self.assertContains(response, 'per_page=10')
         self.assertContains(response, 'search=Empleado')
 
+    def test_dashboard_permite_navegar_a_pagina_tres(self):
+        for index in range(25):
+            self._crear_credito_libranza(f'CR-PAG-P3-{index:03d}', estado=Credito.EstadoCredito.ACTIVO)
+
+        response = self.client.get(reverse('pagador:dashboard'), {'per_page': 10, 'creditos_page': 3})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['creditos'].number, 3)
+        self.assertEqual(response.context['creditos'].paginator.num_pages, 3)
+        self.assertContains(response, 'Página 3 de 3')
+
+    def test_dashboard_parametro_page_legacy_sigue_funcionando(self):
+        for index in range(25):
+            self._crear_credito_libranza(f'CR-PAG-LEG-{index:03d}', estado=Credito.EstadoCredito.ACTIVO)
+
+        response = self.client.get(reverse('pagador:dashboard'), {'per_page': 10, 'page': 3})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['creditos'].number, 3)
+
+    def test_dashboard_link_siguiente_usa_parametro_creditos_y_preserva_filtros(self):
+        for index in range(25):
+            self._crear_credito_libranza(f'CR-PAG-LINK-{index:03d}', estado=Credito.EstadoCredito.ACTIVO)
+
+        response = self.client.get(
+            reverse('pagador:dashboard'),
+            {'per_page': 10, 'creditos_page': 2, 'search': 'Empleado', 'sort_by': 'cliente_nombre'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['creditos'].number, 2)
+        self.assertContains(response, 'creditos_page=3', html=False)
+        self.assertContains(response, 'per_page=10', html=False)
+        self.assertContains(response, 'search=Empleado', html=False)
+        self.assertContains(response, 'sort_by=cliente_nombre', html=False)
+
     def test_pago_directo_redirige_al_siguiente_contexto(self):
         credito = self._crear_credito_libranza('CR-PAG-900', estado=Credito.EstadoCredito.ACTIVO)
 
