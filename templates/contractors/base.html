@@ -25,6 +25,11 @@
     .mensaje { background:#e8fbff; border:1px solid #a9edf8; padding:12px 16px; border-radius:10px; }
     .lista-documentos { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:16px; margin-bottom:24px; }
     .documento { border:1px solid var(--borde); border-radius:12px; padding:16px; background:#fbfdff; }
+    .tabla { width:100%; border-collapse:collapse; }
+    .tabla th, .tabla td { padding:12px; border-bottom:1px solid var(--borde); text-align:left; }
+    .progreso { height:10px; border-radius:999px; background:#e6eef5; overflow:hidden; }
+    .progreso span { display:block; height:100%; background:var(--cyan); }
+    .alerta { padding:14px 16px; border-radius:10px; background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; }
     .footer-prestadores { padding:32px 8%; background:#fff; border-top:1px solid var(--borde); color:#334155; }
     @media (max-width: 760px) { .grid, .lista-documentos { grid-template-columns:1fr; } .hero h1 { font-size:34px; } }
   </style>

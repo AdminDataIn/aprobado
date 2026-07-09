@@ -8,6 +8,7 @@
 <main class="contenedor">
   <form method="post" class="panel" novalidate>
     {% csrf_token %}
+    <h2>Datos del prestador y del contrato</h2>
     <div class="grid">
       {% for field in form %}
         <div>

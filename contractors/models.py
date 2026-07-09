@@ -14,6 +14,7 @@ class ContractorApplication(models.Model):
         BORRADOR = 'BORRADOR', 'Borrador'
         DOCUMENTOS_PENDIENTES = 'DOCUMENTOS_PENDIENTES', 'Documentos pendientes'
         DOCUMENTOS_CARGADOS = 'DOCUMENTOS_CARGADOS', 'Documentos cargados'
+        EN_REVISION = 'EN_REVISION', 'En revision'
 
     class EscenarioCredito(models.TextChoices):
         NUEVO_CREDITO = 'NUEVO_CREDITO', 'Nuevo credito'
@@ -62,6 +63,18 @@ class ContractorApplication(models.Model):
         null=True,
         blank=True,
         validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    monto_solicitado = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    plazo_meses = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1)],
     )
     estado = models.CharField(
         max_length=32,

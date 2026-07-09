@@ -8,12 +8,19 @@
 <main class="contenedor">
   <section class="panel">
     <h2>Documentos requeridos</h2>
+    <p>Progreso documental: {{ progreso_documental.cargados }}/{{ progreso_documental.total }} documentos.</p>
+    <div class="progreso" aria-label="Progreso documental">
+      <span style="width: {{ progreso_documental.porcentaje }}%;"></span>
+    </div>
+    <br>
     <div class="lista-documentos">
-      {% for tipo, etiqueta, cargado in estado_documentos %}
+      {% for tipo, etiqueta, documento in estado_documentos %}
         <div class="documento">
           <strong>{{ etiqueta }}</strong>
-          {% if cargado %}
+          {% if documento %}
             <p>Cargado correctamente.</p>
+            <a href="{% url 'contractors:descargar_documento' solicitud.id documento.id %}">Ver documento</a>
+            <p>Si cargas otro archivo del mismo tipo, reemplazara el documento actual.</p>
           {% else %}
             <p>Pendiente.</p>
           {% endif %}
@@ -29,6 +36,7 @@
   </section>
   <form method="post" enctype="multipart/form-data" class="panel" style="margin-top:24px;" novalidate>
     {% csrf_token %}
+    <h2>Cargar o reemplazar documento</h2>
     {{ form.as_p }}
     <button class="boton" type="submit">Cargar documento</button>
   </form>

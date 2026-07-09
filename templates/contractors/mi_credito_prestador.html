@@ -7,15 +7,35 @@
 </section>
 <main class="contenedor">
   <section class="panel">
-    {% if solicitudes %}
-      <ul>
-        {% for solicitud in solicitudes %}
-          <li>
-            Solicitud #{{ solicitud.id }} - {{ solicitud.empresa.nombre }} - {{ solicitud.get_estado_display }}
-            <a href="{% url 'contractors:documentos' solicitud.id %}">Documentos</a>
-          </li>
+    {% if solicitudes_con_progreso %}
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th>Solicitud</th>
+            <th>Empresa</th>
+            <th>Estado</th>
+            <th>Fecha</th>
+            <th>Documentos</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for solicitud, progreso in solicitudes_con_progreso %}
+          <tr>
+            <td>#{{ solicitud.id }}</td>
+            <td>{{ solicitud.empresa.nombre }}</td>
+            <td>{{ solicitud.get_estado_display }}</td>
+            <td>{{ solicitud.created_at|date:"Y-m-d" }}</td>
+            <td>{{ progreso.cargados }}/{{ progreso.total }}</td>
+            <td>
+              <a href="{% url 'contractors:documentos' solicitud.id %}">Documentos</a>
+              |
+              <a href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">Simular</a>
+            </td>
+          </tr>
         {% endfor %}
-      </ul>
+        </tbody>
+      </table>
     {% else %}
       <p>No tienes solicitudes registradas.</p>
     {% endif %}

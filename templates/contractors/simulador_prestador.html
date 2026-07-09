@@ -12,9 +12,19 @@
       <p>Solicitud #{{ solicitud.id }} asociada a {{ solicitud.empresa.nombre }}.</p>
     {% else %}
       <h2>Faltan documentos</h2>
-      <p>Debes completar la carga documental antes de simular.</p>
+      <p class="alerta">Debes completar la carga documental antes de simular. Progreso actual: {{ progreso_documental.cargados }}/{{ progreso_documental.total }}.</p>
       <a class="boton" href="{% url 'contractors:documentos' solicitud.id %}">Completar documentos</a>
     {% endif %}
+    <h3>Resumen capturado</h3>
+    <table class="tabla">
+      <tr><th>Prestador</th><td>{{ solicitud.nombre_completo }}</td></tr>
+      <tr><th>Empresa</th><td>{{ solicitud.empresa.nombre }}</td></tr>
+      <tr><th>Cargo o actividad</th><td>{{ solicitud.cargo }}</td></tr>
+      <tr><th>Monto solicitado</th><td>{{ solicitud.monto_solicitado|default:"Pendiente" }}</td></tr>
+      <tr><th>Plazo solicitado</th><td>{{ solicitud.plazo_meses|default:"Pendiente" }} meses</td></tr>
+      <tr><th>Valor pendiente por cobrar</th><td>{{ solicitud.valor_pendiente_cobrar|default:"Pendiente" }}</td></tr>
+    </table>
+    <p>Simulacion preliminar en preparacion. Esta pantalla no aprueba ni origina credito.</p>
   </section>
 </main>
 {% endblock %}

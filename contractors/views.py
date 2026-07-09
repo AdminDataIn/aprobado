@@ -1,7 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import Http404
-from django.shortcuts import get_object_or_404, redirect, render
+from django.http import FileResponse, Http404
+from django.shortcuts import redirect, render
 
 from contractors.forms import DocumentoPrestadorForm, SolicitudPrestadorForm
 from contractors.models import (
@@ -64,7 +64,7 @@ def documentos_prestador_view(request, solicitud_id):
     }
     etiquetas = dict(ContractorApplicationDocument.TipoDocumento.choices)
     estado_documentos = [
-        (tipo, etiquetas.get(tipo, tipo), tipo in documentos)
+        (tipo, etiquetas.get(tipo, tipo), documentos.get(tipo))
         for tipo in DOCUMENTOS_OBLIGATORIOS_PRESTADOR
     ]
     documentos_pendientes = [
@@ -81,7 +81,23 @@ def documentos_prestador_view(request, solicitud_id):
             'estado_documentos': estado_documentos,
             'documentos_pendientes': documentos_pendientes,
             'documentos_obligatorios': DOCUMENTOS_OBLIGATORIOS_PRESTADOR,
+            'progreso_documental': calcular_progreso_documental(solicitud),
         },
+    )
+
+
+@login_required
+def descargar_documento_prestador_view(request, solicitud_id, documento_id):
+    solicitud = _obtener_solicitud_del_usuario(solicitud_id, request.user)
+    try:
+        documento = solicitud.documentos.get(id=documento_id)
+    except ContractorApplicationDocument.DoesNotExist as exc:
+        raise Http404('Documento no encontrado.') from exc
+
+    return FileResponse(
+        documento.archivo.open('rb'),
+        as_attachment=False,
+        filename=documento.archivo.name.split('/')[-1],
     )
 
 
@@ -101,17 +117,27 @@ def simular_prestador_view(request):
         {
             'solicitud': solicitud,
             'documentos_cargados': documentos_cargados,
+            'progreso_documental': calcular_progreso_documental(solicitud),
         },
     )
 
 
 @login_required
 def mi_credito_prestador_view(request):
-    solicitudes = ContractorApplication.objects.filter(usuario=request.user).select_related('empresa')
+    solicitudes = (
+        ContractorApplication.objects
+        .filter(usuario=request.user)
+        .select_related('empresa')
+        .prefetch_related('documentos')
+    )
+    solicitudes_con_progreso = [
+        (solicitud, calcular_progreso_documental(solicitud))
+        for solicitud in solicitudes
+    ]
     return render(
         request,
         'contractors/mi_credito_prestador.html',
-        {'solicitudes': solicitudes},
+        {'solicitudes_con_progreso': solicitudes_con_progreso},
     )
 
 
@@ -134,3 +160,20 @@ def _actualizar_estado_documental(solicitud):
     if _solicitud_tiene_documentos_obligatorios(solicitud):
         solicitud.estado = ContractorApplication.Estado.DOCUMENTOS_CARGADOS
         solicitud.save(update_fields=['estado', 'updated_at'])
+
+
+def calcular_progreso_documental(solicitud):
+    documentos = getattr(solicitud, '_prefetched_objects_cache', {}).get('documentos')
+    if documentos is None:
+        tipos_cargados = set(solicitud.documentos.values_list('tipo_documento', flat=True))
+    else:
+        tipos_cargados = {documento.tipo_documento for documento in documentos}
+    total = len(DOCUMENTOS_OBLIGATORIOS_PRESTADOR)
+    cargados = len(set(DOCUMENTOS_OBLIGATORIOS_PRESTADOR).intersection(tipos_cargados))
+    porcentaje = int((cargados / total) * 100) if total else 0
+    return {
+        'cargados': cargados,
+        'total': total,
+        'porcentaje': porcentaje,
+        'completo': cargados == total,
+    }

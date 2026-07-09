@@ -1,7 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
-
 from contractors.models import ContractorApplication, ContractorApplicationDocument
 from gestion_creditos.models import Empresa
 
@@ -24,6 +23,10 @@ class PortalMinimoPrestadoresTest(TestCase):
             nombre='Empresa Convenio',
             convenio_activo=True,
         )
+        self.otra_empresa = Empresa.objects.create(
+            nombre='Otra Empresa Convenio',
+            convenio_activo=True,
+        )
 
     def test_raiz_subdominio_redirige_a_solicitar(self):
         response = self.client.get('/', HTTP_HOST=self.host)
@@ -40,18 +43,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.client.force_login(self.usuario)
         response = self.client.post(
             '/solicitar/',
-            {
-                'escenario_credito': ContractorApplication.EscenarioCredito.NUEVO_CREDITO,
-                'tipo_documento': ContractorApplication.TipoDocumento.CEDULA_CIUDADANIA,
-                'numero_documento': '123456789',
-                'nombres': 'Ana Maria',
-                'apellidos': 'Perez Gomez',
-                'celular': '3001234567',
-                'correo': 'ana@example.com',
-                'direccion': 'Calle 1 # 2-3',
-                'cargo': 'Consultora',
-                'empresa': self.empresa.id,
-            },
+            self._payload_solicitud(),
             HTTP_HOST=self.host,
         )
 
@@ -59,7 +51,36 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(solicitud.usuario, self.usuario)
         self.assertEqual(solicitud.empresa, self.empresa)
+        self.assertEqual(solicitud.monto_solicitado, 3000000)
+        self.assertEqual(solicitud.plazo_meses, 12)
         self.assertEqual(response['Location'], f'/solicitud/{solicitud.id}/documentos/')
+
+    def test_empresa_debe_ser_empresa_existente_activa(self):
+        empresa_inactiva = Empresa.objects.create(
+            nombre='Empresa sin convenio',
+            convenio_activo=False,
+        )
+        self.client.force_login(self.usuario)
+        payload = self._payload_solicitud()
+        payload['empresa'] = empresa_inactiva.id
+
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Debes elegir una empresa valida de la lista.')
+        self.assertEqual(ContractorApplication.objects.count(), 0)
+
+    def test_usuario_ve_solo_sus_solicitudes_en_mi_credito(self):
+        propia = self._crear_solicitud(self.usuario)
+        self._crear_solicitud(self.otro_usuario, empresa=self.otra_empresa, documento='987654321')
+        self.client.force_login(self.usuario)
+
+        response = self.client.get('/mi-credito/', HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'Solicitud</th>')
+        self.assertContains(response, propia.empresa.nombre)
+        self.assertNotContains(response, self.otra_empresa.nombre)
 
     def test_usuario_no_puede_ver_documentos_de_solicitud_ajena(self):
         solicitud = self._crear_solicitud(self.usuario)
@@ -95,17 +116,109 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(documento.solicitud, solicitud)
         self.assertEqual(documento.uploaded_by, self.usuario)
 
-    def _crear_solicitud(self, usuario):
+    def test_reemplazo_de_documento_funciona(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        self.client.force_login(self.usuario)
+
+        self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CONTRATO, 'contrato.pdf')
+        self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CONTRATO, 'contrato-reemplazo.pdf')
+
+        self.assertEqual(ContractorApplicationDocument.objects.count(), 1)
+        documento = ContractorApplicationDocument.objects.get()
+        self.assertIn('CONTRATO', documento.archivo.name)
+        self.assertEqual(documento.uploaded_by, self.usuario)
+
+    def test_estado_cambia_a_documentos_cargados_con_todos_los_obligatorios(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        self.client.force_login(self.usuario)
+
+        self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CEDULA_FRONTAL, 'frontal.jpg', b'imagen')
+        self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CEDULA_TRASERA, 'trasera.jpg', b'imagen')
+        self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CONTRATO, 'contrato.pdf')
+        self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CERTIFICADO_BANCARIO, 'certificado.pdf')
+
+        solicitud.refresh_from_db()
+        self.assertEqual(solicitud.estado, ContractorApplication.Estado.DOCUMENTOS_CARGADOS)
+
+    def test_link_seguro_descarga_documento_solo_para_dueno(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        documento = ContractorApplicationDocument.objects.create(
+            solicitud=solicitud,
+            tipo_documento=ContractorApplicationDocument.TipoDocumento.CONTRATO,
+            archivo=SimpleUploadedFile('contrato.pdf', b'%PDF-1.4 contrato', content_type='application/pdf'),
+            uploaded_by=self.usuario,
+        )
+        url = f'/solicitud/{solicitud.id}/documentos/{documento.id}/descargar/'
+
+        self.client.force_login(self.usuario)
+        response = self.client.get(url, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 200)
+
+        self.client.force_login(self.otro_usuario)
+        response = self.client.get(url, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 404)
+
+    def test_simulador_redirige_si_no_hay_solicitud(self):
+        self.client.force_login(self.usuario)
+
+        response = self.client.get('/simular/', HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], '/solicitar/')
+
+    def test_simulador_muestra_advertencia_si_faltan_documentos(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        self.client.force_login(self.usuario)
+
+        response = self.client.get(f'/simular/?solicitud_id={solicitud.id}', HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Debes completar la carga documental antes de simular.')
+        self.assertContains(response, 'Simulacion preliminar en preparacion.')
+
+    def _payload_solicitud(self):
+        return {
+            'escenario_credito': ContractorApplication.EscenarioCredito.NUEVO_CREDITO,
+            'tipo_documento': ContractorApplication.TipoDocumento.CEDULA_CIUDADANIA,
+            'numero_documento': '123456789',
+            'nombres': 'Ana Maria',
+            'apellidos': 'Perez Gomez',
+            'celular': '3001234567',
+            'correo': 'ana@example.com',
+            'direccion': 'Calle 1 # 2-3',
+            'cargo': 'Consultora',
+            'empresa': self.empresa.id,
+            'fecha_inicio_contrato': '2026-01-01',
+            'fecha_fin_contrato': '2026-12-31',
+            'valor_total_contrato': '12000000',
+            'valor_pendiente_cobrar': '8000000',
+            'monto_solicitado': '3000000',
+            'plazo_meses': '12',
+        }
+
+    def _crear_solicitud(self, usuario, empresa=None, documento='123456789'):
         return ContractorApplication.objects.create(
             usuario=usuario,
-            empresa=self.empresa,
+            empresa=empresa or self.empresa,
             escenario_credito=ContractorApplication.EscenarioCredito.NUEVO_CREDITO,
             tipo_documento=ContractorApplication.TipoDocumento.CEDULA_CIUDADANIA,
-            numero_documento='123456789',
+            numero_documento=documento,
             nombres='Ana Maria',
             apellidos='Perez Gomez',
             celular='3001234567',
             correo='ana@example.com',
             direccion='Calle 1 # 2-3',
             cargo='Consultora',
+            monto_solicitado='3000000',
+            plazo_meses=12,
+        )
+
+    def _cargar_documento(self, solicitud, tipo_documento, nombre, contenido=b'%PDF-1.4 documento'):
+        return self.client.post(
+            f'/solicitud/{solicitud.id}/documentos/',
+            {
+                'tipo_documento': tipo_documento,
+                'archivo': SimpleUploadedFile(nombre, contenido),
+            },
+            HTTP_HOST=self.host,
         )
