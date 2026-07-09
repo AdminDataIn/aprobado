@@ -9,6 +9,7 @@ from contractors.models import (
     ContractorApplicationDocument,
     DOCUMENTOS_OBLIGATORIOS_PRESTADOR,
 )
+from contractors.services.capacidad_contractual import evaluar_capacidad_contractual_preliminar
 
 
 def inicio_prestadores_view(request):
@@ -110,6 +111,11 @@ def simular_prestador_view(request):
 
     solicitud = _obtener_solicitud_del_usuario(solicitud_id, request.user)
     documentos_cargados = _solicitud_tiene_documentos_obligatorios(solicitud)
+    progreso_documental = calcular_progreso_documental(solicitud)
+    simulacion_preliminar = evaluar_capacidad_contractual_preliminar(
+        solicitud,
+        documentos_completos=documentos_cargados,
+    )
 
     return render(
         request,
@@ -117,7 +123,8 @@ def simular_prestador_view(request):
         {
             'solicitud': solicitud,
             'documentos_cargados': documentos_cargados,
-            'progreso_documental': calcular_progreso_documental(solicitud),
+            'progreso_documental': progreso_documental,
+            'simulacion_preliminar': simulacion_preliminar,
         },
     )
 

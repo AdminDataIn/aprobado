@@ -1,8 +1,11 @@
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.utils import timezone
+from datetime import timedelta
+
 from contractors.models import ContractorApplication, ContractorApplicationDocument
-from gestion_creditos.models import Empresa
+from gestion_creditos.models import Credito, CreditoLibranza, Empresa
 
 
 class PortalMinimoPrestadoresTest(TestCase):
@@ -174,7 +177,70 @@ class PortalMinimoPrestadoresTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Debes completar la carga documental antes de simular.')
-        self.assertContains(response, 'Simulacion preliminar en preparacion.')
+        self.assertContains(response, 'Faltan documentos obligatorios para completar la evaluacion.')
+
+    def test_simulador_solo_permite_ver_solicitud_propia(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        self.client.force_login(self.otro_usuario)
+
+        response = self.client.get(f'/simular/?solicitud_id={solicitud.id}', HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_simulador_calcula_cuota_preliminar_con_datos_validos(self):
+        solicitud = self._crear_solicitud(
+            self.usuario,
+            valor_total='12000000',
+            valor_pendiente='8000000',
+            monto='3000000',
+            plazo=12,
+        )
+        self.client.force_login(self.usuario)
+        self._cargar_documentos_obligatorios(solicitud)
+
+        creditos_antes = Credito.objects.count()
+        creditos_libranza_antes = CreditoLibranza.objects.count()
+        response = self.client.get(f'/simular/?solicitud_id={solicitud.id}', HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Cuota estimada preliminar')
+        self.assertContains(response, 'Porcentaje sobre valor pendiente')
+        self.assertContains(response, 'Esta evaluacion no aprueba')
+        self.assertEqual(Credito.objects.count(), creditos_antes)
+        self.assertEqual(CreditoLibranza.objects.count(), creditos_libranza_antes)
+
+    def test_simulador_advierte_monto_mayor_al_valor_pendiente(self):
+        solicitud = self._crear_solicitud(
+            self.usuario,
+            valor_total='5000000',
+            valor_pendiente='2000000',
+            monto='3000000',
+            plazo=12,
+        )
+        self.client.force_login(self.usuario)
+        self._cargar_documentos_obligatorios(solicitud)
+
+        response = self.client.get(f'/simular/?solicitud_id={solicitud.id}', HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'El monto solicitado supera el valor pendiente por cobrar del contrato.')
+
+    def test_simulador_advierte_contrato_vencido(self):
+        solicitud = self._crear_solicitud(
+            self.usuario,
+            valor_total='5000000',
+            valor_pendiente='3000000',
+            monto='2000000',
+            plazo=10,
+            fecha_fin=timezone.localdate() - timedelta(days=1),
+        )
+        self.client.force_login(self.usuario)
+        self._cargar_documentos_obligatorios(solicitud)
+
+        response = self.client.get(f'/simular/?solicitud_id={solicitud.id}', HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'El contrato registrado se encuentra vencido.')
 
     def _payload_solicitud(self):
         return {
@@ -196,7 +262,17 @@ class PortalMinimoPrestadoresTest(TestCase):
             'plazo_meses': '12',
         }
 
-    def _crear_solicitud(self, usuario, empresa=None, documento='123456789'):
+    def _crear_solicitud(
+        self,
+        usuario,
+        empresa=None,
+        documento='123456789',
+        valor_total=None,
+        valor_pendiente=None,
+        monto='3000000',
+        plazo=12,
+        fecha_fin=None,
+    ):
         return ContractorApplication.objects.create(
             usuario=usuario,
             empresa=empresa or self.empresa,
@@ -209,8 +285,12 @@ class PortalMinimoPrestadoresTest(TestCase):
             correo='ana@example.com',
             direccion='Calle 1 # 2-3',
             cargo='Consultora',
-            monto_solicitado='3000000',
-            plazo_meses=12,
+            fecha_inicio_contrato=timezone.localdate(),
+            fecha_fin_contrato=fecha_fin or (timezone.localdate() + timedelta(days=180)),
+            valor_total_contrato=valor_total,
+            valor_pendiente_cobrar=valor_pendiente,
+            monto_solicitado=monto,
+            plazo_meses=plazo,
         )
 
     def _cargar_documento(self, solicitud, tipo_documento, nombre, contenido=b'%PDF-1.4 documento'):
@@ -222,3 +302,9 @@ class PortalMinimoPrestadoresTest(TestCase):
             },
             HTTP_HOST=self.host,
         )
+
+    def _cargar_documentos_obligatorios(self, solicitud):
+        self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CEDULA_FRONTAL, 'frontal.jpg', b'imagen')
+        self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CEDULA_TRASERA, 'trasera.jpg', b'imagen')
+        self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CONTRATO, 'contrato.pdf')
+        self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CERTIFICADO_BANCARIO, 'certificado.pdf')
