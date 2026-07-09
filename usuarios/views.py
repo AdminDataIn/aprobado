@@ -562,6 +562,11 @@ def libranza_landing(request):
     """
     tasa_libranza = obtener_tasa_credito(Credito.LineaCredito.LIBRANZA)
     tasa_libranza_decimal = tasa_libranza / Decimal('100')
+    landing_trusted_companies = _build_landing_trusted_companies()
+    landing_trusted_company_rows = [
+        landing_trusted_companies[::2],
+        landing_trusted_companies[1::2] or landing_trusted_companies[::2],
+    ]
     context = {
         'libranza_tasa_mensual': tasa_libranza,
         'libranza_tasa_decimal': tasa_libranza_decimal,
@@ -582,7 +587,8 @@ def libranza_landing(request):
                 'url': 'https://www.facebook.com/share/1AdTG9Qbim/?mibextid=wwXIfr',
             },
         ],
-        'landing_trusted_companies': _build_landing_trusted_companies(),
+        'landing_trusted_companies': landing_trusted_companies,
+        'landing_trusted_company_rows': landing_trusted_company_rows,
         'landing_testimonials_enabled': False,
     }
     return render(request, 'libranza/libranza_landing.html', context)

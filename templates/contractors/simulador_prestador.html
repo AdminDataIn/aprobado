@@ -4,13 +4,13 @@
 <section class="hero">
   <p class="eyebrow">Simulacion preliminar</p>
   <h1>Revisa tu capacidad contractual</h1>
-  <p>Esta vista usa los datos de tu solicitud para una estimacion informativa. No crea credito ni reemplaza la validacion financiera oficial.</p>
+  <p>Esta vista usa los datos de tu solicitud para una estimación informativa. No crea crédito ni reemplaza la validación financiera oficial.</p>
 </section>
 
 <main class="contenedor">
   <section class="panel alerta-info">
     <strong>Importante:</strong>
-    Esta simulacion es informativa y no constituye aprobacion, pagare ni desembolso. Esta evaluacion no aprueba, no origina credito y no reemplaza la validacion financiera oficial.
+    Esta simulación es informativa y no constituye aprobación, pagaré ni desembolso. Esta evaluación no aprueba, no origina crédito y no reemplaza la validación financiera oficial.
   </section>
 
   <section class="grid-3">
@@ -37,7 +37,7 @@
       <p>Debes completar la carga documental antes de simular. Progreso actual: {{ progreso_documental.cargados }}/{{ progreso_documental.total }}.</p>
       <div class="acciones">
         <a class="boton" href="{% url 'contractors:documentos' solicitud.id %}">Completar documentos</a>
-        <a class="boton boton-secundario" href="{% url 'contractors:mi_credito' %}">Volver a Mi credito</a>
+        <a class="boton boton-secundario" href="{% url 'contractors:mi_credito' %}">Volver a Mi crédito</a>
       </div>
     </section>
   {% endif %}
@@ -75,7 +75,7 @@
         </article>
       </div>
     {% else %}
-      <p class="alerta">No se puede calcular la simulacion preliminar con los datos actuales.</p>
+      <p class="alerta">No se puede calcular la simulación preliminar con los datos actuales.</p>
     {% endif %}
   </section>
 
@@ -83,7 +83,7 @@
     <section class="grid-2">
       {% if simulacion_preliminar.bloqueos %}
         <article class="panel alerta">
-          <h2 class="titulo-seccion">Bloqueos de informacion</h2>
+          <h2 class="titulo-seccion">Bloqueos de información</h2>
           <ul class="lista-alertas">
             {% for bloqueo in simulacion_preliminar.bloqueos %}
               <li>{{ bloqueo }}</li>
@@ -110,7 +110,7 @@
       {% if not documentos_cargados %}
         <a class="boton" href="{% url 'contractors:documentos' solicitud.id %}">Completar documentos</a>
       {% endif %}
-      <a class="boton boton-secundario" href="{% url 'contractors:mi_credito' %}">Volver a Mi credito</a>
+      <a class="boton boton-secundario" href="{% url 'contractors:mi_credito' %}">Volver a Mi crédito</a>
     </div>
   </section>
 </main>

@@ -1,10 +1,10 @@
 {% extends "contractors/base.html" %}
-{% block title %}Mi credito | Prestadores de Servicios{% endblock %}
+{% block title %}Mi crédito | Prestadores de Servicios{% endblock %}
 {% block content %}
 <section class="hero">
   <p class="eyebrow">Portal Prestadores de Servicios</p>
-  <h1>Mi credito</h1>
-  <p>Consulta tus solicitudes, revisa el avance documental y accede a la simulacion preliminar cuando tengas la informacion completa.</p>
+  <h1>Mi crédito</h1>
+  <p>Consulta tus solicitudes, revisa el avance documental y accede a la simulación preliminar cuando tengas la información completa.</p>
 </section>
 
 <main class="contenedor">
@@ -63,9 +63,9 @@
     <section class="panel panel-vacio">
       <p class="eyebrow">Sin solicitudes</p>
       <h2 class="titulo-seccion">Aun no tienes solicitudes</h2>
-      <p class="ayuda">Inicia una solicitud como Prestador de Servicios y continua con la carga documental para habilitar la simulacion preliminar.</p>
+      <p class="ayuda">Inicia una solicitud como Prestador de Servicios y continúa con la carga documental para habilitar la simulación preliminar.</p>
       <div class="acciones">
-        <a class="boton" href="{% url 'contractors:solicitar' %}">Solicitar credito</a>
+        <a class="boton" href="{% url 'contractors:solicitar' %}">Solicitar crédito</a>
       </div>
     </section>
   {% endif %}

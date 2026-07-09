@@ -1,20 +1,24 @@
+{% load static %}
 <header class="barra-prestadores">
-  <a class="marca-prestadores" href="{% url 'contractors:solicitar' %}">
-    <span class="marca-simbolo">✓</span>
-    <span>
-      Aprobado
-      <small>Prestadores de Servicios</small>
-    </span>
+  <a class="marca-prestadores" href="{% url 'contractors:solicitar' %}" aria-label="Aprobado">
+    <img src="{% static 'images/logo.png' %}" alt="Aprobado">
   </a>
-  <nav class="menu-prestadores" aria-label="Navegacion Prestadores de Servicios">
+  <nav class="menu-prestadores" aria-label="Navegación Prestadores de Servicios">
     <a href="{% url 'contractors:solicitar' %}">Solicitar</a>
-    <a href="{% url 'contractors:mi_credito' %}">Mi credito</a>
+    <a href="{% url 'contractors:mi_credito' %}">Mi crédito</a>
     <a href="{% url 'contractors:simular' %}">Simular</a>
     {% if request.user.is_authenticated %}
-      <span class="usuario">{{ request.user.email|default:request.user.username }}</span>
-      <a href="/accounts/logout/">Cerrar sesion</a>
+      <div class="usuario-menu">
+        <button type="button" class="usuario-trigger" aria-haspopup="true" aria-expanded="false">
+          {{ request.user.email|default:request.user.username|truncatechars:28 }}
+        </button>
+        <div class="usuario-dropdown">
+          <a href="{% url 'contractors:mi_credito' %}">Mi crédito</a>
+          <a href="/accounts/logout/">Cerrar sesión</a>
+        </div>
+      </div>
     {% else %}
-      <a href="/auth/login/">Iniciar sesion</a>
+      <a class="nav-login" href="/auth/login/?next={{ request.get_full_path|urlencode }}">Iniciar sesión</a>
     {% endif %}
   </nav>
 </header>

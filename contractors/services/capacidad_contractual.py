@@ -46,7 +46,7 @@ def evaluar_capacidad_contractual_preliminar(solicitud, documentos_completos=Fal
     plazo = solicitud.plazo_meses
 
     if not documentos_completos:
-        advertencias.append('Faltan documentos obligatorios para completar la evaluacion.')
+        advertencias.append('Faltan documentos obligatorios para completar la evaluación.')
 
     if valor_pendiente is None:
         bloqueos.append('Ingresa el valor pendiente por cobrar del contrato.')

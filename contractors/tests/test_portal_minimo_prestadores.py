@@ -70,6 +70,34 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(solicitud.plazo_meses, 12)
         self.assertEqual(response['Location'], f'/solicitud/{solicitud.id}/documentos/')
 
+    def test_solicitar_permite_cargar_documentos_iniciales(self):
+        self.client.force_login(self.usuario)
+        payload = self._payload_solicitud()
+        payload.update(
+            {
+                'cedula_frontal': SimpleUploadedFile('frontal.jpg', b'imagen', content_type='image/jpeg'),
+                'cedula_trasera': SimpleUploadedFile('trasera.jpg', b'imagen', content_type='image/jpeg'),
+                'certificado_bancario': SimpleUploadedFile(
+                    'certificado.pdf',
+                    b'%PDF-1.4 certificado',
+                    content_type='application/pdf',
+                ),
+                'contrato_vigente': SimpleUploadedFile(
+                    'contrato.pdf',
+                    b'%PDF-1.4 contrato',
+                    content_type='application/pdf',
+                ),
+            },
+        )
+
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+
+        solicitud = ContractorApplication.objects.get()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(solicitud.estado, ContractorApplication.Estado.DOCUMENTOS_CARGADOS)
+        self.assertEqual(solicitud.documentos.count(), 4)
+        self.assertEqual(set(solicitud.documentos.values_list('uploaded_by', flat=True)), {self.usuario.id})
+
     def test_empresa_debe_ser_empresa_existente_activa(self):
         empresa_inactiva = Empresa.objects.create(
             nombre='Empresa sin convenio',
@@ -82,7 +110,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Debes elegir una empresa valida de la lista.')
+        self.assertContains(response, 'Debes elegir una empresa válida de la lista.')
         self.assertEqual(ContractorApplication.objects.count(), 0)
 
     def test_usuario_ve_solo_sus_solicitudes_en_mi_credito(self):
@@ -189,7 +217,7 @@ class PortalMinimoPrestadoresTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Debes completar la carga documental antes de simular.')
-        self.assertContains(response, 'Faltan documentos obligatorios para completar la evaluacion.')
+        self.assertContains(response, 'Faltan documentos obligatorios para completar la evaluación.')
 
     def test_simulador_solo_permite_ver_solicitud_propia(self):
         solicitud = self._crear_solicitud(self.usuario)
@@ -217,7 +245,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Cuota estimada preliminar')
         self.assertContains(response, 'Porcentaje sobre valor pendiente')
-        self.assertContains(response, 'Esta evaluacion no aprueba')
+        self.assertContains(response, 'Esta evaluación no aprueba')
         self.assertEqual(Credito.objects.count(), creditos_antes)
         self.assertEqual(CreditoLibranza.objects.count(), creditos_libranza_antes)
 
@@ -370,7 +398,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         resultado = evaluar_predecision_prestador(solicitud, documentos_completos=False)
 
         self.assertEqual(resultado.resultado, RESULTADO_REQUIERE_REVISION)
-        self.assertIn('Faltan documentos obligatorios para completar la evaluacion.', resultado.alertas)
+        self.assertIn('Faltan documentos obligatorios para completar la evaluación.', resultado.alertas)
 
     def test_predecision_requiere_revision_si_contrato_vencido(self):
         solicitud = self._crear_solicitud(
@@ -433,7 +461,7 @@ class PortalMinimoPrestadoresTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'PREAPROBABLE')
-        self.assertContains(response, 'No constituye aprobacion, originacion, pagare ni desembolso.')
+        self.assertContains(response, 'No constituye aprobación, originación, pagaré ni desembolso.')
 
     def test_predecision_no_crea_creditos_ni_cambia_estado(self):
         solicitud = self._crear_solicitud(

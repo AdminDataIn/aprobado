@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import FileResponse, Http404
 from django.shortcuts import redirect, render
 
-from contractors.forms import DocumentoPrestadorForm, SolicitudPrestadorForm
+from contractors.forms import DOCUMENTO_INICIAL_CAMPOS, DocumentoPrestadorForm, SolicitudPrestadorForm
 from contractors.models import (
     ContractorApplication,
     ContractorApplicationDocument,
@@ -19,13 +19,15 @@ def inicio_prestadores_view(request):
 @login_required
 def solicitar_prestador_view(request):
     if request.method == 'POST':
-        form = SolicitudPrestadorForm(request.POST)
+        form = SolicitudPrestadorForm(request.POST, request.FILES)
         if form.is_valid():
             solicitud = form.save(commit=False)
             solicitud.usuario = request.user
             solicitud.estado = ContractorApplication.Estado.DOCUMENTOS_PENDIENTES
             solicitud.save()
-            messages.success(request, 'Solicitud registrada. Continua con la carga de documentos.')
+            _registrar_documentos_iniciales(solicitud, form.cleaned_data, request.user)
+            _actualizar_estado_documental(solicitud)
+            messages.success(request, 'Solicitud registrada. Continúa con la carga de documentos.')
             return redirect('contractors:documentos', solicitud_id=solicitud.id)
     else:
         form = SolicitudPrestadorForm()
@@ -106,7 +108,7 @@ def descargar_documento_prestador_view(request, solicitud_id, documento_id):
 def simular_prestador_view(request):
     solicitud_id = request.GET.get('solicitud_id')
     if not solicitud_id:
-        messages.info(request, 'Primero registra tu solicitud para habilitar la simulacion.')
+        messages.info(request, 'Primero registra tu solicitud para habilitar la simulación.')
         return redirect('contractors:solicitar')
 
     solicitud = _obtener_solicitud_del_usuario(solicitud_id, request.user)
@@ -167,6 +169,22 @@ def _actualizar_estado_documental(solicitud):
     if _solicitud_tiene_documentos_obligatorios(solicitud):
         solicitud.estado = ContractorApplication.Estado.DOCUMENTOS_CARGADOS
         solicitud.save(update_fields=['estado', 'updated_at'])
+
+
+def _registrar_documentos_iniciales(solicitud, datos_limpios, usuario):
+    for nombre_campo, tipo_documento in DOCUMENTO_INICIAL_CAMPOS.items():
+        archivo = datos_limpios.get(nombre_campo)
+        if not archivo:
+            continue
+        documento, _created = ContractorApplicationDocument.objects.get_or_create(
+            solicitud=solicitud,
+            tipo_documento=tipo_documento,
+            defaults={'uploaded_by': usuario},
+        )
+        documento.archivo = archivo
+        documento.uploaded_by = usuario
+        documento.full_clean()
+        documento.save()
 
 
 def calcular_progreso_documental(solicitud):

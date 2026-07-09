@@ -1,103 +1,540 @@
 {% extends "contractors/base.html" %}
-{% block title %}Solicita tu credito | Prestadores de Servicios{% endblock %}
+{% block title %}Solicita tu crédito | Prestadores de Servicios{% endblock %}
 {% block content %}
-<section class="hero">
-  <h1>Credito para Prestadores de Servicios</h1>
-  <p>Registra tu informacion, selecciona la empresa vinculada y completa los datos base de tu contrato para continuar con la carga documental.</p>
-</section>
-<main class="contenedor">
-  <form method="post" class="panel" novalidate>
-    {% csrf_token %}
-    {% if form.non_field_errors %}
-      <div class="alerta">{{ form.non_field_errors }}</div>
-    {% endif %}
+<main class="form-container form-container-prestadores">
+  <div class="form-content">
+    <aside class="form-sidebar">
+      <div class="form-title">
+        <h1>Solicita tu crédito</h1>
+        <p>Completa tu información, carga el contrato y confirma los datos antes de simular.</p>
+      </div>
 
-    <section class="seccion">
-      <h2 class="titulo-seccion">Datos personales</h2>
-      <p class="subtitulo-seccion">Informacion basica del prestador que inicia la solicitud.</p>
-      <div class="grid">
-        {% for field in form %}
-          {% if field.name == "tipo_documento" or field.name == "numero_documento" or field.name == "nombres" or field.name == "apellidos" or field.name == "celular" or field.name == "correo" or field.name == "direccion" %}
+      <div class="step-list" aria-label="Progreso de solicitud">
+        <div class="step-item">
+          <div class="step-content">
+            <div class="step-number active" data-step-indicator="1">1</div>
             <div>
-              <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-              {{ field }}
-              {{ field.errors }}
+              <div class="step-name active" data-step-name="1">Información personal</div>
+              <small>Identificación y contacto.</small>
             </div>
-          {% endif %}
-        {% endfor %}
-      </div>
-    </section>
-
-    <section class="seccion">
-      <h2 class="titulo-seccion">Empresa / pagador</h2>
-      <p class="subtitulo-seccion">Selecciona una empresa registrada en Aprobado. No se crean empresas desde este portal.</p>
-      <div class="grid">
-        <div>
-          <label for="{{ form.empresa.id_for_label }}">{{ form.empresa.label }}</label>
-          {{ form.empresa }}
-          {{ form.empresa.errors }}
+          </div>
+          <div class="step-connector"></div>
         </div>
-        <div>
-          <label for="{{ form.cargo.id_for_label }}">{{ form.cargo.label }}</label>
-          {{ form.cargo }}
-          {{ form.cargo.errors }}
+        <div class="step-item">
+          <div class="step-content">
+            <div class="step-number inactive" data-step-indicator="2">2</div>
+            <div>
+              <div class="step-name inactive" data-step-name="2">Documentos</div>
+              <small>Contrato vigente y soportes.</small>
+            </div>
+          </div>
+          <div class="step-connector"></div>
         </div>
-      </div>
-    </section>
-
-    <section class="seccion">
-      <h2 class="titulo-seccion">Datos contractuales</h2>
-      <p class="subtitulo-seccion">Estos valores permiten una evaluacion preliminar. La validacion final queda para revision interna.</p>
-      <div class="grid">
-        <div>
-          <label for="{{ form.fecha_inicio_contrato.id_for_label }}">{{ form.fecha_inicio_contrato.label }}</label>
-          {{ form.fecha_inicio_contrato }}
-          {{ form.fecha_inicio_contrato.errors }}
+        <div class="step-item">
+          <div class="step-content">
+            <div class="step-number inactive" data-step-indicator="3">3</div>
+            <div>
+              <div class="step-name inactive" data-step-name="3">Empresa contratante</div>
+              <small>Empresa existente en Aprobado.</small>
+            </div>
+          </div>
+          <div class="step-connector"></div>
         </div>
-        <div>
-          <label for="{{ form.fecha_fin_contrato.id_for_label }}">{{ form.fecha_fin_contrato.label }}</label>
-          {{ form.fecha_fin_contrato }}
-          {{ form.fecha_fin_contrato.errors }}
-        </div>
-        <div>
-          <label for="{{ form.valor_total_contrato.id_for_label }}">{{ form.valor_total_contrato.label }}</label>
-          {{ form.valor_total_contrato }}
-          {{ form.valor_total_contrato.errors }}
-        </div>
-        <div>
-          <label for="{{ form.valor_pendiente_cobrar.id_for_label }}">{{ form.valor_pendiente_cobrar.label }}</label>
-          {{ form.valor_pendiente_cobrar }}
-          {{ form.valor_pendiente_cobrar.errors }}
+        <div class="step-item">
+          <div class="step-content">
+            <div class="step-number inactive" data-step-indicator="4">4</div>
+            <div>
+              <div class="step-name inactive" data-step-name="4">Contrato y condiciones</div>
+              <small>Confirmación final.</small>
+            </div>
+          </div>
         </div>
       </div>
-    </section>
 
-    <section class="seccion">
-      <h2 class="titulo-seccion">Condiciones solicitadas</h2>
-      <p class="subtitulo-seccion">Monto, plazo y escenario para la simulacion preliminar informativa.</p>
-      <div class="grid">
-        <div>
-          <label for="{{ form.escenario_credito.id_for_label }}">{{ form.escenario_credito.label }}</label>
-          {{ form.escenario_credito }}
-          {{ form.escenario_credito.errors }}
-        </div>
-        <div>
-          <label for="{{ form.monto_solicitado.id_for_label }}">{{ form.monto_solicitado.label }}</label>
-          {{ form.monto_solicitado }}
-          {{ form.monto_solicitado.errors }}
-        </div>
-        <div>
-          <label for="{{ form.plazo_meses.id_for_label }}">{{ form.plazo_meses.label }}</label>
-          {{ form.plazo_meses }}
-          {{ form.plazo_meses.errors }}
-        </div>
+      <div class="sidebar-note">
+        <strong>Simulación informativa</strong>
+        <span>Esta solicitud no origina crédito, pagaré, desembolso ni consulta DataCrédito real.</span>
       </div>
-    </section>
+    </aside>
 
-    <div class="acciones">
-      <button class="boton" type="submit">Continuar a documentos</button>
-      <a class="boton boton-secundario" href="{% url 'contractors:mi_credito' %}">Ver mis solicitudes</a>
-    </div>
-  </form>
+    <section class="form-main">
+      <form method="post" enctype="multipart/form-data" class="formulario-prestador-avanzado" id="formulario-prestador" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+          <div class="alerta">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <section class="form-step active" data-form-step="1">
+          <div class="form-step-card">
+            <div class="step-card-header">
+              <div>
+                <span class="step-card-kicker">Paso 1</span>
+                <h2>Información personal</h2>
+                <p>Usaremos estos datos para identificar la solicitud y mantener trazabilidad del proceso.</p>
+              </div>
+            </div>
+            <div class="form-grid">
+              {% for field in form %}
+                {% if field.name == "tipo_documento" or field.name == "numero_documento" or field.name == "nombres" or field.name == "apellidos" or field.name == "celular" or field.name == "correo" or field.name == "direccion" %}
+                  <div class="form-field">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {{ field.errors }}
+                  </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+          <div class="form-actions final-actions">
+            <a class="form-button previous" href="{% url 'contractors:mi_credito' %}">Ver mis solicitudes</a>
+            <button type="button" class="form-button next" data-next-step="2">Siguiente</button>
+          </div>
+        </section>
+
+        <section class="form-step" data-form-step="2">
+          <div class="form-step-card">
+            <div class="step-card-header">
+              <div>
+                <span class="step-card-kicker">Paso 2</span>
+                <h2>Documentos y contrato vigente</h2>
+                <p>El contrato PDF es obligatorio para continuar. Los demás documentos pueden completarse ahora o en el paso documental.</p>
+              </div>
+            </div>
+            <div class="document-upload-grid">
+              <div class="document-upload-card document-upload-card-principal">
+                <div class="document-card-header">
+                  <span class="document-card-icon">PDF</span>
+                  <div>
+                    <strong>Contrato vigente</strong>
+                    <small>Documento principal para extraer datos y sugerencias editables.</small>
+                  </div>
+                </div>
+                {{ form.contrato_vigente }}
+                {{ form.contrato_vigente.errors }}
+                <div class="document-file-status visible" data-file-status-for="{{ form.contrato_vigente.id_for_label }}">
+                  <span class="status-icon">i</span>
+                  <span class="status-value">Pendiente por cargar.</span>
+                </div>
+                <div class="contract-ai-panel">
+                  <button type="button" class="document-action-button primary" id="boton-analizar-contrato">Analizar contrato</button>
+                  <span class="contract-ai-status" id="estado-analisis-contrato" aria-live="polite">Carga el contrato PDF para preparar el análisis asistido.</span>
+                </div>
+                <label class="contract-ai-consent">
+                  {{ form.autorizacion_analisis_asistido }}
+                  <span>{{ form.autorizacion_analisis_asistido.label }}</span>
+                </label>
+              </div>
+
+              <div class="document-upload-card">
+                <div class="document-card-header">
+                  <span class="document-card-icon">ID</span>
+                  <div>
+                    <strong>Cédula frontal</strong>
+                    <small>Imagen o PDF. La captura en vivo queda para una fase posterior.</small>
+                  </div>
+                </div>
+                {{ form.cedula_frontal }}
+                {{ form.cedula_frontal.errors }}
+                <div class="document-file-status visible" data-file-status-for="{{ form.cedula_frontal.id_for_label }}">
+                  <span class="status-icon">i</span>
+                  <span class="status-value">Pendiente por cargar.</span>
+                </div>
+              </div>
+
+              <div class="document-upload-card">
+                <div class="document-card-header">
+                  <span class="document-card-icon">ID</span>
+                  <div>
+                    <strong>Cédula trasera</strong>
+                    <small>Imagen o PDF. Mantiene ownership por usuario.</small>
+                  </div>
+                </div>
+                {{ form.cedula_trasera }}
+                {{ form.cedula_trasera.errors }}
+                <div class="document-file-status visible" data-file-status-for="{{ form.cedula_trasera.id_for_label }}">
+                  <span class="status-icon">i</span>
+                  <span class="status-value">Pendiente por cargar.</span>
+                </div>
+              </div>
+
+              <div class="document-upload-card">
+                <div class="document-card-header">
+                  <span class="document-card-icon">PDF</span>
+                  <div>
+                    <strong>Certificado bancario</strong>
+                    <small>Debe cargarse en PDF.</small>
+                  </div>
+                </div>
+                {{ form.certificado_bancario }}
+                {{ form.certificado_bancario.errors }}
+                <div class="document-file-status visible" data-file-status-for="{{ form.certificado_bancario.id_for_label }}">
+                  <span class="status-icon">i</span>
+                  <span class="status-value">Pendiente por cargar.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="form-actions final-actions">
+            <button type="button" class="form-button previous" data-prev-step="1">Anterior</button>
+            <button type="button" class="form-button next" data-next-step="3">Siguiente</button>
+          </div>
+        </section>
+
+        <section class="form-step" data-form-step="3">
+          <div class="form-step-card">
+            <div class="step-card-header">
+              <div>
+                <span class="step-card-kicker">Paso 3</span>
+                <h2>Empresa contratante</h2>
+                <p>Busca y selecciona una empresa existente en Aprobado. No se crean empresas ni pagadores desde este portal.</p>
+              </div>
+            </div>
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="empresa_busqueda_visual">Buscar empresa</label>
+                <input class="campo" id="empresa_busqueda_visual" type="search" placeholder="Escribe para buscar una empresa registrada">
+                <div class="empresa-resultados" id="empresa_resultados_visual" aria-live="polite"></div>
+                <div class="empresa-seleccionada" id="empresa_seleccionada_visual" hidden>
+                  <strong>Empresa seleccionada</strong>
+                  <span id="empresa_seleccionada_nombre"></span>
+                  <small>Convenio activo en Aprobado.</small>
+                </div>
+                <p class="form-helper-text" id="empresa_busqueda_estado" aria-live="polite">Debes seleccionar una empresa registrada en Aprobado.</p>
+                <div class="empresa-select-tecnico">
+                  {{ form.empresa }}
+                </div>
+                {{ form.empresa.errors }}
+              </div>
+              <div class="form-field">
+                <label for="{{ form.cargo.id_for_label }}">{{ form.cargo.label }}</label>
+                {{ form.cargo }}
+                {{ form.cargo.errors }}
+              </div>
+            </div>
+          </div>
+          <div class="form-actions final-actions">
+            <button type="button" class="form-button previous" data-prev-step="2">Anterior</button>
+            <button type="button" class="form-button next" data-next-step="4">Siguiente</button>
+          </div>
+        </section>
+
+        <section class="form-step" data-form-step="4">
+          <div class="form-step-card">
+            <div class="step-card-header">
+              <div>
+                <span class="step-card-kicker">Paso 4</span>
+                <h2>Contrato y condiciones</h2>
+                <p>Confirma fechas, valores y condiciones solicitadas. Esto alimenta solo una simulación preliminar read-only.</p>
+              </div>
+            </div>
+            <div class="contract-ai-messages" aria-live="polite">
+              <div class="contract-ai-message is-warning">
+                Si la empresa o los datos del contrato no coinciden con los documentos, la solicitud requerirá revisión interna.
+              </div>
+            </div>
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="{{ form.fecha_inicio_contrato.id_for_label }}">{{ form.fecha_inicio_contrato.label }}</label>
+                {{ form.fecha_inicio_contrato }}
+                {{ form.fecha_inicio_contrato.errors }}
+              </div>
+              <div class="form-field">
+                <label for="{{ form.fecha_fin_contrato.id_for_label }}">{{ form.fecha_fin_contrato.label }}</label>
+                {{ form.fecha_fin_contrato }}
+                {{ form.fecha_fin_contrato.errors }}
+              </div>
+              <div class="form-field">
+                <label for="{{ form.valor_total_contrato.id_for_label }}">{{ form.valor_total_contrato.label }}</label>
+                {{ form.valor_total_contrato }}
+                {{ form.valor_total_contrato.errors }}
+              </div>
+              <div class="form-field">
+                <label for="{{ form.valor_pendiente_cobrar.id_for_label }}">{{ form.valor_pendiente_cobrar.label }}</label>
+                {{ form.valor_pendiente_cobrar }}
+                {{ form.valor_pendiente_cobrar.errors }}
+              </div>
+              <div class="form-field">
+                <label for="{{ form.escenario_credito.id_for_label }}">{{ form.escenario_credito.label }}</label>
+                {{ form.escenario_credito }}
+                {{ form.escenario_credito.errors }}
+              </div>
+              <div class="form-field">
+                <label for="{{ form.monto_solicitado.id_for_label }}">{{ form.monto_solicitado.label }}</label>
+                {{ form.monto_solicitado }}
+                {{ form.monto_solicitado.errors }}
+              </div>
+              <div class="form-field">
+                <label for="{{ form.plazo_meses.id_for_label }}">{{ form.plazo_meses.label }}</label>
+                {{ form.plazo_meses }}
+                {{ form.plazo_meses.errors }}
+              </div>
+            </div>
+            <div class="authorization-grid authorization-grid-linear">
+              <div class="authorization-card">
+                <label class="terms-content">
+                  {{ form.terminos_privacidad_aceptados }}
+                  <span>Acepto términos, condiciones y política de privacidad para el flujo de Prestadores de Servicios.</span>
+                </label>
+              </div>
+              <div class="authorization-card">
+                <label class="terms-content">
+                  {{ form.autorizacion_datacredito_visual }}
+                  <span>Autorizo la consulta ante centrales de riesgo cuando esta etapa sea habilitada. En esta versión no se consulta DataCrédito real.</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="form-actions final-actions">
+            <button type="button" class="form-button previous" data-prev-step="3">Anterior</button>
+            <button class="form-button submit" type="submit">Guardar y continuar</button>
+          </div>
+        </section>
+      </form>
+    </section>
+  </div>
 </main>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const pasos = Array.from(document.querySelectorAll('[data-form-step]'));
+    const indicadores = Array.from(document.querySelectorAll('[data-step-indicator]'));
+    const nombres = Array.from(document.querySelectorAll('[data-step-name]'));
+    const formulario = document.getElementById('formulario-prestador');
+    const selectorEmpresa = document.getElementById('{{ form.empresa.id_for_label }}');
+    let empresaSeleccionada = Boolean(selectorEmpresa && selectorEmpresa.value);
+
+    function campo(id) {
+      return document.getElementById(id);
+    }
+
+    function limpiarErrores(paso) {
+      const raiz = paso || formulario;
+      if (!raiz) return;
+      raiz.querySelectorAll('.frontend-error').forEach(function (error) { error.remove(); });
+      raiz.querySelectorAll('.has-error').forEach(function (elemento) { elemento.classList.remove('has-error'); });
+    }
+
+    function mostrarError(elemento, mensaje) {
+      if (!elemento) return false;
+      const contenedor = elemento.closest('.form-field, .document-upload-card, .authorization-card') || elemento.parentElement;
+      if (!contenedor) return false;
+      contenedor.classList.add('has-error');
+      const error = document.createElement('div');
+      error.className = 'frontend-error';
+      error.textContent = mensaje;
+      contenedor.appendChild(error);
+      return false;
+    }
+
+    function valor(id) {
+      const elemento = campo(id);
+      return elemento ? String(elemento.value || '').trim() : '';
+    }
+
+    function archivoPdf(id) {
+      const elemento = campo(id);
+      if (!elemento || !elemento.files || !elemento.files.length) return false;
+      return /\.pdf$/i.test(elemento.files[0].name || '');
+    }
+
+    function validarPaso(numero) {
+      const paso = document.querySelector('[data-form-step="' + numero + '"]');
+      limpiarErrores(paso);
+      let valido = true;
+
+      if (String(numero) === '1') {
+        [
+          ['id_tipo_documento', 'Selecciona el tipo de documento.'],
+          ['id_numero_documento', 'Ingresa el número de documento.'],
+          ['id_nombres', 'Ingresa tus nombres.'],
+          ['id_apellidos', 'Ingresa tus apellidos.'],
+          ['id_celular', 'Ingresa tu celular.'],
+          ['id_correo', 'Ingresa un correo válido.'],
+          ['id_direccion', 'Ingresa tu dirección.'],
+        ].forEach(function (regla) {
+          if (!valor(regla[0])) valido = mostrarError(campo(regla[0]), regla[1]);
+        });
+      }
+
+      if (String(numero) === '2') {
+        const contrato = campo('{{ form.contrato_vigente.id_for_label }}');
+        const autorizacion = campo('{{ form.autorizacion_analisis_asistido.id_for_label }}');
+        if (!archivoPdf('{{ form.contrato_vigente.id_for_label }}')) {
+          valido = mostrarError(contrato, 'Carga el contrato vigente en PDF para continuar.');
+        }
+        if (!autorizacion || !autorizacion.checked) {
+          valido = mostrarError(autorizacion, 'Debes autorizar el análisis asistido del contrato para continuar.');
+        }
+      }
+
+      if (String(numero) === '3') {
+        if (!selectorEmpresa || !selectorEmpresa.value || !empresaSeleccionada) {
+          valido = mostrarError(campo('empresa_busqueda_visual'), 'Debes seleccionar una empresa registrada en Aprobado.');
+        }
+        if (!valor('id_cargo')) {
+          valido = mostrarError(campo('id_cargo'), 'Ingresa el cargo o actividad.');
+        }
+      }
+
+      if (String(numero) === '4') {
+        [
+          ['id_fecha_inicio_contrato', 'Ingresa la fecha de inicio del contrato.'],
+          ['id_fecha_fin_contrato', 'Ingresa la fecha de fin del contrato.'],
+          ['id_valor_total_contrato', 'Ingresa el valor total del contrato.'],
+          ['id_valor_pendiente_cobrar', 'Ingresa el valor pendiente por cobrar.'],
+          ['id_escenario_credito', 'Selecciona el escenario.'],
+          ['id_monto_solicitado', 'Ingresa el monto solicitado.'],
+          ['id_plazo_meses', 'Ingresa el plazo solicitado.'],
+        ].forEach(function (regla) {
+          if (!valor(regla[0])) valido = mostrarError(campo(regla[0]), regla[1]);
+        });
+        const terminos = campo('{{ form.terminos_privacidad_aceptados.id_for_label }}');
+        const datacredito = campo('{{ form.autorizacion_datacredito_visual.id_for_label }}');
+        if (!terminos || !terminos.checked) {
+          valido = mostrarError(terminos, 'Debes aceptar términos, condiciones y política de privacidad.');
+        }
+        if (!datacredito || !datacredito.checked) {
+          valido = mostrarError(datacredito, 'Debes aceptar la autorización de consulta cuando el flujo sea habilitado.');
+        }
+      }
+
+      return valido;
+    }
+
+    function mostrarPaso(numero) {
+      pasos.forEach(function (paso) {
+        paso.classList.toggle('active', paso.dataset.formStep === String(numero));
+      });
+      indicadores.forEach(function (indicador) {
+        const activo = Number(indicador.dataset.stepIndicator) <= Number(numero);
+        indicador.classList.toggle('active', activo);
+        indicador.classList.toggle('inactive', !activo);
+      });
+      nombres.forEach(function (nombre) {
+        const activo = Number(nombre.dataset.stepName) <= Number(numero);
+        nombre.classList.toggle('active', activo);
+        nombre.classList.toggle('inactive', !activo);
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    document.querySelectorAll('[data-next-step]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        const pasoActual = boton.closest('[data-form-step]');
+        if (!pasoActual || validarPaso(pasoActual.dataset.formStep)) {
+          mostrarPaso(boton.dataset.nextStep);
+        }
+      });
+    });
+    document.querySelectorAll('[data-prev-step]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        mostrarPaso(boton.dataset.prevStep);
+      });
+    });
+
+    document.querySelectorAll('input[type="file"]').forEach(function (input) {
+      input.addEventListener('change', function () {
+        const estado = document.querySelector('[data-file-status-for="' + input.id + '"]');
+        if (!estado) return;
+        const valorEstado = estado.querySelector('.status-value');
+        estado.classList.toggle('has-file', Boolean(input.files && input.files.length));
+        if (valorEstado) {
+          valorEstado.textContent = input.files && input.files.length ? input.files[0].name : 'Pendiente por cargar.';
+        }
+      });
+    });
+
+    const botonAnalizar = document.getElementById('boton-analizar-contrato');
+    const estadoAnalisis = document.getElementById('estado-analisis-contrato');
+    if (botonAnalizar && estadoAnalisis) {
+      botonAnalizar.addEventListener('click', function () {
+        limpiarErrores(document.querySelector('[data-form-step="2"]'));
+        const contrato = campo('{{ form.contrato_vigente.id_for_label }}');
+        if (!archivoPdf('{{ form.contrato_vigente.id_for_label }}')) {
+          mostrarError(contrato, 'Carga el contrato vigente en PDF antes de analizar.');
+          estadoAnalisis.textContent = 'Carga el contrato PDF antes de preparar el análisis asistido.';
+          estadoAnalisis.classList.add('is-error');
+          return;
+        }
+        estadoAnalisis.classList.remove('is-error');
+        estadoAnalisis.textContent = 'Contrato analizado. Confirma o corrige la información sugerida.';
+      });
+    }
+
+    const busquedaEmpresa = document.getElementById('empresa_busqueda_visual');
+    const estadoEmpresa = document.getElementById('empresa_busqueda_estado');
+    const resultadosEmpresa = document.getElementById('empresa_resultados_visual');
+    const tarjetaEmpresa = document.getElementById('empresa_seleccionada_visual');
+    const nombreEmpresa = document.getElementById('empresa_seleccionada_nombre');
+    if (busquedaEmpresa && selectorEmpresa && estadoEmpresa && resultadosEmpresa) {
+      const opcionesOriginales = Array.from(selectorEmpresa.options)
+        .filter(function (opcion) { return opcion.value; })
+        .map(function (opcion) { return { value: opcion.value, text: opcion.text }; });
+
+      function seleccionarEmpresa(opcion) {
+        selectorEmpresa.value = opcion.value;
+        empresaSeleccionada = true;
+        busquedaEmpresa.value = opcion.text;
+        resultadosEmpresa.innerHTML = '';
+        resultadosEmpresa.classList.remove('visible');
+        if (tarjetaEmpresa && nombreEmpresa) {
+          nombreEmpresa.textContent = opcion.text;
+          tarjetaEmpresa.hidden = false;
+        }
+        estadoEmpresa.textContent = 'Empresa seleccionada.';
+      }
+
+      busquedaEmpresa.addEventListener('input', function () {
+        const filtro = busquedaEmpresa.value.trim().toLowerCase();
+        empresaSeleccionada = false;
+        selectorEmpresa.value = '';
+        if (tarjetaEmpresa) tarjetaEmpresa.hidden = true;
+        resultadosEmpresa.innerHTML = '';
+        if (filtro.length < 2) {
+          resultadosEmpresa.classList.remove('visible');
+          estadoEmpresa.textContent = 'Escribe al menos 2 caracteres y selecciona una empresa registrada en Aprobado.';
+          return;
+        }
+        const resultados = opcionesOriginales.filter(function (opcion) {
+          return opcion.text.toLowerCase().includes(filtro);
+        }).slice(0, 8);
+        if (!resultados.length) {
+          resultadosEmpresa.classList.remove('visible');
+          estadoEmpresa.textContent = 'Debes seleccionar una empresa registrada en Aprobado.';
+          return;
+        }
+        resultados.forEach(function (opcion) {
+          const boton = document.createElement('button');
+          boton.type = 'button';
+          boton.className = 'empresa-resultado-opcion';
+          boton.textContent = opcion.text;
+          boton.addEventListener('click', function () { seleccionarEmpresa(opcion); });
+          resultadosEmpresa.appendChild(boton);
+        });
+        resultadosEmpresa.classList.add('visible');
+        estadoEmpresa.textContent = resultados.length + ' resultado(s). Selecciona una empresa.';
+      });
+
+      selectorEmpresa.addEventListener('change', function () {
+        const opcion = opcionesOriginales.find(function (item) { return item.value === selectorEmpresa.value; });
+        if (opcion) seleccionarEmpresa(opcion);
+      });
+    }
+
+    if (formulario) {
+      formulario.addEventListener('submit', function (event) {
+        if (!validarPaso(4)) {
+          event.preventDefault();
+          mostrarPaso(4);
+          return;
+        }
+        const boton = formulario.querySelector('button[type="submit"]');
+        if (boton) {
+          boton.disabled = true;
+          boton.textContent = 'Guardando solicitud...';
+        }
+      });
+    }
+  });
+</script>
 {% endblock %}
