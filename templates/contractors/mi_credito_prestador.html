@@ -1,0 +1,24 @@
+{% extends "contractors/base.html" %}
+{% block title %}Mi credito | Prestadores de Servicios{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Mi credito</h1>
+  <p>Consulta tus solicitudes de Prestadores de Servicios.</p>
+</section>
+<main class="contenedor">
+  <section class="panel">
+    {% if solicitudes %}
+      <ul>
+        {% for solicitud in solicitudes %}
+          <li>
+            Solicitud #{{ solicitud.id }} - {{ solicitud.empresa.nombre }} - {{ solicitud.get_estado_display }}
+            <a href="{% url 'contractors:documentos' solicitud.id %}">Documentos</a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No tienes solicitudes registradas.</p>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

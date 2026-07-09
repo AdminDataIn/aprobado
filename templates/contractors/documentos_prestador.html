@@ -1,0 +1,36 @@
+{% extends "contractors/base.html" %}
+{% block title %}Documentos | Prestadores de Servicios{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Carga documental</h1>
+  <p>{{ solicitud.nombre_completo }} - {{ solicitud.empresa.nombre }}</p>
+</section>
+<main class="contenedor">
+  <section class="panel">
+    <h2>Documentos requeridos</h2>
+    <div class="lista-documentos">
+      {% for tipo, etiqueta, cargado in estado_documentos %}
+        <div class="documento">
+          <strong>{{ etiqueta }}</strong>
+          {% if cargado %}
+            <p>Cargado correctamente.</p>
+          {% else %}
+            <p>Pendiente.</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+    {% if documentos_pendientes %}
+      <p>Completa todos los documentos para habilitar la simulacion.</p>
+    {% else %}
+      <p>Documentos completos.</p>
+      <a class="boton" href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">Ir a simulacion</a>
+    {% endif %}
+  </section>
+  <form method="post" enctype="multipart/form-data" class="panel" style="margin-top:24px;" novalidate>
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button class="boton" type="submit">Cargar documento</button>
+  </form>
+</main>
+{% endblock %}

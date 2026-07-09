@@ -1,0 +1,25 @@
+{% extends "contractors/base.html" %}
+{% block title %}Solicita tu credito | Prestadores de Servicios{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Credito para Prestadores de Servicios</h1>
+  <p>Registra tus datos y selecciona una empresa existente para iniciar la carga documental.</p>
+</section>
+<main class="contenedor">
+  <form method="post" class="panel" novalidate>
+    {% csrf_token %}
+    <div class="grid">
+      {% for field in form %}
+        <div>
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {{ field.errors }}
+        </div>
+      {% endfor %}
+    </div>
+    <p style="margin-top:22px;">
+      <button class="boton" type="submit">Continuar a documentos</button>
+    </p>
+  </form>
+</main>
+{% endblock %}

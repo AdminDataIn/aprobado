@@ -1,0 +1,20 @@
+{% extends "contractors/base.html" %}
+{% block title %}Simulacion | Prestadores de Servicios{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Simulacion</h1>
+  <p>La simulacion financiera avanzada se conectara en una fase posterior.</p>
+</section>
+<main class="contenedor">
+  <section class="panel">
+    {% if documentos_cargados %}
+      <h2>Solicitud lista para simulacion</h2>
+      <p>Solicitud #{{ solicitud.id }} asociada a {{ solicitud.empresa.nombre }}.</p>
+    {% else %}
+      <h2>Faltan documentos</h2>
+      <p>Debes completar la carga documental antes de simular.</p>
+      <a class="boton" href="{% url 'contractors:documentos' solicitud.id %}">Completar documentos</a>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

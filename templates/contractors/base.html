@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Prestadores de Servicios | Aprobado{% endblock %}</title>
+  <style>
+    :root { --azul:#061a33; --cyan:#10b8d4; --borde:#d8e7f0; --fondo:#f6f9fb; }
+    body { margin:0; font-family: Arial, sans-serif; color:var(--azul); background:var(--fondo); }
+    .barra-prestadores { display:flex; justify-content:space-between; align-items:center; padding:18px 8%; background:#071a33; color:#fff; }
+    .barra-prestadores a { color:#fff; text-decoration:none; margin-left:18px; font-weight:700; }
+    .marca-prestadores { font-size:26px; margin-left:0 !important; }
+    .usuario { margin-left:18px; color:#bfeefa; font-weight:700; }
+    .hero { background:#102239; color:#fff; padding:64px 8%; }
+    .hero h1 { margin:0 0 12px; font-size:44px; line-height:1.1; }
+    .contenedor { width:min(1120px, 92%); margin:38px auto; }
+    .panel { background:#fff; border:1px solid var(--borde); border-radius:14px; padding:28px; box-shadow:0 16px 40px rgba(6,26,51,.08); }
+    .grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:18px; }
+    .campo { width:100%; box-sizing:border-box; padding:12px 14px; border:1px solid #cbd8e2; border-radius:10px; font-size:15px; }
+    label { display:block; font-weight:700; margin-bottom:8px; }
+    .errorlist { color:#b42318; margin:6px 0 0; padding-left:18px; }
+    .boton { display:inline-block; border:0; border-radius:10px; padding:13px 22px; background:var(--cyan); color:#fff; font-weight:800; text-decoration:none; cursor:pointer; }
+    .boton-secundario { background:#fff; color:var(--azul); border:1px solid var(--borde); }
+    .mensajes { width:min(1120px, 92%); margin:20px auto 0; }
+    .mensaje { background:#e8fbff; border:1px solid #a9edf8; padding:12px 16px; border-radius:10px; }
+    .lista-documentos { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:16px; margin-bottom:24px; }
+    .documento { border:1px solid var(--borde); border-radius:12px; padding:16px; background:#fbfdff; }
+    .footer-prestadores { padding:32px 8%; background:#fff; border-top:1px solid var(--borde); color:#334155; }
+    @media (max-width: 760px) { .grid, .lista-documentos { grid-template-columns:1fr; } .hero h1 { font-size:34px; } }
+  </style>
+</head>
+<body>
+  {% include "base/navbar_contractors.html" %}
+  {% if messages %}
+    <div class="mensajes">
+      {% for message in messages %}<div class="mensaje">{{ message }}</div>{% endfor %}
+    </div>
+  {% endif %}
+  {% block content %}{% endblock %}
+  {% include "base/footer_contractors.html" %}
+</body>
+</html>

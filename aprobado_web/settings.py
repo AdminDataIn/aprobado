@@ -80,6 +80,12 @@ def _can_open_redis_socket(redis_url, timeout=0.15):
 PRIMARY_DOMAIN_HOST = os.environ.get('PRIMARY_DOMAIN_HOST', 'aprobado.com.co')
 EMPRENDER_SUBDOMAIN_HOST = os.environ.get('EMPRENDER_SUBDOMAIN_HOST', 'emprender.aprobado.com.co')
 MARKET_SUBDOMAIN_HOST = os.environ.get('MARKET_SUBDOMAIN_HOST', 'market.aprobado.com.co')
+CONTRACTORS_PORTAL_HOST = os.environ.get('CONTRACTORS_PORTAL_HOST', 'contratistas.aprobado.com.co')
+CONTRACTORS_LOCAL_HOST = os.environ.get('CONTRACTORS_LOCAL_HOST', 'contratistas.localhost')
+CONTRACTORS_PORTAL_HOSTS = _split_env_list(
+    'CONTRACTORS_PORTAL_HOSTS',
+    f'{CONTRACTORS_PORTAL_HOST},{CONTRACTORS_LOCAL_HOST}',
+)
 CONTACT_EMAIL = os.environ.get(
     'CONTACT_EMAIL',
     'Info@aprobado.com.co'
@@ -130,6 +136,8 @@ ALLOWED_HOSTS = _split_env_list(
         f'www.{PRIMARY_DOMAIN_HOST},'
         f'{EMPRENDER_SUBDOMAIN_HOST},'
         f'{MARKET_SUBDOMAIN_HOST},'
+        f'{CONTRACTORS_PORTAL_HOST},'
+        f'{CONTRACTORS_LOCAL_HOST},'
         '127.0.0.1,localhost,'
         '.onrender.com,aprobado-proj.onrender.com'
     )
@@ -141,7 +149,8 @@ CSRF_TRUSTED_ORIGINS = _split_env_list(
         'https://aprobado.com.co,'
         'https://www.aprobado.com.co,'
         'https://emprender.aprobado.com.co,'
-        'https://market.aprobado.com.co'
+        'https://market.aprobado.com.co,'
+        'https://contratistas.aprobado.com.co'
     )
 )
 
@@ -167,6 +176,7 @@ INSTALLED_APPS = [
     'configuraciones',
     'gestion_creditos',
     'usuariocreditos',
+    'contractors',
 ]
 
 if ALLAUTH_AVAILABLE:
