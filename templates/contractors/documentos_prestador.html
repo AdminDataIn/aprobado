@@ -3,42 +3,65 @@
 {% block content %}
 <section class="hero">
   <h1>Carga documental</h1>
-  <p>{{ solicitud.nombre_completo }} - {{ solicitud.empresa.nombre }}</p>
+  <p>{{ solicitud.nombre_completo }} - {{ solicitud.empresa.nombre }}. Completa los documentos requeridos para habilitar la simulacion preliminar.</p>
 </section>
 <main class="contenedor">
   <section class="panel">
     <h2>Documentos requeridos</h2>
-    <p>Progreso documental: {{ progreso_documental.cargados }}/{{ progreso_documental.total }} documentos.</p>
+    <div class="grid-2">
+      <div class="tarjeta-resumen">
+        <span class="dato-label">Avance</span>
+        <strong>{{ progreso_documental.cargados }}/{{ progreso_documental.total }}</strong>
+        <span>documentos cargados</span>
+      </div>
+      <div class="tarjeta-resumen">
+        <span class="dato-label">Progreso</span>
+        <strong>{{ progreso_documental.porcentaje }}%</strong>
+        <span>avance documental</span>
+      </div>
+    </div>
+    <br>
     <div class="progreso" aria-label="Progreso documental">
       <span style="width: {{ progreso_documental.porcentaje }}%;"></span>
     </div>
     <br>
     <div class="lista-documentos">
       {% for tipo, etiqueta, documento in estado_documentos %}
-        <div class="documento">
+        <div class="documento {% if documento %}cargado{% endif %}">
           <strong>{{ etiqueta }}</strong>
           {% if documento %}
-            <p>Cargado correctamente.</p>
+            <p><span class="estado-pill estado-ok">Cargado</span></p>
             <a href="{% url 'contractors:descargar_documento' solicitud.id documento.id %}">Ver documento</a>
-            <p>Si cargas otro archivo del mismo tipo, reemplazara el documento actual.</p>
+            <p class="ayuda">Puedes reemplazarlo cargando otro archivo del mismo tipo.</p>
           {% else %}
-            <p>Pendiente.</p>
+            <p><span class="estado-pill estado-warn">Pendiente</span></p>
+            <p class="ayuda">Carga este documento para completar la revision inicial.</p>
           {% endif %}
         </div>
       {% endfor %}
     </div>
     {% if documentos_pendientes %}
-      <p>Completa todos los documentos para habilitar la simulacion.</p>
+      <p class="alerta">Completa todos los documentos para habilitar la simulacion.</p>
+      <div class="acciones">
+        <a class="boton boton-secundario" href="{% url 'contractors:mi_credito' %}">Volver a Mi credito</a>
+      </div>
     {% else %}
-      <p>Documentos completos.</p>
-      <a class="boton" href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">Ir a simulacion</a>
+      <p class="alerta alerta-info">Documentos completos. Ya puedes revisar la simulacion preliminar informativa.</p>
+      <div class="acciones">
+        <a class="boton" href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">Ir a simulacion</a>
+        <a class="boton boton-secundario" href="{% url 'contractors:mi_credito' %}">Volver a Mi credito</a>
+      </div>
     {% endif %}
   </section>
   <form method="post" enctype="multipart/form-data" class="panel" style="margin-top:24px;" novalidate>
     {% csrf_token %}
     <h2>Cargar o reemplazar documento</h2>
+    <p class="subtitulo-seccion">Selecciona el tipo de documento y carga el archivo. Si ya existe, quedara reemplazado.</p>
     {{ form.as_p }}
-    <button class="boton" type="submit">Cargar documento</button>
+    <div class="acciones">
+      <button class="boton" type="submit">Cargar documento</button>
+      <a class="boton boton-secundario" href="{% url 'contractors:mi_credito' %}">Mi credito</a>
+    </div>
   </form>
 </main>
 {% endblock %}

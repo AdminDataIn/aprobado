@@ -2,52 +2,83 @@
 {% block title %}Detalle Prestador | Aprobado{% endblock %}
 {% block content %}
 <section class="hero">
+  <p class="eyebrow">Detalle interno</p>
   <h1>Solicitud #{{ solicitud.id }}</h1>
   <p>{{ solicitud.nombre_completo }} - {{ solicitud.empresa.nombre }}</p>
 </section>
+
 <main class="contenedor">
+  <section class="grid-3">
+    <article class="panel tarjeta-resumen">
+      <span class="dato-label">Estado</span>
+      <strong>{{ solicitud.get_estado_display }}</strong>
+      <span>Operacion interna</span>
+    </article>
+    <article class="panel tarjeta-resumen">
+      <span class="dato-label">Documentos</span>
+      <strong>{{ progreso_documental.cargados }}/{{ progreso_documental.total }}</strong>
+      <span>{{ progreso_documental.porcentaje }}% cargado</span>
+    </article>
+    <article class="panel tarjeta-resumen">
+      <span class="dato-label">Predecision</span>
+      <strong>{{ predecision.resultado }}</strong>
+      <span>Informativa interna</span>
+    </article>
+  </section>
+
   <section class="panel">
-    <h2>Datos de la solicitud</h2>
-    <table class="tabla">
-      <tr><th>Usuario</th><td>{{ solicitud.usuario.email|default:solicitud.usuario.username }}</td></tr>
-      <tr><th>Prestador</th><td>{{ solicitud.nombre_completo }}</td></tr>
-      <tr><th>Documento</th><td>{{ solicitud.tipo_documento }} {{ solicitud.numero_documento }}</td></tr>
-      <tr><th>Celular</th><td>{{ solicitud.celular }}</td></tr>
-      <tr><th>Correo</th><td>{{ solicitud.correo }}</td></tr>
-      <tr><th>Direccion</th><td>{{ solicitud.direccion }}</td></tr>
-      <tr><th>Empresa</th><td>{{ solicitud.empresa.nombre }}</td></tr>
-      <tr><th>Cargo o actividad</th><td>{{ solicitud.cargo }}</td></tr>
-      <tr><th>Escenario</th><td>{{ solicitud.get_escenario_credito_display }}</td></tr>
-      <tr><th>Estado</th><td>{{ solicitud.get_estado_display }}</td></tr>
-    </table>
+    <h2 class="titulo-seccion">Datos de la solicitud</h2>
+    <div class="grid-2 datos-grid">
+      <div class="dato"><span>Usuario</span><strong>{{ solicitud.usuario.email|default:solicitud.usuario.username }}</strong></div>
+      <div class="dato"><span>Prestador</span><strong>{{ solicitud.nombre_completo }}</strong></div>
+      <div class="dato"><span>Documento</span><strong>{{ solicitud.tipo_documento }} {{ solicitud.numero_documento }}</strong></div>
+      <div class="dato"><span>Celular</span><strong>{{ solicitud.celular }}</strong></div>
+      <div class="dato"><span>Correo</span><strong>{{ solicitud.correo }}</strong></div>
+      <div class="dato"><span>Direccion</span><strong>{{ solicitud.direccion }}</strong></div>
+      <div class="dato"><span>Empresa</span><strong>{{ solicitud.empresa.nombre }}</strong></div>
+      <div class="dato"><span>Cargo o actividad</span><strong>{{ solicitud.cargo }}</strong></div>
+      <div class="dato"><span>Escenario</span><strong>{{ solicitud.get_escenario_credito_display }}</strong></div>
+      <div class="dato"><span>Fecha solicitud</span><strong>{{ solicitud.created_at|date:"Y-m-d" }}</strong></div>
+    </div>
   </section>
 
-  <section class="panel" style="margin-top:24px;">
-    <h2>Datos contractuales</h2>
-    <table class="tabla">
-      <tr><th>Fecha inicio</th><td>{{ solicitud.fecha_inicio_contrato|default:"Pendiente" }}</td></tr>
-      <tr><th>Fecha fin</th><td>{{ solicitud.fecha_fin_contrato|default:"Pendiente" }}</td></tr>
-      <tr><th>Valor total contrato</th><td>{{ solicitud.valor_total_contrato|default:"Pendiente" }}</td></tr>
-      <tr><th>Valor pendiente por cobrar</th><td>{{ solicitud.valor_pendiente_cobrar|default:"Pendiente" }}</td></tr>
-      <tr><th>Monto solicitado</th><td>{{ solicitud.monto_solicitado|default:"Pendiente" }}</td></tr>
-      <tr><th>Plazo solicitado</th><td>{{ solicitud.plazo_meses|default:"Pendiente" }}</td></tr>
-    </table>
+  <section class="panel">
+    <h2 class="titulo-seccion">Datos contractuales</h2>
+    <div class="grid-2 datos-grid">
+      <div class="dato"><span>Fecha inicio</span><strong>{{ solicitud.fecha_inicio_contrato|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Fecha fin</span><strong>{{ solicitud.fecha_fin_contrato|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Valor total contrato</span><strong>{{ solicitud.valor_total_contrato|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Valor pendiente por cobrar</span><strong>{{ solicitud.valor_pendiente_cobrar|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Monto solicitado</span><strong>{{ solicitud.monto_solicitado|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Plazo solicitado</span><strong>{{ solicitud.plazo_meses|default:"Pendiente" }} meses</strong></div>
+    </div>
   </section>
 
-  <section class="panel" style="margin-top:24px;">
-    <h2>Documentos</h2>
-    <p>Progreso: {{ progreso_documental.cargados }}/{{ progreso_documental.total }}</p>
+  <section class="panel">
+    <div class="encabezado-panel">
+      <div>
+        <h2 class="titulo-seccion">Documentos</h2>
+        <p class="subtitulo-seccion">Progreso: {{ progreso_documental.cargados }}/{{ progreso_documental.total }} documentos obligatorios.</p>
+      </div>
+    </div>
+    <div class="progreso" aria-label="Progreso documental">
+      <span style="width: {{ progreso_documental.porcentaje }}%;"></span>
+    </div>
     <div class="lista-documentos">
       {% for tipo, etiqueta, documento in estado_documentos %}
-        <div class="documento">
-          <strong>{{ etiqueta }}</strong>
+        <article class="documento {% if documento %}cargado{% endif %}">
+          <div>
+            <strong>{{ etiqueta }}</strong>
+            {% if documento %}
+              <p><span class="estado-pill estado-ok">Cargado</span></p>
+            {% else %}
+              <p><span class="estado-pill estado-warn">Pendiente</span></p>
+            {% endif %}
+          </div>
           {% if documento %}
-            <p>Cargado.</p>
-            <a href="{% url 'contractors:admin_descargar_documento' documento.id %}">Abrir documento</a>
-          {% else %}
-            <p>Pendiente.</p>
+            <a class="boton boton-secundario" href="{% url 'contractors:admin_descargar_documento' documento.id %}">Abrir documento</a>
           {% endif %}
-        </div>
+        </article>
       {% endfor %}
     </div>
     {% if documentos_pendientes %}
@@ -55,55 +86,77 @@
     {% endif %}
   </section>
 
-  <section class="panel" style="margin-top:24px;">
-    <h2>Predecision informativa interna</h2>
-    <p class="alerta">No constituye aprobacion, originacion, pagare ni desembolso.</p>
-    <table class="tabla">
-      <tr><th>Resultado</th><td>{{ predecision.resultado }}</td></tr>
-      <tr><th>Puntaje informativo</th><td>{{ predecision.puntaje_informativo|default:"No calculable" }}</td></tr>
-      <tr><th>Resumen</th><td>{{ predecision.resumen }}</td></tr>
-    </table>
+  <section class="panel alerta-info">
+    <h2 class="titulo-seccion">Predecision informativa interna</h2>
+    <p>No constituye aprobacion, originacion, pagare ni desembolso.</p>
+    <div class="grid-3">
+      <article class="tarjeta-resumen">
+        <span class="dato-label">Resultado</span>
+        <strong>{{ predecision.resultado }}</strong>
+        <span>Read-only</span>
+      </article>
+      <article class="tarjeta-resumen">
+        <span class="dato-label">Puntaje informativo</span>
+        <strong>{{ predecision.puntaje_informativo|default:"No calculable" }}</strong>
+        <span>No productivo</span>
+      </article>
+      <article class="tarjeta-resumen">
+        <span class="dato-label">Fuente</span>
+        <strong>Preliminar</strong>
+        <span>Sin DataCredito ni risk avanzado</span>
+      </article>
+    </div>
+    <p>{{ predecision.resumen }}</p>
     {% if predecision.razones %}
       <h3>Razones</h3>
-      <ul>{% for razon in predecision.razones %}<li>{{ razon }}</li>{% endfor %}</ul>
+      <ul class="lista-alertas">{% for razon in predecision.razones %}<li>{{ razon }}</li>{% endfor %}</ul>
     {% endif %}
     {% if predecision.alertas %}
       <h3>Alertas</h3>
-      <ul>{% for alerta in predecision.alertas %}<li>{{ alerta }}</li>{% endfor %}</ul>
+      <ul class="lista-alertas">{% for alerta in predecision.alertas %}<li>{{ alerta }}</li>{% endfor %}</ul>
     {% endif %}
     {% if predecision.datos_faltantes %}
       <h3>Datos faltantes</h3>
-      <ul>{% for faltante in predecision.datos_faltantes %}<li>{{ faltante }}</li>{% endfor %}</ul>
+      <ul class="lista-alertas">{% for faltante in predecision.datos_faltantes %}<li>{{ faltante }}</li>{% endfor %}</ul>
     {% endif %}
   </section>
 
-  <section class="panel" style="margin-top:24px;">
-    <h2>Simulacion preliminar read-only</h2>
+  <section class="panel">
+    <h2 class="titulo-seccion">Simulacion preliminar read-only</h2>
     {% if simulacion_preliminar.calculable %}
-      <table class="tabla">
-        <tr><th>Cuota estimada preliminar</th><td>{{ simulacion_preliminar.cuota_estimada_preliminar }}</td></tr>
-        <tr><th>Porcentaje sobre valor pendiente</th><td>{{ simulacion_preliminar.porcentaje_compromiso_valor_pendiente|default:"No calculable" }}%</td></tr>
-      </table>
+      <div class="grid-2">
+        <article class="tarjeta-resumen">
+          <span class="dato-label">Cuota estimada preliminar</span>
+          <strong>{{ simulacion_preliminar.cuota_estimada_preliminar }}</strong>
+        </article>
+        <article class="tarjeta-resumen">
+          <span class="dato-label">Porcentaje sobre valor pendiente</span>
+          <strong>{{ simulacion_preliminar.porcentaje_compromiso_valor_pendiente|default:"No calculable" }}%</strong>
+        </article>
+      </div>
     {% else %}
       <p class="alerta">No se puede calcular con los datos actuales.</p>
     {% endif %}
     {% if simulacion_preliminar.advertencias %}
       <h3>Advertencias</h3>
-      <ul>{% for advertencia in simulacion_preliminar.advertencias %}<li>{{ advertencia }}</li>{% endfor %}</ul>
+      <ul class="lista-alertas">{% for advertencia in simulacion_preliminar.advertencias %}<li>{{ advertencia }}</li>{% endfor %}</ul>
     {% endif %}
     {% if simulacion_preliminar.bloqueos %}
       <h3>Datos pendientes</h3>
-      <ul>{% for bloqueo in simulacion_preliminar.bloqueos %}<li>{{ bloqueo }}</li>{% endfor %}</ul>
+      <ul class="lista-alertas">{% for bloqueo in simulacion_preliminar.bloqueos %}<li>{{ bloqueo }}</li>{% endfor %}</ul>
     {% endif %}
   </section>
 
-  <section class="panel" style="margin-top:24px;">
-    <h2>Cambio manual de estado</h2>
-    <form method="post">
+  <section class="panel">
+    <h2 class="titulo-seccion">Cambio manual de estado</h2>
+    <p class="subtitulo-seccion">Accion operativa limitada a estados no financieros.</p>
+    <form method="post" class="formulario-compacto">
       {% csrf_token %}
       {{ form_estado.as_p }}
-      <button class="boton" type="submit">Actualizar estado</button>
-      <a class="boton boton-secundario" href="{% url 'contractors:admin_bandeja' %}">Volver a bandeja</a>
+      <div class="acciones">
+        <button class="boton" type="submit">Actualizar estado</button>
+        <a class="boton boton-secundario" href="{% url 'contractors:admin_bandeja' %}">Volver a bandeja</a>
+      </div>
     </form>
   </section>
 </main>

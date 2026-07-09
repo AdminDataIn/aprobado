@@ -2,70 +2,116 @@
 {% block title %}Simulacion | Prestadores de Servicios{% endblock %}
 {% block content %}
 <section class="hero">
-  <h1>Simulacion</h1>
-  <p>La simulacion financiera avanzada se conectara en una fase posterior.</p>
+  <p class="eyebrow">Simulacion preliminar</p>
+  <h1>Revisa tu capacidad contractual</h1>
+  <p>Esta vista usa los datos de tu solicitud para una estimacion informativa. No crea credito ni reemplaza la validacion financiera oficial.</p>
 </section>
+
 <main class="contenedor">
+  <section class="panel alerta-info">
+    <strong>Importante:</strong>
+    Esta simulacion es informativa y no constituye aprobacion, pagare ni desembolso. Esta evaluacion no aprueba, no origina credito y no reemplaza la validacion financiera oficial.
+  </section>
+
+  <section class="grid-3">
+    <article class="panel tarjeta-resumen">
+      <span class="dato-label">Solicitud</span>
+      <strong>#{{ solicitud.id }}</strong>
+      <span>{{ solicitud.empresa.nombre }}</span>
+    </article>
+    <article class="panel tarjeta-resumen">
+      <span class="dato-label">Documentos</span>
+      <strong>{{ progreso_documental.cargados }}/{{ progreso_documental.total }}</strong>
+      <span>{% if documentos_cargados %}Completos{% else %}Pendientes{% endif %}</span>
+    </article>
+    <article class="panel tarjeta-resumen">
+      <span class="dato-label">Estado operativo</span>
+      <strong>{{ solicitud.get_estado_display }}</strong>
+      <span>Revision preliminar</span>
+    </article>
+  </section>
+
+  {% if not documentos_cargados %}
+    <section class="panel alerta">
+      <h2 class="titulo-seccion">Faltan documentos</h2>
+      <p>Debes completar la carga documental antes de simular. Progreso actual: {{ progreso_documental.cargados }}/{{ progreso_documental.total }}.</p>
+      <div class="acciones">
+        <a class="boton" href="{% url 'contractors:documentos' solicitud.id %}">Completar documentos</a>
+        <a class="boton boton-secundario" href="{% url 'contractors:mi_credito' %}">Volver a Mi credito</a>
+      </div>
+    </section>
+  {% endif %}
+
   <section class="panel">
-    {% if documentos_cargados %}
-      <h2>Solicitud lista para simulacion</h2>
-      <p>Solicitud #{{ solicitud.id }} asociada a {{ solicitud.empresa.nombre }}.</p>
-    {% else %}
-      <h2>Faltan documentos</h2>
-      <p class="alerta">Debes completar la carga documental antes de simular. Progreso actual: {{ progreso_documental.cargados }}/{{ progreso_documental.total }}.</p>
-      <a class="boton" href="{% url 'contractors:documentos' solicitud.id %}">Completar documentos</a>
-    {% endif %}
+    <h2 class="titulo-seccion">Resumen de solicitud</h2>
+    <div class="grid-2 datos-grid">
+      <div class="dato"><span>Prestador</span><strong>{{ solicitud.nombre_completo }}</strong></div>
+      <div class="dato"><span>Empresa</span><strong>{{ solicitud.empresa.nombre }}</strong></div>
+      <div class="dato"><span>Cargo o actividad</span><strong>{{ solicitud.cargo }}</strong></div>
+      <div class="dato"><span>Monto solicitado</span><strong>{{ solicitud.monto_solicitado|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Plazo solicitado</span><strong>{{ solicitud.plazo_meses|default:"Pendiente" }} meses</strong></div>
+      <div class="dato"><span>Valor pendiente por cobrar</span><strong>{{ solicitud.valor_pendiente_cobrar|default:"Pendiente" }}</strong></div>
+    </div>
   </section>
 
-  <section class="panel" style="margin-top:24px;">
-    <h2>Resumen de solicitud</h2>
-    <table class="tabla">
-      <tr><th>Prestador</th><td>{{ solicitud.nombre_completo }}</td></tr>
-      <tr><th>Empresa</th><td>{{ solicitud.empresa.nombre }}</td></tr>
-      <tr><th>Cargo o actividad</th><td>{{ solicitud.cargo }}</td></tr>
-      <tr><th>Monto solicitado</th><td>{{ solicitud.monto_solicitado|default:"Pendiente" }}</td></tr>
-      <tr><th>Plazo solicitado</th><td>{{ solicitud.plazo_meses|default:"Pendiente" }} meses</td></tr>
-      <tr><th>Valor pendiente por cobrar</th><td>{{ solicitud.valor_pendiente_cobrar|default:"Pendiente" }}</td></tr>
-    </table>
-  </section>
-
-  <section class="panel" style="margin-top:24px;">
-    <h2>Simulacion preliminar informativa</h2>
-    <p>Esta evaluacion no aprueba, no origina credito y no reemplaza la validacion financiera oficial.</p>
+  <section class="panel">
+    <h2 class="titulo-seccion">Capacidad contractual preliminar</h2>
     {% if simulacion_preliminar.calculable %}
-      <table class="tabla">
-        <tr><th>Cuota estimada preliminar</th><td>{{ simulacion_preliminar.cuota_estimada_preliminar }}</td></tr>
-        <tr><th>Porcentaje sobre valor pendiente</th><td>{{ simulacion_preliminar.porcentaje_compromiso_valor_pendiente|default:"No calculable" }}%</td></tr>
-        <tr><th>Tasa mensual preliminar</th><td>{{ simulacion_preliminar.tasa_mensual_preliminar }}</td></tr>
-      </table>
+      <div class="grid-3">
+        <article class="tarjeta-resumen">
+          <span class="dato-label">Cuota estimada preliminar</span>
+          <strong>{{ simulacion_preliminar.cuota_estimada_preliminar }}</strong>
+          <span>Valor mensual informativo</span>
+        </article>
+        <article class="tarjeta-resumen">
+          <span class="dato-label">Porcentaje sobre valor pendiente</span>
+          <strong>{{ simulacion_preliminar.porcentaje_compromiso_valor_pendiente|default:"No calculable" }}%</strong>
+          <span>Compromiso sobre contrato</span>
+        </article>
+        <article class="tarjeta-resumen">
+          <span class="dato-label">Tasa mensual preliminar</span>
+          <strong>{{ simulacion_preliminar.tasa_mensual_preliminar }}</strong>
+          <span>Parametro informativo</span>
+        </article>
+      </div>
     {% else %}
       <p class="alerta">No se puede calcular la simulacion preliminar con los datos actuales.</p>
     {% endif %}
+  </section>
 
-    {% if simulacion_preliminar.bloqueos %}
-      <h3>Datos pendientes para calcular</h3>
-      <ul>
-        {% for bloqueo in simulacion_preliminar.bloqueos %}
-          <li>{{ bloqueo }}</li>
-        {% endfor %}
-      </ul>
-    {% endif %}
+  {% if simulacion_preliminar.bloqueos or simulacion_preliminar.advertencias %}
+    <section class="grid-2">
+      {% if simulacion_preliminar.bloqueos %}
+        <article class="panel alerta">
+          <h2 class="titulo-seccion">Bloqueos de informacion</h2>
+          <ul class="lista-alertas">
+            {% for bloqueo in simulacion_preliminar.bloqueos %}
+              <li>{{ bloqueo }}</li>
+            {% endfor %}
+          </ul>
+        </article>
+      {% endif %}
 
-    {% if simulacion_preliminar.advertencias %}
-      <h3>Advertencias</h3>
-      <ul>
-        {% for advertencia in simulacion_preliminar.advertencias %}
-          <li>{{ advertencia }}</li>
-        {% endfor %}
-      </ul>
-    {% endif %}
+      {% if simulacion_preliminar.advertencias %}
+        <article class="panel alerta-info">
+          <h2 class="titulo-seccion">Alertas preliminares</h2>
+          <ul class="lista-alertas">
+            {% for advertencia in simulacion_preliminar.advertencias %}
+              <li>{{ advertencia }}</li>
+            {% endfor %}
+          </ul>
+        </article>
+      {% endif %}
+    </section>
+  {% endif %}
 
-    <p>
-      <a class="boton boton-secundario" href="{% url 'contractors:mi_credito' %}">Volver a mi credito</a>
+  <section class="panel">
+    <div class="acciones">
       {% if not documentos_cargados %}
         <a class="boton" href="{% url 'contractors:documentos' solicitud.id %}">Completar documentos</a>
       {% endif %}
-    </p>
+      <a class="boton boton-secundario" href="{% url 'contractors:mi_credito' %}">Volver a Mi credito</a>
+    </div>
   </section>
 </main>
 {% endblock %}

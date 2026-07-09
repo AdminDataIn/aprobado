@@ -3,24 +3,101 @@
 {% block content %}
 <section class="hero">
   <h1>Credito para Prestadores de Servicios</h1>
-  <p>Registra tus datos y selecciona una empresa existente para iniciar la carga documental.</p>
+  <p>Registra tu informacion, selecciona la empresa vinculada y completa los datos base de tu contrato para continuar con la carga documental.</p>
 </section>
 <main class="contenedor">
   <form method="post" class="panel" novalidate>
     {% csrf_token %}
-    <h2>Datos del prestador y del contrato</h2>
-    <div class="grid">
-      {% for field in form %}
+    {% if form.non_field_errors %}
+      <div class="alerta">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <section class="seccion">
+      <h2 class="titulo-seccion">Datos personales</h2>
+      <p class="subtitulo-seccion">Informacion basica del prestador que inicia la solicitud.</p>
+      <div class="grid">
+        {% for field in form %}
+          {% if field.name == "tipo_documento" or field.name == "numero_documento" or field.name == "nombres" or field.name == "apellidos" or field.name == "celular" or field.name == "correo" or field.name == "direccion" %}
+            <div>
+              <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+              {{ field }}
+              {{ field.errors }}
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="seccion">
+      <h2 class="titulo-seccion">Empresa / pagador</h2>
+      <p class="subtitulo-seccion">Selecciona una empresa registrada en Aprobado. No se crean empresas desde este portal.</p>
+      <div class="grid">
         <div>
-          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-          {{ field }}
-          {{ field.errors }}
+          <label for="{{ form.empresa.id_for_label }}">{{ form.empresa.label }}</label>
+          {{ form.empresa }}
+          {{ form.empresa.errors }}
         </div>
-      {% endfor %}
-    </div>
-    <p style="margin-top:22px;">
+        <div>
+          <label for="{{ form.cargo.id_for_label }}">{{ form.cargo.label }}</label>
+          {{ form.cargo }}
+          {{ form.cargo.errors }}
+        </div>
+      </div>
+    </section>
+
+    <section class="seccion">
+      <h2 class="titulo-seccion">Datos contractuales</h2>
+      <p class="subtitulo-seccion">Estos valores permiten una evaluacion preliminar. La validacion final queda para revision interna.</p>
+      <div class="grid">
+        <div>
+          <label for="{{ form.fecha_inicio_contrato.id_for_label }}">{{ form.fecha_inicio_contrato.label }}</label>
+          {{ form.fecha_inicio_contrato }}
+          {{ form.fecha_inicio_contrato.errors }}
+        </div>
+        <div>
+          <label for="{{ form.fecha_fin_contrato.id_for_label }}">{{ form.fecha_fin_contrato.label }}</label>
+          {{ form.fecha_fin_contrato }}
+          {{ form.fecha_fin_contrato.errors }}
+        </div>
+        <div>
+          <label for="{{ form.valor_total_contrato.id_for_label }}">{{ form.valor_total_contrato.label }}</label>
+          {{ form.valor_total_contrato }}
+          {{ form.valor_total_contrato.errors }}
+        </div>
+        <div>
+          <label for="{{ form.valor_pendiente_cobrar.id_for_label }}">{{ form.valor_pendiente_cobrar.label }}</label>
+          {{ form.valor_pendiente_cobrar }}
+          {{ form.valor_pendiente_cobrar.errors }}
+        </div>
+      </div>
+    </section>
+
+    <section class="seccion">
+      <h2 class="titulo-seccion">Condiciones solicitadas</h2>
+      <p class="subtitulo-seccion">Monto, plazo y escenario para la simulacion preliminar informativa.</p>
+      <div class="grid">
+        <div>
+          <label for="{{ form.escenario_credito.id_for_label }}">{{ form.escenario_credito.label }}</label>
+          {{ form.escenario_credito }}
+          {{ form.escenario_credito.errors }}
+        </div>
+        <div>
+          <label for="{{ form.monto_solicitado.id_for_label }}">{{ form.monto_solicitado.label }}</label>
+          {{ form.monto_solicitado }}
+          {{ form.monto_solicitado.errors }}
+        </div>
+        <div>
+          <label for="{{ form.plazo_meses.id_for_label }}">{{ form.plazo_meses.label }}</label>
+          {{ form.plazo_meses }}
+          {{ form.plazo_meses.errors }}
+        </div>
+      </div>
+    </section>
+
+    <div class="acciones">
       <button class="boton" type="submit">Continuar a documentos</button>
-    </p>
+      <a class="boton boton-secundario" href="{% url 'contractors:mi_credito' %}">Ver mis solicitudes</a>
+    </div>
   </form>
 </main>
 {% endblock %}

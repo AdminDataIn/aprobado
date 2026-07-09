@@ -2,47 +2,63 @@
 {% block title %}Bandeja Prestadores | Aprobado{% endblock %}
 {% block content %}
 <section class="hero">
+  <p class="eyebrow">Gestion interna</p>
   <h1>Bandeja de Prestadores de Servicios</h1>
-  <p>Revision interna de solicitudes registradas en el portal.</p>
+  <p>Revision operativa de solicitudes registradas, progreso documental y estado actual del flujo.</p>
 </section>
+
 <main class="contenedor">
   <section class="panel">
-    <table class="tabla">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Fecha</th>
-          <th>Usuario</th>
-          <th>Prestador</th>
-          <th>Documento</th>
-          <th>Empresa</th>
-          <th>Monto</th>
-          <th>Plazo</th>
-          <th>Estado</th>
-          <th>Documentos</th>
-          <th>Accion</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for solicitud, progreso in solicitudes_con_progreso %}
-        <tr>
-          <td>#{{ solicitud.id }}</td>
-          <td>{{ solicitud.created_at|date:"Y-m-d" }}</td>
-          <td>{{ solicitud.usuario.email|default:solicitud.usuario.username }}</td>
-          <td>{{ solicitud.nombre_completo }}</td>
-          <td>{{ solicitud.numero_documento }}</td>
-          <td>{{ solicitud.empresa.nombre }}</td>
-          <td>{{ solicitud.monto_solicitado|default:"Pendiente" }}</td>
-          <td>{{ solicitud.plazo_meses|default:"Pendiente" }}</td>
-          <td>{{ solicitud.get_estado_display }}</td>
-          <td>{{ progreso.cargados }}/{{ progreso.total }}</td>
-          <td><a href="{% url 'contractors:admin_detalle' solicitud.id %}">Ver detalle</a></td>
-        </tr>
-      {% empty %}
-        <tr><td colspan="11">No hay solicitudes registradas.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
+    <div class="encabezado-panel">
+      <div>
+        <h2 class="titulo-seccion">Solicitudes para revision</h2>
+        <p class="subtitulo-seccion">La bandeja es solo operativa. No origina creditos ni modifica reglas financieras.</p>
+      </div>
+    </div>
+
+    <div class="tabla-responsive">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Fecha</th>
+            <th>Usuario</th>
+            <th>Prestador</th>
+            <th>Documento</th>
+            <th>Empresa</th>
+            <th>Monto</th>
+            <th>Plazo</th>
+            <th>Estado</th>
+            <th>Documentos</th>
+            <th>Accion</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for solicitud, progreso in solicitudes_con_progreso %}
+          <tr>
+            <td><strong>#{{ solicitud.id }}</strong></td>
+            <td>{{ solicitud.created_at|date:"Y-m-d" }}</td>
+            <td>{{ solicitud.usuario.email|default:solicitud.usuario.username }}</td>
+            <td>{{ solicitud.nombre_completo }}</td>
+            <td>{{ solicitud.numero_documento }}</td>
+            <td>{{ solicitud.empresa.nombre }}</td>
+            <td>{{ solicitud.monto_solicitado|default:"Pendiente" }}</td>
+            <td>{{ solicitud.plazo_meses|default:"Pendiente" }}</td>
+            <td><span class="estado-pill">{{ solicitud.get_estado_display }}</span></td>
+            <td>
+              <div class="progreso" aria-label="Progreso documental">
+                <span style="width: {{ progreso.porcentaje }}%;"></span>
+              </div>
+              <small>{{ progreso.cargados }}/{{ progreso.total }}</small>
+            </td>
+            <td><a class="boton boton-secundario" href="{% url 'contractors:admin_detalle' solicitud.id %}">Ver detalle</a></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="11">No hay solicitudes registradas.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </section>
 </main>
 {% endblock %}

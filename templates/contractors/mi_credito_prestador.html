@@ -2,43 +2,72 @@
 {% block title %}Mi credito | Prestadores de Servicios{% endblock %}
 {% block content %}
 <section class="hero">
+  <p class="eyebrow">Portal Prestadores de Servicios</p>
   <h1>Mi credito</h1>
-  <p>Consulta tus solicitudes de Prestadores de Servicios.</p>
+  <p>Consulta tus solicitudes, revisa el avance documental y accede a la simulacion preliminar cuando tengas la informacion completa.</p>
 </section>
+
 <main class="contenedor">
-  <section class="panel">
-    {% if solicitudes_con_progreso %}
-      <table class="tabla">
-        <thead>
-          <tr>
-            <th>Solicitud</th>
-            <th>Empresa</th>
-            <th>Estado</th>
-            <th>Fecha</th>
-            <th>Documentos</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-        {% for solicitud, progreso in solicitudes_con_progreso %}
-          <tr>
-            <td>#{{ solicitud.id }}</td>
-            <td>{{ solicitud.empresa.nombre }}</td>
-            <td>{{ solicitud.get_estado_display }}</td>
-            <td>{{ solicitud.created_at|date:"Y-m-d" }}</td>
-            <td>{{ progreso.cargados }}/{{ progreso.total }}</td>
-            <td>
-              <a href="{% url 'contractors:documentos' solicitud.id %}">Documentos</a>
-              |
-              <a href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">Simular</a>
-            </td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p>No tienes solicitudes registradas.</p>
-    {% endif %}
-  </section>
+  {% if solicitudes_con_progreso %}
+    <section class="panel">
+      <div class="encabezado-panel">
+        <div>
+          <h2 class="titulo-seccion">Solicitudes registradas</h2>
+          <p class="subtitulo-seccion">Cada solicitud conserva sus documentos, empresa, condiciones solicitadas y estado operativo.</p>
+        </div>
+        <a class="boton" href="{% url 'contractors:solicitar' %}">Nueva solicitud</a>
+      </div>
+
+      <div class="tabla-responsive">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Solicitud</th>
+              <th>Empresa</th>
+              <th>Estado</th>
+              <th>Fecha</th>
+              <th>Monto</th>
+              <th>Plazo</th>
+              <th>Documentos</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for solicitud, progreso in solicitudes_con_progreso %}
+            <tr>
+              <td><strong>#{{ solicitud.id }}</strong></td>
+              <td>{{ solicitud.empresa.nombre }}</td>
+              <td><span class="estado-pill">{{ solicitud.get_estado_display }}</span></td>
+              <td>{{ solicitud.created_at|date:"Y-m-d" }}</td>
+              <td>{{ solicitud.monto_solicitado|default:"Pendiente" }}</td>
+              <td>{{ solicitud.plazo_meses|default:"Pendiente" }} meses</td>
+              <td>
+                <div class="progreso" aria-label="Progreso documental">
+                  <span style="width: {{ progreso.porcentaje }}%;"></span>
+                </div>
+                <small>{{ progreso.cargados }}/{{ progreso.total }} cargados</small>
+              </td>
+              <td>
+                <div class="acciones acciones-tabla">
+                  <a class="boton boton-secundario" href="{% url 'contractors:documentos' solicitud.id %}">Ver documentos</a>
+                  <a class="boton" href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">Simular</a>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% else %}
+    <section class="panel panel-vacio">
+      <p class="eyebrow">Sin solicitudes</p>
+      <h2 class="titulo-seccion">Aun no tienes solicitudes</h2>
+      <p class="ayuda">Inicia una solicitud como Prestador de Servicios y continua con la carga documental para habilitar la simulacion preliminar.</p>
+      <div class="acciones">
+        <a class="boton" href="{% url 'contractors:solicitar' %}">Solicitar credito</a>
+      </div>
+    </section>
+  {% endif %}
 </main>
 {% endblock %}

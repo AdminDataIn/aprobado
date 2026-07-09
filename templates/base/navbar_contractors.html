@@ -1,8 +1,15 @@
 <header class="barra-prestadores">
-  <a class="marca-prestadores" href="{% url 'contractors:solicitar' %}">Aprobado</a>
-  <nav>
+  <a class="marca-prestadores" href="{% url 'contractors:solicitar' %}">
+    <span class="marca-simbolo">✓</span>
+    <span>
+      Aprobado
+      <small>Prestadores de Servicios</small>
+    </span>
+  </a>
+  <nav class="menu-prestadores" aria-label="Navegacion Prestadores de Servicios">
     <a href="{% url 'contractors:solicitar' %}">Solicitar</a>
     <a href="{% url 'contractors:mi_credito' %}">Mi credito</a>
+    <a href="{% url 'contractors:simular' %}">Simular</a>
     {% if request.user.is_authenticated %}
       <span class="usuario">{{ request.user.email|default:request.user.username }}</span>
       <a href="/accounts/logout/">Cerrar sesion</a>
