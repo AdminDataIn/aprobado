@@ -1,0 +1,88 @@
+{% extends "contractors/base.html" %}
+{% block title %}Detalle Prestador | Aprobado{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Solicitud #{{ solicitud.id }}</h1>
+  <p>{{ solicitud.nombre_completo }} - {{ solicitud.empresa.nombre }}</p>
+</section>
+<main class="contenedor">
+  <section class="panel">
+    <h2>Datos de la solicitud</h2>
+    <table class="tabla">
+      <tr><th>Usuario</th><td>{{ solicitud.usuario.email|default:solicitud.usuario.username }}</td></tr>
+      <tr><th>Prestador</th><td>{{ solicitud.nombre_completo }}</td></tr>
+      <tr><th>Documento</th><td>{{ solicitud.tipo_documento }} {{ solicitud.numero_documento }}</td></tr>
+      <tr><th>Celular</th><td>{{ solicitud.celular }}</td></tr>
+      <tr><th>Correo</th><td>{{ solicitud.correo }}</td></tr>
+      <tr><th>Direccion</th><td>{{ solicitud.direccion }}</td></tr>
+      <tr><th>Empresa</th><td>{{ solicitud.empresa.nombre }}</td></tr>
+      <tr><th>Cargo o actividad</th><td>{{ solicitud.cargo }}</td></tr>
+      <tr><th>Escenario</th><td>{{ solicitud.get_escenario_credito_display }}</td></tr>
+      <tr><th>Estado</th><td>{{ solicitud.get_estado_display }}</td></tr>
+    </table>
+  </section>
+
+  <section class="panel" style="margin-top:24px;">
+    <h2>Datos contractuales</h2>
+    <table class="tabla">
+      <tr><th>Fecha inicio</th><td>{{ solicitud.fecha_inicio_contrato|default:"Pendiente" }}</td></tr>
+      <tr><th>Fecha fin</th><td>{{ solicitud.fecha_fin_contrato|default:"Pendiente" }}</td></tr>
+      <tr><th>Valor total contrato</th><td>{{ solicitud.valor_total_contrato|default:"Pendiente" }}</td></tr>
+      <tr><th>Valor pendiente por cobrar</th><td>{{ solicitud.valor_pendiente_cobrar|default:"Pendiente" }}</td></tr>
+      <tr><th>Monto solicitado</th><td>{{ solicitud.monto_solicitado|default:"Pendiente" }}</td></tr>
+      <tr><th>Plazo solicitado</th><td>{{ solicitud.plazo_meses|default:"Pendiente" }}</td></tr>
+    </table>
+  </section>
+
+  <section class="panel" style="margin-top:24px;">
+    <h2>Documentos</h2>
+    <p>Progreso: {{ progreso_documental.cargados }}/{{ progreso_documental.total }}</p>
+    <div class="lista-documentos">
+      {% for tipo, etiqueta, documento in estado_documentos %}
+        <div class="documento">
+          <strong>{{ etiqueta }}</strong>
+          {% if documento %}
+            <p>Cargado.</p>
+            <a href="{% url 'contractors:admin_descargar_documento' documento.id %}">Abrir documento</a>
+          {% else %}
+            <p>Pendiente.</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+    {% if documentos_pendientes %}
+      <p class="alerta">Pendientes: {{ documentos_pendientes|join:", " }}</p>
+    {% endif %}
+  </section>
+
+  <section class="panel" style="margin-top:24px;">
+    <h2>Simulacion preliminar read-only</h2>
+    {% if simulacion_preliminar.calculable %}
+      <table class="tabla">
+        <tr><th>Cuota estimada preliminar</th><td>{{ simulacion_preliminar.cuota_estimada_preliminar }}</td></tr>
+        <tr><th>Porcentaje sobre valor pendiente</th><td>{{ simulacion_preliminar.porcentaje_compromiso_valor_pendiente|default:"No calculable" }}%</td></tr>
+      </table>
+    {% else %}
+      <p class="alerta">No se puede calcular con los datos actuales.</p>
+    {% endif %}
+    {% if simulacion_preliminar.advertencias %}
+      <h3>Advertencias</h3>
+      <ul>{% for advertencia in simulacion_preliminar.advertencias %}<li>{{ advertencia }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if simulacion_preliminar.bloqueos %}
+      <h3>Datos pendientes</h3>
+      <ul>{% for bloqueo in simulacion_preliminar.bloqueos %}<li>{{ bloqueo }}</li>{% endfor %}</ul>
+    {% endif %}
+  </section>
+
+  <section class="panel" style="margin-top:24px;">
+    <h2>Cambio manual de estado</h2>
+    <form method="post">
+      {% csrf_token %}
+      {{ form_estado.as_p }}
+      <button class="boton" type="submit">Actualizar estado</button>
+      <a class="boton boton-secundario" href="{% url 'contractors:admin_bandeja' %}">Volver a bandeja</a>
+    </form>
+  </section>
+</main>
+{% endblock %}

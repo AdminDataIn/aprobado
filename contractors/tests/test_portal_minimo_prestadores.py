@@ -22,6 +22,12 @@ class PortalMinimoPrestadoresTest(TestCase):
             email='otro@example.com',
             password='123456',
         )
+        self.staff = get_user_model().objects.create_user(
+            username='staff-prestadores',
+            email='staff@example.com',
+            password='123456',
+            is_staff=True,
+        )
         self.empresa = Empresa.objects.create(
             nombre='Empresa Convenio',
             convenio_activo=True,
@@ -241,6 +247,94 @@ class PortalMinimoPrestadoresTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'El contrato registrado se encuentra vencido.')
+
+    def test_usuario_no_autenticado_no_accede_a_bandeja_staff(self):
+        response = self.client.get('/gestion/prestadores/', HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/auth/login/', response['Location'])
+
+    def test_usuario_autenticado_no_staff_no_accede_a_bandeja(self):
+        self.client.force_login(self.usuario)
+
+        response = self.client.get('/gestion/prestadores/', HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_staff_accede_a_bandeja_y_ve_solicitud(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        self.client.force_login(self.staff)
+
+        response = self.client.get('/gestion/prestadores/', HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'#{solicitud.id}')
+        self.assertContains(response, solicitud.nombre_completo)
+        self.assertContains(response, solicitud.empresa.nombre)
+        self.assertContains(response, 'Ver detalle')
+
+    def test_staff_accede_al_detalle(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        self.client.force_login(self.staff)
+
+        response = self.client.get(f'/gestion/prestadores/{solicitud.id}/', HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Datos de la solicitud')
+        self.assertContains(response, 'Datos contractuales')
+        self.assertContains(response, 'Simulacion preliminar read-only')
+
+    def test_staff_puede_ver_documentos_cargados(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        documento = ContractorApplicationDocument.objects.create(
+            solicitud=solicitud,
+            tipo_documento=ContractorApplicationDocument.TipoDocumento.CONTRATO,
+            archivo=SimpleUploadedFile('contrato.pdf', b'%PDF-1.4 contrato', content_type='application/pdf'),
+            uploaded_by=self.usuario,
+        )
+        self.client.force_login(self.staff)
+
+        detalle = self.client.get(f'/gestion/prestadores/{solicitud.id}/', HTTP_HOST=self.host)
+        descarga = self.client.get(
+            f'/gestion/prestadores/documentos/{documento.id}/descargar/',
+            HTTP_HOST=self.host,
+        )
+
+        self.assertEqual(detalle.status_code, 200)
+        self.assertContains(detalle, 'Abrir documento')
+        self.assertEqual(descarga.status_code, 200)
+
+    def test_staff_puede_cambiar_estado_a_en_revision(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        self.client.force_login(self.staff)
+        creditos_antes = Credito.objects.count()
+        creditos_libranza_antes = CreditoLibranza.objects.count()
+
+        response = self.client.post(
+            f'/gestion/prestadores/{solicitud.id}/',
+            {'estado': ContractorApplication.Estado.EN_REVISION},
+            HTTP_HOST=self.host,
+        )
+
+        solicitud.refresh_from_db()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(solicitud.estado, ContractorApplication.Estado.EN_REVISION)
+        self.assertEqual(Credito.objects.count(), creditos_antes)
+        self.assertEqual(CreditoLibranza.objects.count(), creditos_libranza_antes)
+
+    def test_usuario_normal_no_puede_cambiar_estado(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        self.client.force_login(self.usuario)
+
+        response = self.client.post(
+            f'/gestion/prestadores/{solicitud.id}/',
+            {'estado': ContractorApplication.Estado.EN_REVISION},
+            HTTP_HOST=self.host,
+        )
+
+        solicitud.refresh_from_db()
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(solicitud.estado, ContractorApplication.Estado.DOCUMENTOS_PENDIENTES)
 
     def _payload_solicitud(self):
         return {

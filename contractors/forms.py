@@ -116,3 +116,24 @@ class DocumentoPrestadorForm(forms.ModelForm):
         if cleaned_data.get('tipo_documento') and cleaned_data.get('archivo'):
             documento.clean()
         return cleaned_data
+
+
+class CambiarEstadoPrestadorForm(forms.Form):
+    estado = forms.ChoiceField(
+        label='Estado',
+        choices=(
+            (
+                ContractorApplication.Estado.DOCUMENTOS_PENDIENTES,
+                ContractorApplication.Estado.DOCUMENTOS_PENDIENTES.label,
+            ),
+            (
+                ContractorApplication.Estado.DOCUMENTOS_CARGADOS,
+                ContractorApplication.Estado.DOCUMENTOS_CARGADOS.label,
+            ),
+            (
+                ContractorApplication.Estado.EN_REVISION,
+                ContractorApplication.Estado.EN_REVISION.label,
+            ),
+        ),
+        widget=forms.Select(attrs={'class': 'campo'}),
+    )
