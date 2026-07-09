@@ -40,9 +40,9 @@ def evaluar_capacidad_contractual_preliminar(solicitud, documentos_completos=Fal
     advertencias = []
     bloqueos = []
 
-    valor_total = solicitud.valor_total_contrato
-    valor_pendiente = solicitud.valor_pendiente_cobrar
-    monto = solicitud.monto_solicitado
+    valor_total = _decimal_or_none(solicitud.valor_total_contrato)
+    valor_pendiente = _decimal_or_none(solicitud.valor_pendiente_cobrar)
+    monto = _decimal_or_none(solicitud.monto_solicitado)
     plazo = solicitud.plazo_meses
 
     if not documentos_completos:
@@ -111,6 +111,12 @@ def _calcular_cuota_estimada(monto, plazo_meses, tasa_mensual):
 
 def _decimal_setting(nombre, default):
     valor = getattr(settings, nombre, default)
+    return Decimal(str(valor))
+
+
+def _decimal_or_none(valor):
+    if valor is None or valor == '':
+        return None
     return Decimal(str(valor))
 
 

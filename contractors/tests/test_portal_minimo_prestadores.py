@@ -5,6 +5,12 @@ from django.utils import timezone
 from datetime import timedelta
 
 from contractors.models import ContractorApplication, ContractorApplicationDocument
+from contractors.services.predecision import (
+    RESULTADO_NO_EVALUABLE,
+    RESULTADO_PREAPROBABLE,
+    RESULTADO_REQUIERE_REVISION,
+    evaluar_predecision_prestador,
+)
 from gestion_creditos.models import Credito, CreditoLibranza, Empresa
 
 
@@ -283,6 +289,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertContains(response, 'Datos de la solicitud')
         self.assertContains(response, 'Datos contractuales')
         self.assertContains(response, 'Simulacion preliminar read-only')
+        self.assertContains(response, 'Predecision informativa interna')
 
     def test_staff_puede_ver_documentos_cargados(self):
         solicitud = self._crear_solicitud(self.usuario)
@@ -335,6 +342,117 @@ class PortalMinimoPrestadoresTest(TestCase):
         solicitud.refresh_from_db()
         self.assertEqual(response.status_code, 403)
         self.assertEqual(solicitud.estado, ContractorApplication.Estado.DOCUMENTOS_PENDIENTES)
+
+    def test_predecision_no_evaluable_si_faltan_datos_criticos(self):
+        solicitud = self._crear_solicitud(
+            self.usuario,
+            valor_total='12000000',
+            valor_pendiente=None,
+            monto=None,
+            plazo=None,
+        )
+
+        resultado = evaluar_predecision_prestador(solicitud, documentos_completos=True)
+
+        self.assertEqual(resultado.resultado, RESULTADO_NO_EVALUABLE)
+        self.assertIsNone(resultado.puntaje_informativo)
+        self.assertTrue(resultado.datos_faltantes)
+
+    def test_predecision_requiere_revision_si_documentos_incompletos(self):
+        solicitud = self._crear_solicitud(
+            self.usuario,
+            valor_total='12000000',
+            valor_pendiente='8000000',
+            monto='3000000',
+            plazo=12,
+        )
+
+        resultado = evaluar_predecision_prestador(solicitud, documentos_completos=False)
+
+        self.assertEqual(resultado.resultado, RESULTADO_REQUIERE_REVISION)
+        self.assertIn('Faltan documentos obligatorios para completar la evaluacion.', resultado.alertas)
+
+    def test_predecision_requiere_revision_si_contrato_vencido(self):
+        solicitud = self._crear_solicitud(
+            self.usuario,
+            valor_total='12000000',
+            valor_pendiente='8000000',
+            monto='3000000',
+            plazo=12,
+            fecha_fin=timezone.localdate() - timedelta(days=1),
+        )
+
+        resultado = evaluar_predecision_prestador(solicitud, documentos_completos=True)
+
+        self.assertEqual(resultado.resultado, RESULTADO_REQUIERE_REVISION)
+        self.assertIn('El contrato registrado se encuentra vencido.', resultado.alertas)
+
+    def test_predecision_requiere_revision_si_monto_supera_valor_pendiente(self):
+        solicitud = self._crear_solicitud(
+            self.usuario,
+            valor_total='12000000',
+            valor_pendiente='2000000',
+            monto='3000000',
+            plazo=12,
+        )
+
+        resultado = evaluar_predecision_prestador(solicitud, documentos_completos=True)
+
+        self.assertEqual(resultado.resultado, RESULTADO_REQUIERE_REVISION)
+        self.assertIn('El monto solicitado supera el valor pendiente por cobrar del contrato.', resultado.alertas)
+
+    def test_predecision_preaprobable_si_datos_y_documentos_completos(self):
+        solicitud = self._crear_solicitud(
+            self.usuario,
+            valor_total='12000000',
+            valor_pendiente='8000000',
+            monto='3000000',
+            plazo=12,
+        )
+
+        resultado = evaluar_predecision_prestador(solicitud, documentos_completos=True)
+
+        self.assertEqual(resultado.resultado, RESULTADO_PREAPROBABLE)
+        self.assertEqual(resultado.alertas, [])
+        self.assertEqual(resultado.datos_faltantes, [])
+        self.assertIsNotNone(resultado.puntaje_informativo)
+
+    def test_detalle_staff_muestra_predecision(self):
+        solicitud = self._crear_solicitud(
+            self.usuario,
+            valor_total='12000000',
+            valor_pendiente='8000000',
+            monto='3000000',
+            plazo=12,
+        )
+        self.client.force_login(self.usuario)
+        self._cargar_documentos_obligatorios(solicitud)
+        self.client.force_login(self.staff)
+
+        response = self.client.get(f'/gestion/prestadores/{solicitud.id}/', HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'PREAPROBABLE')
+        self.assertContains(response, 'No constituye aprobacion, originacion, pagare ni desembolso.')
+
+    def test_predecision_no_crea_creditos_ni_cambia_estado(self):
+        solicitud = self._crear_solicitud(
+            self.usuario,
+            valor_total='12000000',
+            valor_pendiente='8000000',
+            monto='3000000',
+            plazo=12,
+        )
+        estado_inicial = solicitud.estado
+        creditos_antes = Credito.objects.count()
+        creditos_libranza_antes = CreditoLibranza.objects.count()
+
+        evaluar_predecision_prestador(solicitud, documentos_completos=True)
+
+        solicitud.refresh_from_db()
+        self.assertEqual(solicitud.estado, estado_inicial)
+        self.assertEqual(Credito.objects.count(), creditos_antes)
+        self.assertEqual(CreditoLibranza.objects.count(), creditos_libranza_antes)
 
     def _payload_solicitud(self):
         return {

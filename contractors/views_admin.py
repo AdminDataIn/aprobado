@@ -13,6 +13,7 @@ from contractors.models import (
     DOCUMENTOS_OBLIGATORIOS_PRESTADOR,
 )
 from contractors.services.capacidad_contractual import evaluar_capacidad_contractual_preliminar
+from contractors.services.predecision import evaluar_predecision_prestador
 from contractors.views import calcular_progreso_documental
 
 
@@ -78,6 +79,10 @@ def detalle_prestador_view(request, solicitud_id):
         solicitud,
         documentos_completos=progreso_documental['completo'],
     )
+    predecision = evaluar_predecision_prestador(
+        solicitud,
+        documentos_completos=progreso_documental['completo'],
+    )
 
     return render(
         request,
@@ -89,6 +94,7 @@ def detalle_prestador_view(request, solicitud_id):
             'documentos_pendientes': documentos_pendientes,
             'progreso_documental': progreso_documental,
             'simulacion_preliminar': simulacion_preliminar,
+            'predecision': predecision,
         },
     )
 

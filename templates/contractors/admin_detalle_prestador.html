@@ -56,6 +56,28 @@
   </section>
 
   <section class="panel" style="margin-top:24px;">
+    <h2>Predecision informativa interna</h2>
+    <p class="alerta">No constituye aprobacion, originacion, pagare ni desembolso.</p>
+    <table class="tabla">
+      <tr><th>Resultado</th><td>{{ predecision.resultado }}</td></tr>
+      <tr><th>Puntaje informativo</th><td>{{ predecision.puntaje_informativo|default:"No calculable" }}</td></tr>
+      <tr><th>Resumen</th><td>{{ predecision.resumen }}</td></tr>
+    </table>
+    {% if predecision.razones %}
+      <h3>Razones</h3>
+      <ul>{% for razon in predecision.razones %}<li>{{ razon }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if predecision.alertas %}
+      <h3>Alertas</h3>
+      <ul>{% for alerta in predecision.alertas %}<li>{{ alerta }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if predecision.datos_faltantes %}
+      <h3>Datos faltantes</h3>
+      <ul>{% for faltante in predecision.datos_faltantes %}<li>{{ faltante }}</li>{% endfor %}</ul>
+    {% endif %}
+  </section>
+
+  <section class="panel" style="margin-top:24px;">
     <h2>Simulacion preliminar read-only</h2>
     {% if simulacion_preliminar.calculable %}
       <table class="tabla">
