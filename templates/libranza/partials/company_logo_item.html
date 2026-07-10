@@ -1,0 +1,14 @@
+<div class="libranza-logo-item">
+    {% if company.logo_url %}
+        <img class="libranza-company-logo" src="{{ company.logo_url }}" alt="{% firstof company.nombre nombre 'Empresa aliada' %}" loading="lazy">
+    {% elif logo_url %}
+        <img class="libranza-company-logo" src="{{ logo_url }}" alt="{% firstof company.nombre nombre 'Empresa aliada' %}" loading="lazy">
+    {% else %}
+        <span class="libranza-company-fallback" aria-label="{% firstof company.nombre nombre 'Empresa aliada' %}">
+            {% firstof company.iniciales iniciales 'AP' %}
+        </span>
+        {% if not ocultar_nombre %}
+            <strong>{% firstof company.nombre nombre 'Empresa aliada' %}</strong>
+        {% endif %}
+    {% endif %}
+</div>

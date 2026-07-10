@@ -34,22 +34,39 @@ class LibranzaLandingMarketingTests(TestCase):
         response = self.client.get(reverse('libranza:landing'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Empresas que confían en nosotros')
+        self.assertContains(response, 'Ellos confiaron en nosotros')
+        self.assertContains(response, 'libranza-company-logo')
         self.assertContains(response, '/media/marketplace/logos/')
         self.assertContains(response, 'Datain')
         self.assertContains(response, 'Cluster Orinoco TIC')
         self.assertNotContains(response, 'https://datain.pro/')
         self.assertNotContains(response, 'https://digitalpress.fra1.cdn.digitaloceanspaces.com/')
 
-    def test_landing_no_muestra_empresas_sin_logo_o_sin_convenio_activo(self):
+    def test_landing_renderiza_fallback_para_empresas_activas_sin_logo(self):
         Empresa.objects.create(nombre='Sin Logo', convenio_activo=True)
         Empresa.objects.create(nombre='Sin Convenio', convenio_activo=False, logo=self._logo_file('inactive.png'))
 
         response = self.client.get(reverse('libranza:landing'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, 'Sin Logo')
+        self.assertContains(response, 'Sin Logo')
+        self.assertContains(response, 'libranza-company-fallback')
         self.assertNotContains(response, 'Sin Convenio')
+
+    def test_landing_renderiza_bloques_visuales_de_paridad(self):
+        Empresa.objects.create(nombre='Aliado Demo', convenio_activo=True, logo=self._logo_file('aliado.png'))
+
+        response = self.client.get(reverse('libranza:landing'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Prestador de Servicios')
+        self.assertContains(response, 'https://contratistas.aprobado.com.co/solicitar/')
+        self.assertContains(response, 'Presencia nacional')
+        self.assertContains(response, 'maps/colombia.geo.json')
+        self.assertContains(response, 'Quiénes nos respaldan')
+        self.assertContains(response, 'Seguros SURA')
+        self.assertNotContains(response, 'Testimonios')
+        self.assertNotContains(response, 'Solicitar adelanto')
 
     def test_logo_acepta_proporcion_estrecha_y_svg(self):
         empresa_svg = Empresa(
@@ -62,3 +79,10 @@ class LibranzaLandingMarketingTests(TestCase):
             ),
         )
         empresa_svg.full_clean()
+        empresa_svg.save()
+
+        response = self.client.get(reverse('libranza:landing'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'marketplace.svg')
+        self.assertContains(response, 'libranza-company-logo')
