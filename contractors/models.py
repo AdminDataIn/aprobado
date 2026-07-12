@@ -25,6 +25,11 @@ class ContractorApplication(models.Model):
         CEDULA_CIUDADANIA = 'CC', 'Cedula de ciudadania'
         CEDULA_EXTRANJERIA = 'CE', 'Cedula de extranjeria'
 
+    class TipoContrato(models.TextChoices):
+        PRESTACION_SERVICIOS = 'PRESTACION_SERVICIOS', 'Prestación de servicios'
+        LABORAL = 'LABORAL', 'Laboral'
+        OTRO = 'OTRO', 'Otro'
+
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -48,6 +53,11 @@ class ContractorApplication(models.Model):
     correo = models.EmailField()
     direccion = models.CharField(max_length=255)
     cargo = models.CharField(max_length=160)
+    tipo_contrato = models.CharField(
+        max_length=30,
+        choices=TipoContrato.choices,
+        default=TipoContrato.PRESTACION_SERVICIOS,
+    )
     fecha_inicio_contrato = models.DateField(null=True, blank=True)
     fecha_fin_contrato = models.DateField(null=True, blank=True)
     valor_total_contrato = models.DecimalField(
@@ -64,6 +74,14 @@ class ContractorApplication(models.Model):
         blank=True,
         validators=[MinValueValidator(Decimal('0.00'))],
     )
+    valor_pagado_contrato = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    observaciones_contrato = models.TextField(blank=True)
     monto_solicitado = models.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -76,6 +94,10 @@ class ContractorApplication(models.Model):
         blank=True,
         validators=[MinValueValidator(1)],
     )
+    acepta_terminos = models.BooleanField(default=False)
+    acepta_politica_privacidad = models.BooleanField(default=False)
+    autoriza_analisis_contractual_asistido = models.BooleanField(default=False)
+    autoriza_consulta_centrales = models.BooleanField(default=False)
     estado = models.CharField(
         max_length=32,
         choices=Estado.choices,
@@ -157,6 +179,8 @@ class ContractorApplicationDocument(models.Model):
             self.TipoDocumento.CEDULA_TRASERA,
         } and extension not in {'.jpg', '.jpeg', '.png', '.pdf'}:
             raise ValidationError({'archivo': 'Carga una imagen o PDF valido.'})
+        if self.archivo and self.archivo.size > 8 * 1024 * 1024:
+            raise ValidationError({'archivo': 'El documento no debe superar 8MB.'})
 
 
 DOCUMENTOS_OBLIGATORIOS_PRESTADOR = (
@@ -165,3 +189,10 @@ DOCUMENTOS_OBLIGATORIOS_PRESTADOR = (
     ContractorApplicationDocument.TipoDocumento.CERTIFICADO_BANCARIO,
     ContractorApplicationDocument.TipoDocumento.CONTRATO,
 )
+
+MAPA_CAMPOS_DOCUMENTOS_PRESTADOR = {
+    'documento_identidad_frontal': ContractorApplicationDocument.TipoDocumento.CEDULA_FRONTAL,
+    'documento_identidad_reverso': ContractorApplicationDocument.TipoDocumento.CEDULA_TRASERA,
+    'certificado_bancario': ContractorApplicationDocument.TipoDocumento.CERTIFICADO_BANCARIO,
+    'contrato_actual': ContractorApplicationDocument.TipoDocumento.CONTRATO,
+}

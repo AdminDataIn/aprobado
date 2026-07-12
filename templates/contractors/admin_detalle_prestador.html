@@ -37,8 +37,10 @@
       <div class="dato"><span>Direccion</span><strong>{{ solicitud.direccion }}</strong></div>
       <div class="dato"><span>Empresa</span><strong>{{ solicitud.empresa.nombre }}</strong></div>
       <div class="dato"><span>Cargo o actividad</span><strong>{{ solicitud.cargo }}</strong></div>
+      <div class="dato"><span>Tipo de contrato</span><strong>{{ solicitud.get_tipo_contrato_display }}</strong></div>
       <div class="dato"><span>Escenario</span><strong>{{ solicitud.get_escenario_credito_display }}</strong></div>
       <div class="dato"><span>Fecha solicitud</span><strong>{{ solicitud.created_at|date:"Y-m-d" }}</strong></div>
+      <div class="dato"><span>Última actualización</span><strong>{{ solicitud.updated_at|date:"Y-m-d H:i" }}</strong></div>
     </div>
   </section>
 
@@ -48,10 +50,23 @@
       <div class="dato"><span>Fecha inicio</span><strong>{{ solicitud.fecha_inicio_contrato|default:"Pendiente" }}</strong></div>
       <div class="dato"><span>Fecha fin</span><strong>{{ solicitud.fecha_fin_contrato|default:"Pendiente" }}</strong></div>
       <div class="dato"><span>Valor total contrato</span><strong>{{ solicitud.valor_total_contrato|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Valor pagado del contrato</span><strong>{{ solicitud.valor_pagado_contrato|default:"Pendiente" }}</strong></div>
       <div class="dato"><span>Valor pendiente por cobrar</span><strong>{{ solicitud.valor_pendiente_cobrar|default:"Pendiente" }}</strong></div>
       <div class="dato"><span>Monto solicitado</span><strong>{{ solicitud.monto_solicitado|default:"Pendiente" }}</strong></div>
       <div class="dato"><span>Plazo solicitado</span><strong>{{ solicitud.plazo_meses|default:"Pendiente" }} meses</strong></div>
+      <div class="dato"><span>Observaciones</span><strong>{{ solicitud.observaciones_contrato|default:"Sin observaciones" }}</strong></div>
     </div>
+  </section>
+
+  <section class="panel">
+    <h2 class="titulo-seccion">Autorizaciones registradas</h2>
+    <div class="grid-2 datos-grid">
+      <div class="dato"><span>Términos y condiciones</span><strong>{% if solicitud.acepta_terminos %}Aceptados{% else %}No aceptados{% endif %}</strong></div>
+      <div class="dato"><span>Política de privacidad</span><strong>{% if solicitud.acepta_politica_privacidad %}Aceptada{% else %}No aceptada{% endif %}</strong></div>
+      <div class="dato"><span>Análisis contractual asistido</span><strong>{% if solicitud.autoriza_analisis_contractual_asistido %}Autorizado{% else %}No autorizado{% endif %}</strong></div>
+      <div class="dato"><span>Consulta futura a centrales</span><strong>{% if solicitud.autoriza_consulta_centrales %}Autorizada{% else %}No autorizada{% endif %}</strong></div>
+    </div>
+    <p class="subtitulo-seccion">Este registro no ejecuta consultas externas ni decisiones financieras.</p>
   </section>
 
   <section class="panel">

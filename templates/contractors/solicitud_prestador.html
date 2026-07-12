@@ -43,6 +43,7 @@
     <section class="form-main">
       <form method="post" enctype="multipart/form-data" class="formulario-prestador" id="formularioPrestador" novalidate>
         {% csrf_token %}
+        {% if solicitud %}<input type="hidden" name="solicitud_id" value="{{ solicitud.id }}">{% endif %}
         {% if form.non_field_errors %}
           <div class="alerta">{{ form.non_field_errors }}</div>
         {% endif %}
@@ -227,6 +228,11 @@
               {{ form.cargo }}
               {{ form.cargo.errors }}
             </div>
+            <div class="form-field form-field-full">
+              {{ form.tipo_contrato.label_tag }}
+              {{ form.tipo_contrato }}
+              {{ form.tipo_contrato.errors }}
+            </div>
             <div class="form-field">
               {{ form.fecha_inicio_contrato.label_tag }}
               {{ form.fecha_inicio_contrato }}
@@ -243,6 +249,11 @@
               {{ form.valor_total_contrato.errors }}
             </div>
             <div class="form-field">
+              {{ form.valor_pagado_contrato.label_tag }}
+              {{ form.valor_pagado_contrato }}
+              {{ form.valor_pagado_contrato.errors }}
+            </div>
+            <div class="form-field">
               {{ form.valor_pendiente_cobrar.label_tag }}
               {{ form.valor_pendiente_cobrar }}
               {{ form.valor_pendiente_cobrar.errors }}
@@ -257,10 +268,23 @@
               {{ form.plazo_meses }}
               {{ form.plazo_meses.errors }}
             </div>
+            <div class="form-field form-field-full">
+              {{ form.observaciones_contrato.label_tag }}
+              {{ form.observaciones_contrato }}
+              {{ form.observaciones_contrato.errors }}
+            </div>
           </div>
           <div class="authorization-card">
-            <strong>Confirmación</strong>
-            <span>Al continuar, registrarás la solicitud con la documentación cargada para revisión segura.</span>
+            <strong>Autorizaciones y confirmación</strong>
+            <label>{{ form.acepta_terminos }} <span>{{ form.acepta_terminos.label }}</span></label>
+            {{ form.acepta_terminos.errors }}
+            <label>{{ form.acepta_politica_privacidad }} <span>{{ form.acepta_politica_privacidad.label }}</span></label>
+            {{ form.acepta_politica_privacidad.errors }}
+            <label>{{ form.autoriza_analisis_contractual_asistido }} <span>{{ form.autoriza_analisis_contractual_asistido.label }}</span></label>
+            {{ form.autoriza_analisis_contractual_asistido.errors }}
+            <label>{{ form.autoriza_consulta_centrales }} <span>{{ form.autoriza_consulta_centrales.label }}</span></label>
+            {{ form.autoriza_consulta_centrales.errors }}
+            <small>La autorización de consulta se registra como consentimiento. En este flujo no se ejecuta ninguna consulta externa.</small>
           </div>
           <div class="form-actions">
             <button type="button" class="form-button previous" data-prev-step="3">Anterior</button>
@@ -355,7 +379,7 @@
       ].forEach(([id, mensaje]) => {
         const campo = document.getElementById(id);
         limpiarError(campo);
-        if (!campo || !campo.files || !campo.files.length) {
+        if (!campo || ((!campo.files || !campo.files.length) && campo.dataset.existing !== 'true')) {
           mostrarError(campo, mensaje);
           valido = false;
         }

@@ -1,7 +1,9 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import FileResponse, Http404
 from django.shortcuts import redirect, render
+from django.urls import reverse
 
 from contractors.forms import DocumentoPrestadorForm, SolicitudPrestadorForm
 from contractors.models import (
@@ -10,6 +12,12 @@ from contractors.models import (
     DOCUMENTOS_OBLIGATORIOS_PRESTADOR,
 )
 from contractors.services.capacidad_contractual import evaluar_capacidad_contractual_preliminar
+from contractors.services.solicitud import (
+    actualizar_estado_documental,
+    guardar_documento_prestador,
+    guardar_documentos_formulario,
+    solicitud_tiene_documentos_obligatorios,
+)
 
 
 def inicio_prestadores_view(request):
@@ -18,46 +26,40 @@ def inicio_prestadores_view(request):
 
 @login_required
 def solicitar_prestador_view(request):
+    solicitud_id = request.POST.get('solicitud_id') or request.GET.get('solicitud_id')
+    solicitud_existente = None
+    if solicitud_id:
+        solicitud_existente = _obtener_solicitud_del_usuario(solicitud_id, request.user)
+
     if request.method == 'POST':
-        form = SolicitudPrestadorForm(request.POST, request.FILES)
+        form = SolicitudPrestadorForm(
+            request.POST,
+            request.FILES,
+            instance=solicitud_existente,
+        )
         if form.is_valid():
-            solicitud = form.save(commit=False)
-            solicitud.usuario = request.user
-            solicitud.estado = ContractorApplication.Estado.DOCUMENTOS_PENDIENTES
-            solicitud.save()
-            _guardar_documentos_solicitud_inicial(solicitud, form.cleaned_data, request.user)
-            _actualizar_estado_documental(solicitud)
+            with transaction.atomic():
+                solicitud = form.save(commit=False)
+                solicitud.usuario = request.user
+                if not solicitud.pk:
+                    solicitud.estado = ContractorApplication.Estado.DOCUMENTOS_PENDIENTES
+                solicitud.save()
+                guardar_documentos_formulario(
+                    solicitud=solicitud,
+                    cleaned_data=form.cleaned_data,
+                    usuario=request.user,
+                )
+                actualizar_estado_documental(solicitud)
             messages.success(request, 'Solicitud registrada correctamente.')
-            return redirect('contractors:documentos', solicitud_id=solicitud.id)
+            return redirect(f'{reverse("contractors:simular")}?solicitud_id={solicitud.id}')
     else:
-        form = SolicitudPrestadorForm()
+        form = SolicitudPrestadorForm(instance=solicitud_existente)
 
     return render(
         request,
         'contractors/solicitud_prestador.html',
-        {'form': form},
+        {'form': form, 'solicitud': solicitud_existente},
     )
-
-
-def _guardar_documentos_solicitud_inicial(solicitud, cleaned_data, usuario):
-    mapa_documentos = {
-        'documento_identidad_frontal': ContractorApplicationDocument.TipoDocumento.CEDULA_FRONTAL,
-        'documento_identidad_reverso': ContractorApplicationDocument.TipoDocumento.CEDULA_TRASERA,
-        'certificado_bancario': ContractorApplicationDocument.TipoDocumento.CERTIFICADO_BANCARIO,
-        'contrato_actual': ContractorApplicationDocument.TipoDocumento.CONTRATO,
-    }
-    for campo, tipo_documento in mapa_documentos.items():
-        archivo = cleaned_data.get(campo)
-        if not archivo:
-            continue
-        ContractorApplicationDocument.objects.update_or_create(
-            solicitud=solicitud,
-            tipo_documento=tipo_documento,
-            defaults={
-                'archivo': archivo,
-                'uploaded_by': usuario,
-            },
-        )
 
 
 @login_required
@@ -67,16 +69,13 @@ def documentos_prestador_view(request, solicitud_id):
     if request.method == 'POST':
         form = DocumentoPrestadorForm(request.POST, request.FILES)
         if form.is_valid():
-            documento, _created = ContractorApplicationDocument.objects.get_or_create(
+            guardar_documento_prestador(
                 solicitud=solicitud,
                 tipo_documento=form.cleaned_data['tipo_documento'],
-                defaults={'uploaded_by': request.user},
+                archivo=form.cleaned_data['archivo'],
+                usuario=request.user,
             )
-            documento.archivo = form.cleaned_data['archivo']
-            documento.uploaded_by = request.user
-            documento.full_clean()
-            documento.save()
-            _actualizar_estado_documental(solicitud)
+            actualizar_estado_documental(solicitud)
             messages.success(request, 'Documento cargado correctamente.')
             return redirect('contractors:documentos', solicitud_id=solicitud.id)
     else:
@@ -177,19 +176,16 @@ def _obtener_solicitud_del_usuario(solicitud_id, usuario):
             id=solicitud_id,
             usuario=usuario,
         )
-    except ContractorApplication.DoesNotExist as exc:
+    except (ContractorApplication.DoesNotExist, ValueError, TypeError) as exc:
         raise Http404('Solicitud no encontrada.') from exc
 
 
 def _solicitud_tiene_documentos_obligatorios(solicitud):
-    tipos_cargados = set(solicitud.documentos.values_list('tipo_documento', flat=True))
-    return set(DOCUMENTOS_OBLIGATORIOS_PRESTADOR).issubset(tipos_cargados)
+    return solicitud_tiene_documentos_obligatorios(solicitud)
 
 
 def _actualizar_estado_documental(solicitud):
-    if _solicitud_tiene_documentos_obligatorios(solicitud):
-        solicitud.estado = ContractorApplication.Estado.DOCUMENTOS_CARGADOS
-        solicitud.save(update_fields=['estado', 'updated_at'])
+    return actualizar_estado_documental(solicitud)
 
 
 def calcular_progreso_documental(solicitud):

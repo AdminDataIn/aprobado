@@ -65,6 +65,8 @@ class PortalMinimoPrestadoresTest(TestCase):
 
     def test_usuario_autenticado_crea_solicitud_basica_con_empresa_existente(self):
         self.client.force_login(self.usuario)
+        creditos_antes = Credito.objects.count()
+        creditos_libranza_antes = CreditoLibranza.objects.count()
         response = self.client.post(
             '/solicitar/',
             self._payload_solicitud_con_documentos(),
@@ -77,9 +79,63 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(solicitud.empresa, self.empresa)
         self.assertEqual(solicitud.monto_solicitado, 3000000)
         self.assertEqual(solicitud.plazo_meses, 12)
+        self.assertEqual(solicitud.tipo_contrato, ContractorApplication.TipoContrato.PRESTACION_SERVICIOS)
+        self.assertEqual(solicitud.valor_pagado_contrato, 4000000)
+        self.assertEqual(solicitud.valor_pendiente_cobrar, 8000000)
+        self.assertEqual(solicitud.observaciones_contrato, 'Contrato confirmado por el prestador.')
+        self.assertTrue(solicitud.acepta_terminos)
+        self.assertTrue(solicitud.acepta_politica_privacidad)
+        self.assertTrue(solicitud.autoriza_analisis_contractual_asistido)
+        self.assertTrue(solicitud.autoriza_consulta_centrales)
         self.assertEqual(solicitud.estado, ContractorApplication.Estado.DOCUMENTOS_CARGADOS)
         self.assertEqual(solicitud.documentos.count(), 4)
-        self.assertEqual(response['Location'], f'/solicitud/{solicitud.id}/documentos/')
+        self.assertEqual(response['Location'], f'/simular/?solicitud_id={solicitud.id}')
+        self.assertEqual(Credito.objects.count(), creditos_antes)
+        self.assertEqual(CreditoLibranza.objects.count(), creditos_libranza_antes)
+
+    def test_usuario_actualiza_solicitud_y_reemplaza_documento_sin_duplicar(self):
+        self.client.force_login(self.usuario)
+        primera_respuesta = self.client.post(
+            '/solicitar/',
+            self._payload_solicitud_con_documentos(),
+            HTTP_HOST=self.host,
+        )
+        solicitud = ContractorApplication.objects.get()
+        contrato = solicitud.documentos.get(
+            tipo_documento=ContractorApplicationDocument.TipoDocumento.CONTRATO,
+        )
+        contrato_id = contrato.id
+
+        payload = self._payload_solicitud_con_documentos()
+        payload['solicitud_id'] = str(solicitud.id)
+        payload['cargo'] = 'Consultora senior'
+        payload['contrato_actual'] = SimpleUploadedFile(
+            'contrato-reemplazo.pdf',
+            b'%PDF-1.4 contrato reemplazado',
+            content_type='application/pdf',
+        )
+        segunda_respuesta = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+
+        solicitud.refresh_from_db()
+        contrato.refresh_from_db()
+        self.assertEqual(primera_respuesta.status_code, 302)
+        self.assertEqual(segunda_respuesta.status_code, 302)
+        self.assertEqual(ContractorApplication.objects.count(), 1)
+        self.assertEqual(solicitud.cargo, 'Consultora senior')
+        self.assertEqual(solicitud.documentos.count(), 4)
+        self.assertEqual(contrato.id, contrato_id)
+        with contrato.archivo.open('rb') as archivo:
+            self.assertIn(b'contrato reemplazado', archivo.read())
+
+    def test_usuario_no_puede_actualizar_solicitud_ajena(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        self.client.force_login(self.otro_usuario)
+        payload = self._payload_solicitud_con_documentos()
+        payload['solicitud_id'] = str(solicitud.id)
+
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 404)
 
     def test_empresa_debe_ser_empresa_existente_activa(self):
         empresa_inactiva = Empresa.objects.create(
@@ -210,6 +266,13 @@ class PortalMinimoPrestadoresTest(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_simulador_rechaza_solicitud_id_invalido(self):
+        self.client.force_login(self.usuario)
+
+        response = self.client.get('/simular/?solicitud_id=no-valido', HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 404)
+
     def test_simulador_calcula_cuota_preliminar_con_datos_validos(self):
         solicitud = self._crear_solicitud(
             self.usuario,
@@ -301,6 +364,8 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertContains(response, 'Datos contractuales')
         self.assertContains(response, 'Simulacion preliminar read-only')
         self.assertContains(response, 'Predecision informativa interna')
+        self.assertContains(response, 'Autorizaciones registradas')
+        self.assertContains(response, 'Consulta futura a centrales')
 
     def test_staff_puede_ver_documentos_cargados(self):
         solicitud = self._crear_solicitud(self.usuario)
@@ -476,13 +541,20 @@ class PortalMinimoPrestadoresTest(TestCase):
             'correo': 'ana@example.com',
             'direccion': 'Calle 1 # 2-3',
             'cargo': 'Consultora',
+            'tipo_contrato': ContractorApplication.TipoContrato.PRESTACION_SERVICIOS,
             'empresa': self.empresa.id,
             'fecha_inicio_contrato': '2026-01-01',
             'fecha_fin_contrato': '2026-12-31',
             'valor_total_contrato': '12000000',
+            'valor_pagado_contrato': '4000000',
             'valor_pendiente_cobrar': '8000000',
+            'observaciones_contrato': 'Contrato confirmado por el prestador.',
             'monto_solicitado': '3000000',
             'plazo_meses': '12',
+            'acepta_terminos': 'on',
+            'acepta_politica_privacidad': 'on',
+            'autoriza_analisis_contractual_asistido': 'on',
+            'autoriza_consulta_centrales': 'on',
         }
 
     def _payload_solicitud_con_documentos(self):
