@@ -19,13 +19,15 @@ def inicio_prestadores_view(request):
 @login_required
 def solicitar_prestador_view(request):
     if request.method == 'POST':
-        form = SolicitudPrestadorForm(request.POST)
+        form = SolicitudPrestadorForm(request.POST, request.FILES)
         if form.is_valid():
             solicitud = form.save(commit=False)
             solicitud.usuario = request.user
             solicitud.estado = ContractorApplication.Estado.DOCUMENTOS_PENDIENTES
             solicitud.save()
-            messages.success(request, 'Solicitud registrada. Continua con la carga de documentos.')
+            _guardar_documentos_solicitud_inicial(solicitud, form.cleaned_data, request.user)
+            _actualizar_estado_documental(solicitud)
+            messages.success(request, 'Solicitud registrada correctamente.')
             return redirect('contractors:documentos', solicitud_id=solicitud.id)
     else:
         form = SolicitudPrestadorForm()
@@ -35,6 +37,27 @@ def solicitar_prestador_view(request):
         'contractors/solicitud_prestador.html',
         {'form': form},
     )
+
+
+def _guardar_documentos_solicitud_inicial(solicitud, cleaned_data, usuario):
+    mapa_documentos = {
+        'documento_identidad_frontal': ContractorApplicationDocument.TipoDocumento.CEDULA_FRONTAL,
+        'documento_identidad_reverso': ContractorApplicationDocument.TipoDocumento.CEDULA_TRASERA,
+        'certificado_bancario': ContractorApplicationDocument.TipoDocumento.CERTIFICADO_BANCARIO,
+        'contrato_actual': ContractorApplicationDocument.TipoDocumento.CONTRATO,
+    }
+    for campo, tipo_documento in mapa_documentos.items():
+        archivo = cleaned_data.get(campo)
+        if not archivo:
+            continue
+        ContractorApplicationDocument.objects.update_or_create(
+            solicitud=solicitud,
+            tipo_documento=tipo_documento,
+            defaults={
+                'archivo': archivo,
+                'uploaded_by': usuario,
+            },
+        )
 
 
 @login_required
