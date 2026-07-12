@@ -252,6 +252,21 @@ class PagadorNotificationsTest(TestCase):
         self.assertEqual(resultado['diagnostics']['cuotas_evaluadas'], 1)
         self.assertEqual(resultado['batches'][0]['cuotas'], [self.cuota])
 
+    def test_resumen_mora_excluye_credito_pagado_aunque_tenga_cuota_pendiente(self):
+        self.cuota.fecha_vencimiento = date(2026, 7, 1)
+        self.cuota.save(update_fields=['fecha_vencimiento'])
+        Credito.objects.filter(pk=self.credito.pk).update(
+            estado=Credito.EstadoCredito.PAGADO,
+        )
+
+        resultado = preparar_lotes_resumen_pagador(
+            fecha_referencia=date(2026, 6, 30),
+            exigir_ventana_mensual=True,
+        )
+
+        self.assertEqual(resultado['diagnostics']['cuotas_evaluadas'], 0)
+        self.assertEqual(resultado['batches'], [])
+
     def test_envio_de_prueba_usa_destinatario_controlado_y_no_marca_cuota(self):
         resultado = enviar_resumenes_pagador(
             fecha_referencia=date(2026, 4, 30),

@@ -712,6 +712,13 @@ def agregar_pago_manual_view(request, credito_id):
     monto = request.POST.get('monto')
     auth_key = request.POST.get('auth_key')
 
+    if credito.estado == Credito.EstadoCredito.PAGADO:
+        messages.error(
+            request,
+            'El crédito ya se encuentra pagado y no permite registrar pagos manuales adicionales.',
+        )
+        return redirect('gestion:credito_detalle', credito_id=credito.id)
+
     if not monto or not auth_key:
         messages.error(request, "Monto y clave de autorización son requeridos.")
         return redirect('gestion:credito_detalle', credito_id=credito.id)
@@ -726,23 +733,37 @@ def agregar_pago_manual_view(request, credito_id):
             raise ValueError("El monto debe ser positivo.")
 
         with transaction.atomic():
-            pago = HistorialPago.objects.create(
+            referencia_pago = (
+                request.POST.get('referencia_pago')
+                or f"MANUAL-{credito.id}-{timezone.now().strftime('%Y%m%d%H%M%S%f')}"
+            ).strip()
+            metodo_pago = request.POST.get('metodo_pago')
+            metodos_permitidos = {
+                HistorialPago.MetodoPago.TRANSFERENCIA_DIRECTA,
+                HistorialPago.MetodoPago.OFFLINE_MANUAL,
+            }
+            if metodo_pago not in metodos_permitidos:
+                metodo_pago = HistorialPago.MetodoPago.OFFLINE_MANUAL
+
+            pago, created = credit_services.registrar_pago_credito(
                 credito=credito,
                 monto=monto_decimal,
-                referencia_pago=f"MANUAL-{credito.id}-{timezone.now().strftime('%Y%m%d%H%M%S%f')}",
-                estado=HistorialPago.EstadoPago.EXITOSO
+                referencia_pago=referencia_pago,
+                metodo_pago=metodo_pago,
+                origen_registro=HistorialPago.OrigenRegistro.REGISTRO_MANUAL_ADMIN,
+                usuario=request.user,
+                comprobante=request.FILES.get('comprobante'),
+                notas=(request.POST.get('nota') or '').strip(),
             )
-
-            detalle = credito.detalle
-
-            if detalle:
-                #? Actualizar saldo y estado usando el helper
-                credit_services.actualizar_saldo_tras_pago(credito, monto_decimal, pago=pago)
-            
-            messages.success(request, f"Abono de ${monto_decimal:,.2f} registrado exitosamente.")
+            if created:
+                messages.success(request, f"Abono de ${monto_decimal:,.2f} registrado exitosamente.")
+            else:
+                messages.warning(request, 'La referencia de pago ya estaba registrada; no se aplicó un pago duplicado.')
 
     except (ValueError, TypeError) as e:
         messages.error(request, f"Error en el monto: {e}")
+    except ValidationError as e:
+        messages.error(request, ' '.join(e.messages))
     except Exception as e:
         messages.error(request, f"Ocurrió un error inesperado: {e}")
 
