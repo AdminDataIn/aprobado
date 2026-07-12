@@ -4,6 +4,7 @@ import io
 
 from django.contrib.auth import get_user_model
 from django.contrib.messages import get_messages
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.urls import reverse
@@ -245,3 +246,115 @@ class AdminViewsSmokeTest(TestCase):
             'El crédito ya se encuentra pagado y no permite registrar pagos manuales adicionales.',
             mensajes,
         )
+
+    def test_historial_pago_legacy_sin_comprobante_muestra_estado_claro(self):
+        credito = Credito.objects.create(
+            usuario=self.staff,
+            numero_credito='CR-ADMIN-LEGACY-SIN-SOPORTE',
+            linea=Credito.LineaCredito.LIBRANZA,
+            estado=Credito.EstadoCredito.ACTIVO,
+            monto_solicitado=Decimal('730000.00'),
+            monto_aprobado=Decimal('730000.00'),
+            plazo_solicitado=1,
+            plazo=1,
+            saldo_pendiente=Decimal('66.21'),
+            capital_pendiente=Decimal('66.21'),
+        )
+        HistorialPago.objects.create(
+            credito=credito,
+            monto=Decimal('730000.00'),
+            referencia_pago='MANUAL-LEGACY-SIN-SOPORTE',
+            estado=HistorialPago.EstadoPago.EXITOSO,
+            metodo_pago=HistorialPago.MetodoPago.NO_DEFINIDO,
+            origen_registro=HistorialPago.OrigenRegistro.LEGACY,
+        )
+
+        response = self.client.get(reverse('gestion:credito_detalle', args=[credito.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Sin comprobante registrado')
+        self.assertContains(response, 'Adjuntar comprobante')
+
+    def test_staff_adjunta_comprobante_a_pago_existente_sin_crear_otro_pago(self):
+        credito = Credito.objects.create(
+            usuario=self.staff,
+            numero_credito='CR-ADMIN-LEGACY-SOPORTE',
+            linea=Credito.LineaCredito.LIBRANZA,
+            estado=Credito.EstadoCredito.ACTIVO,
+            monto_solicitado=Decimal('730000.00'),
+            monto_aprobado=Decimal('730000.00'),
+            plazo_solicitado=1,
+            plazo=1,
+            saldo_pendiente=Decimal('66.21'),
+            capital_pendiente=Decimal('66.21'),
+        )
+        pago = HistorialPago.objects.create(
+            credito=credito,
+            monto=Decimal('730000.00'),
+            referencia_pago='MANUAL-LEGACY-SOPORTE',
+            estado=HistorialPago.EstadoPago.EXITOSO,
+            metodo_pago=HistorialPago.MetodoPago.NO_DEFINIDO,
+            origen_registro=HistorialPago.OrigenRegistro.LEGACY,
+        )
+        monto_original = pago.monto
+
+        response = self.client.post(
+            reverse('gestion:pago_comprobante_actualizar', args=[pago.id]),
+            {
+                'comprobante': SimpleUploadedFile(
+                    'comprobante-legacy.pdf',
+                    b'%PDF-1.4 comprobante de prueba',
+                    content_type='application/pdf',
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pago.refresh_from_db()
+        self.assertTrue(pago.comprobante)
+        self.assertIn('comprobante-legacy', pago.comprobante.name)
+        self.assertEqual(pago.monto, monto_original)
+        self.assertEqual(HistorialPago.objects.filter(credito=credito).count(), 1)
+
+        response_archivo = self.client.get(reverse('gestion:pago_comprobante', args=[pago.id]))
+        self.assertEqual(response_archivo.status_code, 200)
+        self.assertEqual(response_archivo['Content-Type'], 'application/pdf')
+
+    def test_usuario_no_staff_no_puede_actualizar_comprobante_legacy(self):
+        usuario = User.objects.create_user(
+            username='usuario-sin-permiso-comprobante',
+            email='sin-permiso@aprobado.test',
+            password='123456',
+        )
+        credito = Credito.objects.create(
+            usuario=usuario,
+            numero_credito='CR-ADMIN-SOPORTE-PROTEGIDO',
+            linea=Credito.LineaCredito.LIBRANZA,
+            estado=Credito.EstadoCredito.ACTIVO,
+            monto_solicitado=Decimal('100000.00'),
+            monto_aprobado=Decimal('100000.00'),
+            plazo_solicitado=1,
+            plazo=1,
+        )
+        pago = HistorialPago.objects.create(
+            credito=credito,
+            monto=Decimal('100000.00'),
+            referencia_pago='MANUAL-SOPORTE-PROTEGIDO',
+            estado=HistorialPago.EstadoPago.EXITOSO,
+        )
+        self.client.force_login(usuario)
+
+        response = self.client.post(
+            reverse('gestion:pago_comprobante_actualizar', args=[pago.id]),
+            {
+                'comprobante': SimpleUploadedFile(
+                    'no-autorizado.pdf',
+                    b'%PDF-1.4 no autorizado',
+                    content_type='application/pdf',
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        pago.refresh_from_db()
+        self.assertFalse(pago.comprobante)

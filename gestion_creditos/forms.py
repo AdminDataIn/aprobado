@@ -717,6 +717,27 @@ class PagoCreditoOfflineForm(forms.Form):
         return comprobante
 
 
+class ComprobantePagoExistenteForm(forms.Form):
+    comprobante = forms.FileField(
+        label='Comprobante de pago',
+        required=True,
+        validators=[FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'webp'])],
+        widget=forms.FileInput(attrs={
+            'class': 'form-control form-control-sm',
+            'accept': '.pdf,.jpg,.jpeg,.png,.webp',
+            'required': 'required',
+        }),
+    )
+
+    def clean_comprobante(self):
+        comprobante = self.cleaned_data.get('comprobante')
+        if not comprobante:
+            raise forms.ValidationError('Debes adjuntar el comprobante de pago.')
+        if comprobante.size > 8 * 1024 * 1024:
+            raise forms.ValidationError('El comprobante no debe superar 8MB.')
+        return comprobante
+
+
 class PagoObligacionesSeleccionadasForm(forms.Form):
     metodo_pago = forms.ChoiceField(
         label='Metodo de pago',
