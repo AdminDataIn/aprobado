@@ -5,6 +5,31 @@ from gestion_creditos.models import Empresa
 
 
 class SolicitudPrestadorForm(forms.ModelForm):
+    documento_identidad_frontal = forms.FileField(
+        label='Cédula frontal',
+        required=True,
+        widget=forms.ClearableFileInput(attrs={'class': 'campo documento-input', 'accept': 'image/jpeg,image/png,application/pdf'}),
+        error_messages={'required': 'Carga la cédula frontal.'},
+    )
+    documento_identidad_reverso = forms.FileField(
+        label='Cédula trasera',
+        required=True,
+        widget=forms.ClearableFileInput(attrs={'class': 'campo documento-input', 'accept': 'image/jpeg,image/png,application/pdf'}),
+        error_messages={'required': 'Carga la cédula trasera.'},
+    )
+    certificado_bancario = forms.FileField(
+        label='Certificado bancario PDF',
+        required=True,
+        widget=forms.ClearableFileInput(attrs={'class': 'campo documento-input', 'accept': 'application/pdf'}),
+        error_messages={'required': 'Carga el certificado bancario en PDF.'},
+    )
+    contrato_actual = forms.FileField(
+        label='Contrato vigente PDF',
+        required=True,
+        widget=forms.ClearableFileInput(attrs={'class': 'campo documento-input', 'accept': 'application/pdf'}),
+        error_messages={'required': 'Carga el contrato vigente en PDF.'},
+    )
+
     empresa = forms.ModelChoiceField(
         label='Empresa contratante',
         queryset=Empresa.objects.none(),
@@ -40,11 +65,11 @@ class SolicitudPrestadorForm(forms.ModelForm):
             'escenario_credito': forms.Select(attrs={'class': 'campo'}),
             'tipo_documento': forms.Select(attrs={'class': 'campo'}),
             'numero_documento': forms.TextInput(attrs={'class': 'campo', 'placeholder': 'Ej. 1020304050'}),
-            'nombres': forms.TextInput(attrs={'class': 'campo', 'placeholder': 'Tus nombres'}),
-            'apellidos': forms.TextInput(attrs={'class': 'campo', 'placeholder': 'Tus apellidos'}),
+            'nombres': forms.TextInput(attrs={'class': 'campo', 'placeholder': 'Ej. Ana María'}),
+            'apellidos': forms.TextInput(attrs={'class': 'campo', 'placeholder': 'Ej. Pérez Gómez'}),
             'celular': forms.TextInput(attrs={'class': 'campo', 'placeholder': '3001234567'}),
             'correo': forms.EmailInput(attrs={'class': 'campo', 'placeholder': 'correo@dominio.com'}),
-            'direccion': forms.TextInput(attrs={'class': 'campo', 'placeholder': 'Direccion de residencia'}),
+            'direccion': forms.TextInput(attrs={'class': 'campo', 'placeholder': 'Ej. Calle 10 # 20-30, Bogotá'}),
             'cargo': forms.TextInput(attrs={'class': 'campo', 'placeholder': 'Cargo o servicio prestado'}),
             'fecha_inicio_contrato': forms.DateInput(attrs={'class': 'campo', 'type': 'date'}),
             'fecha_fin_contrato': forms.DateInput(attrs={'class': 'campo', 'type': 'date'}),
@@ -56,12 +81,12 @@ class SolicitudPrestadorForm(forms.ModelForm):
         labels = {
             'escenario_credito': 'Escenario',
             'tipo_documento': 'Tipo de documento',
-            'numero_documento': 'Numero de documento',
+            'numero_documento': 'Número de documento',
             'nombres': 'Nombres',
             'apellidos': 'Apellidos',
             'celular': 'Celular',
-            'correo': 'Correo electronico',
-            'direccion': 'Direccion',
+            'correo': 'Correo electrónico',
+            'direccion': 'Dirección',
             'cargo': 'Cargo o actividad',
             'fecha_inicio_contrato': 'Fecha inicio contrato',
             'fecha_fin_contrato': 'Fecha fin contrato',
@@ -83,12 +108,28 @@ class SolicitudPrestadorForm(forms.ModelForm):
         fecha_fin = cleaned_data.get('fecha_fin_contrato')
         valor_total = cleaned_data.get('valor_total_contrato')
         valor_pendiente = cleaned_data.get('valor_pendiente_cobrar')
+        archivos = {
+            'documento_identidad_frontal': cleaned_data.get('documento_identidad_frontal'),
+            'documento_identidad_reverso': cleaned_data.get('documento_identidad_reverso'),
+            'certificado_bancario': cleaned_data.get('certificado_bancario'),
+            'contrato_actual': cleaned_data.get('contrato_actual'),
+        }
 
         if fecha_inicio and fecha_fin and fecha_fin < fecha_inicio:
             self.add_error('fecha_fin_contrato', 'La fecha fin no puede ser menor a la fecha inicio.')
 
         if valor_total is not None and valor_pendiente is not None and valor_pendiente > valor_total:
             self.add_error('valor_pendiente_cobrar', 'El valor pendiente no puede superar el valor total del contrato.')
+
+        for campo in ('certificado_bancario', 'contrato_actual'):
+            archivo = archivos.get(campo)
+            if archivo and not archivo.name.lower().endswith('.pdf'):
+                self.add_error(campo, 'Este documento debe cargarse en PDF.')
+
+        for campo in ('documento_identidad_frontal', 'documento_identidad_reverso'):
+            archivo = archivos.get(campo)
+            if archivo and not archivo.name.lower().endswith(('.jpg', '.jpeg', '.png', '.pdf')):
+                self.add_error(campo, 'Carga una imagen o PDF válido.')
 
         return cleaned_data
 

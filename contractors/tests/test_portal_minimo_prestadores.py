@@ -54,11 +54,20 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertIn('/auth/login/', response['Location'])
         self.assertIn('next=/solicitar/', response['Location'])
 
+    def test_login_accounts_carga_en_subdominio_prestadores(self):
+        response = self.client.get('/accounts/login/?next=/solicitar/', HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'ACCESO PRESTADORES')
+        self.assertContains(response, 'Inicia sesión en Prestadores de Servicios')
+        self.assertContains(response, 'Volver al portal de Prestadores')
+        self.assertNotContains(response, 'Inicia sesión en Libranza')
+
     def test_usuario_autenticado_crea_solicitud_basica_con_empresa_existente(self):
         self.client.force_login(self.usuario)
         response = self.client.post(
             '/solicitar/',
-            self._payload_solicitud(),
+            self._payload_solicitud_con_documentos(),
             HTTP_HOST=self.host,
         )
 
@@ -68,6 +77,8 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(solicitud.empresa, self.empresa)
         self.assertEqual(solicitud.monto_solicitado, 3000000)
         self.assertEqual(solicitud.plazo_meses, 12)
+        self.assertEqual(solicitud.estado, ContractorApplication.Estado.DOCUMENTOS_CARGADOS)
+        self.assertEqual(solicitud.documentos.count(), 4)
         self.assertEqual(response['Location'], f'/solicitud/{solicitud.id}/documentos/')
 
     def test_empresa_debe_ser_empresa_existente_activa(self):
@@ -473,6 +484,16 @@ class PortalMinimoPrestadoresTest(TestCase):
             'monto_solicitado': '3000000',
             'plazo_meses': '12',
         }
+
+    def _payload_solicitud_con_documentos(self):
+        payload = self._payload_solicitud()
+        payload.update({
+            'documento_identidad_frontal': SimpleUploadedFile('cedula-frontal.jpg', b'imagen-frontal', content_type='image/jpeg'),
+            'documento_identidad_reverso': SimpleUploadedFile('cedula-trasera.jpg', b'imagen-trasera', content_type='image/jpeg'),
+            'certificado_bancario': SimpleUploadedFile('certificado.pdf', b'%PDF-1.4 certificado', content_type='application/pdf'),
+            'contrato_actual': SimpleUploadedFile('contrato.pdf', b'%PDF-1.4 contrato', content_type='application/pdf'),
+        })
+        return payload
 
     def _crear_solicitud(
         self,

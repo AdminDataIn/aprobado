@@ -1,20 +1,33 @@
-{% extends "base_general.html" %}
-{% load socialaccount %}
-
-{% block title %}Acceso general - Aprobado{% endblock %}
+{% extends "account/libranza/_base.html" %}
+{% block title %}
+{% with host=request.get_host %}
+{% if "contratistas" in host or "contractors" in host %}Acceso Prestadores - Aprobado{% else %}Acceso general - Aprobado{% endif %}
+{% endwith %}
+{% endblock %}
+{% block body_class %}auth-body{% endblock %}
 
 {% block content %}
-{% include "account/_auth_content_styles.html" %}
+{% include "account/common/_auth_content_styles.html" %}
 
 <main class="section-main">
   <section class="hero-section-account">
     <div class="container-account">
       <div class="div-card-agent-account is-status-card">
+        {% with host=request.get_host %}
+        {% if "contratistas" in host or "contractors" in host %}
+        <div class="mb-3">
+          <span class="badge rounded-pill border">ACCESO PRESTADORES</span>
+        </div>
+        <h1>Inicia sesión en Prestadores de Servicios</h1>
+        <p class="auth-desc">Accede con tu correo para continuar tu solicitud como prestador.</p>
+        {% else %}
         <div class="mb-3">
           <span class="badge rounded-pill border">Acceso general</span>
         </div>
         <h1>Accede a tu cuenta</h1>
         <p class="auth-desc">Usa este acceso solo cuando vengas de un flujo interno de autenticacion. Para clientes, entra desde Libranza, Emprendimiento, Marketplace o Inversionista.</p>
+        {% endif %}
+        {% endwith %}
 
         <form method="post">
           {% csrf_token %}
@@ -38,11 +51,19 @@
           <button type="submit" class="btn-account">Continuar con correo</button>
         </form>
 
+        {% if google_login_url %}
         <div class="auth-divider">o continua con</div>
-        <a href="{% provider_login_url 'google' %}" class="btn-social-account">Continuar con Google</a>
+        <a href="{{ google_login_url }}" class="btn-social-account">Continuar con Google</a>
+        {% endif %}
 
         <div class="auth-footer-links is-centered">
+          {% with host=request.get_host %}
+          {% if "contratistas" in host or "contractors" in host %}
+          <a href="/solicitar/">&larr; Volver al portal de Prestadores</a>
+          {% else %}
           <a href="{% url 'home' %}">&larr; Volver al inicio</a>
+          {% endif %}
+          {% endwith %}
         </div>
       </div>
     </div>
