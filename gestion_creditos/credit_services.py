@@ -3,6 +3,7 @@ import logging
 import uuid
 import hashlib
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
@@ -359,10 +360,20 @@ def actualizar_saldo_tras_pago(credito, monto_pagado, pago=None):
     _aplicar_pago_a_cuotas(credito, monto_pagado, pago=pago)
 
     # 6. Validar si el crédito está completamente pagado
+    credito_quedo_pagado = False
     if credito.saldo_pendiente <= Decimal('0.01'):
         credito.saldo_pendiente = Decimal('0.00')
         if credito.capital_pendiente is not None:
             credito.capital_pendiente = Decimal('0.00')
+        credito.fecha_proximo_pago = None
+
+        # El cambio a PAGADO debe ser la última escritura del flujo. Persistir
+        # antes los saldos evita guardar nuevamente un crédito ya terminal.
+        credito.save(update_fields=[
+            'saldo_pendiente',
+            'capital_pendiente',
+            'fecha_proximo_pago',
+        ])
 
         # Marcar como pagado si no lo está ya
         if credito.estado != Credito.EstadoCredito.PAGADO:
@@ -371,6 +382,7 @@ def actualizar_saldo_tras_pago(credito, monto_pagado, pago=None):
                 nuevo_estado=Credito.EstadoCredito.PAGADO,
                 motivo="Crédito saldado automáticamente por pago."
             )
+        credito_quedo_pagado = True
     else:
         # 7. Avanzar fecha de próximo pago si pagó cuotas completas
         if credito.valor_cuota and credito.valor_cuota > 0 and credito.fecha_proximo_pago:
@@ -401,8 +413,10 @@ def actualizar_saldo_tras_pago(credito, monto_pagado, pago=None):
     if credito.capital_pendiente and credito.capital_pendiente < 0:
         credito.capital_pendiente = Decimal('0.00')
 
-    # ✅ Guardar cambios en el crédito
-    credito.save()
+    # Guardar únicamente cambios no terminales. El cierre en PAGADO ya quedó
+    # persistido como la última transición en el bloque anterior.
+    if not credito_quedo_pagado:
+        credito.save()
 
     capital_pendiente_log = credito.capital_pendiente if credito.capital_pendiente is not None else Decimal('0.00')
     logger.info(
@@ -1111,6 +1125,19 @@ def registrar_pago_credito(
     wompi_intento=None,
     lote_pago=None,
 ):
+    pago_existente = HistorialPago.objects.filter(referencia_pago=referencia_pago).first()
+    if pago_existente:
+        return pago_existente, False
+
+    credito = Credito.objects.select_for_update().get(pk=credito.pk)
+    if (
+        estado == HistorialPago.EstadoPago.EXITOSO
+        and credito.estado == Credito.EstadoCredito.PAGADO
+    ):
+        raise ValidationError(
+            'El crédito ya se encuentra pagado y no permite registrar pagos manuales adicionales.'
+        )
+
     pago, created = HistorialPago.objects.get_or_create(
         referencia_pago=referencia_pago,
         defaults={
@@ -1133,7 +1160,9 @@ def registrar_pago_credito(
 
     if estado == HistorialPago.EstadoPago.EXITOSO:
         actualizar_saldo_tras_pago(credito, monto, pago=pago)
-        recalcular_credito_desde_tabla_amortizacion(credito, persist=True)
+        credito.refresh_from_db()
+        if credito.estado != Credito.EstadoCredito.PAGADO:
+            recalcular_credito_desde_tabla_amortizacion(credito, persist=True)
     return pago, True
 
 

@@ -5,6 +5,7 @@ import re
 
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.test.utils import override_settings
@@ -100,6 +101,84 @@ class PagosOfflineServiceTest(TestCase):
         self.assertEqual(credito.saldo_pendiente, Decimal('0.00'))
         self.assertEqual(pago.metodo_pago, HistorialPago.MetodoPago.TRANSFERENCIA_DIRECTA)
         self.assertEqual(pago.origen_registro, HistorialPago.OrigenRegistro.REGISTRO_MANUAL_ADMIN)
+
+    def test_pago_total_con_interes_cierra_credito_sin_segunda_transicion(self):
+        credito = self._crear_credito_libranza(
+            numero='CR-2026-00040-TEST',
+            saldo='3357000.00',
+            cuota='3420783.00',
+            cuotas_pagadas=0,
+            cuotas_totales=1,
+        )
+        credito.monto_aprobado = Decimal('3000000.00')
+        credito.comision = Decimal('300000.00')
+        credito.iva_comision = Decimal('57000.00')
+        credito.capital_pendiente = Decimal('3000000.00')
+        credito.total_a_pagar = Decimal('3420783.00')
+        credito.tasa_interes = Decimal('1.90')
+        credito.save(update_fields=[
+            'monto_aprobado', 'comision', 'iva_comision', 'capital_pendiente',
+            'total_a_pagar', 'tasa_interes',
+        ])
+        cuota = credito.tabla_amortizacion.get(numero_cuota=1)
+        cuota.capital_a_pagar = Decimal('3357000.00')
+        cuota.interes_a_pagar = Decimal('63783.00')
+        cuota.saldo_capital_pendiente = Decimal('0.00')
+        cuota.save(update_fields=[
+            'capital_a_pagar', 'interes_a_pagar', 'saldo_capital_pendiente',
+        ])
+
+        pago, created = credit_services.registrar_pago_credito(
+            credito=credito,
+            monto=Decimal('3420783.00'),
+            referencia_pago='MANUAL-CR-2026-00040-TEST',
+            metodo_pago=HistorialPago.MetodoPago.OFFLINE_MANUAL,
+            origen_registro=HistorialPago.OrigenRegistro.REGISTRO_MANUAL_ADMIN,
+            usuario=self.user,
+        )
+
+        self.assertTrue(created)
+        credito.refresh_from_db()
+        cuota.refresh_from_db()
+        self.assertEqual(credito.estado, Credito.EstadoCredito.PAGADO)
+        self.assertEqual(credito.saldo_pendiente, Decimal('0.00'))
+        self.assertEqual(credito.capital_pendiente, Decimal('0.00'))
+        self.assertIsNone(credito.fecha_proximo_pago)
+        self.assertTrue(cuota.pagada)
+        self.assertEqual(cuota.monto_pagado, Decimal('3420783.00'))
+        self.assertIsNotNone(cuota.fecha_pago)
+        self.assertEqual(HistorialPago.objects.filter(credito=credito).count(), 1)
+        self.assertEqual(pago.estado, HistorialPago.EstadoPago.EXITOSO)
+
+    def test_credito_pagado_bloquea_pago_manual_adicional(self):
+        credito = self._crear_credito_libranza(
+            numero='CR-TEST-PAGADO',
+            saldo='0.00',
+            cuota='100.00',
+            cuotas_pagadas=1,
+            cuotas_totales=1,
+        )
+        Credito.objects.filter(pk=credito.pk).update(
+            estado=Credito.EstadoCredito.PAGADO,
+            saldo_pendiente=Decimal('0.00'),
+            capital_pendiente=Decimal('0.00'),
+        )
+        credito.refresh_from_db()
+
+        with self.assertRaisesMessage(
+            ValidationError,
+            'El crédito ya se encuentra pagado y no permite registrar pagos manuales adicionales.',
+        ):
+            credit_services.registrar_pago_credito(
+                credito=credito,
+                monto=Decimal('100.00'),
+                referencia_pago='MANUAL-PAGADO-NO-PERMITIDO',
+                metodo_pago=HistorialPago.MetodoPago.OFFLINE_MANUAL,
+                origen_registro=HistorialPago.OrigenRegistro.REGISTRO_MANUAL_ADMIN,
+                usuario=self.user,
+            )
+
+        self.assertFalse(HistorialPago.objects.filter(credito=credito).exists())
 
     def test_registrar_pago_crea_detalle_contable_por_cuota(self):
         credito = self._crear_credito_libranza(

@@ -3,12 +3,21 @@ from decimal import Decimal
 import io
 
 from django.contrib.auth import get_user_model
+from django.contrib.messages import get_messages
 from django.test import TestCase
+from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from openpyxl import load_workbook
 
-from gestion_creditos.models import Credito, CreditoAdelantoNomina, Empresa, VinculoLaboralEmpresa
+from gestion_creditos.models import (
+    Credito,
+    CreditoAdelantoNomina,
+    CuotaAmortizacion,
+    Empresa,
+    HistorialPago,
+    VinculoLaboralEmpresa,
+)
 
 
 User = get_user_model()
@@ -156,3 +165,83 @@ class AdminViewsSmokeTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['creditos'].number, 3)
         self.assertNotContains(response, 'page=2&amp;page=3', html=False)
+
+    @override_settings(MANUAL_PAYMENT_AUTH_KEY='clave-prueba-admin')
+    def test_pago_manual_admin_total_cierra_credito_activo(self):
+        credito = Credito.objects.create(
+            usuario=self.staff,
+            numero_credito='CR-ADMIN-PAGO-TOTAL',
+            linea=Credito.LineaCredito.LIBRANZA,
+            estado=Credito.EstadoCredito.ACTIVO,
+            monto_solicitado=Decimal('3000000.00'),
+            monto_aprobado=Decimal('3000000.00'),
+            plazo_solicitado=1,
+            plazo=1,
+            saldo_pendiente=Decimal('3357000.00'),
+            capital_pendiente=Decimal('3000000.00'),
+            comision=Decimal('300000.00'),
+            iva_comision=Decimal('57000.00'),
+            tasa_interes=Decimal('1.90'),
+            valor_cuota=Decimal('3420783.00'),
+            total_a_pagar=Decimal('3420783.00'),
+            fecha_proximo_pago=timezone.localdate(),
+        )
+        cuota = CuotaAmortizacion.objects.create(
+            credito=credito,
+            numero_cuota=1,
+            fecha_vencimiento=timezone.localdate(),
+            capital_a_pagar=Decimal('3357000.00'),
+            interes_a_pagar=Decimal('63783.00'),
+            valor_cuota=Decimal('3420783.00'),
+            saldo_capital_pendiente=Decimal('0.00'),
+        )
+
+        response = self.client.post(
+            reverse('gestion:credito_agregar_pago', args=[credito.id]),
+            {
+                'monto': '3420783.00',
+                'referencia_pago': 'ADMIN-PAGO-TOTAL-001',
+                'metodo_pago': HistorialPago.MetodoPago.OFFLINE_MANUAL,
+                'auth_key': 'clave-prueba-admin',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        credito.refresh_from_db()
+        cuota.refresh_from_db()
+        self.assertEqual(credito.estado, Credito.EstadoCredito.PAGADO)
+        self.assertTrue(cuota.pagada)
+        self.assertEqual(HistorialPago.objects.filter(credito=credito).count(), 1)
+        mensajes = [str(mensaje) for mensaje in get_messages(response.wsgi_request)]
+        self.assertFalse(any('error inesperado' in mensaje.lower() for mensaje in mensajes))
+
+    @override_settings(MANUAL_PAYMENT_AUTH_KEY='clave-prueba-admin')
+    def test_pago_manual_admin_bloquea_credito_ya_pagado_con_mensaje_controlado(self):
+        credito = Credito.objects.create(
+            usuario=self.staff,
+            numero_credito='CR-ADMIN-YA-PAGADO',
+            linea=Credito.LineaCredito.LIBRANZA,
+            estado=Credito.EstadoCredito.PAGADO,
+            monto_solicitado=Decimal('100000.00'),
+            monto_aprobado=Decimal('100000.00'),
+            plazo_solicitado=1,
+            plazo=1,
+            saldo_pendiente=Decimal('0.00'),
+            capital_pendiente=Decimal('0.00'),
+        )
+
+        response = self.client.post(
+            reverse('gestion:credito_agregar_pago', args=[credito.id]),
+            {
+                'monto': '100000.00',
+                'auth_key': 'clave-prueba-admin',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(HistorialPago.objects.filter(credito=credito).exists())
+        mensajes = [str(mensaje) for mensaje in get_messages(response.wsgi_request)]
+        self.assertIn(
+            'El crédito ya se encuentra pagado y no permite registrar pagos manuales adicionales.',
+            mensajes,
+        )
