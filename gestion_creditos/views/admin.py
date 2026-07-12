@@ -1,6 +1,7 @@
 from .common import *
 from .common import _build_capacidad_descuento_context
 from gestion_creditos.models import DetalleContablePago
+from gestion_creditos.forms import ComprobantePagoExistenteForm
 from gestion_creditos.services.advisors import filter_creditos_by_asesor
 from libranza.services.special_case_audit import create_special_case_audit
 from libranza.services.special_case_originator import SpecialCaseOriginationError, originate_special_case_libranza
@@ -712,6 +713,13 @@ def agregar_pago_manual_view(request, credito_id):
     monto = request.POST.get('monto')
     auth_key = request.POST.get('auth_key')
 
+    if credito.estado == Credito.EstadoCredito.PAGADO:
+        messages.error(
+            request,
+            'El crédito ya se encuentra pagado y no permite registrar pagos manuales adicionales.',
+        )
+        return redirect('gestion:credito_detalle', credito_id=credito.id)
+
     if not monto or not auth_key:
         messages.error(request, "Monto y clave de autorización son requeridos.")
         return redirect('gestion:credito_detalle', credito_id=credito.id)
@@ -726,27 +734,115 @@ def agregar_pago_manual_view(request, credito_id):
             raise ValueError("El monto debe ser positivo.")
 
         with transaction.atomic():
-            pago = HistorialPago.objects.create(
+            referencia_pago = (
+                request.POST.get('referencia_pago')
+                or f"MANUAL-{credito.id}-{timezone.now().strftime('%Y%m%d%H%M%S%f')}"
+            ).strip()
+            metodo_pago = request.POST.get('metodo_pago')
+            metodos_permitidos = {
+                HistorialPago.MetodoPago.TRANSFERENCIA_DIRECTA,
+                HistorialPago.MetodoPago.OFFLINE_MANUAL,
+            }
+            if metodo_pago not in metodos_permitidos:
+                metodo_pago = HistorialPago.MetodoPago.OFFLINE_MANUAL
+
+            pago, created = credit_services.registrar_pago_credito(
                 credito=credito,
                 monto=monto_decimal,
-                referencia_pago=f"MANUAL-{credito.id}-{timezone.now().strftime('%Y%m%d%H%M%S%f')}",
-                estado=HistorialPago.EstadoPago.EXITOSO
+                referencia_pago=referencia_pago,
+                metodo_pago=metodo_pago,
+                origen_registro=HistorialPago.OrigenRegistro.REGISTRO_MANUAL_ADMIN,
+                usuario=request.user,
+                comprobante=request.FILES.get('comprobante'),
+                notas=(request.POST.get('nota') or '').strip(),
             )
-
-            detalle = credito.detalle
-
-            if detalle:
-                #? Actualizar saldo y estado usando el helper
-                credit_services.actualizar_saldo_tras_pago(credito, monto_decimal, pago=pago)
-            
-            messages.success(request, f"Abono de ${monto_decimal:,.2f} registrado exitosamente.")
+            if created:
+                messages.success(request, f"Abono de ${monto_decimal:,.2f} registrado exitosamente.")
+            else:
+                messages.warning(request, 'La referencia de pago ya estaba registrada; no se aplicó un pago duplicado.')
 
     except (ValueError, TypeError) as e:
         messages.error(request, f"Error en el monto: {e}")
+    except ValidationError as e:
+        messages.error(request, ' '.join(e.messages))
     except Exception as e:
         messages.error(request, f"Ocurrió un error inesperado: {e}")
 
     return redirect('gestion:credito_detalle', credito_id=credito.id)
+
+
+@staff_member_required
+def comprobante_pago_manual_view(request, pago_id):
+    pago = get_object_or_404(HistorialPago, pk=pago_id)
+    if not pago.comprobante:
+        raise Http404('El pago no tiene comprobante registrado.')
+
+    try:
+        archivo = pago.comprobante.open('rb')
+    except (FileNotFoundError, OSError):
+        raise Http404('El archivo del comprobante no está disponible.')
+
+    content_type, _ = mimetypes.guess_type(pago.comprobante.name)
+    return FileResponse(
+        archivo,
+        content_type=content_type or 'application/octet-stream',
+        as_attachment=False,
+        filename=os.path.basename(pago.comprobante.name),
+    )
+
+
+@staff_member_required
+@require_POST
+def actualizar_comprobante_pago_manual_view(request, pago_id):
+    pago = get_object_or_404(HistorialPago, pk=pago_id)
+    form = ComprobantePagoExistenteForm(request.POST, request.FILES)
+    if not form.is_valid():
+        messages.error(
+            request,
+            ' '.join(
+                error
+                for errores in form.errors.values()
+                for error in errores
+            ),
+        )
+        return redirect('gestion:credito_detalle', credito_id=pago.credito_id)
+
+    comprobante_anterior = pago.comprobante.name if pago.comprobante else None
+    storage = pago.comprobante.storage
+    pago.comprobante = form.cleaned_data['comprobante']
+    pago.save(update_fields=['comprobante'])
+
+    if comprobante_anterior and comprobante_anterior != pago.comprobante.name:
+        storage.delete(comprobante_anterior)
+
+    messages.success(request, 'Comprobante de pago actualizado correctamente.')
+    return redirect('gestion:credito_detalle', credito_id=pago.credito_id)
+
+
+@staff_member_required
+@require_POST
+def reconciliar_pago_manual_view(request, pago_id):
+    pago = get_object_or_404(HistorialPago, pk=pago_id)
+    auth_key = request.POST.get('auth_key')
+    if auth_key != getattr(settings, 'MANUAL_PAYMENT_AUTH_KEY', None):
+        messages.error(request, 'Clave de autorización no válida.')
+        return redirect('gestion:credito_detalle', credito_id=pago.credito_id)
+
+    try:
+        cuotas, resumen = credit_services.reconciliar_pago_manual_por_tolerancia(
+            pago,
+            usuario=request.user,
+        )
+        numeros = ', '.join(str(cuota.numero_cuota) for cuota in cuotas)
+        messages.success(
+            request,
+            f'Pago reconciliado. Cuota(s) cerrada(s) por tolerancia: {numeros}. '
+            f'Próximo vencimiento: {resumen["fecha_proximo_pago"] or "sin cuotas pendientes"}.',
+        )
+    except ValidationError as exc:
+        messages.error(request, ' '.join(exc.messages))
+
+    return redirect('gestion:credito_detalle', credito_id=pago.credito_id)
 
 
 @staff_member_required

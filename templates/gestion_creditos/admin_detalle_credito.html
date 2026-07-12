@@ -412,11 +412,37 @@
                                           <td class="text-end">${{ pago.monto|intcomma }}</td>
                                           <td class="text-center">
                                               {% if pago.comprobante %}
-                                              <a href="{{ pago.comprobante.url }}" target="_blank" class="btn btn-outline-primary btn-sm">Ver</a>
+                                              <a href="{% url 'gestion:pago_comprobante' pago.id %}" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm">Ver comprobante</a>
                                               {% elif pago.lote_pago and pago.lote_pago.comprobante %}
                                               <a href="{{ pago.lote_pago.comprobante.url }}" target="_blank" class="btn btn-outline-primary btn-sm">Lote</a>
                                               {% else %}
-                                              <span class="text-muted">-</span>
+                                              <span class="text-muted d-block mb-2">Sin comprobante registrado</span>
+                                              {% endif %}
+                                              <details class="mt-2 text-start">
+                                                  <summary class="small text-primary" style="cursor: pointer;">
+                                                      {% if pago.comprobante %}Reemplazar comprobante{% else %}Adjuntar comprobante{% endif %}
+                                                  </summary>
+                                                  <form method="post" action="{% url 'gestion:pago_comprobante_actualizar' pago.id %}" enctype="multipart/form-data" class="mt-2">
+                                                      {% csrf_token %}
+                                                      <input type="file" name="comprobante" class="form-control form-control-sm mb-2" accept=".pdf,.jpg,.jpeg,.png,.webp" required>
+                                                      <button type="submit" class="btn btn-outline-primary btn-sm w-100">
+                                                          Guardar comprobante
+                                                      </button>
+                                                  </form>
+                                              </details>
+                                              {% if pago.origen_registro == 'LEGACY' or pago.origen_registro == 'REGISTRO_MANUAL_ADMIN' %}
+                                                  {% if credito.estado == 'ACTIVO' or credito.estado == 'EN_MORA' %}
+                                                  <details class="mt-2 text-start">
+                                                      <summary class="small text-warning" style="cursor: pointer;">Reconciliar redondeo</summary>
+                                                      <form method="post" action="{% url 'gestion:pago_reconciliar_redondeo' pago.id %}" class="mt-2">
+                                                          {% csrf_token %}
+                                                          <input type="password" name="auth_key" class="form-control form-control-sm mb-2" placeholder="Clave de autorización" required>
+                                                          <button type="submit" class="btn btn-outline-warning btn-sm w-100">
+                                                              Aplicar tolerancia controlada
+                                                          </button>
+                                                      </form>
+                                                  </details>
+                                                  {% endif %}
                                               {% endif %}
                                           </td>
                                       </tr>

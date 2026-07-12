@@ -158,6 +158,7 @@ USE_X_FORWARDED_HOST = True
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 MANUAL_PAYMENT_AUTH_KEY = os.environ.get('MANUAL_PAYMENT_AUTH_KEY', 'clave-secreta-para-desarrollo')
+MANUAL_PAYMENT_ROUNDING_TOLERANCE = os.environ.get('MANUAL_PAYMENT_ROUNDING_TOLERANCE', '100.00')
 
 # ========================
 # Aplicaciones

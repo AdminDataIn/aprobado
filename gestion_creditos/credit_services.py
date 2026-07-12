@@ -3,6 +3,7 @@ import logging
 import uuid
 import hashlib
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
@@ -42,6 +43,48 @@ from django.contrib import messages
 from django.urls import NoReverseMatch, reverse
 
 logger = logging.getLogger(__name__)
+
+MANUAL_PAYMENT_ROUNDING_TOLERANCE_DEFAULT = Decimal('100.00')
+
+
+def obtener_tolerancia_redondeo_pago_manual():
+    try:
+        tolerancia = Decimal(str(settings.MANUAL_PAYMENT_ROUNDING_TOLERANCE))
+    except (AttributeError, InvalidOperation, TypeError, ValueError):
+        return MANUAL_PAYMENT_ROUNDING_TOLERANCE_DEFAULT
+    return max(tolerancia, Decimal('0.00'))
+
+
+def _pago_admite_tolerancia_redondeo(pago, *, incluir_legacy=False):
+    if pago is None:
+        return False
+    origenes = {HistorialPago.OrigenRegistro.REGISTRO_MANUAL_ADMIN}
+    if incluir_legacy:
+        origenes.add(HistorialPago.OrigenRegistro.LEGACY)
+    return pago.origen_registro in origenes
+
+
+def _fecha_aplicacion_pago(pago):
+    if pago is None:
+        return timezone.now()
+    return pago.fecha_aplicacion or pago.fecha_pago or timezone.now()
+
+
+def _registrar_nota_cierre_por_tolerancia(pago, cuota, diferencia, *, usuario=None):
+    if pago is None:
+        return
+    nota = (
+        f'Cuota {cuota.numero_cuota} cerrada por tolerancia de redondeo '
+        f'(diferencia: ${diferencia.quantize(Decimal("0.01"))} COP). '
+        'El monto registrado conserva el valor efectivamente recibido.'
+    )
+    if usuario is not None:
+        nota += f' Acción realizada por {usuario.get_username()}.'
+    notas_actuales = (pago.notas or '').strip()
+    if nota in notas_actuales:
+        return
+    pago.notas = f'{notas_actuales}\n{nota}'.strip()
+    pago.save(update_fields=['notas'])
 
 @transaction.atomic
 def gestionar_cambio_estado_credito(credito, nuevo_estado, motivo, usuario_modificacion=None, comprobante=None):
@@ -359,10 +402,20 @@ def actualizar_saldo_tras_pago(credito, monto_pagado, pago=None):
     _aplicar_pago_a_cuotas(credito, monto_pagado, pago=pago)
 
     # 6. Validar si el crédito está completamente pagado
+    credito_quedo_pagado = False
     if credito.saldo_pendiente <= Decimal('0.01'):
         credito.saldo_pendiente = Decimal('0.00')
         if credito.capital_pendiente is not None:
             credito.capital_pendiente = Decimal('0.00')
+        credito.fecha_proximo_pago = None
+
+        # El cambio a PAGADO debe ser la última escritura del flujo. Persistir
+        # antes los saldos evita guardar nuevamente un crédito ya terminal.
+        credito.save(update_fields=[
+            'saldo_pendiente',
+            'capital_pendiente',
+            'fecha_proximo_pago',
+        ])
 
         # Marcar como pagado si no lo está ya
         if credito.estado != Credito.EstadoCredito.PAGADO:
@@ -371,6 +424,7 @@ def actualizar_saldo_tras_pago(credito, monto_pagado, pago=None):
                 nuevo_estado=Credito.EstadoCredito.PAGADO,
                 motivo="Crédito saldado automáticamente por pago."
             )
+        credito_quedo_pagado = True
     else:
         # 7. Avanzar fecha de próximo pago si pagó cuotas completas
         if credito.valor_cuota and credito.valor_cuota > 0 and credito.fecha_proximo_pago:
@@ -401,8 +455,10 @@ def actualizar_saldo_tras_pago(credito, monto_pagado, pago=None):
     if credito.capital_pendiente and credito.capital_pendiente < 0:
         credito.capital_pendiente = Decimal('0.00')
 
-    # ✅ Guardar cambios en el crédito
-    credito.save()
+    # Guardar únicamente cambios no terminales. El cierre en PAGADO ya quedó
+    # persistido como la última transición en el bloque anterior.
+    if not credito_quedo_pagado:
+        credito.save()
 
     capital_pendiente_log = credito.capital_pendiente if credito.capital_pendiente is not None else Decimal('0.00')
     logger.info(
@@ -445,12 +501,31 @@ def _aplicar_pago_a_cuotas(credito, monto_pagado, pago=None):
         if monto_aplicado <= Decimal('0.00'):
             continue
 
-        if monto_restante >= restante_cuota:
-            cuota.monto_pagado = cuota.valor_cuota
+        diferencia_redondeo = restante_cuota - monto_restante
+        tolerancia_redondeo = obtener_tolerancia_redondeo_pago_manual()
+        cerrar_por_tolerancia = (
+            monto_restante > Decimal('0.00')
+            and diferencia_redondeo > Decimal('0.00')
+            and diferencia_redondeo <= tolerancia_redondeo
+            and _pago_admite_tolerancia_redondeo(pago)
+        )
+
+        if monto_restante >= restante_cuota or cerrar_por_tolerancia:
+            if cerrar_por_tolerancia:
+                cuota.monto_pagado = ya_pagado + monto_restante
+                monto_restante = Decimal('0.00')
+            else:
+                cuota.monto_pagado = cuota.valor_cuota
+                monto_restante -= restante_cuota
             cuota.pagada = True
-            cuota.fecha_pago = timezone.now()
+            cuota.fecha_pago = _fecha_aplicacion_pago(pago)
             cuota.save(update_fields=['monto_pagado', 'pagada', 'fecha_pago'])
-            monto_restante -= restante_cuota
+            if cerrar_por_tolerancia:
+                _registrar_nota_cierre_por_tolerancia(
+                    pago,
+                    cuota,
+                    diferencia_redondeo,
+                )
         else:
             cuota.monto_pagado = ya_pagado + monto_restante
             cuota.save(update_fields=['monto_pagado'])
@@ -467,6 +542,77 @@ def _aplicar_pago_a_cuotas(credito, monto_pagado, pago=None):
 
     if pago is not None and aplicaciones_contables:
         registrar_detalle_contable_pago(pago=pago, aplicaciones=aplicaciones_contables)
+
+
+@transaction.atomic
+def reconciliar_pago_manual_por_tolerancia(pago, *, usuario=None):
+    pago = (
+        HistorialPago.objects.select_for_update()
+        .select_related('credito')
+        .get(pk=pago.pk)
+    )
+    credito = Credito.objects.select_for_update().get(pk=pago.credito_id)
+
+    if pago.estado != HistorialPago.EstadoPago.EXITOSO:
+        raise ValidationError('Solo se pueden reconciliar pagos exitosos.')
+    if not _pago_admite_tolerancia_redondeo(pago, incluir_legacy=True):
+        raise ValidationError('Este pago no corresponde a un registro manual o legacy.')
+    if credito.estado not in [Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]:
+        raise ValidationError('Solo se pueden reconciliar créditos activos o en mora.')
+
+    cuotas = []
+    cuotas_vistas = set()
+    for detalle in pago.detalles_contables.select_related('cuota').order_by('secuencia_aplicacion'):
+        cuota = detalle.cuota
+        if cuota and cuota.pk not in cuotas_vistas:
+            cuotas.append(cuota)
+            cuotas_vistas.add(cuota.pk)
+
+    if not cuotas:
+        raise ValidationError('El pago no tiene una cuota asociada para reconciliar de forma segura.')
+
+    tolerancia_redondeo = obtener_tolerancia_redondeo_pago_manual()
+    cuotas_reconciliadas = []
+    for cuota in cuotas:
+        if cuota.pagada:
+            continue
+        monto_real = cuota.monto_pagado or Decimal('0.00')
+        diferencia = (cuota.valor_cuota or Decimal('0.00')) - monto_real
+        if diferencia <= Decimal('0.00') or diferencia > tolerancia_redondeo:
+            continue
+
+        cuota.pagada = True
+        cuota.fecha_pago = _fecha_aplicacion_pago(pago)
+        cuota.save(update_fields=['pagada', 'fecha_pago'])
+        _registrar_nota_cierre_por_tolerancia(
+            pago,
+            cuota,
+            diferencia,
+            usuario=usuario,
+        )
+        cuotas_reconciliadas.append(cuota)
+
+    if not cuotas_reconciliadas:
+        raise ValidationError(
+            f'No hay diferencias pendientes dentro de la tolerancia de '
+            f'${tolerancia_redondeo} COP.'
+        )
+
+    resumen = obtener_resumen_pagos_credito(credito)
+    credito.saldo_pendiente = resumen['saldo_pendiente']
+    credito.capital_pendiente = resumen['capital_pendiente']
+    credito.fecha_proximo_pago = resumen['fecha_proximo_pago']
+    credito.save(update_fields=['saldo_pendiente', 'capital_pendiente', 'fecha_proximo_pago'])
+
+    if resumen['cuotas_restantes'] == 0:
+        gestionar_cambio_estado_credito(
+            credito=credito,
+            nuevo_estado=Credito.EstadoCredito.PAGADO,
+            motivo='Crédito saldado al reconciliar diferencia menor de redondeo.',
+            usuario_modificacion=usuario,
+        )
+
+    return cuotas_reconciliadas, resumen
 
 
 def evaluar_motivacion_credito(texto: str) -> int:
@@ -1111,6 +1257,19 @@ def registrar_pago_credito(
     wompi_intento=None,
     lote_pago=None,
 ):
+    pago_existente = HistorialPago.objects.filter(referencia_pago=referencia_pago).first()
+    if pago_existente:
+        return pago_existente, False
+
+    credito = Credito.objects.select_for_update().get(pk=credito.pk)
+    if (
+        estado == HistorialPago.EstadoPago.EXITOSO
+        and credito.estado == Credito.EstadoCredito.PAGADO
+    ):
+        raise ValidationError(
+            'El crédito ya se encuentra pagado y no permite registrar pagos manuales adicionales.'
+        )
+
     pago, created = HistorialPago.objects.get_or_create(
         referencia_pago=referencia_pago,
         defaults={
@@ -1133,7 +1292,9 @@ def registrar_pago_credito(
 
     if estado == HistorialPago.EstadoPago.EXITOSO:
         actualizar_saldo_tras_pago(credito, monto, pago=pago)
-        recalcular_credito_desde_tabla_amortizacion(credito, persist=True)
+        credito.refresh_from_db()
+        if credito.estado != Credito.EstadoCredito.PAGADO:
+            recalcular_credito_desde_tabla_amortizacion(credito, persist=True)
     return pago, True
 
 
@@ -1453,9 +1614,10 @@ def obtener_resumen_pagos_credito(credito, historial_pagos=None):
 
             total_pagado += ya_pagado
 
-            restante_cuota = (cuota.valor_cuota or Decimal('0.00')) - ya_pagado
-            if restante_cuota > 0:
-                saldo_pendiente += restante_cuota
+            if not cuota.pagada:
+                restante_cuota = (cuota.valor_cuota or Decimal('0.00')) - ya_pagado
+                if restante_cuota > 0:
+                    saldo_pendiente += restante_cuota
 
         capital_pendiente = sum(
             (cuota.capital_a_pagar or Decimal('0.00'))
