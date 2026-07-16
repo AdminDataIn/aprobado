@@ -1,0 +1,84 @@
+{% extends 'contractors/base.html' %}
+
+{% block title %}{{ contenido.titulo }} | Aprobado{% endblock %}
+
+{% block content %}
+<div class="legal-container">
+  <div class="legal-header">
+    <h1>{{ contenido.titulo }}</h1>
+    <span class="update-date">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+      </svg>
+      Última actualización: {{ contenido.actualizacion }}
+    </span>
+  </div>
+
+  <div class="legal-intro">
+    <p>{{ contenido.introduccion }}</p>
+  </div>
+
+  <div class="legal-card">
+    {% for numero, titulo, texto in contenido.secciones %}
+      <section class="legal-section" id="seccion-{{ numero }}">
+        <div class="section-header">
+          <span class="section-number">{{ numero }}</span>
+          <h2 class="section-title">{{ titulo }}</h2>
+        </div>
+        <div class="section-content">
+          <p>{{ texto }}</p>
+        </div>
+      </section>
+    {% endfor %}
+  </div>
+
+  <div class="legal-intro legal-highlight">
+    <p>{{ contenido.destacado }}</p>
+  </div>
+
+  <div class="contact-card">
+    <h3>Canales de atención</h3>
+    <p>Para consultas sobre el portal o el tratamiento de tus datos, comunícate con Aprobado.</p>
+    <a href="mailto:info@aprobado.com.co">info@aprobado.com.co</a>
+  </div>
+
+  <div class="company-info">
+    <p class="company-name">APROBADO SOLUCIONES DIGITALES S.A.S.</p>
+    <p>Portal para Prestadores de Servicios</p>
+    <a class="legal-back" href="{% url 'contractors:solicitar' %}">← Volver a la solicitud</a>
+  </div>
+</div>
+
+<style>
+  .legal-container { max-width: 900px; margin: 0 auto; padding: 48px 24px; }
+  .legal-header { text-align: center; margin-bottom: 48px; }
+  .legal-header h1 { font-size: 36px; font-weight: 700; color: #111827; margin: 0 0 12px; letter-spacing: 0; }
+  .legal-header .update-date { display: inline-flex; align-items: center; gap: 8px; background: #f3f4f6; padding: 8px 16px; border-radius: 20px; font-size: 14px; color: #6b7280; }
+  .legal-header .update-date svg { width: 16px; height: 16px; }
+  .legal-intro { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #fff; padding: 24px 32px; border-radius: 16px; margin-bottom: 32px; }
+  .legal-intro p { margin: 0; font-size: 16px; line-height: 1.6; }
+  .legal-card { background: #fff; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 1px 2px rgba(0,0,0,.06); overflow: hidden; margin-bottom: 24px; }
+  .legal-section { padding: 24px 32px; border-bottom: 1px solid #f3f4f6; scroll-margin-top: 90px; }
+  .legal-section:last-child { border-bottom: 0; }
+  .section-header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+  .section-number { width: 40px; height: 40px; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #fff; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; flex-shrink: 0; }
+  .section-title { font-size: 18px; font-weight: 600; color: #111827; margin: 0; letter-spacing: 0; }
+  .section-content { color: #4b5563; line-height: 1.7; font-size: 15px; }
+  .section-content p { margin: 0; }
+  .legal-highlight { margin-top: 0; }
+  .contact-card { background: linear-gradient(135deg, #059669 0%, #047857 100%); color: #fff; padding: 32px; border-radius: 16px; text-align: center; }
+  .contact-card h3 { font-size: 20px; font-weight: 600; margin: 0 0 8px; }
+  .contact-card p { margin: 0 0 20px; opacity: .9; }
+  .contact-card a { display: inline-flex; align-items: center; background: #fff; color: #059669; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; }
+  .company-info { text-align: center; margin-top: 32px; padding: 24px; background: #f9fafb; border-radius: 12px; }
+  .company-info p { margin: 4px 0; color: #6b7280; font-size: 14px; }
+  .company-info .company-name { font-weight: 600; color: #111827; font-size: 15px; }
+  .legal-back { display: inline-flex; margin-top: 16px; color: #2563eb; font-weight: 600; text-decoration: none; }
+  @media (max-width: 640px) {
+    .legal-container { padding: 24px 16px; }
+    .legal-header h1 { font-size: 28px; }
+    .legal-section { padding: 20px; }
+    .section-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+</style>
+{% endblock %}

@@ -70,6 +70,37 @@
   </section>
 
   <section class="panel">
+    <h2 class="titulo-seccion">Análisis contractual asistido</h2>
+    <div class="grid-3 datos-grid">
+      <div class="dato"><span>Estado</span><strong>{{ solicitud.get_estado_analisis_contractual_display }}</strong></div>
+      <div class="dato"><span>Fecha</span><strong>{{ solicitud.fecha_analisis_contractual|date:"Y-m-d H:i"|default:"No ejecutado" }}</strong></div>
+      <div class="dato"><span>Confianza</span><strong>{{ solicitud.metadata_analisis_contractual.confianza_general|default:"0.00" }}</strong></div>
+    </div>
+    {% with metadata=solicitud.metadata_analisis_contractual %}
+      {% if metadata.empresa_sugerida %}
+        <p><strong>Empresa sugerida:</strong> {{ metadata.empresa_sugerida.nombre }} ({{ metadata.empresa_sugerida.tipo_coincidencia }})</p>
+      {% endif %}
+      {% if metadata.datos_sugeridos %}
+        <div class="grid-2 datos-grid">
+          <div class="dato"><span>Cargo o servicio sugerido</span><strong>{{ metadata.datos_sugeridos.cargo_o_servicio|default:"No detectado" }}</strong></div>
+          <div class="dato"><span>Fecha inicio sugerida</span><strong>{{ metadata.datos_sugeridos.fecha_inicio_contrato|default:"No detectada" }}</strong></div>
+          <div class="dato"><span>Fecha fin sugerida</span><strong>{{ metadata.datos_sugeridos.fecha_fin_contrato|default:"No detectada" }}</strong></div>
+          <div class="dato"><span>Valor total sugerido</span><strong>{{ metadata.datos_sugeridos.valor_total_contrato|default:"No detectado" }}</strong></div>
+        </div>
+      {% endif %}
+      {% if metadata.advertencias %}
+        <h3>Advertencias</h3>
+        <ul class="lista-alertas">{% for advertencia in metadata.advertencias %}<li>{{ advertencia }}</li>{% endfor %}</ul>
+      {% endif %}
+      {% if metadata.bloqueos %}
+        <h3>Bloqueos</h3>
+        <ul class="lista-alertas">{% for bloqueo in metadata.bloqueos %}<li>{{ bloqueo }}</li>{% endfor %}</ul>
+      {% endif %}
+    {% endwith %}
+    <p class="subtitulo-seccion">No se almacena ni se muestra el texto completo del contrato.</p>
+  </section>
+
+  <section class="panel">
     <div class="encabezado-panel">
       <div>
         <h2 class="titulo-seccion">Documentos</h2>

@@ -9,6 +9,10 @@ TASA_MENSUAL_PRELIMINAR_DEFAULT = Decimal('0.019')
 PLAZO_MAXIMO_MESES_DEFAULT = 24
 MONTO_MINIMO_DEFAULT = Decimal('1000000')
 MONTO_MAXIMO_DEFAULT = Decimal('10000000')
+TASA_ORIGINACION_DEFAULT = Decimal('0.10')
+TASA_IVA_DEFAULT = Decimal('0.19')
+TASA_SEGURO_VIDA_DEFAULT = Decimal('0.003711')
+TASA_GARANTIA_DEFAULT = Decimal('0.02')
 
 
 @dataclass(frozen=True)
@@ -26,6 +30,145 @@ class ResultadoCapacidadContractualPreliminar:
     advertencias: list[str] = field(default_factory=list)
     bloqueos: list[str] = field(default_factory=list)
     fuente: str = 'simulacion_prestadores_read_only'
+
+
+@dataclass(frozen=True)
+class ResultadoSimulacionPrestadorInformativa:
+    monto_solicitado: Decimal
+    plazo_meses: int
+    tasa_mensual: Decimal
+    tasa_mensual_porcentaje: Decimal
+    costo_originacion: Decimal
+    iva_costo_originacion: Decimal
+    seguro_vida: Decimal
+    fondo_garantia: Decimal
+    capital_total_financiado: Decimal
+    intereses_estimados: Decimal
+    total_a_pagar: Decimal
+    cuota_mensual: Decimal
+    fuente: str = 'simulacion_prestadores_informativa_v1'
+
+    def como_dict(self):
+        return {
+            'monto_solicitado': self.monto_solicitado,
+            'plazo_meses': self.plazo_meses,
+            'tasa_mensual': self.tasa_mensual,
+            'tasa_mensual_porcentaje': self.tasa_mensual_porcentaje,
+            'costo_originacion': self.costo_originacion,
+            'iva_costo_originacion': self.iva_costo_originacion,
+            'seguro_vida': self.seguro_vida,
+            'fondo_garantia': self.fondo_garantia,
+            'capital_total_financiado': self.capital_total_financiado,
+            'intereses_estimados': self.intereses_estimados,
+            'total_a_pagar': self.total_a_pagar,
+            'cuota_mensual': self.cuota_mensual,
+            'fuente': self.fuente,
+        }
+
+
+def obtener_configuracion_simulador_prestador():
+    from contractors.models import ConfiguracionSimuladorPrestador
+
+    return ConfiguracionSimuladorPrestador.objects.filter(activo=True).first()
+
+
+def obtener_configuracion_publica_simulador_prestador(configuracion=None):
+    monto_minimo = Decimal(str(
+        configuracion.monto_minimo
+        if configuracion else getattr(settings, 'CONTRACTORS_MIN_AMOUNT', MONTO_MINIMO_DEFAULT)
+    ))
+    monto_maximo = Decimal(str(
+        configuracion.monto_maximo
+        if configuracion else getattr(settings, 'CONTRACTORS_MAX_AMOUNT', MONTO_MAXIMO_DEFAULT)
+    ))
+    plazo_minimo = int(
+        configuracion.plazo_minimo_meses
+        if configuracion else getattr(settings, 'CONTRACTORS_MIN_TERM_MONTHS', 3)
+    )
+    plazo_maximo = int(
+        configuracion.plazo_maximo_meses
+        if configuracion else getattr(settings, 'CONTRACTORS_MAX_TERM_MONTHS', PLAZO_MAXIMO_MESES_DEFAULT)
+    )
+    return {
+        'monto_minimo': str(monto_minimo),
+        'monto_maximo': str(monto_maximo),
+        'plazo_minimo_meses': plazo_minimo,
+        'plazo_maximo_meses': plazo_maximo,
+        'tasa_mensual': str(_tasa_configurada(
+            configuracion, 'tasa_mensual',
+            'CONTRACTORS_PRELIMINARY_MONTHLY_RATE', TASA_MENSUAL_PRELIMINAR_DEFAULT,
+        )),
+        'tasa_originacion': str(_tasa_configurada(
+            configuracion, 'porcentaje_originacion',
+            'CONTRACTORS_PRELIMINARY_ORIGINATION_RATE', TASA_ORIGINACION_DEFAULT,
+        )),
+        'tasa_iva_originacion': str(_tasa_configurada(
+            configuracion, 'porcentaje_iva_originacion',
+            'CONTRACTORS_PRELIMINARY_VAT_RATE', TASA_IVA_DEFAULT,
+        )),
+        'tasa_fondo_garantia': str(_tasa_configurada(
+            configuracion, 'porcentaje_fondo_garantia',
+            'CONTRACTORS_PRELIMINARY_GUARANTEE_RATE', TASA_GARANTIA_DEFAULT,
+        )),
+        'tasa_seguro_vida': str(_tasa_configurada(
+            configuracion, 'porcentaje_seguro_vida_primera_cuota',
+            'CONTRACTORS_PRELIMINARY_LIFE_INSURANCE_RATE', TASA_SEGURO_VIDA_DEFAULT,
+        )),
+    }
+
+
+def simular_credito_prestador_informativo(*, monto, plazo_meses, configuracion=None):
+    monto = _decimal_or_none(monto)
+    plazo_meses = int(plazo_meses)
+    if monto is None or monto <= 0 or plazo_meses <= 0:
+        raise ValueError('Monto y plazo deben ser mayores a cero.')
+
+    tasa_mensual = _tasa_configurada(
+        configuracion, 'tasa_mensual',
+        'CONTRACTORS_PRELIMINARY_MONTHLY_RATE', TASA_MENSUAL_PRELIMINAR_DEFAULT,
+    )
+    tasa_originacion = _tasa_configurada(
+        configuracion, 'porcentaje_originacion',
+        'CONTRACTORS_PRELIMINARY_ORIGINATION_RATE', TASA_ORIGINACION_DEFAULT,
+    )
+    tasa_iva = _tasa_configurada(
+        configuracion, 'porcentaje_iva_originacion',
+        'CONTRACTORS_PRELIMINARY_VAT_RATE', TASA_IVA_DEFAULT,
+    )
+    tasa_seguro = _tasa_configurada(
+        configuracion, 'porcentaje_seguro_vida_primera_cuota',
+        'CONTRACTORS_PRELIMINARY_LIFE_INSURANCE_RATE', TASA_SEGURO_VIDA_DEFAULT,
+    )
+    tasa_garantia = _tasa_configurada(
+        configuracion, 'porcentaje_fondo_garantia',
+        'CONTRACTORS_PRELIMINARY_GUARANTEE_RATE', TASA_GARANTIA_DEFAULT,
+    )
+
+    costo_originacion = _redondear(monto * tasa_originacion)
+    iva_originacion = _redondear(costo_originacion * tasa_iva)
+    seguro_vida = _redondear(monto * tasa_seguro)
+    fondo_garantia = _redondear(monto * tasa_garantia)
+    capital_total = _redondear(
+        monto + costo_originacion + iva_originacion + seguro_vida + fondo_garantia
+    )
+    cuota = _calcular_cuota_estimada(capital_total, plazo_meses, tasa_mensual)
+    total = _redondear(cuota * Decimal(plazo_meses))
+    intereses = _redondear(max(Decimal('0'), total - capital_total))
+
+    return ResultadoSimulacionPrestadorInformativa(
+        monto_solicitado=monto,
+        plazo_meses=plazo_meses,
+        tasa_mensual=tasa_mensual,
+        tasa_mensual_porcentaje=_redondear(tasa_mensual * Decimal('100')),
+        costo_originacion=costo_originacion,
+        iva_costo_originacion=iva_originacion,
+        seguro_vida=seguro_vida,
+        fondo_garantia=fondo_garantia,
+        capital_total_financiado=capital_total,
+        intereses_estimados=intereses,
+        total_a_pagar=total,
+        cuota_mensual=cuota,
+    )
 
 
 def evaluar_capacidad_contractual_preliminar(solicitud, documentos_completos=False):
@@ -112,6 +255,12 @@ def _calcular_cuota_estimada(monto, plazo_meses, tasa_mensual):
 def _decimal_setting(nombre, default):
     valor = getattr(settings, nombre, default)
     return Decimal(str(valor))
+
+
+def _tasa_configurada(configuracion, campo, setting_name, default):
+    if configuracion is not None:
+        return Decimal(str(getattr(configuracion, campo))) / Decimal('100')
+    return _decimal_setting(setting_name, default)
 
 
 def _decimal_or_none(valor):

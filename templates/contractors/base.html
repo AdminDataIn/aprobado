@@ -46,14 +46,23 @@
     }
 
     .mensaje {
+      position: relative;
       background: #ffffff;
       border: 1px solid #bdeef7;
-      padding: 13px 16px;
+      border-left: 5px solid var(--cyan);
+      padding: 13px 44px 13px 16px;
       border-radius: 14px;
       color: #075985;
       box-shadow: 0 18px 36px rgba(7, 26, 51, 0.16);
       font-weight: 500;
+      transition: opacity .2s ease, transform .2s ease;
     }
+
+    .mensaje.success { border-left-color: #16a34a; }
+    .mensaje.warning { border-left-color: #f59e0b; }
+    .mensaje.error, .mensaje.danger { border-left-color: #dc2626; }
+    .mensaje-close { position: absolute; top: 8px; right: 9px; width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: #64748b; font-size: 20px; line-height: 1; cursor: pointer; }
+    .mensaje-close:hover, .mensaje-close:focus-visible { background: #eaf5f8; color: #0f172a; outline: none; }
 
     .hero {
       background: linear-gradient(135deg, #071a33 0%, #102239 60%, #12304d 100%);
@@ -491,7 +500,24 @@
       border: 1px solid #fed7aa;
     }
 
-    .company-selected-card,
+    .company-selected-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 8px;
+      border-radius: 10px;
+      padding: 9px 11px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #166534;
+    }
+
+    .company-selected-check { display: inline-flex !important; flex: 0 0 26px; width: 26px; height: 26px; align-items: center; justify-content: center; border-radius: 50%; background: #dcfce7; color: #15803d; font-weight: 900; }
+    .company-selected-copy { display: grid !important; min-width: 0; gap: 1px; }
+    .company-selected-copy small { color: #4b7a5a; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .company-selected-copy strong { margin: 0; color: #14532d; line-height: 1.25; }
+    .company-selected-validation { margin-left: auto; color: #15803d; font-size: 12px; white-space: nowrap; }
+
     .authorization-card {
       margin-top: 14px;
       border-radius: 14px;
@@ -501,9 +527,7 @@
       color: #166534;
     }
 
-    .company-selected-card strong,
     .authorization-card strong { display: block; margin-bottom: 4px; }
-    .company-selected-card span,
     .authorization-card span { display: block; line-height: 1.45; }
     .form-helper-text.is-error { color: var(--error); font-weight: 700; }
 
@@ -651,6 +675,8 @@
       .form-actions { flex-direction: column-reverse; align-items: stretch; }
       .form-button, .boton { width: 100%; }
       .step-list { grid-template-columns: 1fr; }
+      .company-selected-card { align-items: flex-start; flex-wrap: wrap; }
+      .company-selected-validation { width: 100%; margin-left: 36px; }
     }
   </style>
 </head>
@@ -659,7 +685,9 @@
   {% if messages %}
     <div class="mensajes">
       {% for message in messages %}
-      <div class="mensaje" role="status" aria-live="polite">
+      {% if 'solicitud-registrada-modal' not in message.tags %}
+      <div class="mensaje {{ message.tags|default:'info' }}" role="status" aria-live="polite" data-contractor-toast>
+        <button type="button" class="mensaje-close" data-close-toast aria-label="Cerrar notificación">&times;</button>
         {% with texto=message|stringformat:"s" %}
           {% if "Ha iniciado" in texto or "PrestadorServicio" in texto %}
             Has iniciado sesión correctamente.
@@ -668,10 +696,25 @@
           {% endif %}
         {% endwith %}
       </div>
+      {% endif %}
       {% endfor %}
     </div>
   {% endif %}
   {% block content %}{% endblock %}
   {% include "base/footer_contractors.html" %}
+  <script>
+    document.querySelectorAll('[data-contractor-toast]').forEach((toast) => {
+      let timer;
+      const cerrar = () => {
+        window.clearTimeout(timer);
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-8px)';
+        window.setTimeout(() => toast.remove(), 220);
+      };
+      const boton = toast.querySelector('[data-close-toast]');
+      if (boton) boton.addEventListener('click', cerrar);
+      timer = window.setTimeout(cerrar, 5000);
+    });
+  </script>
 </body>
 </html>

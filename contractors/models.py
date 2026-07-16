@@ -30,6 +30,13 @@ class ContractorApplication(models.Model):
         LABORAL = 'LABORAL', 'Laboral'
         OTRO = 'OTRO', 'Otro'
 
+    class EstadoAnalisisContractual(models.TextChoices):
+        NO_SOLICITADO = 'NO_SOLICITADO', 'No solicitado'
+        NO_DISPONIBLE = 'NO_DISPONIBLE', 'No disponible'
+        COMPLETADO = 'COMPLETADO', 'Completado'
+        CON_ADVERTENCIAS = 'CON_ADVERTENCIAS', 'Con advertencias'
+        BLOQUEADO = 'BLOQUEADO', 'Bloqueado'
+
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -98,6 +105,13 @@ class ContractorApplication(models.Model):
     acepta_politica_privacidad = models.BooleanField(default=False)
     autoriza_analisis_contractual_asistido = models.BooleanField(default=False)
     autoriza_consulta_centrales = models.BooleanField(default=False)
+    estado_analisis_contractual = models.CharField(
+        max_length=24,
+        choices=EstadoAnalisisContractual.choices,
+        default=EstadoAnalisisContractual.NO_SOLICITADO,
+    )
+    metadata_analisis_contractual = models.JSONField(default=dict, blank=True)
+    fecha_analisis_contractual = models.DateTimeField(null=True, blank=True)
     estado = models.CharField(
         max_length=32,
         choices=Estado.choices,
@@ -124,6 +138,60 @@ class ContractorApplication(models.Model):
         return f'{self.nombres} {self.apellidos}'.strip()
 
 
+class ConfiguracionSimuladorPrestador(models.Model):
+    activo = models.BooleanField(default=True)
+    nombre = models.CharField(max_length=120, default='Simulador Prestadores')
+    monto_minimo = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('1000000'))
+    monto_maximo = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('10000000'))
+    plazo_minimo_meses = models.PositiveSmallIntegerField(default=3)
+    plazo_maximo_meses = models.PositiveSmallIntegerField(default=24)
+    tasa_mensual = models.DecimalField(
+        max_digits=8,
+        decimal_places=4,
+        default=Decimal('1.9000'),
+        help_text='Tasa efectiva mensual expresada como porcentaje. Ejemplo: 1.9.',
+    )
+    porcentaje_originacion = models.DecimalField(
+        max_digits=8,
+        decimal_places=4,
+        default=Decimal('10.0000'),
+        help_text='Porcentaje aplicado sobre el monto solicitado. Ejemplo: 10.',
+    )
+    porcentaje_iva_originacion = models.DecimalField(
+        max_digits=8,
+        decimal_places=4,
+        default=Decimal('19.0000'),
+        help_text='IVA sobre el costo de originación. Ejemplo: 19.',
+    )
+    porcentaje_fondo_garantia = models.DecimalField(
+        max_digits=8,
+        decimal_places=4,
+        default=Decimal('2.0000'),
+        help_text='Fondo de garantía, IVA incluido, sobre el monto solicitado.',
+    )
+    porcentaje_seguro_vida_primera_cuota = models.DecimalField(
+        max_digits=8,
+        decimal_places=4,
+        default=Decimal('0.3711'),
+        help_text='Seguro de vida de la primera cuota sobre el monto solicitado.',
+    )
+    texto_nota_simulacion = models.TextField(
+        blank=True,
+        default='',
+        help_text='Nota informativa opcional mostrada debajo de la simulación.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at', '-id']
+        verbose_name = 'Configuración del simulador de prestadores'
+        verbose_name_plural = 'Configuraciones del simulador de prestadores'
+
+    def __str__(self):
+        return self.nombre
+
+
 def ruta_documento_prestador(instance, filename):
     extension = Path(filename or '').suffix.lower()
     return f'prestadores/solicitudes/{instance.solicitud_id}/{instance.tipo_documento}{extension}'
@@ -148,6 +216,7 @@ class ContractorApplicationDocument(models.Model):
         on_delete=models.PROTECT,
         related_name='documentos_prestadores_cargados',
     )
+    metadata_captura = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -177,8 +246,8 @@ class ContractorApplicationDocument(models.Model):
         if self.tipo_documento in {
             self.TipoDocumento.CEDULA_FRONTAL,
             self.TipoDocumento.CEDULA_TRASERA,
-        } and extension not in {'.jpg', '.jpeg', '.png', '.pdf'}:
-            raise ValidationError({'archivo': 'Carga una imagen o PDF valido.'})
+        } and extension not in {'.jpg', '.jpeg', '.png'}:
+            raise ValidationError({'archivo': 'Captura una imagen valida de la cedula.'})
         if self.archivo and self.archivo.size > 8 * 1024 * 1024:
             raise ValidationError({'archivo': 'El documento no debe superar 8MB.'})
 

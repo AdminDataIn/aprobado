@@ -157,6 +157,9 @@ CSRF_TRUSTED_ORIGINS = _split_env_list(
 USE_X_FORWARDED_HOST = True
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+CONTRACTORS_CONTRACT_AI_ENABLED = os.environ.get('CONTRACTORS_CONTRACT_AI_ENABLED', 'False').lower() in ('1', 'true', 'yes')
+CONTRACTORS_CONTRACT_AI_MODEL = os.environ.get('CONTRACTORS_CONTRACT_AI_MODEL', 'gpt-4.1-mini')
+CONTRACTORS_ALLOW_ID_UPLOAD_FALLBACK = os.environ.get('CONTRACTORS_ALLOW_ID_UPLOAD_FALLBACK', 'False').lower() in ('1', 'true', 'yes')
 MANUAL_PAYMENT_AUTH_KEY = os.environ.get('MANUAL_PAYMENT_AUTH_KEY', 'clave-secreta-para-desarrollo')
 MANUAL_PAYMENT_ROUNDING_TOLERANCE = os.environ.get('MANUAL_PAYMENT_ROUNDING_TOLERANCE', '100.00')
 

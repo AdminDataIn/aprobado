@@ -1,6 +1,10 @@
 from django.contrib import admin
 
-from contractors.models import ContractorApplication, ContractorApplicationDocument
+from contractors.models import (
+    ConfiguracionSimuladorPrestador,
+    ContractorApplication,
+    ContractorApplicationDocument,
+)
 
 
 class ContractorApplicationDocumentInline(admin.TabularInline):
@@ -39,4 +43,20 @@ class ContractorApplicationDocumentAdmin(admin.ModelAdmin):
     list_display = ['id', 'solicitud', 'tipo_documento', 'uploaded_by', 'created_at']
     list_filter = ['tipo_documento', 'created_at']
     search_fields = ['solicitud__numero_documento', 'solicitud__nombres', 'solicitud__apellidos']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(ConfiguracionSimuladorPrestador)
+class ConfiguracionSimuladorPrestadorAdmin(admin.ModelAdmin):
+    list_display = [
+        'nombre',
+        'activo',
+        'monto_minimo',
+        'monto_maximo',
+        'plazo_minimo_meses',
+        'plazo_maximo_meses',
+        'tasa_mensual',
+        'updated_at',
+    ]
+    list_filter = ['activo']
     readonly_fields = ['created_at', 'updated_at']

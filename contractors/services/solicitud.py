@@ -9,7 +9,9 @@ from contractors.models import (
 
 
 @transaction.atomic
-def guardar_documento_prestador(*, solicitud, tipo_documento, archivo, usuario):
+def guardar_documento_prestador(
+    *, solicitud, tipo_documento, archivo, usuario, metadata_captura=None
+):
     documento = (
         ContractorApplicationDocument.objects.select_for_update()
         .filter(solicitud=solicitud, tipo_documento=tipo_documento)
@@ -25,6 +27,7 @@ def guardar_documento_prestador(*, solicitud, tipo_documento, archivo, usuario):
         )
     documento.archivo = archivo
     documento.uploaded_by = usuario
+    documento.metadata_captura = metadata_captura or {}
     documento.full_clean()
     documento.save()
 
@@ -33,7 +36,10 @@ def guardar_documento_prestador(*, solicitud, tipo_documento, archivo, usuario):
     return documento
 
 
-def guardar_documentos_formulario(*, solicitud, cleaned_data, usuario):
+def guardar_documentos_formulario(
+    *, solicitud, cleaned_data, usuario, metadata_documentos=None
+):
+    metadata_documentos = metadata_documentos or {}
     documentos = []
     for campo, tipo_documento in MAPA_CAMPOS_DOCUMENTOS_PRESTADOR.items():
         archivo = cleaned_data.get(campo)
@@ -44,6 +50,7 @@ def guardar_documentos_formulario(*, solicitud, cleaned_data, usuario):
                     tipo_documento=tipo_documento,
                     archivo=archivo,
                     usuario=usuario,
+                    metadata_captura=metadata_documentos.get(campo, {}),
                 )
             )
     return documentos

@@ -2932,7 +2932,6 @@ body {
 .simulador-text-content p {
     font-size: 1.125rem;
     color: #FFFFFF;
-    margin-bottom: 2rem;
     line-height: 1.6;
 }
 
@@ -2961,7 +2960,7 @@ body {
 .simulador-form-step {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 1rem;
 }
 
 /* .simulador-slider-container {
@@ -3089,7 +3088,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.75rem 0;
+    padding: 0.5rem 0;
     border-bottom: 1px solid #e5e7eb;
 }
 

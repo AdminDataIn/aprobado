@@ -8,14 +8,28 @@ app_name = 'contractors'
 urlpatterns = [
     path('', views.inicio_prestadores_view, name='inicio'),
     path('solicitar/', views.solicitar_prestador_view, name='solicitar'),
+    path(
+        'contrato/analizar/',
+        views.analizar_contrato_prestador_view,
+        name='analizar_contrato_temporal',
+    ),
     path('solicitud/<int:solicitud_id>/documentos/', views.documentos_prestador_view, name='documentos'),
+    path(
+        'solicitud/<int:solicitud_id>/contrato/analizar/',
+        views.analizar_contrato_prestador_view,
+        name='analizar_contrato',
+    ),
     path(
         'solicitud/<int:solicitud_id>/documentos/<int:documento_id>/descargar/',
         views.descargar_documento_prestador_view,
         name='descargar_documento',
     ),
     path('simular/', views.simular_prestador_view, name='simular'),
+    path('simular/calcular/', views.calcular_simulacion_prestador_view, name='calcular_simulacion'),
     path('mi-credito/', views.mi_credito_prestador_view, name='mi_credito'),
+    path('terminos-y-condiciones/', views.legal_prestadores_view, {'seccion': 'terminos'}, name='terminos'),
+    path('politica-de-privacidad/', views.legal_prestadores_view, {'seccion': 'privacidad'}, name='privacidad'),
+    path('centrales-de-informacion/', views.legal_prestadores_view, {'seccion': 'centrales'}, name='centrales_informacion'),
     path('gestion/prestadores/', views_admin.bandeja_prestadores_view, name='admin_bandeja'),
     path('gestion/prestadores/<int:solicitud_id>/', views_admin.detalle_prestador_view, name='admin_detalle'),
     path(

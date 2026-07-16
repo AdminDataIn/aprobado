@@ -1,117 +1,246 @@
-{% extends "contractors/base.html" %}
-{% block title %}Simulacion | Prestadores de Servicios{% endblock %}
+{% extends 'contractors/base.html' %}
+{% load humanize l10n %}
+
+{% block title %}Simulación | Prestadores de Servicios{% endblock %}
+
 {% block content %}
-<section class="hero">
-  <p class="eyebrow">Simulacion preliminar</p>
-  <h1>Revisa tu capacidad contractual</h1>
-  <p>Esta vista usa los datos de tu solicitud para una estimacion informativa. No crea credito ni reemplaza la validacion financiera oficial.</p>
-</section>
+<main class="simulador-main">
+  <section class="simulador-hero-section">
+    <div class="simulador-container">
+      {% if not documentos_cargados or not analisis_habilita_simulacion %}
+        <div class="simulador-gate" role="alert">
+          <strong>Completa la información requerida</strong>
+          {% if not documentos_cargados %}<p>Debes completar la carga documental antes de simular.</p>{% endif %}
+          {% if not analisis_habilita_simulacion %}<p>Debes analizar y confirmar el contrato antes de registrar la solicitud.</p>{% endif %}
+          <a href="{% url 'contractors:solicitar' %}?solicitud_id={{ solicitud.id }}">Volver a la solicitud</a>
+        </div>
+      {% endif %}
 
-<main class="contenedor">
-  <section class="panel alerta-info">
-    <strong>Importante:</strong>
-    Esta simulacion es informativa y no constituye aprobacion, pagare ni desembolso. Esta evaluacion no aprueba, no origina credito y no reemplaza la validacion financiera oficial.
-  </section>
+      <div class="simulador-hero">
+        <div class="simulador-text-content">
+          <span class="simulador-eyebrow">SIMULACIÓN INFORMATIVA</span>
+          <h1>Simula tu crédito para Prestadores de Servicios</h1>
+          <p>Selecciona el monto y el plazo que mejor se ajusten al valor pendiente de tu contrato. Revisa la cuota estimada, los costos asociados y el capital total financiado antes de registrar la solicitud.</p>
+          <p class="simulador-legal-note">La simulación es informativa. La aprobación estará sujeta al análisis documental, validación de identidad, evaluación de riesgo y consulta ante centrales de información.</p>
+          <button type="submit" class="simulador-cta-button simulador-submit simulador-register-cta"
+                  form="simulator-form" data-register-application
+                  {% if not puede_registrar %}disabled{% endif %}>Registrar solicitud</button>
+        </div>
 
-  <section class="grid-3">
-    <article class="panel tarjeta-resumen">
-      <span class="dato-label">Solicitud</span>
-      <strong>#{{ solicitud.id }}</strong>
-      <span>{{ solicitud.empresa.nombre }}</span>
-    </article>
-    <article class="panel tarjeta-resumen">
-      <span class="dato-label">Documentos</span>
-      <strong>{{ progreso_documental.cargados }}/{{ progreso_documental.total }}</strong>
-      <span>{% if documentos_cargados %}Completos{% else %}Pendientes{% endif %}</span>
-    </article>
-    <article class="panel tarjeta-resumen">
-      <span class="dato-label">Estado operativo</span>
-      <strong>{{ solicitud.get_estado_display }}</strong>
-      <span>Revision preliminar</span>
-    </article>
-  </section>
+        <div class="simulador-card">
+          <form method="post" class="simulador-form" id="simulator-form"
+                data-calculate-url="{% url 'contractors:calcular_simulacion' %}"
+                data-application-id="{{ solicitud.id }}">
+            {% csrf_token %}
+            <input type="hidden" name="solicitud_id" value="{{ solicitud.id }}">
+            <input type="hidden" name="monto" id="simulador-monto-hidden"
+                   value="{{ form.monto.value|default:form.monto.field.widget.attrs.min|unlocalize }}">
+            <input type="hidden" name="plazo_meses" id="simulador-plazo-hidden"
+                   value="{{ form.plazo_meses.value|default:form.plazo_meses.field.widget.attrs.min }}">
+            {{ form.non_field_errors }}
 
-  {% if not documentos_cargados %}
-    <section class="panel alerta">
-      <h2 class="titulo-seccion">Faltan documentos</h2>
-      <p>Debes completar la carga documental antes de simular. Progreso actual: {{ progreso_documental.cargados }}/{{ progreso_documental.total }}.</p>
-      <div class="acciones">
-        <a class="boton" href="{% url 'contractors:documentos' solicitud.id %}">Completar documentos</a>
-        <a class="boton boton-secundario" href="{% url 'contractors:mi_credito' %}">Volver a Mi credito</a>
+            <div class="simulador-form-step active">
+              <div class="simulador-slider-container">
+                <div class="simulador-slider-title">¿Cuánto necesitas?</div>
+                <div class="simulador-range-container">
+                  <div class="simulador-range-progress" id="simulador-progress-1"></div>
+                  <input class="simulador-range-input" id="simulador-range-1" type="range"
+                         min="{{ form.monto.field.widget.attrs.min|unlocalize }}"
+                         max="{{ form.monto.field.widget.attrs.max|unlocalize }}"
+                         step="50000" value="{{ form.monto.value|default:form.monto.field.widget.attrs.min|unlocalize }}">
+                  <div class="simulador-range-tooltip" id="simulador-tooltip-1">$ 0</div>
+                </div>
+                <div class="simulador-range-labels">
+                  <span>$ {{ form.monto.field.widget.attrs.min|floatformat:0|intcomma }}</span>
+                  <span>$ {{ form.monto.field.widget.attrs.max|floatformat:0|intcomma }}</span>
+                </div>
+                {{ form.monto.errors }}
+              </div>
+
+              <div class="simulador-slider-container">
+                <div class="simulador-slider-title">¿En cuántos meses deseas pagarlo?</div>
+                <div class="simulador-range-container">
+                  <div class="simulador-range-progress" id="simulador-progress-2"></div>
+                  <input class="simulador-range-input" id="simulador-range-2" type="range"
+                         min="{{ form.plazo_meses.field.widget.attrs.min }}"
+                         max="{{ form.plazo_meses.field.widget.attrs.max }}"
+                         step="1" value="{{ form.plazo_meses.value|default:form.plazo_meses.field.widget.attrs.min }}">
+                  <div class="simulador-range-tooltip" id="simulador-tooltip-2">0 meses</div>
+                </div>
+                <div class="simulador-range-labels">
+                  <span>{{ form.plazo_meses.field.widget.attrs.min }} meses</span>
+                  <span>{{ form.plazo_meses.field.widget.attrs.max }} meses</span>
+                </div>
+                {{ form.plazo_meses.errors }}
+              </div>
+
+              <div class="simulador-results-container">
+                <div class="simulador-result-row"><label class="simulador-result-label">Monto solicitado:</label><input class="simulador-result-input" data-result="monto_solicitado" value="--" readonly></div>
+                <div class="simulador-result-row"><label class="simulador-result-label">Costo de originación:</label><input class="simulador-result-input" data-result="costo_originacion" value="--" readonly></div>
+                <div class="simulador-result-row"><label class="simulador-result-label">IVA sobre costo de originación:</label><input class="simulador-result-input" data-result="iva_costo_originacion" value="--" readonly></div>
+                <div class="simulador-result-row"><label class="simulador-result-label">Fondo de garantía:</label><input class="simulador-result-input" data-result="fondo_garantia" value="--" readonly></div>
+                <div class="simulador-result-row"><label class="simulador-result-label">Seguro de vida:</label><input class="simulador-result-input" data-result="seguro_vida" value="--" readonly></div>
+                <div class="simulador-result-row"><label class="simulador-result-label">Capital total financiado:</label><input class="simulador-result-input" data-result="capital_total_financiado" value="--" readonly></div>
+                <div class="simulador-result-row"><label class="simulador-result-label">Intereses estimados:</label><input class="simulador-result-input" data-result="intereses_estimados" value="--" readonly></div>
+                <div class="simulador-result-row"><label class="simulador-result-label">Tasa mensual informativa:</label><input class="simulador-result-input" data-result="tasa_mensual_porcentaje" value="--" readonly></div>
+                <div class="simulador-result-row simulador-total-row"><label class="simulador-result-label">Total a pagar:</label><input class="simulador-result-input" data-result="total_a_pagar" value="--" readonly></div>
+                <div class="simulador-result-row"><label class="simulador-result-label simulador-cuota-label">Cuota mensual:</label><input class="simulador-result-input simulador-cuota-input" data-result="cuota_mensual" value="--" readonly></div>
+              </div>
+
+              <p class="simulador-legal-note">
+                {% if configuracion_simulador.texto_nota_simulacion %}{{ configuracion_simulador.texto_nota_simulacion }}{% else %}Los valores son estimados y están sujetos al análisis de riesgo y la validación documental.{% endif %}
+              </p>
+              <p id="simulator-status" class="simulador-status" aria-live="polite">Calculando simulación...</p>
+            </div>
+          </form>
+        </div>
       </div>
-    </section>
-  {% endif %}
-
-  <section class="panel">
-    <h2 class="titulo-seccion">Resumen de solicitud</h2>
-    <div class="grid-2 datos-grid">
-      <div class="dato"><span>Prestador</span><strong>{{ solicitud.nombre_completo }}</strong></div>
-      <div class="dato"><span>Empresa</span><strong>{{ solicitud.empresa.nombre }}</strong></div>
-      <div class="dato"><span>Cargo o actividad</span><strong>{{ solicitud.cargo }}</strong></div>
-      <div class="dato"><span>Monto solicitado</span><strong>{{ solicitud.monto_solicitado|default:"Pendiente" }}</strong></div>
-      <div class="dato"><span>Plazo solicitado</span><strong>{{ solicitud.plazo_meses|default:"Pendiente" }} meses</strong></div>
-      <div class="dato"><span>Valor pendiente por cobrar</span><strong>{{ solicitud.valor_pendiente_cobrar|default:"Pendiente" }}</strong></div>
-    </div>
-  </section>
-
-  <section class="panel">
-    <h2 class="titulo-seccion">Capacidad contractual preliminar</h2>
-    {% if simulacion_preliminar.calculable %}
-      <div class="grid-3">
-        <article class="tarjeta-resumen">
-          <span class="dato-label">Cuota estimada preliminar</span>
-          <strong>{{ simulacion_preliminar.cuota_estimada_preliminar }}</strong>
-          <span>Valor mensual informativo</span>
-        </article>
-        <article class="tarjeta-resumen">
-          <span class="dato-label">Porcentaje sobre valor pendiente</span>
-          <strong>{{ simulacion_preliminar.porcentaje_compromiso_valor_pendiente|default:"No calculable" }}%</strong>
-          <span>Compromiso sobre contrato</span>
-        </article>
-        <article class="tarjeta-resumen">
-          <span class="dato-label">Tasa mensual preliminar</span>
-          <strong>{{ simulacion_preliminar.tasa_mensual_preliminar }}</strong>
-          <span>Parametro informativo</span>
-        </article>
-      </div>
-    {% else %}
-      <p class="alerta">No se puede calcular la simulacion preliminar con los datos actuales.</p>
-    {% endif %}
-  </section>
-
-  {% if simulacion_preliminar.bloqueos or simulacion_preliminar.advertencias %}
-    <section class="grid-2">
-      {% if simulacion_preliminar.bloqueos %}
-        <article class="panel alerta">
-          <h2 class="titulo-seccion">Bloqueos de informacion</h2>
-          <ul class="lista-alertas">
-            {% for bloqueo in simulacion_preliminar.bloqueos %}
-              <li>{{ bloqueo }}</li>
-            {% endfor %}
-          </ul>
-        </article>
-      {% endif %}
-
-      {% if simulacion_preliminar.advertencias %}
-        <article class="panel alerta-info">
-          <h2 class="titulo-seccion">Alertas preliminares</h2>
-          <ul class="lista-alertas">
-            {% for advertencia in simulacion_preliminar.advertencias %}
-              <li>{{ advertencia }}</li>
-            {% endfor %}
-          </ul>
-        </article>
-      {% endif %}
-    </section>
-  {% endif %}
-
-  <section class="panel">
-    <div class="acciones">
-      {% if not documentos_cargados %}
-        <a class="boton" href="{% url 'contractors:documentos' solicitud.id %}">Completar documentos</a>
-      {% endif %}
-      <a class="boton boton-secundario" href="{% url 'contractors:mi_credito' %}">Volver a Mi credito</a>
     </div>
   </section>
 </main>
+
+<style>
+  .simulador-eyebrow { display: inline-block; margin-bottom: 10px; color: #22d3ee; font-size: 12px; font-weight: 700; }
+  .simulador-gate { margin-bottom: 20px; padding: 16px 20px; border-left: 4px solid #f59e0b; background: #fff7ed; color: #78350f; border-radius: 8px; }
+  .simulador-gate p { margin: 5px 0; }
+  .simulador-gate a { display: inline-flex; margin-top: 6px; color: #075985; font-weight: 700; }
+  .simulador-legal-note { color: #64748b; font-size: 13px; line-height: 1.5; }
+  .simulador-status { min-height: 20px; color: #64748b; font-size: 13px; }
+  .simulador-status.is-error { color: #b42318; }
+  .simulador-submit { width: 100%; border: 0; cursor: pointer; }
+  .simulador-register-cta { margin-top: 18px; }
+  .simulador-submit:disabled { opacity: .5; cursor: not-allowed; }
+  .simulador-total-row { border-top: 2px solid #06b6d4; padding-top: 10px; }
+  .simulador-total-row label, .simulador-total-row input { font-weight: 700; }
+  .simulador-cuota-label, .simulador-cuota-input { color: #06b6d4 !important; font-weight: 700 !important; }
+  .errorlist { margin: 8px 0; padding-left: 20px; color: #b42318; font-size: 13px; }
+</style>
+
+{{ configuracion_publica_simulador|json_script:"simulator-public-config" }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const form = document.getElementById('simulator-form');
+  const amount = document.getElementById('simulador-range-1');
+  const term = document.getElementById('simulador-range-2');
+  const amountTip = document.getElementById('simulador-tooltip-1');
+  const termTip = document.getElementById('simulador-tooltip-2');
+  const amountProgress = document.getElementById('simulador-progress-1');
+  const termProgress = document.getElementById('simulador-progress-2');
+  const amountHidden = document.getElementById('simulador-monto-hidden');
+  const termHidden = document.getElementById('simulador-plazo-hidden');
+  const status = document.getElementById('simulator-status');
+  const registerButton = document.querySelector('[data-register-application]');
+  const publicConfigNode = document.getElementById('simulator-public-config');
+  if (!form || !amount || !term) return;
+
+  const publicConfig = publicConfigNode ? JSON.parse(publicConfigNode.textContent) : {};
+  const moneyFields = new Set(['monto_solicitado','costo_originacion','iva_costo_originacion','fondo_garantia','seguro_vida','capital_total_financiado','intereses_estimados','total_a_pagar','cuota_mensual']);
+  const money = value => new Intl.NumberFormat('es-CO', {style:'currency', currency:'COP', maximumFractionDigits:0}).format(Number(value || 0));
+  const roundMoney = value => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+  let timer;
+  let requestNumber = 0;
+  let activeController = null;
+
+  function updateSlider(input, tooltip, progress, formatter) {
+    const min = Number(input.min);
+    const max = Number(input.max);
+    const value = Number(input.value);
+    const percent = max === min ? 0 : ((value - min) / (max - min)) * 100;
+    tooltip.textContent = formatter(value);
+    tooltip.style.left = `${percent}%`;
+    tooltip.style.transform = 'translateX(-50%)';
+    progress.style.width = `${percent}%`;
+  }
+  function updateLabels() {
+    updateSlider(amount, amountTip, amountProgress, money);
+    updateSlider(term, termTip, termProgress, value => `${value} meses`);
+    amountHidden.value = amount.value;
+    termHidden.value = term.value;
+  }
+  function paint(data) {
+    document.querySelectorAll('[data-result]').forEach(node => {
+      const key = node.dataset.result;
+      if (moneyFields.has(key)) node.value = money(data[key]);
+      else if (key === 'tasa_mensual_porcentaje') node.value = `${Number(data[key]).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}%`;
+      else node.value = data[key] || '--';
+    });
+  }
+  function previewCalculation() {
+    const requestedAmount = Number(amount.value);
+    const months = Number(term.value);
+    const monthlyRate = Number(publicConfig.tasa_mensual || 0);
+    const origination = roundMoney(requestedAmount * Number(publicConfig.tasa_originacion || 0));
+    const originationVat = roundMoney(origination * Number(publicConfig.tasa_iva_originacion || 0));
+    const guaranteeFund = roundMoney(requestedAmount * Number(publicConfig.tasa_fondo_garantia || 0));
+    const lifeInsurance = roundMoney(requestedAmount * Number(publicConfig.tasa_seguro_vida || 0));
+    const financedCapital = roundMoney(
+      requestedAmount + origination + originationVat + guaranteeFund + lifeInsurance
+    );
+    let installment = months ? financedCapital / months : 0;
+    if (monthlyRate && months) {
+      const factor = Math.pow(1 + monthlyRate, months);
+      installment = financedCapital * ((monthlyRate * factor) / (factor - 1));
+    }
+    installment = roundMoney(installment);
+    const total = roundMoney(installment * months);
+    paint({
+      monto_solicitado: requestedAmount,
+      plazo_meses: months,
+      tasa_mensual_porcentaje: roundMoney(monthlyRate * 100),
+      costo_originacion: origination,
+      iva_costo_originacion: originationVat,
+      fondo_garantia: guaranteeFund,
+      seguro_vida: lifeInsurance,
+      capital_total_financiado: financedCapital,
+      intereses_estimados: roundMoney(Math.max(0, total - financedCapital)),
+      total_a_pagar: total,
+      cuota_mensual: installment,
+    });
+  }
+  async function calculate() {
+    updateLabels();
+    const current = ++requestNumber;
+    if (activeController) activeController.abort();
+    activeController = new AbortController();
+    status.className = 'simulador-status';
+    status.textContent = 'Verificando cálculo...';
+    try {
+      const response = await fetch(form.dataset.calculateUrl, {
+        method: 'POST', credentials: 'same-origin',
+        signal: activeController.signal,
+        headers: {'Content-Type':'application/json', 'X-CSRFToken':form.querySelector('[name="csrfmiddlewaretoken"]').value},
+        body: JSON.stringify({solicitud_id:form.dataset.applicationId, monto:amount.value, plazo_meses:term.value})
+      });
+      const data = await response.json();
+      if (current !== requestNumber) return;
+      if (!response.ok || !data.ok) throw new Error(data.error || 'No fue posible calcular la simulación.');
+      paint(data.resultado);
+      status.textContent = '';
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      if (current !== requestNumber) return;
+      status.className = 'simulador-status is-error';
+      status.textContent = error.message;
+    }
+  }
+  function schedule() {
+    updateLabels();
+    previewCalculation();
+    clearTimeout(timer);
+    timer = setTimeout(calculate, 150);
+  }
+  amount.addEventListener('input', schedule);
+  term.addEventListener('input', schedule);
+  form.addEventListener('submit', function () {
+    updateLabels();
+    if (registerButton) {
+      registerButton.disabled = true;
+      registerButton.textContent = 'Registrando...';
+    }
+  });
+  updateLabels();
+  previewCalculation();
+  calculate();
+});
+</script>
 {% endblock %}

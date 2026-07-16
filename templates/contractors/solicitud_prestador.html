@@ -41,7 +41,15 @@
     </aside>
 
     <section class="form-main">
-      <form method="post" enctype="multipart/form-data" class="formulario-prestador" id="formularioPrestador" novalidate>
+      <form
+        method="post"
+        enctype="multipart/form-data"
+        class="formulario-prestador"
+        id="formularioPrestador"
+        data-analysis-url="{% url 'contractors:analizar_contrato_temporal' %}"
+        data-allow-id-upload-fallback="{% if allow_id_upload_fallback %}true{% else %}false{% endif %}"
+        novalidate
+      >
         {% csrf_token %}
         {% if solicitud %}<input type="hidden" name="solicitud_id" value="{{ solicitud.id }}">{% endif %}
         {% if form.non_field_errors %}
@@ -96,93 +104,111 @@
 
         <div class="form-step" id="step-2" data-step="2">
           <h2 class="step-title">Documentos obligatorios</h2>
-          <p class="form-helper-text">Carga los documentos al inicio para validar tu solicitud. Cédula frontal y trasera pueden cargarse como imagen o PDF; contrato y certificado bancario deben ser PDF.</p>
-          <div class="document-grid">
-            <article class="document-upload-card">
+          <p class="form-helper-text">Captura tu cédula y carga los documentos requeridos para validar tu solicitud.</p>
+          <div class="document-flow">
+            <section class="document-section identity-document-section">
+              <h3>Cédula</h3>
+              <div class="identity-document-rows">
+            <div class="document-row identity-document-card">
               <div class="document-card-header">
                 <span class="document-card-icon">ID</span>
                 <div>
                   <strong>Cédula frontal</strong>
-                  <small>Captura desde el dispositivo o carga una imagen legible.</small>
+                  <small>Captura en tiempo real.</small>
                 </div>
               </div>
               <div class="document-upload-actions">
-                <button type="button" class="document-action-button primary open-file-btn" data-target="id_documento_identidad_frontal">Tomar foto o cargar</button>
+                <button type="button" class="document-action-button primary open-camera-btn" data-target="id_documento_identidad_frontal" data-label="cédula frontal">Tomar foto</button>
+                {% if allow_id_upload_fallback %}<button type="button" class="document-action-button open-file-btn" data-target="id_documento_identidad_frontal">Carga manual</button>{% endif %}
               </div>
+              <input type="hidden" name="origen_documento_identidad_frontal" id="origen_documento_identidad_frontal" value="">
               {{ form.documento_identidad_frontal }}
               {{ form.documento_identidad_frontal.errors }}
-              <div class="document-file-status visible" id="id_documento_identidad_frontal_status">
+              <div class="document-compact-status" id="id_documento_identidad_frontal_status">
                 <span class="status-icon">i</span>
-                <div class="status-text">
-                  <span class="status-label">Estado</span>
-                  <span class="status-value">No se ha cargado documento.</span>
-                </div>
+                <span class="status-value">Sin cargar</span>
               </div>
-            </article>
+            </div>
 
-            <article class="document-upload-card">
+            <div class="document-row identity-document-card">
               <div class="document-card-header">
                 <span class="document-card-icon">ID</span>
                 <div>
                   <strong>Cédula trasera</strong>
-                  <small>Captura desde el dispositivo o carga una imagen legible.</small>
+                  <small>Captura en tiempo real.</small>
                 </div>
               </div>
               <div class="document-upload-actions">
-                <button type="button" class="document-action-button primary open-file-btn" data-target="id_documento_identidad_reverso">Tomar foto o cargar</button>
+                <button type="button" class="document-action-button primary open-camera-btn" data-target="id_documento_identidad_reverso" data-label="cédula trasera">Tomar foto</button>
+                {% if allow_id_upload_fallback %}<button type="button" class="document-action-button open-file-btn" data-target="id_documento_identidad_reverso">Carga manual</button>{% endif %}
               </div>
+              <input type="hidden" name="origen_documento_identidad_reverso" id="origen_documento_identidad_reverso" value="">
               {{ form.documento_identidad_reverso }}
               {{ form.documento_identidad_reverso.errors }}
-              <div class="document-file-status visible" id="id_documento_identidad_reverso_status">
+              <div class="document-compact-status" id="id_documento_identidad_reverso_status">
                 <span class="status-icon">i</span>
-                <div class="status-text">
-                  <span class="status-label">Estado</span>
-                  <span class="status-value">No se ha cargado documento.</span>
-                </div>
+                <span class="status-value">Sin cargar</span>
               </div>
-            </article>
+            </div>
+              </div>
+            </section>
 
-            <article class="document-upload-card">
+            <section class="document-section">
+              <h3>Certificado bancario</h3>
+              <div class="document-row document-file-row">
               <div class="document-card-header">
                 <span class="document-card-icon">PDF</span>
                 <div>
                   <strong>Certificado bancario</strong>
-                  <small>Debe cargarse en PDF para validación.</small>
+                  <small>Cargar certificado PDF.</small>
                 </div>
               </div>
               {{ form.certificado_bancario }}
+              <button type="button" class="document-action-button file-select-button open-file-btn" data-target="id_certificado_bancario">Seleccionar archivo</button>
               {{ form.certificado_bancario.errors }}
-              <div class="document-file-status visible" id="id_certificado_bancario_status">
+              <div class="document-compact-status" id="id_certificado_bancario_status">
                 <span class="status-icon">i</span>
-                <div class="status-text">
-                  <span class="status-label">Estado</span>
-                  <span class="status-value">No se ha cargado certificado.</span>
-                </div>
+                <span class="status-value">Sin cargar</span>
               </div>
-            </article>
+              </div>
+            </section>
 
-            <article class="document-upload-card document-featured">
+            <section class="document-section document-featured contract-document-card">
+              <h3>Contrato vigente</h3>
+              <div class="contract-upload-row">
               <div class="document-card-header">
                 <span class="document-card-icon">PDF</span>
                 <div>
                   <strong>Contrato vigente</strong>
-                  <small>Documento base para revisar tus condiciones.</small>
+                  <small>Cargar contrato PDF y analizarlo.</small>
                 </div>
               </div>
               {{ form.contrato_actual }}
+              <button type="button" class="document-action-button file-select-button open-file-btn" data-target="id_contrato_actual">Seleccionar archivo</button>
+              </div>
               {{ form.contrato_actual.errors }}
-              <div class="contract-ai-panel">
-                <button type="button" class="document-action-button primary" disabled>Análisis contractual asistido</button>
-                <span class="contract-ai-status" aria-live="polite">Disponible en el siguiente bloque de integración.</span>
-              </div>
-              <div class="document-file-status visible" id="id_contrato_actual_status">
+              <div class="contract-upload-status" id="id_contrato_actual_status">
                 <span class="status-icon">i</span>
-                <div class="status-text">
-                  <span class="status-label">Estado</span>
-                  <span class="status-value">No se ha cargado contrato.</span>
-                </div>
+                <span class="status-value">Ningún archivo cargado todavía</span>
               </div>
-            </article>
+              <div class="authorization-card authorization-card-compact">
+                <strong>Autorización para análisis asistido</strong>
+                <label>{{ form.autoriza_analisis_contractual_asistido }} <span>Autorizo a Aprobado a analizar el contrato cargado para extraer información necesaria de mi solicitud. Entiendo que debo revisar y confirmar los datos antes de continuar.</span></label>
+                {{ form.autoriza_analisis_contractual_asistido.errors }}
+              </div>
+              <div class="contract-ai-panel">
+                <button
+                  type="button"
+                  class="document-action-button primary"
+                  id="analizar_contrato_button"
+                  {% if solicitud %}data-analysis-url="{% url 'contractors:analizar_contrato' solicitud.id %}"{% endif %}
+                  disabled
+                >Analizar contrato</button>
+                <span class="contract-analysis-spinner" id="contract_analysis_spinner" aria-hidden="true" hidden></span>
+                <span class="contract-ai-status" id="contract_ai_status" aria-live="polite">Carga el contrato y autoriza el análisis para continuar.</span>
+              </div>
+              <div id="contract_ai_result" class="contract-analysis-result" aria-live="polite"></div>
+            </section>
           </div>
           <div class="form-actions">
             <button type="button" class="form-button previous" data-prev-step="1">Anterior</button>
@@ -258,43 +284,181 @@
               {{ form.valor_pendiente_cobrar }}
               {{ form.valor_pendiente_cobrar.errors }}
             </div>
-            <div class="form-field">
-              {{ form.monto_solicitado.label_tag }}
-              {{ form.monto_solicitado }}
-              {{ form.monto_solicitado.errors }}
-            </div>
-            <div class="form-field">
-              {{ form.plazo_meses.label_tag }}
-              {{ form.plazo_meses }}
-              {{ form.plazo_meses.errors }}
-            </div>
             <div class="form-field form-field-full">
               {{ form.observaciones_contrato.label_tag }}
               {{ form.observaciones_contrato }}
               {{ form.observaciones_contrato.errors }}
             </div>
           </div>
-          <div class="authorization-card">
+          <div class="authorization-card legal-authorizations">
             <strong>Autorizaciones y confirmación</strong>
-            <label>{{ form.acepta_terminos }} <span>{{ form.acepta_terminos.label }}</span></label>
+            <div class="legal-authorization-row">
+              {{ form.acepta_terminos }}
+              <label for="{{ form.acepta_terminos.id_for_label }}">
+                Acepto los <a href="{% url 'contractors:terminos' %}" target="_blank" rel="noopener">términos y condiciones para Prestadores de Servicios</a>.
+              </label>
+            </div>
             {{ form.acepta_terminos.errors }}
-            <label>{{ form.acepta_politica_privacidad }} <span>{{ form.acepta_politica_privacidad.label }}</span></label>
+            <div class="legal-authorization-row">
+              {{ form.acepta_politica_privacidad }}
+              <label for="{{ form.acepta_politica_privacidad.id_for_label }}">
+                Acepto el tratamiento de mis datos conforme a la <a href="{% url 'contractors:privacidad' %}" target="_blank" rel="noopener">política de privacidad</a>.
+              </label>
+            </div>
             {{ form.acepta_politica_privacidad.errors }}
-            <label>{{ form.autoriza_analisis_contractual_asistido }} <span>{{ form.autoriza_analisis_contractual_asistido.label }}</span></label>
-            {{ form.autoriza_analisis_contractual_asistido.errors }}
-            <label>{{ form.autoriza_consulta_centrales }} <span>{{ form.autoriza_consulta_centrales.label }}</span></label>
+            <div class="legal-authorization-row">
+              {{ form.autoriza_consulta_centrales }}
+              <label for="{{ form.autoriza_consulta_centrales.id_for_label }}">
+                Autorizo la consulta futura ante <a href="{% url 'contractors:centrales_informacion' %}" target="_blank" rel="noopener">centrales de información y riesgo</a> en etapas posteriores del proceso.
+              </label>
+            </div>
             {{ form.autoriza_consulta_centrales.errors }}
             <small>La autorización de consulta se registra como consentimiento. En este flujo no se ejecuta ninguna consulta externa.</small>
           </div>
           <div class="form-actions">
             <button type="button" class="form-button previous" data-prev-step="3">Anterior</button>
-            <button class="form-button submit" type="submit">Registrar solicitud</button>
+            <button class="form-button submit" type="submit">Continuar a simulación</button>
           </div>
         </div>
       </form>
     </section>
   </div>
 </main>
+
+<div class="camera-modal" id="camera_modal" aria-hidden="true">
+  <div class="camera-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="camera_modal_title">
+    <div class="camera-modal-header">
+      <div>
+        <h3 id="camera_modal_title">Capturar documento</h3>
+        <p>Ajusta la cédula dentro del recuadro y verifica que sea legible.</p>
+      </div>
+      <button type="button" class="camera-close-button" id="camera_close_button" aria-label="Cerrar cámara">&times;</button>
+    </div>
+    <div class="camera-modal-body">
+      <div class="camera-preview-shell">
+        <video id="camera_preview" autoplay playsinline muted></video>
+        <canvas id="camera_canvas" hidden></canvas>
+        <img id="camera_photo_preview" alt="Vista previa de la cédula capturada" hidden>
+        <div class="camera-preview-guide" aria-hidden="true"></div>
+      </div>
+      <p class="camera-status-message" id="camera_status_message" aria-live="polite">Solicitando acceso a la cámara...</p>
+      <div class="camera-modal-footer">
+        <button type="button" class="document-action-button primary" id="capture_photo_button">Capturar foto</button>
+        <button type="button" class="document-action-button" id="retake_photo_button" hidden>Repetir foto</button>
+        <button type="button" class="document-action-button primary" id="use_photo_button" hidden>Usar esta foto</button>
+        <button type="button" class="document-action-button" id="camera_cancel_button">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .prestadores-wizard .document-flow { display: grid; gap: 12px; }
+  .prestadores-wizard .document-section { padding: 12px 14px; border: 1px solid #d3e1ec; border-radius: 10px; background: #f8fbff; }
+  .prestadores-wizard .document-section > h3 { margin: 0 0 5px; color: var(--cyan-2); font-size: 14px; font-weight: 600; }
+  .prestadores-wizard .identity-document-rows { display: grid; }
+  .prestadores-wizard .document-row { display: grid; grid-template-columns: minmax(180px, 1fr) auto minmax(170px, .9fr); align-items: center; gap: 12px; padding: 9px 0; }
+  .prestadores-wizard .identity-document-card { display: flex; align-items: center; justify-content: flex-start; flex-wrap: wrap; gap: 10px 14px; }
+  .prestadores-wizard .identity-document-card .document-card-header { flex: 0 1 350px; min-width: 220px; }
+  .prestadores-wizard .identity-document-card .document-upload-actions,
+  .prestadores-wizard .identity-document-card .document-compact-status { flex: 0 0 auto; }
+  .prestadores-wizard .identity-document-card .errorlist { flex-basis: 100%; }
+  .prestadores-wizard .identity-document-rows .document-row + .document-row { border-top: 1px solid #dce6ed; }
+  .prestadores-wizard .document-row .errorlist { grid-column: 1 / -1; margin: 0; }
+  .prestadores-wizard .document-file-row { grid-template-columns: minmax(290px, 1fr) minmax(170px, 1fr) minmax(90px, .8fr); }
+  .prestadores-wizard .document-file-row > .document-card-header,
+  .prestadores-wizard .document-file-row > .documento-input,
+  .prestadores-wizard .document-file-row > .document-file-status { margin: 0; }
+  .prestadores-wizard .document-file-row > .documento-input,
+  .prestadores-wizard .contract-upload-row > .documento-input { display: none; }
+  .prestadores-wizard .document-card-header { margin: 0; }
+  .prestadores-wizard .document-card-header strong { font-size: 16px; font-weight: 600; }
+  .prestadores-wizard .document-card-header small { margin-top: 2px; font-size: 12px; }
+  .prestadores-wizard .document-card-icon { min-width: 36px; height: 36px; border-radius: 9px; }
+  .prestadores-wizard .document-upload-actions { margin: 0; white-space: nowrap; }
+  .prestadores-wizard .document-file-status { padding: 8px 10px; border-radius: 8px; }
+  .prestadores-wizard .status-icon { width: 25px; height: 25px; }
+  .prestadores-wizard .status-label { display: none; }
+  .prestadores-wizard .status-value { font-size: 12px; font-weight: 600; }
+  .prestadores-wizard .identity-document-card .documento-input { display: none; }
+  .prestadores-wizard .contract-document-card { display: grid; gap: 12px; background: #f4fcff; border-color: #b8e7f3; }
+  .prestadores-wizard .document-compact-status,
+  .prestadores-wizard .contract-upload-status { display: inline-flex; align-items: center; justify-content: flex-start; gap: 7px; color: #64748b; font-size: 13px; white-space: nowrap; }
+  .prestadores-wizard .document-compact-status .status-icon,
+  .prestadores-wizard .contract-upload-status .status-icon { width: 20px; height: 20px; border: 1px solid #94a3b8; background: transparent; color: #64748b; font-size: 11px; }
+  .prestadores-wizard .document-compact-status.has-file,
+  .prestadores-wizard .contract-upload-status.has-file { color: #15803d; font-weight: 600; }
+  .prestadores-wizard .document-compact-status.has-file .status-icon,
+  .prestadores-wizard .contract-upload-status.has-file .status-icon { border-color: #86efac; background: #dcfce7; color: #15803d; }
+  .prestadores-wizard .file-select-button { border: 1px solid #94a3b8; border-radius: 8px; background: #fff; color: var(--azul); }
+  .prestadores-wizard .contract-upload-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+  .prestadores-wizard .contract-upload-status,
+  .prestadores-wizard .contract-document-card .authorization-card-compact,
+  .prestadores-wizard .contract-document-card .contract-ai-panel { margin: 0; }
+  .prestadores-wizard .contract-upload-status { min-width: 0; max-width: 100%; }
+  .prestadores-wizard .contract-upload-status .status-value { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prestadores-wizard .contract-analysis-spinner { width: 18px; height: 18px; flex: 0 0 18px; border: 2px solid #bae6fd; border-top-color: var(--cyan); border-radius: 50%; animation: contract-analysis-spin .75s linear infinite; }
+  .prestadores-wizard .contract-analysis-spinner[hidden] { display: none; }
+  @keyframes contract-analysis-spin { to { transform: rotate(360deg); } }
+  .prestadores-wizard .contract-analysis-result:empty { display: none; }
+  .prestadores-wizard .contract-analysis-result { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; width: 100%; padding: 12px; border: 1px solid #bae6fd; border-radius: 10px; background: #f8fcff; }
+  .prestadores-wizard .contract-analysis-summary { display: flex; align-items: center; padding: 9px 11px; border: 1px solid #a7e8c3; border-radius: 8px; background: #effcf4; color: #166534; font-size: 13px; font-weight: 700; }
+  .prestadores-wizard .contract-analysis-summary.is-blocked { border-color: #fdba74; background: #fff7ed; color: #9a3412; }
+  .prestadores-wizard .contract-analysis-summary-item { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; border-radius: 999px; background: #e8f6fc; color: #334155; font-size: 12px; }
+  .prestadores-wizard .contract-analysis-summary-item strong { color: var(--azul); }
+  .prestadores-wizard .contract-analysis-summary-item.is-blocked { background: #fff1e8; color: #9a3412; }
+  .prestadores-wizard .contract-analysis-section { width: 100%; padding: 10px 12px; border: 1px solid #dbe7ef; border-radius: 9px; background: #fff; }
+  .prestadores-wizard .contract-analysis-section > strong { display: block; margin-bottom: 6px; color: var(--azul); font-size: 13px; }
+  .prestadores-wizard .contract-analysis-section ul { margin: 0; padding-left: 19px; }
+  .prestadores-wizard .contract-analysis-section li { margin: 3px 0; line-height: 1.4; overflow-wrap: anywhere; }
+  .prestadores-wizard .contract-analysis-warnings { border-color: #fde68a; background: #fffbeb; color: #92400e; }
+  .prestadores-wizard .contract-analysis-blocks { border-color: #fdba74; background: #fff7ed; color: #9a3412; }
+  .prestadores-wizard .contract-analysis-data-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 14px; margin: 0; }
+  .prestadores-wizard .contract-analysis-data-item { min-width: 0; }
+  .prestadores-wizard .contract-analysis-data-item dt { color: #64748b; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+  .prestadores-wizard .contract-analysis-data-item dd { margin: 2px 0 0; color: #0f2744; font-size: 13px; overflow-wrap: anywhere; }
+  .authorization-card-compact { background: #f8fbff; border-color: #c8eafa; color: var(--azul); }
+  .authorization-card-compact { margin-top: 10px; padding: 12px 13px; }
+  .authorization-card-compact label { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0 0; font-size: 13px; line-height: 1.4; }
+  .legal-authorizations { display: grid; gap: 10px; }
+  .legal-authorizations > strong { margin-bottom: 2px; }
+  .legal-authorization-row { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: start; gap: 10px; }
+  .legal-authorization-row .authorization-checkbox { width: 17px; height: 17px; margin: 2px 0 0; }
+  .legal-authorization-row label { margin: 0; color: var(--azul); font-size: 13px; line-height: 1.5; cursor: pointer; }
+  .legal-authorization-row a { color: var(--cyan-2); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+  .legal-authorizations .errorlist { margin: -5px 0 0 30px; }
+  .camera-modal { position: fixed; inset: 0; z-index: 1100; display: none; align-items: center; justify-content: center; padding: 20px; background: rgba(7, 26, 51, .82); }
+  .camera-modal.visible { display: flex; }
+  .camera-modal-dialog { display: flex; flex-direction: column; width: min(720px, 100%); max-height: calc(100vh - 40px); overflow: hidden; border-radius: 14px; background: #fff; box-shadow: 0 24px 70px rgba(0, 0, 0, .3); }
+  .camera-modal-header { display: flex; justify-content: space-between; gap: 16px; padding: 20px 22px 15px; border-bottom: 1px solid var(--borde); }
+  .camera-modal-header h3 { margin: 0 0 5px; color: var(--azul); }
+  .camera-modal-header p { margin: 0; color: var(--muted); }
+  .camera-close-button { border: 0; background: transparent; color: var(--muted); font-size: 28px; cursor: pointer; }
+  .camera-modal-body { min-height: 0; overflow-y: auto; padding: 16px 22px 20px; }
+  .camera-preview-shell { position: relative; min-height: 220px; overflow: hidden; border-radius: 12px; background: var(--azul); }
+  .camera-preview-shell video,
+  .camera-preview-shell img { display: block; width: 100%; min-height: 220px; max-height: 65vh; object-fit: contain; }
+  .camera-preview-shell canvas { display: none !important; }
+  .camera-preview-shell [hidden] { display: none !important; }
+  .camera-preview-guide { position: absolute; inset: 12%; border: 2px dashed rgba(255, 255, 255, .92); border-radius: 12px; pointer-events: none; }
+  .camera-status-message { margin: 13px 0; color: var(--muted); }
+  .camera-modal-footer { position: sticky; bottom: -20px; z-index: 2; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin: 0 -4px; padding: 10px 4px 0; background: #fff; }
+  body.camera-open { overflow: hidden; }
+  @media (max-width: 720px) {
+    .prestadores-wizard .document-row,
+    .prestadores-wizard .document-file-row { grid-template-columns: 1fr; gap: 8px; }
+    .prestadores-wizard .identity-document-card { display: grid; grid-template-columns: 1fr; align-items: start; }
+    .prestadores-wizard .identity-document-card .document-card-header { min-width: 0; }
+    .prestadores-wizard .contract-upload-row { grid-template-columns: 1fr; }
+    .prestadores-wizard .contract-analysis-data-list { grid-template-columns: 1fr; }
+    .prestadores-wizard .document-file-status { width: 100%; }
+    .camera-modal { padding: 10px; }
+    .camera-modal-dialog { max-height: calc(100vh - 20px); }
+    .camera-modal-header { padding: 15px 16px 12px; }
+    .camera-modal-body { padding: 12px 16px 16px; }
+    .camera-modal-footer { bottom: -16px; }
+  }
+</style>
 
 <script>
   document.addEventListener('DOMContentLoaded', function () {
@@ -308,6 +472,28 @@
     const empresaSeleccionada = document.getElementById('empresa_selected_card');
     const indicadorEmpresa = document.getElementById('empresa_valid_indicator');
     const helperEmpresa = document.getElementById('empresa_helper_text');
+    const camposMonedaContrato = Array.from(document.querySelectorAll('[data-money-contract]'));
+    const botonAnalizarContrato = document.getElementById('analizar_contrato_button');
+    const spinnerAnalisisContrato = document.getElementById('contract_analysis_spinner');
+    const estadoAnalisisContrato = document.getElementById('contract_ai_status');
+    const resultadoAnalisisContrato = document.getElementById('contract_ai_result');
+    const autorizacionAnalisis = document.getElementById('id_autoriza_analisis_contractual_asistido');
+    const campoContrato = document.getElementById('id_contrato_actual');
+    const modalCamara = document.getElementById('camera_modal');
+    const videoCamara = document.getElementById('camera_preview');
+    const canvasCamara = document.getElementById('camera_canvas');
+    const imagenPreviewCamara = document.getElementById('camera_photo_preview');
+    const estadoCamara = document.getElementById('camera_status_message');
+    const botonCapturarFoto = document.getElementById('capture_photo_button');
+    const botonRepetirFoto = document.getElementById('retake_photo_button');
+    const botonUsarFoto = document.getElementById('use_photo_button');
+    let streamCamara = null;
+    let campoCamaraActual = null;
+    let archivoCapturado = null;
+    let urlPreviewCamara = '';
+    let datosSugeridosContrato = {};
+    let analisisContratoValido = false;
+    let analisisContratoEnCurso = false;
 
     function mostrarPaso(numero) {
       pasos.forEach((paso) => paso.classList.toggle('active', paso.dataset.step === String(numero)));
@@ -348,6 +534,47 @@
       return campo ? String(campo.value || '').trim() : '';
     }
 
+    function normalizarMonedaVisual(valorEntrada) {
+      const texto = String(valorEntrada || '').replace(/[$\s\u00a0]/g, '');
+      if (!texto) return '';
+      if (!/^\d[\d.,]*$/.test(texto)) return null;
+      const tienePunto = texto.includes('.');
+      const tieneComa = texto.includes(',');
+      if (tienePunto && tieneComa) {
+        const separadorDecimal = texto.lastIndexOf('.') > texto.lastIndexOf(',') ? '.' : ',';
+        const separadorMiles = separadorDecimal === '.' ? ',' : '.';
+        const indice = texto.lastIndexOf(separadorDecimal);
+        const entero = texto.slice(0, indice).replaceAll(separadorMiles, '');
+        const decimales = texto.slice(indice + 1);
+        if (!/^\d+$/.test(entero) || !/^\d{1,2}$/.test(decimales)) return null;
+        return `${entero}.${decimales}`;
+      }
+      const separador = tienePunto ? '.' : tieneComa ? ',' : '';
+      if (!separador) return texto;
+      const partes = texto.split(separador);
+      if (partes.some((parte) => !/^\d+$/.test(parte))) return null;
+      if (partes.length > 2 || partes.at(-1).length === 3) {
+        if (partes.slice(1).some((parte) => parte.length !== 3)) return null;
+        return partes.join('');
+      }
+      if (partes.length === 2 && /^\d{1,2}$/.test(partes[1])) return `${partes[0]}.${partes[1]}`;
+      return null;
+    }
+
+    function formatearMonedaContrato(campo) {
+      const normalizado = normalizarMonedaVisual(campo.value);
+      if (normalizado === null || normalizado === '') return;
+      const [entero, decimales] = normalizado.split('.');
+      const enteroFormateado = new Intl.NumberFormat('es-CO', {maximumFractionDigits: 0}).format(Number(entero));
+      campo.value = decimales ? `${enteroFormateado},${decimales}` : enteroFormateado;
+    }
+
+    camposMonedaContrato.forEach((campo) => {
+      formatearMonedaContrato(campo);
+      campo.addEventListener('input', () => formatearMonedaContrato(campo));
+      campo.addEventListener('blur', () => formatearMonedaContrato(campo));
+    });
+
     function validarPasoUno() {
       let valido = true;
       const reglas = [
@@ -384,6 +611,13 @@
           valido = false;
         }
       });
+      if (!autorizacionAnalisis || !autorizacionAnalisis.checked) {
+        if (estadoAnalisisContrato) estadoAnalisisContrato.textContent = 'Debes autorizar el análisis contractual antes de continuar.';
+        valido = false;
+      } else if (!analisisContratoValido) {
+        if (estadoAnalisisContrato) estadoAnalisisContrato.textContent = 'Debes analizar el contrato antes de continuar.';
+        valido = false;
+      }
       return valido;
     }
 
@@ -434,12 +668,26 @@
       if (resultadosEmpresa) resultadosEmpresa.innerHTML = '';
       if (indicadorEmpresa) indicadorEmpresa.classList.add('visible');
       if (helperEmpresa) {
-        helperEmpresa.textContent = 'Empresa validada correctamente. Continuaremos con esa empresa.';
+        helperEmpresa.textContent = '';
         helperEmpresa.classList.remove('is-error');
       }
       if (empresaSeleccionada) {
         empresaSeleccionada.style.display = 'block';
-        empresaSeleccionada.innerHTML = `<strong>Empresa seleccionada</strong><span>${nombre}</span>`;
+        empresaSeleccionada.replaceChildren();
+        const check = document.createElement('span');
+        check.className = 'company-selected-check';
+        check.textContent = '✓';
+        const copy = document.createElement('span');
+        copy.className = 'company-selected-copy';
+        const etiqueta = document.createElement('small');
+        etiqueta.textContent = 'Empresa seleccionada';
+        const nombreEmpresa = document.createElement('strong');
+        nombreEmpresa.textContent = nombre;
+        copy.append(etiqueta, nombreEmpresa);
+        const validacion = document.createElement('span');
+        validacion.className = 'company-selected-validation';
+        validacion.textContent = 'Empresa validada correctamente';
+        empresaSeleccionada.append(check, copy, validacion);
       }
     }
 
@@ -450,6 +698,9 @@
       if (empresaSeleccionada) {
         empresaSeleccionada.style.display = 'none';
         empresaSeleccionada.innerHTML = '';
+      }
+      if (helperEmpresa) {
+        helperEmpresa.textContent = 'Debes elegir una empresa válida de la lista de resultados.';
       }
       const consulta = inputEmpresa.value.trim().toLowerCase();
       resultadosEmpresa.innerHTML = '';
@@ -474,23 +725,183 @@
     function actualizarEstadoDocumento(campo) {
       const estado = campo ? document.getElementById(`${campo.id}_status`) : null;
       const archivo = campo && campo.files && campo.files[0];
-      if (!estado || !archivo) return;
+      const yaExiste = campo && campo.dataset.existing === 'true';
+      if (!estado || (!archivo && !yaExiste)) return;
       estado.classList.add('has-file');
       const valorEstado = estado.querySelector('.status-value');
       const icono = estado.querySelector('.status-icon');
-      if (valorEstado) valorEstado.textContent = `Archivo seleccionado: ${archivo.name}`;
-      if (icono) icono.textContent = 'OK';
+      if (valorEstado) {
+        valorEstado.textContent = campo.id === 'id_contrato_actual'
+          ? `Contrato cargado: ${(archivo && archivo.name ? archivo.name : 'contrato.pdf').split(/[\\/]/).pop()}`
+          : 'OK';
+      }
+      if (icono) icono.textContent = '✓';
       limpiarError(campo);
     }
 
-    document.querySelectorAll('.open-file-btn[data-target]').forEach((boton) => {
+    function detenerCamara() {
+      if (streamCamara) {
+        streamCamara.getTracks().forEach((track) => track.stop());
+        streamCamara = null;
+      }
+    }
+
+    function limpiarPreviewCamara() {
+      if (urlPreviewCamara) URL.revokeObjectURL(urlPreviewCamara);
+      urlPreviewCamara = '';
+      if (imagenPreviewCamara) {
+        imagenPreviewCamara.removeAttribute('src');
+        imagenPreviewCamara.hidden = true;
+      }
+    }
+
+    function cerrarCamara() {
+      detenerCamara();
+      if (modalCamara) {
+        modalCamara.classList.remove('visible');
+        modalCamara.setAttribute('aria-hidden', 'true');
+      }
+      document.body.classList.remove('camera-open');
+      if (videoCamara) {
+        videoCamara.srcObject = null;
+        videoCamara.hidden = false;
+      }
+      limpiarPreviewCamara();
+      if (botonCapturarFoto) botonCapturarFoto.hidden = false;
+      if (botonRepetirFoto) botonRepetirFoto.hidden = true;
+      if (botonUsarFoto) botonUsarFoto.hidden = true;
+      archivoCapturado = null;
+      campoCamaraActual = null;
+    }
+
+    function abrirSelectorManual(campo) {
+      if (!campo) return;
+      const origen = document.getElementById(`origen_${campo.name}`);
+      if (origen) origen.value = 'upload_fallback';
+      const captura = campo.getAttribute('capture');
+      campo.removeAttribute('capture');
+      campo.click();
+      window.setTimeout(() => {
+        if (captura) campo.setAttribute('capture', captura);
+      }, 0);
+    }
+
+    async function abrirCamara(campo, etiqueta) {
+      if (!campo) return;
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !modalCamara) {
+        const origen = document.getElementById(`origen_${campo.name}`);
+        if (origen) origen.value = 'capture';
+        campo.setAttribute('capture', 'environment');
+        campo.click();
+        return;
+      }
+      campoCamaraActual = campo;
+      archivoCapturado = null;
+      detenerCamara();
+      limpiarPreviewCamara();
+      videoCamara.hidden = false;
+      modalCamara.classList.add('visible');
+      modalCamara.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('camera-open');
+      document.getElementById('camera_modal_title').textContent = `Capturar ${etiqueta}`;
+      if (estadoCamara) estadoCamara.textContent = 'Solicitando acceso a la cámara...';
+      try {
+        streamCamara = await navigator.mediaDevices.getUserMedia({
+          video: {facingMode: {ideal: 'environment'}},
+          audio: false,
+        });
+        videoCamara.srcObject = streamCamara;
+        await videoCamara.play();
+        if (estadoCamara) estadoCamara.textContent = 'Ajusta el documento dentro del recuadro y captura la foto.';
+      } catch (error) {
+        cerrarCamara();
+        if (formulario.dataset.allowIdUploadFallback === 'true') {
+          abrirSelectorManual(campo);
+        } else {
+          mostrarError(campo, 'No fue posible abrir la cámara. Revisa el permiso del navegador e inténtalo nuevamente.');
+        }
+      }
+    }
+
+    function asignarFotoAlCampo(campo, archivo) {
+      if (!campo || !archivo || typeof DataTransfer === 'undefined') return false;
+      const transferencia = new DataTransfer();
+      transferencia.items.add(archivo);
+      campo.files = transferencia.files;
+      const origen = document.getElementById(`origen_${campo.name}`);
+      if (origen) origen.value = 'camera';
+      actualizarEstadoDocumento(campo);
+      campo.dispatchEvent(new Event('change', {bubbles: true}));
+      return true;
+    }
+
+    document.querySelectorAll('.open-camera-btn[data-target]').forEach((boton) => {
       boton.addEventListener('click', function () {
-        const campo = document.getElementById(boton.dataset.target);
-        if (campo) campo.click();
+        abrirCamara(
+          document.getElementById(boton.dataset.target),
+          boton.dataset.label || 'documento',
+        );
       });
     });
 
+    document.querySelectorAll('.open-file-btn[data-target]').forEach((boton) => {
+      boton.addEventListener('click', function () {
+        abrirSelectorManual(document.getElementById(boton.dataset.target));
+      });
+    });
+
+    ['camera_close_button', 'camera_cancel_button'].forEach((id) => {
+      const boton = document.getElementById(id);
+      if (boton) boton.addEventListener('click', cerrarCamara);
+    });
+
+    if (botonCapturarFoto) {
+      botonCapturarFoto.addEventListener('click', function () {
+        if (!videoCamara || !canvasCamara || !videoCamara.videoWidth) {
+          if (estadoCamara) estadoCamara.textContent = 'La cámara todavía no está lista.';
+          return;
+        }
+        canvasCamara.width = videoCamara.videoWidth;
+        canvasCamara.height = videoCamara.videoHeight;
+        canvasCamara.getContext('2d').drawImage(videoCamara, 0, 0);
+        canvasCamara.toBlob((blob) => {
+          if (!blob) {
+            if (estadoCamara) estadoCamara.textContent = 'No fue posible capturar la imagen.';
+            return;
+          }
+          archivoCapturado = new File([blob], `cedula-${Date.now()}.jpg`, {type: 'image/jpeg'});
+          limpiarPreviewCamara();
+          urlPreviewCamara = URL.createObjectURL(blob);
+          imagenPreviewCamara.src = urlPreviewCamara;
+          imagenPreviewCamara.hidden = false;
+          videoCamara.hidden = true;
+          botonCapturarFoto.hidden = true;
+          botonRepetirFoto.hidden = false;
+          botonUsarFoto.hidden = false;
+          if (estadoCamara) estadoCamara.textContent = 'Foto capturada. Verifica que sea legible antes de usarla.';
+        }, 'image/jpeg', 0.9);
+      });
+    }
+
+    if (botonRepetirFoto) {
+      botonRepetirFoto.addEventListener('click', function () {
+        archivoCapturado = null;
+        limpiarPreviewCamara();
+        videoCamara.hidden = false;
+        botonCapturarFoto.hidden = false;
+        botonRepetirFoto.hidden = true;
+        botonUsarFoto.hidden = true;
+      });
+    }
+
+    if (botonUsarFoto) {
+      botonUsarFoto.addEventListener('click', function () {
+        if (asignarFotoAlCampo(campoCamaraActual, archivoCapturado)) cerrarCamara();
+      });
+    }
+
     document.querySelectorAll('.documento-input').forEach((campo) => {
+      actualizarEstadoDocumento(campo);
       campo.addEventListener('change', function () {
         actualizarEstadoDocumento(campo);
       });
@@ -506,6 +917,195 @@
     if (inputEmpresa) {
       inputEmpresa.addEventListener('input', renderResultadosEmpresa);
     }
+
+    function contratoDisponible() {
+      return Boolean(
+        campoContrato
+        && ((campoContrato.files && campoContrato.files.length) || campoContrato.dataset.existing === 'true')
+      );
+    }
+
+    function actualizarBotonAnalisis() {
+      if (!botonAnalizarContrato) return;
+      const habilitado = !analisisContratoEnCurso && contratoDisponible() && autorizacionAnalisis && autorizacionAnalisis.checked;
+      botonAnalizarContrato.disabled = !habilitado;
+      if (estadoAnalisisContrato && !habilitado && !analisisContratoEnCurso) {
+        estadoAnalisisContrato.textContent = 'Carga el contrato y autoriza el análisis para continuar.';
+      }
+    }
+
+    function agregarListaResultado(contenedor, titulo, valores, clase) {
+      if (!valores || !valores.length) return;
+      const bloque = document.createElement('div');
+      bloque.className = `contract-analysis-section ${clase}`;
+      const encabezado = document.createElement('strong');
+      encabezado.textContent = titulo;
+      bloque.appendChild(encabezado);
+      const lista = document.createElement('ul');
+      valores.forEach((valor) => {
+        const item = document.createElement('li');
+        item.textContent = valor;
+        lista.appendChild(item);
+      });
+      bloque.appendChild(lista);
+      contenedor.appendChild(bloque);
+    }
+
+    function agregarDatoDetectado(lista, etiqueta, valor) {
+      if (valor === undefined || valor === null || String(valor).trim() === '') return;
+      const item = document.createElement('div');
+      item.className = 'contract-analysis-data-item';
+      const termino = document.createElement('dt');
+      termino.textContent = etiqueta;
+      const detalle = document.createElement('dd');
+      detalle.textContent = String(valor);
+      item.append(termino, detalle);
+      lista.appendChild(item);
+    }
+
+    function renderizarResultadoAnalisis(data) {
+      if (!resultadoAnalisisContrato) return;
+      resultadoAnalisisContrato.innerHTML = '';
+      resultadoAnalisisContrato.classList.add('visible');
+      const mensaje = document.createElement('div');
+      mensaje.className = data.bloqueos?.length
+        ? 'contract-analysis-summary is-blocked'
+        : 'contract-analysis-summary';
+      mensaje.textContent = data.bloqueos?.length
+        ? 'El análisis detectó información que debes revisar antes de continuar.'
+        : 'Datos detectados desde el contrato. Revísalos antes de continuar.';
+      resultadoAnalisisContrato.appendChild(mensaje);
+
+      datosSugeridosContrato = data.datos || {};
+      const sugerencia = data.empresa_sugerida || {};
+      const listaDatos = document.createElement('dl');
+      listaDatos.className = 'contract-analysis-data-list';
+      agregarDatoDetectado(listaDatos, 'Empresa detectada', datosSugeridosContrato.empresa_contratante);
+      agregarDatoDetectado(listaDatos, 'NIT detectado', datosSugeridosContrato.nit_empresa);
+      agregarDatoDetectado(listaDatos, 'Empresa sugerida en Aprobado', sugerencia.empresa_sugerida_nombre || sugerencia.nombre);
+      agregarDatoDetectado(listaDatos, 'Cargo o actividad', datosSugeridosContrato.cargo_o_servicio);
+      agregarDatoDetectado(listaDatos, 'Tipo de contrato', datosSugeridosContrato.tipo_contrato);
+      agregarDatoDetectado(listaDatos, 'Fecha de inicio', datosSugeridosContrato.fecha_inicio_contrato);
+      agregarDatoDetectado(listaDatos, 'Fecha de finalización', datosSugeridosContrato.fecha_fin_contrato);
+      agregarDatoDetectado(listaDatos, 'Valor total', datosSugeridosContrato.valor_total_contrato);
+      agregarDatoDetectado(listaDatos, 'Valor pendiente', datosSugeridosContrato.valor_pendiente_estimado);
+      if (listaDatos.children.length) {
+        const bloqueDatos = document.createElement('div');
+        bloqueDatos.className = 'contract-analysis-section contract-analysis-data';
+        const tituloDatos = document.createElement('strong');
+        tituloDatos.textContent = 'Datos detectados';
+        bloqueDatos.append(tituloDatos, listaDatos);
+        resultadoAnalisisContrato.appendChild(bloqueDatos);
+      }
+      agregarListaResultado(resultadoAnalisisContrato, 'Advertencias', data.advertencias, 'contract-analysis-warnings');
+      agregarListaResultado(resultadoAnalisisContrato, 'Bloqueos', data.bloqueos, 'contract-analysis-blocks');
+      if (!data.bloqueos?.length && sugerencia.empresa_sugerida_id) {
+        confirmarEmpresa(String(sugerencia.empresa_sugerida_id), sugerencia.nombre);
+      }
+    }
+
+    function aplicarSugerenciasContrato() {
+      const mapa = {
+        cargo_o_servicio: 'id_cargo',
+        tipo_contrato: 'id_tipo_contrato',
+        fecha_inicio_contrato: 'id_fecha_inicio_contrato',
+        fecha_fin_contrato: 'id_fecha_fin_contrato',
+        valor_total_contrato: 'id_valor_total_contrato',
+        valor_pagado_estimado: 'id_valor_pagado_contrato',
+        valor_pendiente_estimado: 'id_valor_pendiente_cobrar',
+      };
+      Object.entries(mapa).forEach(([origen, destino]) => {
+        const campo = document.getElementById(destino);
+        if (campo && datosSugeridosContrato[origen]) {
+          campo.value = datosSugeridosContrato[origen];
+          if (campo.matches('[data-money-contract]')) formatearMonedaContrato(campo);
+        }
+      });
+    }
+
+    async function ejecutarAnalisisContrato() {
+      if (!botonAnalizarContrato || botonAnalizarContrato.disabled || analisisContratoEnCurso) return;
+      analisisContratoEnCurso = true;
+      botonAnalizarContrato.disabled = true;
+      botonAnalizarContrato.textContent = 'Analizando...';
+      if (spinnerAnalisisContrato) spinnerAnalisisContrato.hidden = false;
+      if (estadoAnalisisContrato) estadoAnalisisContrato.textContent = 'Estamos revisando el contrato. Esto puede tardar unos segundos.';
+      try {
+        const datosAnalisis = new FormData();
+        const archivo = campoContrato && campoContrato.files ? campoContrato.files[0] : null;
+        if (archivo) datosAnalisis.append('contrato_actual', archivo);
+        datosAnalisis.append('numero_documento', valor('id_numero_documento'));
+        datosAnalisis.append('autoriza_analisis_contractual_asistido', autorizacionAnalisis.checked ? '1' : '0');
+        const csrf = formulario.querySelector('[name="csrfmiddlewaretoken"]').value;
+        datosAnalisis.append('csrfmiddlewaretoken', csrf);
+        const urlAnalisis = botonAnalizarContrato.dataset.analysisUrl || formulario.dataset.analysisUrl;
+        if (estadoAnalisisContrato) estadoAnalisisContrato.textContent = 'Analizando contrato...';
+        const analisis = await fetch(urlAnalisis, {
+          method: 'POST',
+          body: datosAnalisis,
+          credentials: 'same-origin',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': csrf,
+          },
+        });
+        const respuestaAnalisis = await analisis.json();
+        if (estadoAnalisisContrato) estadoAnalisisContrato.textContent = 'Validando información...';
+        renderizarResultadoAnalisis(respuestaAnalisis);
+        if (!analisis.ok) throw new Error(respuestaAnalisis.error || 'No fue posible analizar el contrato.');
+        if (estadoAnalisisContrato) {
+          if (respuestaAnalisis.bloqueos && respuestaAnalisis.bloqueos.length) {
+            analisisContratoValido = false;
+            estadoAnalisisContrato.textContent = 'El análisis detectó un bloqueo que debes revisar.';
+          } else if (!respuestaAnalisis.success) {
+            analisisContratoValido = Boolean(respuestaAnalisis.manual_allowed);
+            estadoAnalisisContrato.textContent = 'Análisis completado con advertencias. Completa y confirma la información manualmente.';
+          } else {
+            analisisContratoValido = true;
+            aplicarSugerenciasContrato();
+            estadoAnalisisContrato.textContent = 'Datos detectados desde el contrato. Revísalos antes de continuar.';
+          }
+        }
+      } catch (error) {
+        analisisContratoValido = false;
+        if (estadoAnalisisContrato) estadoAnalisisContrato.textContent = error.message || 'No fue posible analizar el contrato.';
+      } finally {
+        analisisContratoEnCurso = false;
+        if (spinnerAnalisisContrato) spinnerAnalisisContrato.hidden = true;
+        botonAnalizarContrato.textContent = 'Analizar contrato';
+        actualizarBotonAnalisis();
+      }
+    }
+
+    if (campoContrato) campoContrato.addEventListener('change', function () {
+      analisisContratoValido = false;
+      datosSugeridosContrato = {};
+      if (resultadoAnalisisContrato) resultadoAnalisisContrato.innerHTML = '';
+      actualizarBotonAnalisis();
+      if (estadoAnalisisContrato) estadoAnalisisContrato.textContent = 'Contrato cargado. Debes analizarlo antes de continuar.';
+    });
+    if (autorizacionAnalisis) autorizacionAnalisis.addEventListener('change', function () {
+      if (!autorizacionAnalisis.checked) analisisContratoValido = false;
+      actualizarBotonAnalisis();
+    });
+    const campoNumeroDocumento = document.getElementById('id_numero_documento');
+    if (campoNumeroDocumento) campoNumeroDocumento.addEventListener('input', function () {
+      analisisContratoValido = false;
+    });
+    if (botonAnalizarContrato) botonAnalizarContrato.addEventListener('click', ejecutarAnalisisContrato);
+    formulario.addEventListener('submit', function (event) {
+      if (!analisisContratoValido) {
+        event.preventDefault();
+        mostrarPaso(2);
+        if (estadoAnalisisContrato) estadoAnalisisContrato.textContent = 'Debes analizar el contrato antes de registrar la solicitud.';
+        return;
+      }
+      camposMonedaContrato.forEach((campo) => {
+        const normalizado = normalizarMonedaVisual(campo.value);
+        if (normalizado !== null && normalizado !== '') campo.value = normalizado;
+      });
+    });
+    actualizarBotonAnalisis();
   });
 </script>
 {% endblock %}

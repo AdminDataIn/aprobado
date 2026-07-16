@@ -1,4 +1,9 @@
+from decimal import Decimal, InvalidOperation
+import re
+
 from django import forms
+from django.conf import settings
+from django.core.exceptions import ValidationError
 
 from contractors.models import (
     ContractorApplication,
@@ -8,19 +13,189 @@ from contractors.models import (
 from gestion_creditos.models import Empresa
 
 
+def normalizar_monto_colombiano(valor):
+    if valor in (None, ''):
+        return valor
+    if isinstance(valor, (Decimal, int, float)):
+        return str(valor)
+
+    texto = re.sub(r'[\s\u00a0$]', '', str(valor).strip())
+    if not texto or not re.fullmatch(r'\d[\d.,]*', texto):
+        raise ValidationError('Ingresa un valor monetario válido.')
+
+    if '.' in texto and ',' in texto:
+        separador_decimal = '.' if texto.rfind('.') > texto.rfind(',') else ','
+        separador_miles = ',' if separador_decimal == '.' else '.'
+        entero, decimales = texto.rsplit(separador_decimal, 1)
+        if len(decimales) not in (1, 2) or not decimales.isdigit():
+            raise ValidationError('Ingresa un valor monetario válido.')
+        entero = entero.replace(separador_miles, '')
+        if not entero.isdigit():
+            raise ValidationError('Ingresa un valor monetario válido.')
+        return f'{entero}.{decimales}'
+
+    separador = '.' if '.' in texto else ',' if ',' in texto else None
+    if not separador:
+        return texto
+
+    partes = texto.split(separador)
+    if any(not parte.isdigit() for parte in partes):
+        raise ValidationError('Ingresa un valor monetario válido.')
+    if len(partes) > 2 or len(partes[-1]) == 3:
+        if any(len(parte) != 3 for parte in partes[1:]):
+            raise ValidationError('Ingresa un valor monetario válido.')
+        return ''.join(partes)
+    if len(partes) == 2 and len(partes[-1]) in (1, 2):
+        return f'{partes[0]}.{partes[1]}'
+    raise ValidationError('Ingresa un valor monetario válido.')
+
+
+class MontoContratoField(forms.DecimalField):
+    def to_python(self, value):
+        return super().to_python(normalizar_monto_colombiano(value))
+
+    def prepare_value(self, value):
+        if value in (None, ''):
+            return value
+        if isinstance(value, str) and not re.fullmatch(r'\d+(\.\d+)?', value.strip()):
+            return value
+        try:
+            decimal = Decimal(str(value))
+        except (InvalidOperation, TypeError, ValueError):
+            return value
+        entero, _, decimales = format(decimal, 'f').partition('.')
+        entero_formateado = f'{int(entero):,}'.replace(',', '.')
+        decimales = decimales.rstrip('0')
+        return f'{entero_formateado},{decimales}' if decimales else entero_formateado
+
+
+class SimulacionPrestadorForm(forms.Form):
+    monto = forms.DecimalField(
+        label='Monto solicitado',
+        max_digits=14,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={'step': '50000'}),
+    )
+    plazo_meses = forms.IntegerField(
+        label='Plazo en meses',
+        widget=forms.NumberInput(attrs={'step': '1'}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        configuracion = kwargs.pop('configuracion', None)
+        super().__init__(*args, **kwargs)
+        monto_minimo = Decimal(str(
+            configuracion.monto_minimo
+            if configuracion else getattr(settings, 'CONTRACTORS_MIN_AMOUNT', '1000000')
+        ))
+        monto_maximo = Decimal(str(
+            configuracion.monto_maximo
+            if configuracion else getattr(settings, 'CONTRACTORS_MAX_AMOUNT', '10000000')
+        ))
+        plazo_minimo = int(
+            configuracion.plazo_minimo_meses
+            if configuracion else getattr(settings, 'CONTRACTORS_MIN_TERM_MONTHS', 3)
+        )
+        plazo_maximo = int(
+            configuracion.plazo_maximo_meses
+            if configuracion else getattr(settings, 'CONTRACTORS_MAX_TERM_MONTHS', 24)
+        )
+
+        self.fields['monto'].min_value = monto_minimo
+        self.fields['monto'].max_value = monto_maximo
+        self.fields['monto'].widget.attrs.update({
+            'min': str(monto_minimo),
+            'max': str(monto_maximo),
+        })
+        self.fields['plazo_meses'].min_value = plazo_minimo
+        self.fields['plazo_meses'].max_value = plazo_maximo
+        self.fields['plazo_meses'].widget.attrs.update({
+            'min': str(plazo_minimo),
+            'max': str(plazo_maximo),
+        })
+        self.monto_minimo = monto_minimo
+        self.monto_maximo = monto_maximo
+        self.plazo_minimo = plazo_minimo
+        self.plazo_maximo = plazo_maximo
+
+    def clean_monto(self):
+        monto = self.cleaned_data['monto']
+        if monto < self.monto_minimo or monto > self.monto_maximo:
+            raise forms.ValidationError(
+                f'El monto debe estar entre ${self.monto_minimo:,.0f} y ${self.monto_maximo:,.0f}.'
+            )
+        return monto
+
+    def clean_plazo_meses(self):
+        plazo = self.cleaned_data['plazo_meses']
+        if plazo < self.plazo_minimo or plazo > self.plazo_maximo:
+            raise forms.ValidationError(
+                f'El plazo debe estar entre {self.plazo_minimo} y {self.plazo_maximo} meses.'
+            )
+        return plazo
+
+
 class SolicitudPrestadorForm(forms.ModelForm):
     MAPA_DOCUMENTOS = MAPA_CAMPOS_DOCUMENTOS_PRESTADOR
+
+    valor_total_contrato = MontoContratoField(
+        label='Valor total contrato',
+        max_digits=14,
+        decimal_places=2,
+        min_value=Decimal('0'),
+        widget=forms.TextInput(attrs={
+            'class': 'campo money-contract-input',
+            'inputmode': 'numeric',
+            'autocomplete': 'off',
+            'placeholder': 'Ej. 80.000.000',
+            'data-money-contract': 'true',
+        }),
+    )
+    valor_pagado_contrato = MontoContratoField(
+        label='Valor pagado del contrato',
+        max_digits=14,
+        decimal_places=2,
+        min_value=Decimal('0'),
+        widget=forms.TextInput(attrs={
+            'class': 'campo money-contract-input',
+            'inputmode': 'numeric',
+            'autocomplete': 'off',
+            'placeholder': 'Ej. 5.000.000',
+            'data-money-contract': 'true',
+        }),
+    )
+    valor_pendiente_cobrar = MontoContratoField(
+        label='Valor pendiente por cobrar',
+        max_digits=14,
+        decimal_places=2,
+        min_value=Decimal('0'),
+        widget=forms.TextInput(attrs={
+            'class': 'campo money-contract-input',
+            'inputmode': 'numeric',
+            'autocomplete': 'off',
+            'placeholder': 'Ej. 75.000.000',
+            'data-money-contract': 'true',
+        }),
+    )
 
     documento_identidad_frontal = forms.FileField(
         label='Cédula frontal',
         required=True,
-        widget=forms.ClearableFileInput(attrs={'class': 'campo documento-input', 'accept': 'image/jpeg,image/png,application/pdf'}),
+        widget=forms.ClearableFileInput(attrs={
+            'class': 'campo documento-input',
+            'accept': 'image/*',
+            'capture': 'environment',
+        }),
         error_messages={'required': 'Carga la cédula frontal.'},
     )
     documento_identidad_reverso = forms.FileField(
         label='Cédula trasera',
         required=True,
-        widget=forms.ClearableFileInput(attrs={'class': 'campo documento-input', 'accept': 'image/jpeg,image/png,application/pdf'}),
+        widget=forms.ClearableFileInput(attrs={
+            'class': 'campo documento-input',
+            'accept': 'image/*',
+            'capture': 'environment',
+        }),
         error_messages={'required': 'Carga la cédula trasera.'},
     )
     certificado_bancario = forms.FileField(
@@ -67,8 +242,6 @@ class SolicitudPrestadorForm(forms.ModelForm):
             'valor_pagado_contrato',
             'valor_pendiente_cobrar',
             'observaciones_contrato',
-            'monto_solicitado',
-            'plazo_meses',
             'acepta_terminos',
             'acepta_politica_privacidad',
             'autoriza_analisis_contractual_asistido',
@@ -87,12 +260,7 @@ class SolicitudPrestadorForm(forms.ModelForm):
             'tipo_contrato': forms.Select(attrs={'class': 'campo'}),
             'fecha_inicio_contrato': forms.DateInput(attrs={'class': 'campo', 'type': 'date'}),
             'fecha_fin_contrato': forms.DateInput(attrs={'class': 'campo', 'type': 'date'}),
-            'valor_total_contrato': forms.NumberInput(attrs={'class': 'campo', 'step': '0.01', 'min': '0', 'placeholder': 'Ej. 12000000'}),
-            'valor_pagado_contrato': forms.NumberInput(attrs={'class': 'campo', 'step': '0.01', 'min': '0', 'placeholder': 'Ej. 4000000'}),
-            'valor_pendiente_cobrar': forms.NumberInput(attrs={'class': 'campo', 'step': '0.01', 'min': '0', 'placeholder': 'Ej. 8000000'}),
             'observaciones_contrato': forms.Textarea(attrs={'class': 'campo', 'rows': 3, 'placeholder': 'Observaciones contractuales opcionales'}),
-            'monto_solicitado': forms.NumberInput(attrs={'class': 'campo', 'step': '0.01', 'min': '0', 'placeholder': 'Ej. 3000000'}),
-            'plazo_meses': forms.NumberInput(attrs={'class': 'campo', 'min': '1', 'placeholder': 'Ej. 12'}),
             'acepta_terminos': forms.CheckboxInput(attrs={'class': 'authorization-checkbox'}),
             'acepta_politica_privacidad': forms.CheckboxInput(attrs={'class': 'authorization-checkbox'}),
             'autoriza_analisis_contractual_asistido': forms.CheckboxInput(attrs={'class': 'authorization-checkbox'}),
@@ -115,8 +283,6 @@ class SolicitudPrestadorForm(forms.ModelForm):
             'valor_pagado_contrato': 'Valor pagado del contrato',
             'valor_pendiente_cobrar': 'Valor pendiente por cobrar',
             'observaciones_contrato': 'Observaciones del contrato',
-            'monto_solicitado': 'Monto solicitado',
-            'plazo_meses': 'Plazo solicitado en meses',
             'acepta_terminos': 'Acepto los términos y condiciones',
             'acepta_politica_privacidad': 'Acepto la política de privacidad',
             'autoriza_analisis_contractual_asistido': 'Autorizo el análisis contractual asistido',
@@ -134,8 +300,6 @@ class SolicitudPrestadorForm(forms.ModelForm):
             'valor_total_contrato',
             'valor_pagado_contrato',
             'valor_pendiente_cobrar',
-            'monto_solicitado',
-            'plazo_meses',
         ):
             self.fields[campo].required = True
 
@@ -187,8 +351,8 @@ class SolicitudPrestadorForm(forms.ModelForm):
 
         for campo in ('documento_identidad_frontal', 'documento_identidad_reverso'):
             archivo = archivos.get(campo)
-            if archivo and not archivo.name.lower().endswith(('.jpg', '.jpeg', '.png', '.pdf')):
-                self.add_error(campo, 'Carga una imagen o PDF válido.')
+            if archivo and not archivo.name.lower().endswith(('.jpg', '.jpeg', '.png')):
+                self.add_error(campo, 'Captura una imagen válida de la cédula.')
 
         for campo, tipo_documento in self.MAPA_DOCUMENTOS.items():
             archivo = archivos.get(campo)
