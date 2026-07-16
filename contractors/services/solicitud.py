@@ -6,12 +6,26 @@ from contractors.models import (
     DOCUMENTOS_OBLIGATORIOS_PRESTADOR,
     MAPA_CAMPOS_DOCUMENTOS_PRESTADOR,
 )
+from contractors.services.evaluacion_audit import (
+    ESTADOS_CON_EVALUACION,
+    invalidar_evaluacion_si_cambiaron_datos,
+)
+from contractors.services.evaluacion_versionado import construir_version_datos
 
 
 @transaction.atomic
 def guardar_documento_prestador(
-    *, solicitud, tipo_documento, archivo, usuario, metadata_captura=None
+    *, solicitud, tipo_documento, archivo, usuario, metadata_captura=None,
+    invalidar_evaluacion=True,
 ):
+    debe_versionar = (
+        invalidar_evaluacion
+        and (
+            solicitud.estado in ESTADOS_CON_EVALUACION
+            or solicitud.auditorias_predecision.exists()
+        )
+    )
+    version_anterior = construir_version_datos(solicitud)[0] if debe_versionar else ''
     documento = (
         ContractorApplicationDocument.objects.select_for_update()
         .filter(solicitud=solicitud, tipo_documento=tipo_documento)
@@ -30,6 +44,15 @@ def guardar_documento_prestador(
     documento.metadata_captura = metadata_captura or {}
     documento.full_clean()
     documento.save()
+
+    if debe_versionar:
+        invalidar_evaluacion_si_cambiaron_datos(
+            solicitud,
+            version_anterior=version_anterior,
+            usuario=usuario,
+            campos=['documentos', tipo_documento],
+            motivo='documento_reemplazado',
+        )
 
     if archivo_anterior and archivo_anterior != documento.archivo.name:
         transaction.on_commit(lambda: storage.delete(archivo_anterior))
@@ -51,6 +74,7 @@ def guardar_documentos_formulario(
                     archivo=archivo,
                     usuario=usuario,
                     metadata_captura=metadata_documentos.get(campo, {}),
+                    invalidar_evaluacion=False,
                 )
             )
     return documentos
@@ -62,6 +86,8 @@ def solicitud_tiene_documentos_obligatorios(solicitud):
 
 
 def actualizar_estado_documental(solicitud):
+    if solicitud.estado in ESTADOS_CON_EVALUACION:
+        return solicitud.estado
     estado = (
         ContractorApplication.Estado.DOCUMENTOS_CARGADOS
         if solicitud_tiene_documentos_obligatorios(solicitud)

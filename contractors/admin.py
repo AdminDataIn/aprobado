@@ -4,6 +4,8 @@ from contractors.models import (
     ConfiguracionSimuladorPrestador,
     ContractorApplication,
     ContractorApplicationDocument,
+    PredecisionPrestadorAudit,
+    TimelinePrestador,
 )
 
 
@@ -60,3 +62,49 @@ class ConfiguracionSimuladorPrestadorAdmin(admin.ModelAdmin):
     ]
     list_filter = ['activo']
     readonly_fields = ['created_at', 'updated_at']
+
+
+class AdminAuditoriaSoloLectura(admin.ModelAdmin):
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PredecisionPrestadorAudit)
+class PredecisionPrestadorAuditAdmin(AdminAuditoriaSoloLectura):
+    list_display = [
+        'id',
+        'solicitud',
+        'resultado',
+        'estado_ejecucion',
+        'score',
+        'version_politica',
+        'iniciada_en',
+        'finalizada_en',
+    ]
+    list_filter = ['resultado', 'estado_ejecucion', 'version_politica', 'created_at']
+    search_fields = ['solicitud__id', 'clave_idempotencia', 'version_datos']
+    readonly_fields = [campo.name for campo in PredecisionPrestadorAudit._meta.fields]
+    ordering = ['-created_at', '-id']
+
+
+@admin.register(TimelinePrestador)
+class TimelinePrestadorAdmin(AdminAuditoriaSoloLectura):
+    list_display = [
+        'id',
+        'solicitud',
+        'tipo_evento',
+        'titulo',
+        'visible_cliente',
+        'creado_por',
+        'created_at',
+    ]
+    list_filter = ['tipo_evento', 'visible_cliente', 'created_at']
+    search_fields = ['solicitud__id', 'titulo']
+    readonly_fields = [campo.name for campo in TimelinePrestador._meta.fields]
+    ordering = ['-created_at', '-id']

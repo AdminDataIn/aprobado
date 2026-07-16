@@ -13,6 +13,7 @@ from contractors.models import (
     ConfiguracionSimuladorPrestador,
     ContractorApplication,
     ContractorApplicationDocument,
+    TimelinePrestador,
 )
 from contractors.forms import SolicitudPrestadorForm
 from contractors.services.analisis_contrato import ResultadoAnalisisContrato
@@ -112,6 +113,12 @@ class PortalMinimoPrestadoresTest(TestCase):
         )
         self.assertEqual(solicitud.estado, ContractorApplication.Estado.DOCUMENTOS_CARGADOS)
         self.assertEqual(solicitud.documentos.count(), 4)
+        self.assertTrue(
+            TimelinePrestador.objects.filter(
+                solicitud=solicitud,
+                tipo_evento=TimelinePrestador.TipoEvento.SOLICITUD_REGISTRADA,
+            ).exists()
+        )
         cedula_frontal = solicitud.documentos.get(
             tipo_documento=ContractorApplicationDocument.TipoDocumento.CEDULA_FRONTAL,
         )
@@ -1131,6 +1138,10 @@ class PortalMinimoPrestadoresTest(TestCase):
         solicitud.refresh_from_db()
         self.assertEqual(solicitud.monto_solicitado, Decimal('3500000.00'))
         self.assertEqual(solicitud.plazo_meses, 12)
+        self.assertEqual(
+            solicitud.estado,
+            ContractorApplication.Estado.EVALUACION_PENDIENTE,
+        )
         self.assertEqual(Credito.objects.count(), creditos_antes)
         self.assertEqual(CreditoLibranza.objects.count(), creditos_libranza_antes)
 
@@ -1322,13 +1333,13 @@ class PortalMinimoPrestadoresTest(TestCase):
 
         response = self.client.post(
             f'/gestion/prestadores/{solicitud.id}/',
-            {'estado': ContractorApplication.Estado.EN_REVISION},
+            {'estado': ContractorApplication.Estado.EN_REVISION_MANUAL},
             HTTP_HOST=self.host,
         )
 
         solicitud.refresh_from_db()
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(solicitud.estado, ContractorApplication.Estado.EN_REVISION)
+        self.assertEqual(solicitud.estado, ContractorApplication.Estado.EN_REVISION_MANUAL)
         self.assertEqual(Credito.objects.count(), creditos_antes)
         self.assertEqual(CreditoLibranza.objects.count(), creditos_libranza_antes)
 
@@ -1338,7 +1349,7 @@ class PortalMinimoPrestadoresTest(TestCase):
 
         response = self.client.post(
             f'/gestion/prestadores/{solicitud.id}/',
-            {'estado': ContractorApplication.Estado.EN_REVISION},
+            {'estado': ContractorApplication.Estado.EN_REVISION_MANUAL},
             HTTP_HOST=self.host,
         )
 

@@ -25,7 +25,10 @@
             <span class="status-badge-modern contractors-status-badge status-{{ solicitud.estado|lower }}">
               {% if solicitud.estado == 'DOCUMENTOS_PENDIENTES' %}Documentación pendiente
               {% elif solicitud.estado == 'DOCUMENTOS_CARGADOS' %}Documentación completa
-              {% elif solicitud.estado == 'EN_REVISION' %}En análisis
+              {% elif solicitud.estado == 'EVALUACION_PENDIENTE' %}Evaluación pendiente
+              {% elif solicitud.estado == 'EN_EVALUACION' %}En evaluación
+              {% elif solicitud.estado == 'EVALUACION_COMPLETADA' %}Evaluación completada
+              {% elif solicitud.estado == 'EN_REVISION' %}Revisión manual
               {% else %}Requiere validación{% endif %}
             </span>
             <a class="boton boton-secundario contractors-new-request" href="{% url 'contractors:solicitar' %}">Nueva solicitud</a>
@@ -41,7 +44,10 @@
             <h2 id="estado-solicitud-title">
               {% if solicitud.estado == 'DOCUMENTOS_PENDIENTES' %}Completa la documentación de tu solicitud
               {% elif solicitud.estado == 'DOCUMENTOS_CARGADOS' %}Recibimos tu documentación
-              {% elif solicitud.estado == 'EN_REVISION' %}Tu solicitud está en análisis
+              {% elif solicitud.estado == 'EVALUACION_PENDIENTE' %}Tu solicitud está pendiente de evaluación
+              {% elif solicitud.estado == 'EN_EVALUACION' %}Tu solicitud está en evaluación
+              {% elif solicitud.estado == 'EVALUACION_COMPLETADA' %}La evaluación operativa fue completada
+              {% elif solicitud.estado == 'EN_REVISION' %}Tu solicitud requiere revisión manual
               {% else %}Tu solicitud requiere validación{% endif %}
             </h2>
             <p>
@@ -57,7 +63,10 @@
             <strong>
               {% if progreso.porcentaje < 100 %}Documentos
               {% elif not solicitud.monto_solicitado or not solicitud.plazo_meses %}Simulación
-              {% elif solicitud.estado == 'EN_REVISION' %}Análisis
+              {% elif solicitud.estado == 'EVALUACION_PENDIENTE' %}Evaluación pendiente
+              {% elif solicitud.estado == 'EN_EVALUACION' %}Evaluación
+              {% elif solicitud.estado == 'EVALUACION_COMPLETADA' %}Evaluación completada
+              {% elif solicitud.estado == 'EN_REVISION' %}Revisión manual
               {% else %}Validación{% endif %}
             </strong>
             <span>Consulta aquí los avances</span>

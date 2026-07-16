@@ -407,8 +407,8 @@ class CambiarEstadoPrestadorForm(forms.Form):
                 ContractorApplication.Estado.DOCUMENTOS_CARGADOS.label,
             ),
             (
-                ContractorApplication.Estado.EN_REVISION,
-                ContractorApplication.Estado.EN_REVISION.label,
+                ContractorApplication.Estado.EN_REVISION_MANUAL,
+                ContractorApplication.Estado.EN_REVISION_MANUAL.label,
             ),
         ),
         widget=forms.Select(attrs={'class': 'campo'}),

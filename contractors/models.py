@@ -14,7 +14,11 @@ class ContractorApplication(models.Model):
         BORRADOR = 'BORRADOR', 'Borrador'
         DOCUMENTOS_PENDIENTES = 'DOCUMENTOS_PENDIENTES', 'Documentos pendientes'
         DOCUMENTOS_CARGADOS = 'DOCUMENTOS_CARGADOS', 'Documentos cargados'
-        EN_REVISION = 'EN_REVISION', 'En revision'
+        EVALUACION_PENDIENTE = 'EVALUACION_PENDIENTE', 'Evaluación pendiente'
+        EN_EVALUACION = 'EN_EVALUACION', 'En evaluación'
+        EVALUACION_COMPLETADA = 'EVALUACION_COMPLETADA', 'Evaluación completada'
+        # Conserva el valor persistido previamente y precisa su semántica operativa.
+        EN_REVISION_MANUAL = 'EN_REVISION', 'En revisión manual'
 
     class EscenarioCredito(models.TextChoices):
         NUEVO_CREDITO = 'NUEVO_CREDITO', 'Nuevo credito'
@@ -136,6 +140,125 @@ class ContractorApplication(models.Model):
     @property
     def nombre_completo(self):
         return f'{self.nombres} {self.apellidos}'.strip()
+
+
+class PredecisionPrestadorAudit(models.Model):
+    class EstadoEjecucion(models.TextChoices):
+        PENDIENTE = 'PENDIENTE', 'Pendiente'
+        EN_PROCESO = 'EN_PROCESO', 'En proceso'
+        COMPLETADA = 'COMPLETADA', 'Completada'
+        ERROR_CONTROLADO = 'ERROR_CONTROLADO', 'Error controlado'
+
+    class Resultado(models.TextChoices):
+        NO_EVALUABLE = 'NO_EVALUABLE', 'No evaluable'
+        REQUIERE_REVISION_MANUAL = 'REQUIERE_REVISION_MANUAL', 'Requiere revisión manual'
+        BLOQUEADO_READ_ONLY = 'BLOQUEADO_READ_ONLY', 'Bloqueado read-only'
+        PREAPROBADO_READ_ONLY = 'PREAPROBADO_READ_ONLY', 'Preaprobado read-only'
+        ERROR_CONTROLADO = 'ERROR_CONTROLADO', 'Error controlado'
+
+    solicitud = models.ForeignKey(
+        ContractorApplication,
+        on_delete=models.PROTECT,
+        related_name='auditorias_predecision',
+    )
+    version_datos = models.CharField(max_length=64)
+    clave_idempotencia = models.CharField(max_length=64, unique=True)
+    estado_ejecucion = models.CharField(
+        max_length=24,
+        choices=EstadoEjecucion.choices,
+        default=EstadoEjecucion.PENDIENTE,
+    )
+    resultado = models.CharField(
+        max_length=32,
+        choices=Resultado.choices,
+        default=Resultado.NO_EVALUABLE,
+    )
+    score = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
+    version_score = models.CharField(max_length=80, blank=True)
+    version_politica = models.CharField(max_length=80)
+    razones = models.JSONField(default=list, blank=True)
+    alertas = models.JSONField(default=list, blank=True)
+    bloqueos = models.JSONField(default=list, blank=True)
+    snapshot_entrada = models.JSONField(default=dict, blank=True)
+    snapshot_salida = models.JSONField(default=dict, blank=True)
+    error_codigo = models.CharField(max_length=80, blank=True)
+    error_etapa = models.CharField(max_length=80, blank=True)
+    iniciada_en = models.DateTimeField()
+    finalizada_en = models.DateTimeField(null=True, blank=True)
+    creada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='auditorias_predecision_prestador_creadas',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'contractors_predecisionprestadoraudit_v2'
+        ordering = ['-created_at', '-id']
+        verbose_name = 'Auditoría de predecisión de prestador'
+        verbose_name_plural = 'Auditorías de predecisión de prestadores'
+        indexes = [
+            models.Index(fields=['solicitud', '-created_at'], name='prest_audit_solic_fecha_idx'),
+            models.Index(fields=['resultado'], name='prest_audit_resultado_idx'),
+            models.Index(fields=['estado_ejecucion'], name='prest_audit_ejecucion_idx'),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            estado_anterior = type(self).objects.filter(pk=self.pk).values_list(
+                'estado_ejecucion', flat=True
+            ).first()
+            if estado_anterior == self.EstadoEjecucion.COMPLETADA:
+                raise ValidationError('Una auditoría completada es inmutable.')
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'Evaluación {self.id} - solicitud {self.solicitud_id}'
+
+
+class TimelinePrestador(models.Model):
+    class TipoEvento(models.TextChoices):
+        SOLICITUD_REGISTRADA = 'SOLICITUD_REGISTRADA', 'Solicitud registrada'
+        EVALUACION_PENDIENTE = 'EVALUACION_PENDIENTE', 'Evaluación pendiente'
+        EVALUACION_INICIADA = 'EVALUACION_INICIADA', 'Evaluación iniciada'
+        EVALUACION_COMPLETADA = 'EVALUACION_COMPLETADA', 'Evaluación completada'
+        REVISION_MANUAL_REQUERIDA = 'REVISION_MANUAL_REQUERIDA', 'Revisión manual requerida'
+        DATOS_MODIFICADOS = 'DATOS_MODIFICADOS', 'Datos modificados'
+
+    solicitud = models.ForeignKey(
+        ContractorApplication,
+        on_delete=models.PROTECT,
+        related_name='timeline_operativo',
+    )
+    tipo_evento = models.CharField(max_length=40, choices=TipoEvento.choices)
+    titulo = models.CharField(max_length=160)
+    descripcion = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    visible_cliente = models.BooleanField(default=False)
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='timeline_prestador_creado',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'contractors_timelineprestador_v2'
+        ordering = ['-created_at', '-id']
+        verbose_name = 'Evento de timeline de prestador'
+        verbose_name_plural = 'Timeline de prestadores'
+        indexes = [
+            models.Index(fields=['solicitud', '-created_at'], name='prest_timeline_solic_idx'),
+            models.Index(fields=['tipo_evento', '-created_at'], name='prest_timeline_tipo_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.tipo_evento} - solicitud {self.solicitud_id}'
 
 
 class ConfiguracionSimuladorPrestador(models.Model):

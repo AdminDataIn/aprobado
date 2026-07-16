@@ -32,6 +32,13 @@ from contractors.services.solicitud import (
     guardar_documentos_formulario,
     solicitud_tiene_documentos_obligatorios,
 )
+from contractors.services.evaluacion_audit import (
+    ESTADOS_CON_EVALUACION,
+    invalidar_evaluacion_si_cambiaron_datos,
+    marcar_evaluacion_pendiente,
+    registrar_solicitud_creada,
+)
+from contractors.services.evaluacion_versionado import construir_version_datos
 
 
 CLAVE_SESION_ANALISIS_CONTRATO = 'contractors_analisis_contrato_v1'
@@ -123,6 +130,7 @@ def analizar_contrato_prestador_view(request, solicitud_id=None):
     request.session[CLAVE_SESION_ANALISIS_CONTRATO] = evidencia
     request.session.modified = True
     if solicitud is not None:
+        version_anterior = construir_version_datos(solicitud)[0]
         solicitud.estado_analisis_contractual = resultado.estado
         solicitud.metadata_analisis_contractual = {
             **resultado.metadata,
@@ -136,6 +144,13 @@ def analizar_contrato_prestador_view(request, solicitud_id=None):
             'fecha_analisis_contractual',
             'updated_at',
         ])
+        invalidar_evaluacion_si_cambiaron_datos(
+            solicitud,
+            version_anterior=version_anterior,
+            usuario=request.user,
+            campos=['analisis_contractual', 'contrato_hash_sha256'],
+            motivo='analisis_contractual_actualizado',
+        )
     return JsonResponse(resultado.respuesta_publica())
 
 
@@ -261,6 +276,10 @@ def solicitar_prestador_view(request):
     solicitud_existente = None
     if solicitud_id:
         solicitud_existente = _obtener_solicitud_del_usuario(solicitud_id, request.user)
+    version_anterior = (
+        construir_version_datos(solicitud_existente)[0]
+        if solicitud_existente is not None else ''
+    )
 
     if request.method == 'POST':
         form = SolicitudPrestadorForm(
@@ -280,6 +299,7 @@ def solicitar_prestador_view(request):
             if origenes_validos and not error_analisis:
                 with transaction.atomic():
                     solicitud = form.save(commit=False)
+                    es_nueva = not solicitud.pk
                     solicitud.usuario = request.user
                     if not solicitud.pk:
                         solicitud.estado = ContractorApplication.Estado.DOCUMENTOS_PENDIENTES
@@ -292,6 +312,16 @@ def solicitar_prestador_view(request):
                         metadata_documentos=_metadata_documentos_desde_request(request),
                     )
                     actualizar_estado_documental(solicitud)
+                    if es_nueva:
+                        registrar_solicitud_creada(solicitud, usuario=request.user)
+                    else:
+                        invalidar_evaluacion_si_cambiaron_datos(
+                            solicitud,
+                            version_anterior=version_anterior,
+                            usuario=request.user,
+                            campos=['empresa', 'datos_contractuales', 'autorizaciones'],
+                            motivo='formulario_actualizado',
+                        )
                 request.session.pop(CLAVE_SESION_ANALISIS_CONTRATO, None)
                 messages.success(request, 'Información y documentos guardados. Continúa con la simulación.')
                 return redirect(f'{reverse("contractors:simular")}?solicitud_id={solicitud.id}')
@@ -472,9 +502,25 @@ def simular_prestador_view(request):
                     pk=solicitud.pk,
                     usuario=request.user,
                 )
+                version_anterior, _ = construir_version_datos(solicitud_bloqueada)
+                estado_anterior = solicitud_bloqueada.estado
                 solicitud_bloqueada.monto_solicitado = resultado.monto_solicitado
                 solicitud_bloqueada.plazo_meses = resultado.plazo_meses
                 solicitud_bloqueada.save(update_fields=['monto_solicitado', 'plazo_meses', 'updated_at'])
+                if estado_anterior in ESTADOS_CON_EVALUACION:
+                    invalidar_evaluacion_si_cambiaron_datos(
+                        solicitud_bloqueada,
+                        version_anterior=version_anterior,
+                        usuario=request.user,
+                        campos=['monto_solicitado', 'plazo_meses'],
+                        motivo='simulacion_actualizada',
+                    )
+                else:
+                    marcar_evaluacion_pendiente(
+                        solicitud_bloqueada,
+                        usuario=request.user,
+                        motivo='simulacion_registrada',
+                    )
             messages.success(
                 request,
                 'Tu solicitud fue registrada para validación. El siguiente paso es el análisis '
