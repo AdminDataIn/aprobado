@@ -23,7 +23,9 @@ from contractors.services.capacidad_contractual import (
     evaluar_capacidad_contractual_preliminar,
     obtener_configuracion_simulador_prestador,
     obtener_configuracion_publica_simulador_prestador,
+    obtener_version_politica_simulador,
     simular_credito_prestador_informativo,
+    snapshot_configuracion_financiera,
 )
 from contractors.services.analisis_contractual_seguro import analizar_contrato_seguro
 from contractors.services.solicitud import (
@@ -514,7 +516,32 @@ def simular_prestador_view(request):
                 estado_anterior = solicitud_bloqueada.estado
                 solicitud_bloqueada.monto_solicitado = resultado.monto_solicitado
                 solicitud_bloqueada.plazo_meses = resultado.plazo_meses
-                solicitud_bloqueada.save(update_fields=['monto_solicitado', 'plazo_meses', 'updated_at'])
+                snapshot_financiero = snapshot_configuracion_financiera(configuracion)
+                solicitud_bloqueada.version_configuracion_financiera_simulacion = (
+                    snapshot_financiero['version']
+                )
+                solicitud_bloqueada.version_politica_simulacion = (
+                    obtener_version_politica_simulador(configuracion)
+                )
+                solicitud_bloqueada.monto_simulado = resultado.monto_solicitado
+                solicitud_bloqueada.plazo_simulado_meses = resultado.plazo_meses
+                solicitud_bloqueada.tasa_mensual_simulacion = snapshot_financiero['tasa_mensual']
+                solicitud_bloqueada.monto_maximo_configuracion_simulacion = (
+                    snapshot_financiero['monto_maximo']
+                )
+                solicitud_bloqueada.plazo_maximo_configuracion_simulacion = (
+                    snapshot_financiero['plazo_maximo_meses']
+                )
+                solicitud_bloqueada.simulada_en = timezone.now()
+                solicitud_bloqueada.save(update_fields=[
+                    'monto_solicitado', 'plazo_meses',
+                    'version_configuracion_financiera_simulacion',
+                    'version_politica_simulacion',
+                    'monto_simulado', 'plazo_simulado_meses',
+                    'tasa_mensual_simulacion',
+                    'monto_maximo_configuracion_simulacion',
+                    'plazo_maximo_configuracion_simulacion', 'simulada_en', 'updated_at',
+                ])
                 if estado_anterior in ESTADOS_CON_EVALUACION:
                     invalidar_evaluacion_si_cambiaron_datos(
                         solicitud_bloqueada,

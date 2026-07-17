@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.conf import settings
+from django.db import models
 from django.utils import timezone
 
 
@@ -67,9 +68,56 @@ class ResultadoSimulacionPrestadorInformativa:
 
 
 def obtener_configuracion_simulador_prestador():
-    from contractors.models import ConfiguracionSimuladorPrestador
+    from contractors.models import ConfiguracionScorePrestador, ConfiguracionSimuladorPrestador
+
+    hoy = timezone.localdate()
+    politica = (
+        ConfiguracionScorePrestador.objects.select_related('configuracion_financiera')
+        .filter(activa=True, fecha_vigencia_desde__lte=hoy)
+        .filter(
+            models.Q(fecha_vigencia_hasta__isnull=True)
+            | models.Q(fecha_vigencia_hasta__gte=hoy)
+        )
+        .first()
+    )
+    if politica and politica.configuracion_financiera_id:
+        return politica.configuracion_financiera
 
     return ConfiguracionSimuladorPrestador.objects.filter(activo=True).first()
+
+
+def snapshot_configuracion_financiera(configuracion):
+    if configuracion is None:
+        return {
+            'version': '',
+            'tasa_mensual': None,
+            'monto_maximo': None,
+            'plazo_maximo_meses': None,
+        }
+    return {
+        'version': str(configuracion.version or ''),
+        'tasa_mensual': configuracion.tasa_mensual,
+        'monto_maximo': configuracion.monto_maximo,
+        'plazo_maximo_meses': configuracion.plazo_maximo_meses,
+    }
+
+
+def obtener_version_politica_simulador(configuracion):
+    if configuracion is None:
+        return ''
+    hoy = timezone.localdate()
+    politica = (
+        configuracion.politicas_score.filter(
+            activa=True,
+            fecha_vigencia_desde__lte=hoy,
+        )
+        .filter(
+            models.Q(fecha_vigencia_hasta__isnull=True)
+            | models.Q(fecha_vigencia_hasta__gte=hoy)
+        )
+        .first()
+    )
+    return str(politica.version_politica or '') if politica else ''
 
 
 def obtener_configuracion_publica_simulador_prestador(configuracion=None):

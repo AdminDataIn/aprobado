@@ -11,6 +11,9 @@ class ResultadoNormalizadoDatacreditoPrestador:
     obligaciones_vigentes: int | None = None
     obligaciones_en_mora: int | None = None
     mora_maxima_dias: int | None = None
+    saldo_mora: str | None = None
+    mora_actual: bool | None = None
+    mora_severa: bool | None = None
     consultas_recientes: int | None = None
     cupos_rotativos: str | None = None
     porcentaje_utilizacion: str | None = None

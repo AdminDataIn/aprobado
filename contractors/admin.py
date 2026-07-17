@@ -1,8 +1,13 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.template.response import TemplateResponse
 
 from contractors.models import (
     AutorizacionConsultaDatacreditoPrestador,
+    BandaScorePrestador,
     ConfiguracionSimuladorPrestador,
+    ConfiguracionScorePrestador,
     ContractorApplication,
     ContractorApplicationDocument,
     PredecisionPrestadorAudit,
@@ -39,6 +44,55 @@ class ContractorApplicationAdmin(admin.ModelAdmin):
     ]
     readonly_fields = ['created_at', 'updated_at']
     inlines = [ContractorApplicationDocumentInline]
+    actions = ['ejecutar_evaluacion_formal']
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if not request.user.has_perm('contractors.can_evaluate_contractor_application'):
+            actions.pop('ejecutar_evaluacion_formal', None)
+        return actions
+
+    @admin.action(description='Ejecutar evaluacion formal read-only')
+    def ejecutar_evaluacion_formal(self, request, queryset):
+        from contractors.services.evaluacion_formal import evaluar_solicitud_prestador
+
+        if not request.user.has_perm('contractors.can_evaluate_contractor_application'):
+            self.message_user(request, 'No tienes permiso para evaluar solicitudes.', messages.ERROR)
+            return
+        if request.POST.get('confirmar_evaluacion') != '1':
+            contexto = {
+                **self.admin_site.each_context(request),
+                'title': 'Confirmar evaluacion formal read-only',
+                'opts': self.model._meta,
+                'solicitudes': queryset,
+                'action_checkbox_name': ACTION_CHECKBOX_NAME,
+            }
+            return TemplateResponse(
+                request,
+                'admin/contractors/confirmar_evaluacion_formal.html',
+                contexto,
+            )
+        evaluadas = reutilizadas = errores = 0
+        for solicitud in queryset.order_by('id'):
+            try:
+                resultado = evaluar_solicitud_prestador(
+                    solicitud,
+                    solicitado_por=request.user,
+                )
+                evaluadas += 1
+                reutilizadas += int(resultado.reutilizada)
+            except (ValidationError, PermissionDenied) as exc:
+                errores += 1
+                self.message_user(
+                    request,
+                    f'Solicitud {solicitud.pk}: {exc}',
+                    messages.WARNING,
+                )
+        self.message_user(
+            request,
+            f'Evaluadas: {evaluadas}. Reutilizadas: {reutilizadas}. Errores: {errores}.',
+            messages.SUCCESS if not errores else messages.WARNING,
+        )
 
 
 @admin.register(ContractorApplicationDocument)
@@ -53,6 +107,7 @@ class ContractorApplicationDocumentAdmin(admin.ModelAdmin):
 class ConfiguracionSimuladorPrestadorAdmin(admin.ModelAdmin):
     list_display = [
         'nombre',
+        'version',
         'activo',
         'monto_minimo',
         'monto_maximo',
@@ -63,6 +118,47 @@ class ConfiguracionSimuladorPrestadorAdmin(admin.ModelAdmin):
     ]
     list_filter = ['activo']
     readonly_fields = ['created_at', 'updated_at']
+
+
+class BandaScorePrestadorInline(admin.TabularInline):
+    model = BandaScorePrestador
+    extra = 0
+
+
+@admin.register(ConfiguracionScorePrestador)
+class ConfiguracionScorePrestadorAdmin(admin.ModelAdmin):
+    list_display = [
+        'nombre', 'version', 'activa', 'fecha_vigencia_desde',
+        'fecha_vigencia_hasta', 'configuracion_financiera',
+        'version_score', 'version_politica',
+    ]
+    list_filter = ['activa', 'fecha_vigencia_desde', 'fecha_vigencia_hasta']
+    search_fields = ['nombre', 'version', 'version_score', 'version_politica']
+    readonly_fields = ['created_at', 'updated_at']
+    inlines = [BandaScorePrestadorInline]
+    fieldsets = [
+        ('Version y vigencia', {'fields': (
+            'nombre', 'version', 'activa', 'fecha_vigencia_desde',
+            'fecha_vigencia_hasta', 'configuracion_financiera',
+            'version_score', 'version_politica',
+        )}),
+        ('Pesos (deben sumar 1)', {'fields': (
+            'peso_datacredito', 'peso_capacidad', 'peso_comportamiento',
+            'peso_riesgo', 'peso_referencias',
+        )}),
+        ('Politica', {'fields': (
+            'score_premium_min', 'score_alta_min', 'score_media_min',
+            'score_entrada_min', 'cuota_ingreso_maxima',
+            'monto_maximo_politica', 'plazo_maximo_politica',
+            'tasa_mensual_referencia', 'mora_bloqueo_dias',
+            'consultas_recientes_revision', 'accion_exceso_capacidad',
+        )}),
+        ('Componentes opcionales', {'fields': (
+            'requiere_referencias', 'permite_redistribuir_pesos_faltantes',
+            'penalizacion_geolocalizacion', 'umbral_geolocalizacion',
+        )}),
+        ('Auditoria', {'fields': ('created_at', 'updated_at')}),
+    ]
 
 
 class AdminAuditoriaSoloLectura(admin.ModelAdmin):
@@ -84,7 +180,9 @@ class PredecisionPrestadorAuditAdmin(AdminAuditoriaSoloLectura):
         'resultado',
         'estado_ejecucion',
         'score',
+        'banda_score',
         'version_politica',
+        'version_configuracion_financiera',
         'iniciada_en',
         'finalizada_en',
     ]
@@ -92,6 +190,11 @@ class PredecisionPrestadorAuditAdmin(AdminAuditoriaSoloLectura):
     search_fields = ['solicitud__id', 'clave_idempotencia', 'version_datos']
     readonly_fields = [campo.name for campo in PredecisionPrestadorAudit._meta.fields]
     ordering = ['-created_at', '-id']
+
+    @admin.display(description='Banda')
+    def banda_score(self, obj):
+        score = (obj.snapshot_salida or {}).get('score_resultado') or {}
+        return score.get('banda') or '-'
 
 
 @admin.register(TimelinePrestador)

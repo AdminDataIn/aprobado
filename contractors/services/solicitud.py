@@ -31,6 +31,10 @@ def guardar_documento_prestador(
         .filter(solicitud=solicitud, tipo_documento=tipo_documento)
         .first()
     )
+    reemplaza_contrato = bool(
+        documento is not None
+        and tipo_documento == ContractorApplicationDocument.TipoDocumento.CONTRATO
+    )
     archivo_anterior = documento.archivo.name if documento and documento.archivo else None
     storage = documento.archivo.storage if documento else ContractorApplicationDocument._meta.get_field('archivo').storage
 
@@ -44,6 +48,18 @@ def guardar_documento_prestador(
     documento.metadata_captura = metadata_captura or {}
     documento.full_clean()
     documento.save()
+
+    if reemplaza_contrato:
+        solicitud.estado_analisis_contractual = (
+            ContractorApplication.EstadoAnalisisContractual.NO_SOLICITADO
+        )
+        solicitud.metadata_analisis_contractual = {}
+        solicitud.fecha_analisis_contractual = None
+        solicitud.estado = ContractorApplication.Estado.EVALUACION_PENDIENTE
+        solicitud.save(update_fields=[
+            'estado_analisis_contractual', 'metadata_analisis_contractual',
+            'fecha_analisis_contractual', 'estado', 'updated_at',
+        ])
 
     if debe_versionar:
         invalidar_evaluacion_si_cambiaron_datos(

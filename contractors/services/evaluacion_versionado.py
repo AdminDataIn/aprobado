@@ -30,6 +30,8 @@ def construir_snapshot_entrada_evaluacion(solicitud):
         'tipo_contrato': solicitud.tipo_contrato,
         'fecha_inicio_contrato': _fecha_segura(solicitud.fecha_inicio_contrato),
         'fecha_fin_contrato': _fecha_segura(solicitud.fecha_fin_contrato),
+        'duracion_contrato_meses': solicitud.duracion_contrato_meses,
+        'estado_contractual_declarado': solicitud.estado_contractual_declarado,
         'valor_total_contrato': _decimal_seguro(solicitud.valor_total_contrato),
         'valor_pagado_contrato': _decimal_seguro(solicitud.valor_pagado_contrato),
         'valor_pendiente_cobrar': _decimal_seguro(solicitud.valor_pendiente_cobrar),
@@ -42,6 +44,20 @@ def construir_snapshot_entrada_evaluacion(solicitud):
             or str(metadata_analisis.get('archivo_hash_sha256') or '')
         ),
         'estado_analisis_contractual': solicitud.estado_analisis_contractual,
+        'configuracion_financiera_simulacion': {
+            'version': solicitud.version_configuracion_financiera_simulacion,
+            'version_politica': solicitud.version_politica_simulacion,
+            'monto_simulado': _decimal_seguro(solicitud.monto_simulado),
+            'plazo_simulado_meses': solicitud.plazo_simulado_meses,
+            'tasa_mensual': _decimal_seguro(solicitud.tasa_mensual_simulacion),
+            'monto_maximo': _decimal_seguro(
+                solicitud.monto_maximo_configuracion_simulacion
+            ),
+            'plazo_maximo_meses': solicitud.plazo_maximo_configuracion_simulacion,
+            'simulada_en': (
+                solicitud.simulada_en.isoformat() if solicitud.simulada_en else None
+            ),
+        },
         'autorizaciones': {
             'version': VERSION_AUTORIZACIONES,
             'terminos': bool(solicitud.acepta_terminos),
@@ -65,13 +81,15 @@ def construir_version_datos(solicitud):
 
 def construir_clave_idempotencia(
     *, solicitud, version_datos, version_politica=VERSION_POLITICA_EVALUACION,
-    version_score=VERSION_SCORE_NO_HABILITADO, modo_evaluacion=MODO_EVALUACION_BASE,
+    version_score=VERSION_SCORE_NO_HABILITADO, version_configuracion_financiera='',
+    modo_evaluacion=MODO_EVALUACION_BASE,
 ):
     return _sha256_json({
         'solicitud_id': solicitud.id,
         'version_datos': version_datos,
         'version_politica': version_politica,
         'version_score': version_score,
+        'version_configuracion_financiera': version_configuracion_financiera,
         'modo_evaluacion': modo_evaluacion,
     })
 

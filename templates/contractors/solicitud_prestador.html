@@ -270,6 +270,12 @@
               {{ form.fecha_fin_contrato.errors }}
             </div>
             <div class="form-field">
+              {{ form.duracion_contrato_meses.label_tag }}
+              {{ form.duracion_contrato_meses }}
+              {{ form.duracion_contrato_meses.errors }}
+              <small class="form-helper-text">Usa este campo solo si el contrato no indica una fecha final.</small>
+            </div>
+            <div class="form-field">
               {{ form.valor_total_contrato.label_tag }}
               {{ form.valor_total_contrato }}
               {{ form.valor_total_contrato.errors }}
@@ -1010,6 +1016,7 @@
         tipo_contrato: 'id_tipo_contrato',
         fecha_inicio_contrato: 'id_fecha_inicio_contrato',
         fecha_fin_contrato: 'id_fecha_fin_contrato',
+        duracion_meses_contrato: 'id_duracion_contrato_meses',
         valor_total_contrato: 'id_valor_total_contrato',
         valor_pagado_estimado: 'id_valor_pagado_contrato',
         valor_pendiente_estimado: 'id_valor_pendiente_cobrar',

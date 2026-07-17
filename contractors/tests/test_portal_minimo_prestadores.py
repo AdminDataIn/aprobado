@@ -477,12 +477,23 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.client.force_login(self.usuario)
 
         self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CONTRATO, 'contrato.pdf')
+        solicitud.estado_analisis_contractual = ContractorApplication.EstadoAnalisisContractual.COMPLETADO
+        solicitud.metadata_analisis_contractual = {'estado': 'COMPLETADO'}
+        solicitud.estado = ContractorApplication.Estado.EVALUACION_COMPLETADA
+        solicitud.save()
         self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CONTRATO, 'contrato-reemplazo.pdf')
 
+        solicitud.refresh_from_db()
         self.assertEqual(ContractorApplicationDocument.objects.count(), 1)
         documento = ContractorApplicationDocument.objects.get()
         self.assertIn('CONTRATO', documento.archivo.name)
         self.assertEqual(documento.uploaded_by, self.usuario)
+        self.assertEqual(
+            solicitud.estado_analisis_contractual,
+            ContractorApplication.EstadoAnalisisContractual.NO_SOLICITADO,
+        )
+        self.assertEqual(solicitud.metadata_analisis_contractual, {})
+        self.assertEqual(solicitud.estado, ContractorApplication.Estado.EVALUACION_PENDIENTE)
 
     def test_estado_cambia_a_documentos_cargados_con_todos_los_obligatorios(self):
         solicitud = self._crear_solicitud(self.usuario)

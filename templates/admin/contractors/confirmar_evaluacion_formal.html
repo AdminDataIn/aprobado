@@ -1,0 +1,16 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+  <p>Se ejecutara una evaluacion read-only para las solicitudes seleccionadas.</p>
+  <p>No se crearan creditos, pagos, pagares ni desembolsos.</p>
+  <form method="post">
+    {% csrf_token %}
+    {% for solicitud in solicitudes %}
+      <input type="hidden" name="{{ action_checkbox_name }}" value="{{ solicitud.pk }}">
+    {% endfor %}
+    <input type="hidden" name="action" value="ejecutar_evaluacion_formal">
+    <input type="hidden" name="confirmar_evaluacion" value="1">
+    <input type="hidden" name="index" value="0">
+    <button type="submit" class="default">Confirmar evaluacion</button>
+    <a href="../">Cancelar</a>
+  </form>
+{% endblock %}

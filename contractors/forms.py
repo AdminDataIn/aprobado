@@ -238,6 +238,7 @@ class SolicitudPrestadorForm(forms.ModelForm):
             'empresa',
             'fecha_inicio_contrato',
             'fecha_fin_contrato',
+            'duracion_contrato_meses',
             'valor_total_contrato',
             'valor_pagado_contrato',
             'valor_pendiente_cobrar',
@@ -260,6 +261,9 @@ class SolicitudPrestadorForm(forms.ModelForm):
             'tipo_contrato': forms.Select(attrs={'class': 'campo'}),
             'fecha_inicio_contrato': forms.DateInput(attrs={'class': 'campo', 'type': 'date'}),
             'fecha_fin_contrato': forms.DateInput(attrs={'class': 'campo', 'type': 'date'}),
+            'duracion_contrato_meses': forms.NumberInput(attrs={
+                'class': 'campo', 'min': 1, 'placeholder': 'Ej. 8',
+            }),
             'observaciones_contrato': forms.Textarea(attrs={'class': 'campo', 'rows': 3, 'placeholder': 'Observaciones contractuales opcionales'}),
             'acepta_terminos': forms.CheckboxInput(attrs={'class': 'authorization-checkbox'}),
             'acepta_politica_privacidad': forms.CheckboxInput(attrs={'class': 'authorization-checkbox'}),
@@ -279,6 +283,7 @@ class SolicitudPrestadorForm(forms.ModelForm):
             'tipo_contrato': 'Tipo de contrato',
             'fecha_inicio_contrato': 'Fecha inicio contrato',
             'fecha_fin_contrato': 'Fecha fin contrato',
+            'duracion_contrato_meses': 'Duracion contractual (meses)',
             'valor_total_contrato': 'Valor total contrato',
             'valor_pagado_contrato': 'Valor pagado del contrato',
             'valor_pendiente_cobrar': 'Valor pendiente por cobrar',
@@ -296,7 +301,6 @@ class SolicitudPrestadorForm(forms.ModelForm):
         ).order_by('nombre')
         for campo in (
             'fecha_inicio_contrato',
-            'fecha_fin_contrato',
             'valor_total_contrato',
             'valor_pagado_contrato',
             'valor_pendiente_cobrar',
@@ -317,6 +321,7 @@ class SolicitudPrestadorForm(forms.ModelForm):
         cleaned_data = super().clean()
         fecha_inicio = cleaned_data.get('fecha_inicio_contrato')
         fecha_fin = cleaned_data.get('fecha_fin_contrato')
+        duracion_meses = cleaned_data.get('duracion_contrato_meses')
         valor_total = cleaned_data.get('valor_total_contrato')
         valor_pagado = cleaned_data.get('valor_pagado_contrato')
         valor_pendiente = cleaned_data.get('valor_pendiente_cobrar')
@@ -329,6 +334,11 @@ class SolicitudPrestadorForm(forms.ModelForm):
 
         if fecha_inicio and fecha_fin and fecha_fin < fecha_inicio:
             self.add_error('fecha_fin_contrato', 'La fecha fin no puede ser menor a la fecha inicio.')
+        if not fecha_fin and not (fecha_inicio and duracion_meses):
+            self.add_error(
+                'fecha_fin_contrato',
+                'Indica la fecha final o una duracion contractual explicita.',
+            )
 
         if valor_total is not None and valor_pendiente is not None and valor_pendiente > valor_total:
             self.add_error('valor_pendiente_cobrar', 'El valor pendiente no puede superar el valor total del contrato.')

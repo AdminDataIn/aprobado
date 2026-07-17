@@ -3,8 +3,9 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import Q
 
 from gestion_creditos.models import Empresa
 
@@ -41,6 +42,14 @@ class ContractorApplication(models.Model):
         CON_ADVERTENCIAS = 'CON_ADVERTENCIAS', 'Con advertencias'
         BLOQUEADO = 'BLOQUEADO', 'Bloqueado'
 
+    class EstadoContrato(models.TextChoices):
+        VIGENTE = 'VIGENTE', 'Vigente'
+        VENCIDO = 'VENCIDO', 'Vencido'
+        SUSPENDIDO = 'SUSPENDIDO', 'Suspendido'
+        TERMINADO = 'TERMINADO', 'Terminado'
+        LIQUIDADO = 'LIQUIDADO', 'Liquidado'
+        NO_DETERMINABLE = 'NO_DETERMINABLE', 'No determinable'
+
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -71,6 +80,17 @@ class ContractorApplication(models.Model):
     )
     fecha_inicio_contrato = models.DateField(null=True, blank=True)
     fecha_fin_contrato = models.DateField(null=True, blank=True)
+    duracion_contrato_meses = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1)],
+        help_text='Duracion contractual explicita en meses calendario.',
+    )
+    estado_contractual_declarado = models.CharField(
+        max_length=20,
+        choices=EstadoContrato.choices,
+        default=EstadoContrato.NO_DETERMINABLE,
+    )
     valor_total_contrato = models.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -105,6 +125,32 @@ class ContractorApplication(models.Model):
         blank=True,
         validators=[MinValueValidator(1)],
     )
+    version_configuracion_financiera_simulacion = models.CharField(max_length=80, blank=True)
+    version_politica_simulacion = models.CharField(max_length=80, blank=True)
+    monto_simulado = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    plazo_simulado_meses = models.PositiveSmallIntegerField(null=True, blank=True)
+    tasa_mensual_simulacion = models.DecimalField(
+        max_digits=8,
+        decimal_places=4,
+        null=True,
+        blank=True,
+    )
+    monto_maximo_configuracion_simulacion = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    plazo_maximo_configuracion_simulacion = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+    )
+    simulada_en = models.DateTimeField(null=True, blank=True)
     acepta_terminos = models.BooleanField(default=False)
     acepta_politica_privacidad = models.BooleanField(default=False)
     autoriza_analisis_contractual_asistido = models.BooleanField(default=False)
@@ -176,6 +222,20 @@ class PredecisionPrestadorAudit(models.Model):
     score = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
     version_score = models.CharField(max_length=80, blank=True)
     version_politica = models.CharField(max_length=80)
+    version_configuracion_financiera = models.CharField(max_length=80, blank=True)
+    tasa_mensual_configuracion = models.DecimalField(
+        max_digits=8,
+        decimal_places=4,
+        null=True,
+        blank=True,
+    )
+    monto_maximo_configuracion = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    plazo_maximo_configuracion = models.PositiveSmallIntegerField(null=True, blank=True)
     razones = models.JSONField(default=list, blank=True)
     alertas = models.JSONField(default=list, blank=True)
     bloqueos = models.JSONField(default=list, blank=True)
@@ -204,6 +264,12 @@ class PredecisionPrestadorAudit(models.Model):
             models.Index(fields=['solicitud', '-created_at'], name='prest_audit_solic_fecha_idx'),
             models.Index(fields=['resultado'], name='prest_audit_resultado_idx'),
             models.Index(fields=['estado_ejecucion'], name='prest_audit_ejecucion_idx'),
+        ]
+        permissions = [
+            (
+                'can_evaluate_contractor_application',
+                'Puede ejecutar la evaluacion formal de prestadores',
+            ),
         ]
 
     def save(self, *args, **kwargs):
@@ -324,6 +390,11 @@ class AutorizacionConsultaDatacreditoPrestador(models.Model):
 class ConfiguracionSimuladorPrestador(models.Model):
     activo = models.BooleanField(default=True)
     nombre = models.CharField(max_length=120, default='Simulador Prestadores')
+    version = models.CharField(
+        max_length=80,
+        blank=True,
+        help_text='Version administrativa de la configuracion financiera.',
+    )
     monto_minimo = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('1000000'))
     monto_maximo = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('10000000'))
     plazo_minimo_meses = models.PositiveSmallIntegerField(default=3)
@@ -368,11 +439,259 @@ class ConfiguracionSimuladorPrestador(models.Model):
 
     class Meta:
         ordering = ['-updated_at', '-id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['version'],
+                condition=~Q(version=''),
+                name='unique_simulador_prestador_version',
+            ),
+        ]
         verbose_name = 'Configuración del simulador de prestadores'
         verbose_name_plural = 'Configuraciones del simulador de prestadores'
 
     def __str__(self):
         return self.nombre
+
+
+class ConfiguracionScorePrestador(models.Model):
+    class AccionExcesoCapacidad(models.TextChoices):
+        BLOQUEAR = 'BLOQUEAR', 'Bloquear en modo read-only'
+        REVISION = 'REVISION', 'Enviar a revision manual'
+
+    nombre = models.CharField(max_length=120)
+    version = models.CharField(max_length=80, unique=True)
+    activa = models.BooleanField(default=False)
+    fecha_vigencia_desde = models.DateField()
+    fecha_vigencia_hasta = models.DateField(null=True, blank=True)
+    configuracion_financiera = models.ForeignKey(
+        ConfiguracionSimuladorPrestador,
+        on_delete=models.PROTECT,
+        related_name='politicas_score',
+        null=True,
+        blank=True,
+        help_text='Configuracion financiera exacta aplicable a esta politica.',
+    )
+
+    peso_datacredito = models.DecimalField(max_digits=6, decimal_places=5)
+    peso_capacidad = models.DecimalField(max_digits=6, decimal_places=5)
+    peso_comportamiento = models.DecimalField(max_digits=6, decimal_places=5)
+    peso_riesgo = models.DecimalField(max_digits=6, decimal_places=5)
+    peso_referencias = models.DecimalField(max_digits=6, decimal_places=5)
+
+    score_premium_min = models.PositiveSmallIntegerField(default=850)
+    score_alta_min = models.PositiveSmallIntegerField(default=750)
+    score_media_min = models.PositiveSmallIntegerField(default=680)
+    score_entrada_min = models.PositiveSmallIntegerField(default=600)
+    cuota_ingreso_maxima = models.DecimalField(
+        max_digits=6,
+        decimal_places=5,
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('1'))],
+    )
+    monto_maximo_politica = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    plazo_maximo_politica = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1)],
+    )
+    tasa_mensual_referencia = models.DecimalField(
+        max_digits=8,
+        decimal_places=4,
+        validators=[MinValueValidator(Decimal('0'))],
+        help_text='Porcentaje mensual de referencia. Ejemplo: 2.2000.',
+    )
+    penalizacion_geolocalizacion = models.PositiveSmallIntegerField(default=80)
+    umbral_geolocalizacion = models.PositiveSmallIntegerField(default=600)
+    mora_bloqueo_dias = models.PositiveSmallIntegerField(default=90)
+    consultas_recientes_revision = models.PositiveSmallIntegerField(default=6)
+    requiere_referencias = models.BooleanField(default=False)
+    permite_redistribuir_pesos_faltantes = models.BooleanField(default=False)
+    accion_exceso_capacidad = models.CharField(
+        max_length=16,
+        choices=AccionExcesoCapacidad.choices,
+        default=AccionExcesoCapacidad.REVISION,
+    )
+    version_score = models.CharField(max_length=80)
+    version_politica = models.CharField(max_length=80)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-fecha_vigencia_desde', '-id']
+        verbose_name = 'Configuracion de score de prestadores'
+        verbose_name_plural = 'Configuraciones de score de prestadores'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['activa'],
+                condition=Q(activa=True),
+                name='unique_score_prestador_activo',
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        pesos = (
+            self.peso_datacredito,
+            self.peso_capacidad,
+            self.peso_comportamiento,
+            self.peso_riesgo,
+            self.peso_referencias,
+        )
+        if any(peso is None or peso < 0 or peso > 1 for peso in pesos):
+            raise ValidationError('Cada peso debe estar entre 0 y 1.')
+        if abs(sum(pesos, Decimal('0')) - Decimal('1')) > Decimal('0.00001'):
+            raise ValidationError('Los pesos del score deben sumar 1.00000.')
+        if not (
+            1000 >= self.score_premium_min > self.score_alta_min
+            > self.score_media_min > self.score_entrada_min >= 0
+        ):
+            raise ValidationError('Los umbrales deben ser descendentes y estar entre 0 y 1000.')
+        if self.umbral_geolocalizacion > 1000:
+            raise ValidationError({'umbral_geolocalizacion': 'El umbral no puede superar 1000.'})
+        if self.fecha_vigencia_hasta and self.fecha_vigencia_hasta < self.fecha_vigencia_desde:
+            raise ValidationError('La fecha final de vigencia no puede ser anterior a la inicial.')
+        if self.activa:
+            if not self.configuracion_financiera_id:
+                raise ValidationError({
+                    'configuracion_financiera': (
+                        'Una politica activa requiere configuracion financiera vinculada.'
+                    ),
+                })
+            configuracion = self.configuracion_financiera
+            if not configuracion.activo or not configuracion.version:
+                raise ValidationError({
+                    'configuracion_financiera': (
+                        'La configuracion financiera debe estar activa y versionada.'
+                    ),
+                })
+            inconsistencias = []
+            if self.monto_maximo_politica != configuracion.monto_maximo:
+                inconsistencias.append('monto maximo')
+            if self.plazo_maximo_politica != configuracion.plazo_maximo_meses:
+                inconsistencias.append('plazo maximo')
+            if self.tasa_mensual_referencia != configuracion.tasa_mensual:
+                inconsistencias.append('tasa mensual')
+            if inconsistencias:
+                raise ValidationError({
+                    'configuracion_financiera': (
+                        'La politica no coincide con su configuracion financiera: '
+                        + ', '.join(inconsistencias)
+                        + '.'
+                    ),
+                })
+        self._validar_inmutabilidad_si_fue_usada()
+
+    def _validar_inmutabilidad_si_fue_usada(self):
+        if not self.pk:
+            return
+        anterior = type(self).objects.filter(pk=self.pk).first()
+        if anterior is None or not PredecisionPrestadorAudit.objects.filter(
+            version_politica=anterior.version_politica
+        ).exists():
+            return
+        campos_semanticos = (
+            'version', 'peso_datacredito', 'peso_capacidad', 'peso_comportamiento',
+            'peso_riesgo', 'peso_referencias', 'score_premium_min', 'score_alta_min',
+            'score_media_min', 'score_entrada_min', 'cuota_ingreso_maxima',
+            'monto_maximo_politica', 'plazo_maximo_politica',
+            'tasa_mensual_referencia', 'penalizacion_geolocalizacion',
+            'umbral_geolocalizacion', 'mora_bloqueo_dias',
+            'consultas_recientes_revision', 'requiere_referencias',
+            'permite_redistribuir_pesos_faltantes', 'accion_exceso_capacidad',
+            'version_score', 'version_politica', 'configuracion_financiera_id',
+        )
+        if any(getattr(anterior, campo) != getattr(self, campo) for campo in campos_semanticos):
+            raise ValidationError(
+                'Una politica usada en auditorias no puede cambiar de significado; crea una nueva version.'
+            )
+
+    def __str__(self):
+        return f'{self.nombre} ({self.version})'
+
+
+class BandaScorePrestador(models.Model):
+    class Nombre(models.TextChoices):
+        PREMIUM = 'PREMIUM', 'Premium'
+        ALTA = 'ALTA', 'Alta'
+        MEDIA = 'MEDIA', 'Media'
+        ENTRADA = 'ENTRADA', 'Entrada'
+        REVISION = 'REVISION', 'Revision'
+
+    class Resultado(models.TextChoices):
+        PREAPROBADO_READ_ONLY = 'PREAPROBADO_READ_ONLY', 'Preaprobado read-only'
+        REQUIERE_REVISION_MANUAL = 'REQUIERE_REVISION_MANUAL', 'Requiere revision manual'
+
+    configuracion = models.ForeignKey(
+        ConfiguracionScorePrestador,
+        on_delete=models.PROTECT,
+        related_name='bandas',
+    )
+    nombre = models.CharField(max_length=16, choices=Nombre.choices)
+    score_min = models.PositiveSmallIntegerField()
+    score_max = models.PositiveSmallIntegerField(null=True, blank=True)
+    monto_maximo = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0'))],
+    )
+    plazo_maximo = models.PositiveSmallIntegerField(default=0)
+    resultado = models.CharField(max_length=32, choices=Resultado.choices)
+    orden = models.PositiveSmallIntegerField()
+
+    class Meta:
+        ordering = ['orden', '-score_min']
+        verbose_name = 'Banda de score de prestadores'
+        verbose_name_plural = 'Bandas de score de prestadores'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['configuracion', 'nombre'],
+                name='unique_banda_score_prestador_nombre',
+            ),
+            models.UniqueConstraint(
+                fields=['configuracion', 'orden'],
+                name='unique_banda_score_prestador_orden',
+            ),
+            models.CheckConstraint(
+                condition=Q(score_min__lte=1000),
+                name='banda_score_prestador_min_lte_1000',
+            ),
+            models.CheckConstraint(
+                condition=Q(score_max__isnull=True) | Q(score_max__lte=1000),
+                name='banda_score_prestador_max_lte_1000',
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        limite_superior = 1000 if self.score_max is None else self.score_max
+        if self.score_min > limite_superior:
+            raise ValidationError('El score minimo no puede superar el maximo.')
+        if not self.configuracion_id:
+            return
+        bandas = type(self).objects.filter(configuracion_id=self.configuracion_id)
+        if self.pk:
+            bandas = bandas.exclude(pk=self.pk)
+        if bandas.filter(
+            score_min__lte=limite_superior,
+        ).filter(Q(score_max__isnull=True) | Q(score_max__gte=self.score_min)).exists():
+            raise ValidationError('El rango de score se solapa con otra banda configurada.')
+        if self.pk:
+            anterior = type(self).objects.select_related('configuracion').filter(pk=self.pk).first()
+            if anterior and PredecisionPrestadorAudit.objects.filter(
+                version_politica=anterior.configuracion.version_politica
+            ).exists():
+                campos = (
+                    'nombre', 'score_min', 'score_max', 'monto_maximo',
+                    'plazo_maximo', 'resultado', 'orden',
+                )
+                if any(getattr(anterior, campo) != getattr(self, campo) for campo in campos):
+                    raise ValidationError(
+                        'Una banda usada en auditorias no puede modificarse; crea una nueva politica.'
+                    )
+
+    def __str__(self):
+        return f'{self.configuracion.version} - {self.nombre}'
 
 
 def ruta_documento_prestador(instance, filename):
