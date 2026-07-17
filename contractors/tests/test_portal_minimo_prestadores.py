@@ -10,6 +10,7 @@ from unittest.mock import patch
 from django.test import override_settings
 
 from contractors.models import (
+    AutorizacionConsultaDatacreditoPrestador,
     ConfiguracionSimuladorPrestador,
     ContractorApplication,
     ContractorApplicationDocument,
@@ -128,6 +129,29 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(response['Location'], f'/simular/?solicitud_id={solicitud.id}')
         self.assertEqual(Credito.objects.count(), creditos_antes)
         self.assertEqual(CreditoLibranza.objects.count(), creditos_libranza_antes)
+
+    @override_settings(
+        DATACREDITO_AUTHORIZATION_TEXT_VERSION='prestadores-v1',
+        DATACREDITO_AUTHORIZATION_TEXT='Autorización de consulta para pruebas.',
+    )
+    def test_formulario_registra_evidencia_versionada_de_autorizacion(self):
+        self.client.force_login(self.usuario)
+
+        response = self.client.post(
+            '/solicitar/',
+            self._payload_solicitud_con_documentos(),
+            HTTP_HOST=self.host,
+            HTTP_USER_AGENT='Navegador de prueba',
+            REMOTE_ADDR='192.0.2.10',
+        )
+
+        self.assertEqual(response.status_code, 302)
+        evidencia = AutorizacionConsultaDatacreditoPrestador.objects.get()
+        self.assertTrue(evidencia.autorizada)
+        self.assertEqual(evidencia.version_texto, 'prestadores-v1')
+        self.assertEqual(len(evidencia.texto_hash), 64)
+        self.assertEqual(len(evidencia.ip_hash), 64)
+        self.assertNotEqual(evidencia.ip_hash, '192.0.2.10')
 
     def test_formulario_inicial_no_solicita_monto_plazo_y_continua_a_simulacion(self):
         self.client.force_login(self.usuario)

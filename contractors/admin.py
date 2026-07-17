@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from contractors.models import (
+    AutorizacionConsultaDatacreditoPrestador,
     ConfiguracionSimuladorPrestador,
     ContractorApplication,
     ContractorApplicationDocument,
@@ -108,3 +109,21 @@ class TimelinePrestadorAdmin(AdminAuditoriaSoloLectura):
     search_fields = ['solicitud__id', 'titulo']
     readonly_fields = [campo.name for campo in TimelinePrestador._meta.fields]
     ordering = ['-created_at', '-id']
+
+
+@admin.register(AutorizacionConsultaDatacreditoPrestador)
+class AutorizacionConsultaDatacreditoPrestadorAdmin(AdminAuditoriaSoloLectura):
+    list_display = [
+        'id',
+        'solicitud',
+        'usuario',
+        'version_texto',
+        'autorizada',
+        'aceptada_en',
+    ]
+    list_filter = ['autorizada', 'version_texto', 'aceptada_en']
+    search_fields = ['solicitud__id', 'usuario__email', 'texto_hash']
+    readonly_fields = [
+        campo.name for campo in AutorizacionConsultaDatacreditoPrestador._meta.fields
+    ]
+    ordering = ['-aceptada_en', '-id']

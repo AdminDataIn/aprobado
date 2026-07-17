@@ -227,6 +227,9 @@ class TimelinePrestador(models.Model):
         EVALUACION_COMPLETADA = 'EVALUACION_COMPLETADA', 'Evaluación completada'
         REVISION_MANUAL_REQUERIDA = 'REVISION_MANUAL_REQUERIDA', 'Revisión manual requerida'
         DATOS_MODIFICADOS = 'DATOS_MODIFICADOS', 'Datos modificados'
+        DATACREDITO_REUTILIZADO = 'DATACREDITO_REUTILIZADO', 'DataCrédito reutilizado'
+        DATACREDITO_CONSULTADO = 'DATACREDITO_CONSULTADO', 'DataCrédito consultado'
+        DATACREDITO_ERROR = 'DATACREDITO_ERROR', 'Error DataCrédito'
 
     solicitud = models.ForeignKey(
         ContractorApplication,
@@ -259,6 +262,63 @@ class TimelinePrestador(models.Model):
 
     def __str__(self):
         return f'{self.tipo_evento} - solicitud {self.solicitud_id}'
+
+
+class AutorizacionConsultaDatacreditoPrestador(models.Model):
+    solicitud = models.ForeignKey(
+        ContractorApplication,
+        on_delete=models.PROTECT,
+        related_name='autorizaciones_datacredito',
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='autorizaciones_datacredito_prestador',
+    )
+    autorizada = models.BooleanField()
+    version_texto = models.CharField(max_length=80)
+    texto_hash = models.CharField(max_length=64)
+    aceptada_en = models.DateTimeField()
+    ip_hash = models.CharField(max_length=64, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'contractors_autorizaciondatacredito_v2'
+        ordering = ['-aceptada_en', '-id']
+        verbose_name = 'Autorización DataCrédito de prestador'
+        verbose_name_plural = 'Autorizaciones DataCrédito de prestadores'
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    'solicitud',
+                    'usuario',
+                    'autorizada',
+                    'version_texto',
+                    'texto_hash',
+                ],
+                name='unique_autorizacion_datacredito_v2',
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=['solicitud', '-aceptada_en'],
+                name='prest_auth_dc_solic_idx',
+            ),
+            models.Index(
+                fields=['version_texto', 'texto_hash'],
+                name='prest_auth_dc_version_idx',
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValidationError('La evidencia de autorización es inmutable.')
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        estado = 'autorizada' if self.autorizada else 'no autorizada'
+        return f'Solicitud {self.solicitud_id} - {self.version_texto} - {estado}'
 
 
 class ConfiguracionSimuladorPrestador(models.Model):

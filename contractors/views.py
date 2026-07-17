@@ -39,6 +39,9 @@ from contractors.services.evaluacion_audit import (
     registrar_solicitud_creada,
 )
 from contractors.services.evaluacion_versionado import construir_version_datos
+from contractors.services.autorizacion_datacredito import (
+    registrar_autorizacion_datacredito_desde_solicitud,
+)
 
 
 CLAVE_SESION_ANALISIS_CONTRATO = 'contractors_analisis_contrato_v1'
@@ -312,6 +315,11 @@ def solicitar_prestador_view(request):
                         metadata_documentos=_metadata_documentos_desde_request(request),
                     )
                     actualizar_estado_documental(solicitud)
+                    registrar_autorizacion_datacredito_desde_solicitud(
+                        solicitud,
+                        usuario=request.user,
+                        request=request,
+                    )
                     if es_nueva:
                         registrar_solicitud_creada(solicitud, usuario=request.user)
                     else:

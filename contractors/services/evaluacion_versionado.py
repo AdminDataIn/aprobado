@@ -17,6 +17,9 @@ VERSION_AUTORIZACIONES = 'autorizaciones_prestadores_v1'
 def construir_snapshot_entrada_evaluacion(solicitud):
     tipos_documentos = sorted(solicitud.documentos.values_list('tipo_documento', flat=True))
     metadata_analisis = solicitud.metadata_analisis_contractual or {}
+    autorizacion_datacredito = solicitud.autorizaciones_datacredito.order_by(
+        '-aceptada_en', '-id'
+    ).first()
     return {
         'solicitud_id': solicitud.id,
         'empresa_id': solicitud.empresa_id,
@@ -45,6 +48,12 @@ def construir_snapshot_entrada_evaluacion(solicitud):
             'privacidad': bool(solicitud.acepta_politica_privacidad),
             'analisis_contractual': bool(solicitud.autoriza_analisis_contractual_asistido),
             'consulta_centrales': bool(solicitud.autoriza_consulta_centrales),
+            'consulta_centrales_version': (
+                autorizacion_datacredito.version_texto if autorizacion_datacredito else ''
+            ),
+            'consulta_centrales_texto_hash': (
+                autorizacion_datacredito.texto_hash if autorizacion_datacredito else ''
+            ),
         },
     }
 

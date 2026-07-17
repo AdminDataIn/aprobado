@@ -8,6 +8,11 @@ CLAVES_METADATA_PERMITIDAS = {
     'modo_evaluacion',
     'motivo',
     'resultado',
+    'snapshot_id',
+    'servicio',
+    'estado',
+    'reutilizado',
+    'error_codigo',
     'version_datos',
 }
 

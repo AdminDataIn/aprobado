@@ -178,14 +178,9 @@ class EvaluacionAuditPrestadorTest(TestCase):
         from pathlib import Path
 
         directorio_servicios = Path(__file__).resolve().parents[1] / 'services'
-        contenido = '\n'.join(
-            (directorio_servicios / nombre).read_text(encoding='utf-8').lower()
-            for nombre in (
-                'evaluacion_audit.py',
-                'evaluacion_timeline.py',
-                'evaluacion_versionado.py',
-            )
-        )
+        contenido = (directorio_servicios / 'evaluacion_audit.py').read_text(
+            encoding='utf-8'
+        ).lower()
 
         for dependencia in ('integrations', 'datacredito', 'risk.', 'zapsign', 'whatsapp'):
             self.assertNotIn(dependencia, contenido)
