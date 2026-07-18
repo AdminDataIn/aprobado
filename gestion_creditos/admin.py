@@ -14,6 +14,7 @@ from .models import (
     MarketplaceLiquidacionEmpresa, InvestorAccount, InvestmentPosition, InvestmentCashflow,
     InvestmentReturnSnapshot, InvestmentEvent, VinculoLaboralEmpresa, CreditoAdelantoNomina,
     PagoComisionEjecutivo, AprobacionPagadorLibranza,
+    OrigenCreditoPrestador, SecuenciaNumeroCredito,
 )
 from django.utils import timezone
 from datetime import timedelta
@@ -65,6 +66,43 @@ class CreditoLibranzaInline(admin.StackedInline):
     can_delete = False
     verbose_name_plural = 'Detalle de Libranza'
     fk_name = 'credito'
+
+
+@admin.register(OrigenCreditoPrestador)
+class OrigenCreditoPrestadorAdmin(admin.ModelAdmin):
+    list_display = (
+        'gate_id', 'estado', 'credito', 'credito_libranza', 'created_by', 'created_at',
+    )
+    list_filter = ('estado', 'created_at')
+    search_fields = ('gate_id', 'clave_idempotencia', 'credito__numero_credito')
+    readonly_fields = (
+        'gate_id', 'gate_version', 'clave_idempotencia', 'credito',
+        'credito_libranza', 'estado', 'created_by', 'created_at', 'updated_at',
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return request.method in {'GET', 'HEAD', 'OPTIONS'}
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(SecuenciaNumeroCredito)
+class SecuenciaNumeroCreditoAdmin(admin.ModelAdmin):
+    list_display = ('anio', 'ultimo_numero', 'updated_at')
+    readonly_fields = ('anio', 'ultimo_numero', 'updated_at')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return request.method in {'GET', 'HEAD', 'OPTIONS'}
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 class CreditoAdelantoNominaInline(admin.StackedInline):

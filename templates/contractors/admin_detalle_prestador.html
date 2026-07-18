@@ -80,7 +80,7 @@
   {% if puede_ver_aprobacion or puede_crear_aprobacion %}
   <section class="panel">
     <h2 class="titulo-seccion">Aprobacion interna previa a originacion</h2>
-    <p><strong>Este gate no crea Credito, no formaliza una obligacion y no desembolsa.</strong></p>
+    <p><strong>El gate no desembolsa ni activa el credito. La originacion separada crea una obligacion en revision.</strong></p>
     {% if aprobacion_interna %}
       <div class="grid-3 datos-grid">
         <div class="dato"><span>Estado</span><strong>{{ aprobacion_interna.get_estado_display }}</strong></div>
@@ -90,6 +90,17 @@
         <div class="dato"><span>Plazo autorizado</span><strong>{{ aprobacion_interna.plazo_autorizado }} meses</strong></div>
         <div class="dato"><span>Politica / configuracion</span><strong>{{ aprobacion_interna.version_politica }} / {{ aprobacion_interna.version_configuracion_financiera }}</strong></div>
       </div>
+      {% if origen_credito and origen_credito.estado == 'COMPLETADO' %}
+        <div class="alerta-info">
+          Credito originado en revision: <strong>{{ origen_credito.credito.numero_credito }}</strong>.
+          No implica activacion, firma ni desembolso.
+        </div>
+      {% elif puede_originar %}
+        <form method="post" action="{% url 'contractors:admin_originar_credito' aprobacion_interna.id %}">
+          {% csrf_token %}
+          <button class="boton" type="submit">Originar credito en revision</button>
+        </form>
+      {% endif %}
       {% if puede_decidir_aprobacion and aprobacion_interna.estado == 'PENDIENTE' %}
         <form method="post" action="{% url 'contractors:admin_accion_aprobacion_interna' aprobacion_interna.id %}">
           {% csrf_token %}<button class="boton boton-secundario" name="accion" value="INICIAR">Iniciar analisis interno</button>

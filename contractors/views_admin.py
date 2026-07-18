@@ -1,3 +1,4 @@
+import logging
 from functools import wraps
 
 from django.contrib import messages
@@ -41,7 +42,12 @@ from contractors.services.revision_manual import (
     solicitar_validacion_empresa,
     usuarios_asignables_revision,
 )
+from contractors.services.originacion import originar_credito_prestador_desde_gate
 from contractors.views import calcular_progreso_documental
+from gestion_creditos.models import OrigenCreditoPrestador
+
+
+logger = logging.getLogger(__name__)
 
 
 def permiso_interno_requerido(codename):
@@ -227,6 +233,11 @@ def detalle_prestador_view(request, solicitud_id):
     aprobacion_interna = solicitud.aprobaciones_internas.select_related(
         'auditoria_predecision', 'revision_manual', 'creada_por', 'decidida_por'
     ).first()
+    origen_credito = None
+    if aprobacion_interna:
+        origen_credito = OrigenCreditoPrestador.objects.select_related(
+            'credito', 'credito_libranza'
+        ).filter(gate_id=aprobacion_interna.id).first()
     return render(
         request,
         'contractors/admin_detalle_prestador.html',
@@ -262,6 +273,7 @@ def detalle_prestador_view(request, solicitud_id):
             'puede_solicitar': request.user.has_perm('contractors.can_request_contractor_correction'),
             'puede_ver_score': puede_ver_score,
             'aprobacion_interna': aprobacion_interna,
+            'origen_credito': origen_credito,
             'motivos_aprobacion': AprobacionInternaPrestador.Motivo.choices,
             'puede_ver_aprobacion': request.user.has_perm(
                 'contractors.can_view_contractor_internal_approval'
@@ -271,6 +283,14 @@ def detalle_prestador_view(request, solicitud_id):
             ),
             'puede_cerrar_aprobacion': request.user.has_perm(
                 'contractors.can_close_contractor_internal_approval'
+            ),
+            'puede_originar': bool(
+                aprobacion_interna
+                and aprobacion_interna.estado
+                == AprobacionInternaPrestador.Estado.APROBADA_PARA_ORIGINAR
+                and request.user.has_perm(
+                    'contractors.can_originate_contractor_credit'
+                )
             ),
             'puede_crear_aprobacion': bool(
                 auditoria
@@ -360,6 +380,41 @@ def accion_aprobacion_interna_prestador_view(request, gate_id):
         messages.error(request, str(exc))
     else:
         messages.success(request, 'La decision interna fue registrada.')
+    return redirect('contractors:admin_detalle', solicitud_id=gate.solicitud_id)
+
+
+@require_POST
+@permiso_interno_requerido('contractors.can_originate_contractor_credit')
+def originar_credito_prestador_view(request, gate_id):
+    gate = get_object_or_404(
+        AprobacionInternaPrestador.objects.select_related('solicitud'),
+        pk=gate_id,
+    )
+    try:
+        resultado = originar_credito_prestador_desde_gate(
+            gate,
+            actor=request.user,
+        )
+    except (ValidationError, PermissionDenied) as exc:
+        messages.error(request, str(exc))
+    except Exception:
+        logger.exception('Error controlado al originar gate_id=%s', gate.id)
+        messages.error(
+            request,
+            'No fue posible completar la originacion. No se crearon obligaciones parciales.',
+        )
+    else:
+        if resultado.reutilizado:
+            messages.info(
+                request,
+                f'La originacion ya existia y se reutilizo el credito '
+                f'{resultado.credito.numero_credito}.',
+            )
+        else:
+            messages.success(
+                request,
+                f'Credito {resultado.credito.numero_credito} originado en revision.',
+            )
     return redirect('contractors:admin_detalle', solicitud_id=gate.solicitud_id)
 
 

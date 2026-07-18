@@ -5,6 +5,7 @@ from contractors.models import (
     RequerimientoSubsanacionPrestador,
     RevisionManualPrestador,
 )
+from gestion_creditos.models import OrigenCreditoPrestador
 
 
 def construir_estado_publico_solicitud(solicitud):
@@ -19,6 +20,17 @@ def construir_estado_publico_solicitud(solicitud):
 
     if aprobacion:
         if aprobacion.estado == AprobacionInternaPrestador.Estado.APROBADA_PARA_ORIGINAR:
+            originada = OrigenCreditoPrestador.objects.filter(
+                gate_id=aprobacion.id,
+                estado=OrigenCreditoPrestador.Estado.COMPLETADO,
+            ).exists()
+            if originada:
+                return _estado(
+                    'ORIGINADA_EN_REVISION',
+                    'Tu solicitud está avanzando a la etapa de formalización.',
+                    'La obligación permanece en revisión y todavía no ha sido desembolsada.',
+                    tono='favorable',
+                )
             return _estado(
                 'APROBADA_PARA_ORIGINAR',
                 'Tu solicitud super\u00f3 las validaciones internas.',

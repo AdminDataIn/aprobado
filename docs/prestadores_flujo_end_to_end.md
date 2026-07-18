@@ -1,6 +1,6 @@
 # Flujo end-to-end de Prestadores de Servicios
 
-Estado del documento: **Commit E - gate interno implementado; originacion pendiente**.
+Estado del documento: **Commit F - originacion central idempotente implementada**.
 
 Convenciones:
 
@@ -11,8 +11,9 @@ Convenciones:
 ## 1. Objetivo del modulo
 
 El dominio `contractors` recibe y evalua solicitudes de Prestadores de Servicios. Su
-responsabilidad termina, por ahora, en una aprobacion interna para originar y en la
-construccion determinista de un expediente. No crea obligaciones financieras.
+responsabilidad publica termina en la solicitud y su evaluacion. La accion staff del
+Commit F entrega un expediente inmutable al servicio central de `gestion_creditos`,
+que crea una obligacion exclusivamente en estado `EN_REVISION`.
 
 El modulo conserva trazabilidad desde la solicitud publica hasta la decision interna,
 sin convertir `PREAPROBADO_READ_ONLY` en una aprobacion crediticia o desembolso.
@@ -46,7 +47,7 @@ flowchart TD
     SUB --> EF
     EF -->|PREAPROBADO_READ_ONLY| AI[Aprobacion interna]
     AI -->|APROBADA_PARA_ORIGINAR| EO[Expediente originacion inmutable]
-    EO -. PENDIENTE .-> OR[Originacion gestion_creditos]
+    EO --> OR[Originacion gestion_creditos]
     OR -. PENDIENTE .-> PG[Pagare]
     PG -. PENDIENTE .-> FI[Firma]
     FI -. PENDIENTE .-> PA[Pagador / validacion operativa]
@@ -56,8 +57,8 @@ flowchart TD
     classDef partial fill:#fff3cd,stroke:#a16207,color:#123;
     classDef pending fill:#f1f5f9,stroke:#64748b,color:#475569,stroke-dasharray: 5 5;
     class U,P,S,D,AC,SIM,DC,SC,EF,RM,SUB,AI ok;
-    class EO partial;
-    class OR,PG,FI,PA,DE pending;
+    class EO,OR ok;
+    class PG,FI,PA,DE pending;
 ```
 
 ## 4. Flujo end-to-end
@@ -81,7 +82,8 @@ flowchart TD
     M -->|cambio o vencimiento| I
     M -->|sin cambios| N[APROBADA_PARA_ORIGINAR]
     N --> O[ExpedienteOriginacionPrestadorDTO]
-    O -. Commit F .-> P[Servicio central de originacion]
+    O --> P[Servicio central de originacion]
+    P --> Q[Credito y CreditoLibranza EN_REVISION]
 ```
 
 ## 5. Maquina de estados ContractorApplication
@@ -183,6 +185,8 @@ pagare, firma, obligacion activa ni desembolso.
 | `AprobacionInternaPrestador` | gate humano previo a originar | comentario interno, topes | si del gate | solicitud, auditoria, revision |
 | `AutorizacionConsultaDatacreditoPrestador` | consentimiento versionado | hash y referencia | si de autorizacion | solicitud, usuario |
 | `ConsultaDatacreditoSnapshot` | resultado externo reutilizable | hash, resultado normalizado | si del snapshot | referencia logica a solicitud/autorizacion |
+| `OrigenCreditoPrestador` | enlace idempotente gate/obligacion | IDs y clave opaca | si del origen | Credito, CreditoLibranza |
+| `SecuenciaNumeroCredito` | consecutivo anual transaccional | no | si de numeracion | ninguna |
 
 ## 10. Servicios
 
@@ -200,6 +204,8 @@ pagare, firma, obligacion activa ni desembolso.
 | `subsanacion` | requerimiento/cambios | requerimiento atendido | invalida evaluacion | si |
 | `aprobacion_interna` | auditoria o gate/actor | gate | gate, revision, timeline | si, corta |
 | `expediente_originacion` | gate aprobado | DTO inmutable | ninguno | no |
+| `originacion_libranza` | DTO + clave + actor | origen, Credito y detalle | crea obligacion EN_REVISION | si, atomica |
+| `contractors.services.originacion` | gate aprobado + actor | resultado central | timeline allowlist | si |
 
 ## 11. Rutas
 
@@ -224,6 +230,7 @@ son los de django-allauth bajo `/accounts/`; no existen aliases `/login/` o `/re
 | GET | `/gestion/prestadores/<id>/` | `detalle_prestador_view` | staff | permiso de bandeja | detalle/revision/gate |
 | POST | `/gestion/prestadores/<id>/aprobacion-interna/crear/` | `crear_aprobacion_interna_prestador_view` | staff + CSRF | `can_decide_contractor_internal_approval` | crear gate |
 | POST | `/gestion/prestadores/aprobaciones/<gate>/accion/` | `accion_aprobacion_interna_prestador_view` | staff + CSRF | permiso segun accion | decidir gate |
+| POST | `/gestion/prestadores/aprobaciones/<gate>/originar/` | `originar_credito_prestador_view` | staff + CSRF | `can_originate_contractor_credit` | originar EN_REVISION |
 | POST | `/gestion/prestadores/revisiones/<revision>/accion/` | `accion_revision_prestador_view` | staff + CSRF | permiso segun accion | operar revision |
 | GET | `/gestion/prestadores/documentos/<doc>/descargar/` | `descargar_documento_prestador_staff_view` | staff | permiso de bandeja | descarga interna |
 
@@ -324,41 +331,32 @@ plazo, nunca aumentarlos. Se conservan topes originales y valores autorizados.
 
 `contractors` termina en `ExpedienteOriginacionPrestadorDTO`, dataclass inmutable
 construida solo desde un gate `APROBADA_PARA_ORIGINAR` y con version intacta. La
-funcion no persiste ni ejecuta efectos externos.
+vista no escribe modelos financieros. `contractors.services.originacion` bloquea el
+gate, reconstruye el DTO y delega en
+`gestion_creditos.services.originacion_libranza.originar_libranza_desde_expediente`.
 
-`gestion_creditos` debe comenzar en un futuro servicio central que reciba ese DTO,
-vuelva a bloquear/revalidar el gate y cree la obligacion idempotentemente. Las vistas
-de `contractors` no deben importar vistas de originacion ni escribir modelos del core.
+El servicio central usa `transaction.atomic`, `OrigenCreditoPrestador.gate_id` unico y
+`clave_idempotencia` unica (`prestador:<gate_id>:<version_datos>`). Un reintento con la
+misma clave devuelve el mismo `Credito` y `CreditoLibranza`; una clave diferente para
+el mismo gate se rechaza.
 
-## 20. Auditoria de originacion actual
+## 20. Mapping de originacion implementado
 
-Hallazgos reales:
+| Expediente Prestador | Destino | Regla |
+|---|---|---|
+| `usuario_id` | `Credito.usuario_id` | usuario propietario |
+| monto/plazo solicitados | `Credito.monto_solicitado/plazo_solicitado` | snapshot del gate |
+| monto/plazo autorizados | `Credito.monto_aprobado/plazo` | limites humanos, estado EN_REVISION |
+| `tasa_mensual` | `Credito.tasa_interes` | snapshot financiero |
+| identidad/contacto | `CreditoLibranza` | copia estructurada del expediente |
+| `empresa_id` | `CreditoLibranza.empresa_id` | Empresa existente |
+| cargo/tipo/fechas/valores | campos contractuales de `CreditoLibranza` | sin datos laborales ficticios |
+| contrato | `contrato_prestacion_servicios` | referencia al archivo existente |
+| cedulas/certificado bancario | campos documentales existentes | referencia al archivo existente |
+| escenario | `CreditoLibranza.escenario_credito` | valor compartido de libranza |
 
-1. El `Credito` de Libranza nace en
-   `gestion_creditos.views.solicitudes.solicitud_credito_libranza_view` mediante
-   `Credito.objects.create`.
-2. `CreditoLibranza` nace inmediatamente despues mediante
-   `CreditoLibranzaForm.save(commit=False)` y `save()` dentro de la misma transaccion.
-3. No existe un unico servicio de dominio reutilizable para crear ambos modelos.
-4. La vista mezcla persistencia con parseo de certificado, emails al cliente,
-   notificacion interna y notificacion a pagadores.
-5. `Credito.save()` calcula `CR-<año>-<secuencia>` consultando el ultimo registro. La
-   unicidad protege duplicados, pero el calculo no es una secuencia transaccional y
-   puede competir bajo concurrencia.
-6. La solicitud tradicional no usa una clave idempotente de origen; repetir un POST
-   puede depender de validaciones indirectas (por ejemplo cedula) y no de un contrato
-   formal de idempotencia.
-7. `credit_services.gestionar_cambio_estado_credito` persiste historial y envia email.
-8. `aprobacion_pagador_libranza` llama
-   `credit_services.preparar_documento_para_firma`; esto cambia a
-   `PENDIENTE_FIRMA`, genera pagare y programa envio ZapSign en `on_commit`.
-9. `credit_services.activar_credito` calcula comision, IVA, cuota y amortizacion,
-   fija fecha de desembolso y crea cuotas. No corresponde a originacion inicial.
-10. Los comandos de creditos especiales tambien crean y activan directamente, por lo
-    que no son una frontera apropiada para Prestadores.
-
-Conclusion: originar en Commit E duplicaria reglas y heredaria efectos laterales no
-controlados. Se requiere una extraccion en el core antes de Commit F.
+`certificado_laboral` e `ingresos_mensuales` quedan vacios: el contrato de prestacion
+no se disfraza como relacion laboral. Los archivos no se duplican fisicamente.
 
 ## 21. Secuencia futura de originacion
 
@@ -381,44 +379,37 @@ sequenceDiagram
     else nuevo
         Core->>DB: crear Credito EN_REVISION
         Core->>DB: crear CreditoLibranza
-        Core->>DB: registrar HistorialEstado y relacion de origen
+        Core->>DB: completar relacion de origen
     end
     Core-->>Contractors: referencia idempotente
-    Contractors-->>Staff: originacion registrada
+    Contractors-->>Staff: originacion registrada/reutilizada
     Note over Formal: pagare, firma, pagador y desembolso siguen separados
 ```
 
-## 22. Riesgos tecnicos
+## 22. Numeracion y efectos laterales
 
-- Numeracion de credito susceptible a carrera si el futuro servicio no agrega retry o
-  secuencia segura.
-- Efectos de email/pagare acoplados a transiciones del core.
-- Diferencia semantica entre contrato de prestacion y campos laborales obligatorios
-  de `CreditoLibranza`.
-- Archivos de `ContractorApplicationDocument` no deben copiarse sin estrategia de
-  ownership, almacenamiento e idempotencia.
-- Un cambio de politica entre gate y originacion debe invalidar, no ajustar valores.
-- La doble aprobacion de pagador tradicional no representa la decision interna de
-  Prestadores.
-- Reintentos HTTP sin clave estable podrian duplicar obligaciones.
+`Credito.save()` reserva ahora el consecutivo anual mediante `SecuenciaNumeroCredito`
+y `select_for_update`. La primera reserva inicializa el contador con el maximo numerico
+historico del año. La reserva puede dejar saltos si una transaccion posterior falla,
+pero no reutiliza ni duplica numeros. La restriccion `Credito.numero_credito unique`
+permanece como defensa adicional.
 
-## 23. Pendientes
+La originacion no llama `gestionar_cambio_estado_credito`, preparacion de pagare,
+ZapSign, activacion, desembolso, pagos, pagador ni generacion de amortizacion. Tampoco
+crea `HistorialEstado`: la trazabilidad de esta fase queda en `OrigenCreditoPrestador`
+y `TimelinePrestador` (`ORIGINACION_INICIADA`, `COMPLETADA`, `REUTILIZADA` o
+`ERROR_CONTROLADO`).
 
-- **PENDIENTE Commit F**: extraer servicio idempotente en `gestion_creditos` para
-  crear `Credito` + `CreditoLibranza` sin pagare, pago ni desembolso.
-- Definir relacion unica entre gate y credito originado, preferiblemente en un modelo
-  de enlace/auditoria del core con constraint unica por gate.
-- Definir mapeo contractual a campos actualmente laborales de `CreditoLibranza`.
-- Hacer segura la numeracion bajo concurrencia PostgreSQL.
-- Separar efectos de notificacion con `transaction.on_commit`/outbox.
-- Definir formalizacion, pagare, firma y validacion de hechos por empresa.
-- Agregar pruebas PostgreSQL de concurrencia e idempotencia antes de activar origen.
+## 23. Pendientes Commit G
 
-Recomendacion exacta para Commit F: crear
-`gestion_creditos/services/originacion_libranza.py` con un DTO de entrada estable,
-una clave idempotente igual al ID del gate/version, `transaction.atomic`, locks sobre
-el registro de enlace, creacion en estado `EN_REVISION` y cero llamadas a pagare,
-ZapSign, pagos o desembolso. Solo despues conectar una accion staff separada.
+- Formalizacion separada desde un credito `EN_REVISION`.
+- Pagare, firma y ZapSign con contratos de idempotencia propios.
+- Validacion operativa de hechos por empresa sin reutilizar decision crediticia del
+  pagador tradicional.
+- Activacion, amortizacion y desembolso solo despues de formalizacion completa.
+- Prueba de concurrencia real sobre PostgreSQL para complementar constraints y locks.
+- Resolver en un cambio independiente la deuda de migraciones `WhatsAppInternal*`
+  presente en la rama; Commit F no la incluye.
 
 ## 24. Historial de commits/fases
 
@@ -428,6 +419,6 @@ ZapSign, pagos o desembolso. Solo despues conectar una accion staff separada.
 | B | IMPLEMENTADO | DataCredito seguro, snapshots e idempotencia |
 | C | IMPLEMENTADO | score parametrizado y predecision formal read-only |
 | D | IMPLEMENTADO | revision manual, subsanacion y bandeja interna |
-| E | IMPLEMENTADO | gate interno y expediente inmutable; sin originacion |
-| F | PENDIENTE | servicio central idempotente de originacion |
-
+| E | IMPLEMENTADO | gate interno y expediente inmutable |
+| F | IMPLEMENTADO | servicio central idempotente y Credito EN_REVISION |
+| G | PENDIENTE | formalizacion, firma, activacion y desembolso controlados |

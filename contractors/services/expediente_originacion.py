@@ -22,9 +22,12 @@ class ExpedienteOriginacionPrestadorDTO:
     celular: str
     direccion: str
     escenario_credito: str
+    monto_solicitado: Decimal
+    plazo_solicitado: int
     monto_autorizado: Decimal
     plazo_autorizado: int
     tasa_mensual: Decimal
+    version_datos: str
     version_politica: str
     version_configuracion_financiera: str
     cargo: str
@@ -34,6 +37,10 @@ class ExpedienteOriginacionPrestadorDTO:
     valor_total_contrato: Decimal
     valor_pagado_contrato: Decimal
     valor_pendiente_cobrar: Decimal
+    cedula_frontal_nombre: str
+    cedula_trasera_nombre: str
+    contrato_nombre: str
+    certificado_bancario_nombre: str
 
     def como_dict(self):
         return asdict(self)
@@ -51,6 +58,16 @@ def construir_expediente_originacion_prestador(gate):
         raise ValidationError('Los datos cambiaron despues de la aprobacion interna.')
     if gate.auditoria_predecision.version_datos != gate.version_datos:
         raise ValidationError('La aprobacion no coincide con su auditoria de predecision.')
+    documentos = {
+        documento.tipo_documento: documento
+        for documento in solicitud.documentos.all()
+        if documento.archivo
+    }
+    requeridos = {
+        'CEDULA_FRONTAL', 'CEDULA_TRASERA', 'CONTRATO', 'CERTIFICADO_BANCARIO'
+    }
+    if not requeridos.issubset(documentos):
+        raise ValidationError('Los documentos requeridos para originar no estan completos.')
     return ExpedienteOriginacionPrestadorDTO(
         solicitud_id=solicitud.id,
         aprobacion_interna_id=gate.id,
@@ -65,9 +82,12 @@ def construir_expediente_originacion_prestador(gate):
         celular=solicitud.celular,
         direccion=solicitud.direccion,
         escenario_credito=solicitud.escenario_credito,
+        monto_solicitado=gate.monto_solicitado_snapshot,
+        plazo_solicitado=gate.plazo_solicitado_snapshot,
         monto_autorizado=gate.monto_autorizado,
         plazo_autorizado=gate.plazo_autorizado,
         tasa_mensual=gate.tasa_mensual_snapshot,
+        version_datos=gate.version_datos,
         version_politica=gate.version_politica,
         version_configuracion_financiera=gate.version_configuracion_financiera,
         cargo=solicitud.cargo,
@@ -77,4 +97,8 @@ def construir_expediente_originacion_prestador(gate):
         valor_total_contrato=solicitud.valor_total_contrato,
         valor_pagado_contrato=solicitud.valor_pagado_contrato,
         valor_pendiente_cobrar=solicitud.valor_pendiente_cobrar,
+        cedula_frontal_nombre=documentos['CEDULA_FRONTAL'].archivo.name,
+        cedula_trasera_nombre=documentos['CEDULA_TRASERA'].archivo.name,
+        contrato_nombre=documentos['CONTRATO'].archivo.name,
+        certificado_bancario_nombre=documentos['CERTIFICADO_BANCARIO'].archivo.name,
     )

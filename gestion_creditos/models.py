@@ -454,6 +454,52 @@ class MarketplaceLiquidacionEmpresa(models.Model):
         return f"{self.empresa.nombre} - {self.pedido.numero_pedido}"
 
 #? ----- Modelo principal de crédito ----
+class SecuenciaNumeroCredito(models.Model):
+    anio = models.PositiveSmallIntegerField(unique=True)
+    ultimo_numero = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Secuencia de numero de credito'
+        verbose_name_plural = 'Secuencias de numeros de credito'
+
+    def __str__(self):
+        return f'{self.anio}: {self.ultimo_numero}'
+
+
+def generar_numero_credito_seguro(anio):
+    """Reserva un consecutivo anual sin depender de leer el ultimo credito."""
+    from django.db import IntegrityError, transaction
+
+    prefijo = f'CR-{anio}-'
+    with transaction.atomic():
+        try:
+            secuencia = SecuenciaNumeroCredito.objects.select_for_update().get(anio=anio)
+        except SecuenciaNumeroCredito.DoesNotExist:
+            existentes = Credito.objects.filter(
+                numero_credito__startswith=prefijo
+            ).values_list('numero_credito', flat=True)
+            ultimo_existente = 0
+            for numero in existentes:
+                sufijo = numero[len(prefijo):]
+                if sufijo.isdigit():
+                    ultimo_existente = max(ultimo_existente, int(sufijo))
+            try:
+                with transaction.atomic():
+                    secuencia = SecuenciaNumeroCredito.objects.create(
+                        anio=anio,
+                        ultimo_numero=ultimo_existente,
+                    )
+            except IntegrityError:
+                secuencia = SecuenciaNumeroCredito.objects.select_for_update().get(
+                    anio=anio
+                )
+
+        secuencia.ultimo_numero += 1
+        secuencia.save(update_fields=['ultimo_numero', 'updated_at'])
+        return f'{prefijo}{secuencia.ultimo_numero:05d}'
+
+
 class Credito(models.Model):
     class LineaCredito(models.TextChoices):
         EMPRENDIMIENTO = 'EMPRENDIMIENTO', 'Emprendimiento'
@@ -604,21 +650,7 @@ class Credito(models.Model):
         """
         # 1. Generar numero_credito si es un crédito nuevo
         if not self.numero_credito:
-            from django.utils import timezone
-            today = timezone.now()
-            year = today.year
-            
-            # Generar el prefijo y buscar el último número para ese año
-            prefix = f'CR-{year}-'
-            last_credit = Credito.objects.filter(numero_credito__startswith=prefix).order_by('numero_credito').last()
-            
-            if last_credit and last_credit.numero_credito[len(prefix):].isdigit():
-                last_sequence = int(last_credit.numero_credito[len(prefix):])
-                new_sequence = last_sequence + 1
-            else:
-                new_sequence = 1
-            
-            self.numero_credito = f'{prefix}{new_sequence:05d}'
+            self.numero_credito = generar_numero_credito_seguro(timezone.now().year)
 
         # 2. Validación de transiciones de estado
         if self.pk:  # Si el objeto ya existe en la BD
@@ -976,6 +1008,25 @@ class CreditoLibranza(models.Model):
         verbose_name="Ingresos mensuales"
     )
 
+    # Datos contractuales de prestadores. Permanecen opcionales para no alterar
+    # solicitudes historicas de libranza tradicional.
+    es_prestador_servicios = models.BooleanField(default=False)
+    tipo_documento = models.CharField(max_length=10, blank=True)
+    cargo_actividad_contractual = models.CharField(max_length=160, blank=True)
+    tipo_contrato = models.CharField(max_length=80, blank=True)
+    fecha_inicio_contrato = models.DateField(null=True, blank=True)
+    fecha_fin_contrato = models.DateField(null=True, blank=True)
+    valor_total_contrato = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    valor_pagado_contrato = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    valor_pendiente_contrato = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    escenario_credito = models.CharField(max_length=32, blank=True)
+
     #? Archivos adjuntos
     cedula_frontal = models.FileField(
         upload_to='credito_libranza/cedulas/',
@@ -990,6 +1041,12 @@ class CreditoLibranza(models.Model):
         null=True,
         blank=True,
         verbose_name="Certificado laboral"
+    )
+    contrato_prestacion_servicios = models.FileField(
+        upload_to='credito_libranza/contratos_prestadores/',
+        null=True,
+        blank=True,
+        verbose_name='Contrato de prestacion de servicios',
     )
     desprendible_nomina = models.FileField(
         upload_to='credito_libranza/desprendibles_nomina/',
@@ -1025,6 +1082,56 @@ class CreditoLibranza(models.Model):
     @property
     def nombre_completo(self):
         return build_full_name_upper(self.nombres, self.apellidos)
+
+
+class OrigenCreditoPrestador(models.Model):
+    class Estado(models.TextChoices):
+        EN_PROCESO = 'EN_PROCESO', 'En proceso'
+        COMPLETADO = 'COMPLETADO', 'Completado'
+        ERROR_CONTROLADO = 'ERROR_CONTROLADO', 'Error controlado'
+
+    gate_id = models.PositiveBigIntegerField(unique=True)
+    gate_version = models.CharField(max_length=64)
+    clave_idempotencia = models.CharField(max_length=180, unique=True)
+    credito = models.OneToOneField(
+        Credito,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='origen_prestador',
+    )
+    credito_libranza = models.OneToOneField(
+        CreditoLibranza,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='origen_prestador',
+    )
+    estado = models.CharField(
+        max_length=24,
+        choices=Estado.choices,
+        default=Estado.EN_PROCESO,
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='origenes_credito_prestador_creados',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        verbose_name = 'Origen de credito de prestador'
+        verbose_name_plural = 'Origenes de creditos de prestadores'
+        indexes = [
+            models.Index(fields=['estado', '-created_at'], name='orig_prest_estado_idx'),
+        ]
+
+    def __str__(self):
+        return f'Gate {self.gate_id} - {self.estado}'
 
 
 class AprobacionPagadorLibranza(models.Model):

@@ -48,6 +48,11 @@ urlpatterns = [
         name='admin_accion_aprobacion_interna',
     ),
     path(
+        'gestion/prestadores/aprobaciones/<int:gate_id>/originar/',
+        views_admin.originar_credito_prestador_view,
+        name='admin_originar_credito',
+    ),
+    path(
         'gestion/prestadores/revisiones/<int:revision_id>/accion/',
         views_admin.accion_revision_prestador_view,
         name='admin_accion_revision',

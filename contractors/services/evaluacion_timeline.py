@@ -19,6 +19,8 @@ CLAVES_METADATA_PERMITIDAS = {
     'tipo',
     'actor_id',
     'gate_id',
+    'origin_id',
+    'credito_id',
     'estado_anterior',
     'estado_nuevo',
     'version_politica',

@@ -31,14 +31,21 @@ from contractors.services.evaluacion_versionado import construir_version_datos
 from contractors.services.expediente_originacion import (
     construir_expediente_originacion_prestador,
 )
+from contractors.services.originacion import originar_credito_prestador_desde_gate
 from contractors.tests.test_score_prestadores_v2 import crear_politica_score
 from gestion_creditos.models import (
     AprobacionPagadorLibranza,
     Credito,
     CreditoLibranza,
+    CuotaAmortizacion,
     Empresa,
     HistorialPago,
+    OrigenCreditoPrestador,
     Pagare,
+)
+from gestion_creditos.services.originacion_libranza import (
+    construir_clave_idempotencia_prestador,
+    originar_libranza_desde_expediente,
 )
 from integrations.models import ConsultaDatacreditoSnapshot
 from usuarios.models import PerfilPagador
@@ -77,6 +84,7 @@ class AprobacionInternaPrestadorTest(TestCase):
             'can_view_contractor_internal_approval',
             'can_decide_contractor_internal_approval',
             'can_close_contractor_internal_approval',
+            'can_originate_contractor_credit',
         )
         self._otorgar(
             self.lector,
@@ -323,6 +331,194 @@ class AprobacionInternaPrestadorTest(TestCase):
         self.solicitud.save(update_fields=['direccion', 'updated_at'])
         with self.assertRaises(ValidationError):
             construir_expediente_originacion_prestador(gate)
+
+    def test_originacion_es_idempotente_y_crea_un_solo_par(self):
+        gate = self._crear_gate()
+        aprobar_para_originar(gate, actor=self.analista)
+
+        primero = originar_credito_prestador_desde_gate(gate, actor=self.analista)
+        segundo = originar_credito_prestador_desde_gate(gate, actor=self.analista)
+
+        self.assertFalse(primero.reutilizado)
+        self.assertTrue(segundo.reutilizado)
+        self.assertEqual(primero.credito.pk, segundo.credito.pk)
+        self.assertEqual(primero.credito_libranza.pk, segundo.credito_libranza.pk)
+        self.assertEqual(Credito.objects.count(), 1)
+        self.assertEqual(CreditoLibranza.objects.count(), 1)
+        self.assertEqual(OrigenCreditoPrestador.objects.count(), 1)
+        self.assertEqual(primero.credito.estado, Credito.EstadoCredito.EN_REVISION)
+        self.assertTrue(self.solicitud.timeline_operativo.filter(
+            tipo_evento=TimelinePrestador.TipoEvento.ORIGINACION_COMPLETADA
+        ).exists())
+        self.assertTrue(self.solicitud.timeline_operativo.filter(
+            tipo_evento=TimelinePrestador.TipoEvento.ORIGINACION_REUTILIZADA
+        ).exists())
+
+    def test_clave_diferente_no_duplica_el_mismo_gate(self):
+        gate = self._crear_gate()
+        aprobar_para_originar(gate, actor=self.analista)
+        dto = construir_expediente_originacion_prestador(gate)
+        clave = construir_clave_idempotencia_prestador(dto)
+        originar_libranza_desde_expediente(dto, clave, self.analista)
+
+        with self.assertRaises(ValidationError):
+            originar_libranza_desde_expediente(
+                dto,
+                f'{clave}:distinta',
+                self.analista,
+            )
+        self.assertEqual(Credito.objects.count(), 1)
+        self.assertEqual(CreditoLibranza.objects.count(), 1)
+
+    def test_originacion_mapea_contrato_sin_inventar_certificado_laboral(self):
+        gate = self._crear_gate()
+        aprobar_para_originar(gate, actor=self.analista)
+        resultado = originar_credito_prestador_desde_gate(gate, actor=self.analista)
+        detalle = resultado.credito_libranza
+
+        self.assertTrue(detalle.es_prestador_servicios)
+        self.assertEqual(detalle.tipo_documento, self.solicitud.tipo_documento)
+        self.assertEqual(detalle.cargo_actividad_contractual, self.solicitud.cargo)
+        self.assertEqual(detalle.valor_pendiente_contrato, self.solicitud.valor_pendiente_cobrar)
+        self.assertFalse(detalle.certificado_laboral.name)
+        self.assertEqual(
+            detalle.contrato_prestacion_servicios.name,
+            self.solicitud.documentos.get(tipo_documento='CONTRATO').archivo.name,
+        )
+
+    @patch('gestion_creditos.credit_services.activar_credito')
+    @patch('gestion_creditos.credit_services.iniciar_proceso_desembolso')
+    @patch('gestion_creditos.credit_services.preparar_documento_para_firma')
+    def test_originacion_no_formaliza_ni_crea_efectos_laterales(
+        self, preparar_firma, iniciar_desembolso, activar_credito
+    ):
+        gate = self._crear_gate()
+        aprobar_para_originar(gate, actor=self.analista)
+        resultado = originar_credito_prestador_desde_gate(gate, actor=self.analista)
+
+        self.assertEqual(resultado.credito.estado, Credito.EstadoCredito.EN_REVISION)
+        self.assertFalse(resultado.credito.documento_enviado)
+        self.assertIsNone(resultado.credito.fecha_desembolso)
+        self.assertEqual(Pagare.objects.count(), 0)
+        self.assertEqual(CuotaAmortizacion.objects.count(), 0)
+        self.assertEqual(HistorialPago.objects.count(), 0)
+        self.assertEqual(AprobacionPagadorLibranza.objects.count(), 0)
+        preparar_firma.assert_not_called()
+        iniciar_desembolso.assert_not_called()
+        activar_credito.assert_not_called()
+
+    def test_gate_no_aprobado_datos_modificados_y_permisos_bloquean_originacion(self):
+        gate = self._crear_gate()
+        with self.assertRaises(ValidationError):
+            originar_credito_prestador_desde_gate(gate, actor=self.analista)
+
+        aprobar_para_originar(gate, actor=self.analista)
+        self.solicitud.direccion = 'Direccion cambiada antes de originar'
+        self.solicitud.save(update_fields=['direccion', 'updated_at'])
+        with self.assertRaises(ValidationError):
+            originar_credito_prestador_desde_gate(gate, actor=self.analista)
+
+        self.solicitud.direccion = 'Direccion gate'
+        self.solicitud.save(update_fields=['direccion', 'updated_at'])
+        sin_permiso = get_user_model().objects.create_user(
+            'staff-sin-originar', password='test', is_staff=True
+        )
+        with self.assertRaises(PermissionDenied):
+            originar_credito_prestador_desde_gate(gate, actor=sin_permiso)
+
+        pagador = get_user_model().objects.create_user(
+            'pagador-originacion', password='test', is_staff=True
+        )
+        PerfilPagador.objects.create(usuario=pagador, empresa=self.empresa)
+        self._otorgar(pagador, 'can_originate_contractor_credit')
+        with self.assertRaises(PermissionDenied):
+            originar_credito_prestador_desde_gate(gate, actor=pagador)
+        dto = construir_expediente_originacion_prestador(gate)
+        with self.assertRaises(PermissionDenied):
+            originar_libranza_desde_expediente(
+                dto,
+                construir_clave_idempotencia_prestador(dto),
+                pagador,
+            )
+        self.assertEqual(Credito.objects.count(), 0)
+
+    @patch('gestion_creditos.services.originacion_libranza.CreditoLibranza.objects.create')
+    def test_error_controlado_revierte_origen_y_credito(self, crear_detalle):
+        crear_detalle.side_effect = RuntimeError('fallo controlado de prueba')
+        gate = self._crear_gate()
+        aprobar_para_originar(gate, actor=self.analista)
+        with self.assertRaises(RuntimeError):
+            originar_credito_prestador_desde_gate(gate, actor=self.analista)
+
+        self.assertEqual(OrigenCreditoPrestador.objects.count(), 0)
+        self.assertEqual(Credito.objects.count(), 0)
+        self.assertEqual(CreditoLibranza.objects.count(), 0)
+        self.assertTrue(self.solicitud.timeline_operativo.filter(
+            tipo_evento=TimelinePrestador.TipoEvento.ORIGINACION_ERROR_CONTROLADO
+        ).exists())
+
+    def test_vista_originacion_requiere_permiso_y_reintento_reutiliza(self):
+        gate = self._crear_gate()
+        aprobar_para_originar(gate, actor=self.analista)
+        self.client.force_login(self.lector)
+        detalle = self.client.get(
+            f'/gestion/prestadores/{self.solicitud.id}/', HTTP_HOST=self.host
+        )
+        self.assertNotContains(detalle, 'Originar credito en revision')
+        bloqueado = self.client.post(
+            f'/gestion/prestadores/aprobaciones/{gate.id}/originar/',
+            HTTP_HOST=self.host,
+        )
+        self.assertEqual(bloqueado.status_code, 403)
+
+        self.client.force_login(self.analista)
+        detalle = self.client.get(
+            f'/gestion/prestadores/{self.solicitud.id}/', HTTP_HOST=self.host
+        )
+        self.assertContains(detalle, 'Originar credito en revision')
+        for _ in range(2):
+            respuesta = self.client.post(
+                f'/gestion/prestadores/aprobaciones/{gate.id}/originar/',
+                HTTP_HOST=self.host,
+            )
+            self.assertEqual(respuesta.status_code, 302)
+        self.assertEqual(Credito.objects.count(), 1)
+        self.assertEqual(CreditoLibranza.objects.count(), 1)
+        self.assertTrue(self.solicitud.timeline_operativo.filter(
+            tipo_evento=TimelinePrestador.TipoEvento.ORIGINACION_REUTILIZADA
+        ).exists())
+
+    def test_mi_credito_no_confunde_originacion_con_desembolso(self):
+        gate = self._crear_gate()
+        aprobar_para_originar(gate, actor=self.analista)
+        originar_credito_prestador_desde_gate(gate, actor=self.analista)
+        self.client.force_login(self.solicitante)
+        response = self.client.get('/mi-credito/', HTTP_HOST=self.host)
+        self.assertContains(
+            response,
+            'Tu solicitud está avanzando a la etapa de formalización.',
+        )
+        self.assertNotContains(response, 'Crédito activo')
+        self.assertNotContains(response, 'Crédito desembolsado')
+
+    def test_numeracion_segura_conserva_creditos_tradicionales_existentes(self):
+        anio = timezone.now().year
+        Credito.objects.create(
+            usuario=self.solicitante,
+            numero_credito=f'CR-{anio}-00009',
+            linea=Credito.LineaCredito.LIBRANZA,
+            estado=Credito.EstadoCredito.EN_REVISION,
+            monto_solicitado=Decimal('1000000'),
+            plazo_solicitado=3,
+        )
+        siguiente = Credito.objects.create(
+            usuario=self.solicitante,
+            linea=Credito.LineaCredito.LIBRANZA,
+            estado=Credito.EstadoCredito.EN_REVISION,
+            monto_solicitado=Decimal('1000000'),
+            plazo_solicitado=3,
+        )
+        self.assertEqual(siguiente.numero_credito, f'CR-{anio}-00010')
 
     def test_devolver_crea_revision_y_cerrar_conserva_gate(self):
         gate = self._crear_gate()

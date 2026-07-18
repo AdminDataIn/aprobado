@@ -327,6 +327,13 @@ class TimelinePrestador(models.Model):
             'APROBACION_INTERNA_CANCELADA',
             'Aprobacion interna cancelada',
         )
+        ORIGINACION_INICIADA = 'ORIGINACION_INICIADA', 'Originacion iniciada'
+        ORIGINACION_COMPLETADA = 'ORIGINACION_COMPLETADA', 'Originacion completada'
+        ORIGINACION_REUTILIZADA = 'ORIGINACION_REUTILIZADA', 'Originacion reutilizada'
+        ORIGINACION_ERROR_CONTROLADO = (
+            'ORIGINACION_ERROR_CONTROLADO',
+            'Error controlado de originacion',
+        )
 
     solicitud = models.ForeignKey(
         ContractorApplication,
@@ -527,6 +534,10 @@ class AprobacionInternaPrestador(models.Model):
             (
                 'can_close_contractor_internal_approval',
                 'Puede cerrar aprobaciones internas de prestadores',
+            ),
+            (
+                'can_originate_contractor_credit',
+                'Puede originar creditos de prestadores aprobados internamente',
             ),
         ]
 
