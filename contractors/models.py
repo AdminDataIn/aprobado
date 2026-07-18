@@ -334,6 +334,23 @@ class TimelinePrestador(models.Model):
             'ORIGINACION_ERROR_CONTROLADO',
             'Error controlado de originacion',
         )
+        FORMALIZACION_INICIADA = 'FORMALIZACION_INICIADA', 'Formalizacion iniciada'
+        PAGARE_GENERADO = 'PAGARE_GENERADO', 'Pagare generado'
+        IDENTIDAD_VALIDADA_FIRMA = (
+            'IDENTIDAD_VALIDADA_FIRMA',
+            'Identidad validada para firma',
+        )
+        ENVIO_FIRMA_INICIADO = 'ENVIO_FIRMA_INICIADO', 'Envio a firma iniciado'
+        PENDIENTE_FIRMA = 'PENDIENTE_FIRMA', 'Pendiente de firma'
+        FIRMA_CONFIRMADA = 'FIRMA_CONFIRMADA', 'Firma confirmada'
+        FIRMA_ERROR_CONTROLADO = (
+            'FIRMA_ERROR_CONTROLADO',
+            'Error controlado de firma',
+        )
+        FORMALIZACION_REUTILIZADA = (
+            'FORMALIZACION_REUTILIZADA',
+            'Formalizacion reutilizada',
+        )
 
     solicitud = models.ForeignKey(
         ContractorApplication,
@@ -543,6 +560,126 @@ class AprobacionInternaPrestador(models.Model):
 
     def __str__(self):
         return f'Aprobacion interna {self.id} - solicitud {self.solicitud_id}'
+
+
+class FormalizacionCreditoPrestador(models.Model):
+    class Estado(models.TextChoices):
+        PENDIENTE = 'PENDIENTE', 'Pendiente'
+        PREPARANDO_DOCUMENTO = 'PREPARANDO_DOCUMENTO', 'Preparando documento'
+        DOCUMENTO_GENERADO = 'DOCUMENTO_GENERADO', 'Documento generado'
+        PENDIENTE_VALIDACION_IDENTIDAD = (
+            'PENDIENTE_VALIDACION_IDENTIDAD',
+            'Pendiente de validacion de identidad',
+        )
+        IDENTIDAD_VALIDADA = 'IDENTIDAD_VALIDADA', 'Identidad validada'
+        ENVIANDO_A_FIRMA = 'ENVIANDO_A_FIRMA', 'Enviando a firma'
+        PENDIENTE_FIRMA = 'PENDIENTE_FIRMA', 'Pendiente de firma'
+        FIRMADO = 'FIRMADO', 'Firmado'
+        ERROR_CONTROLADO = 'ERROR_CONTROLADO', 'Error controlado'
+        CANCELADO = 'CANCELADO', 'Cancelado'
+
+    class EstadoIdentidad(models.TextChoices):
+        PENDIENTE = 'IDENTIDAD_PENDIENTE', 'Identidad pendiente'
+        VALIDADA = 'IDENTIDAD_VALIDADA', 'Identidad validada'
+        EXPIRADA = 'IDENTIDAD_EXPIRADA', 'Identidad expirada'
+        FALLIDA = 'IDENTIDAD_FALLIDA', 'Identidad fallida'
+
+    origen_credito_prestador = models.OneToOneField(
+        'gestion_creditos.OrigenCreditoPrestador',
+        on_delete=models.PROTECT,
+        related_name='formalizacion_prestador',
+    )
+    credito = models.OneToOneField(
+        'gestion_creditos.Credito',
+        on_delete=models.PROTECT,
+        related_name='formalizacion_prestador',
+    )
+    credito_libranza = models.OneToOneField(
+        'gestion_creditos.CreditoLibranza',
+        on_delete=models.PROTECT,
+        related_name='formalizacion_prestador',
+    )
+    pagare = models.OneToOneField(
+        'gestion_creditos.Pagare',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='formalizacion_prestador',
+    )
+    estado = models.CharField(
+        max_length=40,
+        choices=Estado.choices,
+        default=Estado.PENDIENTE,
+    )
+    clave_idempotencia = models.CharField(max_length=220, unique=True)
+    version_origen = models.CharField(max_length=64)
+    proveedor_firma = models.CharField(max_length=30, default='ZAPSIGN')
+    proveedor_document_id_hash = models.CharField(
+        max_length=64,
+        unique=True,
+        null=True,
+        blank=True,
+    )
+    estado_identidad = models.CharField(
+        max_length=28,
+        choices=EstadoIdentidad.choices,
+        default=EstadoIdentidad.PENDIENTE,
+    )
+    identidad_usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='identidades_firma_prestador',
+    )
+    identidad_referencia_hash = models.CharField(
+        max_length=64,
+        unique=True,
+        null=True,
+        blank=True,
+    )
+    identidad_validada_en = models.DateTimeField(null=True, blank=True)
+    identidad_expira_en = models.DateTimeField(null=True, blank=True)
+    intentos_firma = models.PositiveSmallIntegerField(default=0)
+    enviada_firma_en = models.DateTimeField(null=True, blank=True)
+    firmada_en = models.DateTimeField(null=True, blank=True)
+    error_codigo = models.CharField(max_length=80, blank=True)
+    error_etapa = models.CharField(max_length=80, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='formalizaciones_prestador_creadas',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        verbose_name = 'Formalizacion de credito de prestador'
+        verbose_name_plural = 'Formalizaciones de creditos de prestadores'
+        indexes = [
+            models.Index(fields=['estado', '-created_at'], name='prest_form_estado_idx'),
+            models.Index(fields=['estado_identidad', '-created_at'], name='prest_form_ident_idx'),
+        ]
+        permissions = [
+            (
+                'can_prepare_contractor_formalization',
+                'Puede preparar formalizaciones de prestadores',
+            ),
+            (
+                'can_retry_contractor_signature',
+                'Puede reintentar firmas de prestadores',
+            ),
+            (
+                'can_view_contractor_formalization',
+                'Puede ver formalizaciones de prestadores',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Formalizacion {self.id} - credito {self.credito_id}'
 
 
 class RevisionManualPrestador(models.Model):

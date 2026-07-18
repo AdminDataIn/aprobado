@@ -11,6 +11,7 @@ from contractors.models import (
     ConfiguracionScorePrestador,
     ContractorApplication,
     ContractorApplicationDocument,
+    FormalizacionCreditoPrestador,
     PredecisionPrestadorAudit,
     RequerimientoSubsanacionPrestador,
     RevisionManualPrestador,
@@ -265,3 +266,22 @@ class AprobacionInternaPrestadorAdmin(AdminAuditoriaSoloLectura):
     search_fields = ['solicitud__id', 'auditoria_predecision__id']
     readonly_fields = [campo.name for campo in AprobacionInternaPrestador._meta.fields]
     ordering = ['-creada_en', '-id']
+
+
+@admin.register(FormalizacionCreditoPrestador)
+class FormalizacionCreditoPrestadorAdmin(AdminAuditoriaSoloLectura):
+    list_display = [
+        'id', 'credito', 'estado', 'estado_identidad', 'proveedor_firma',
+        'intentos_firma', 'enviada_firma_en', 'firmada_en', 'created_at',
+    ]
+    list_filter = [
+        'estado', 'estado_identidad', 'proveedor_firma', 'created_at',
+    ]
+    search_fields = [
+        'credito__numero_credito', 'clave_idempotencia',
+        'origen_credito_prestador__gate_id',
+    ]
+    readonly_fields = [
+        campo.name for campo in FormalizacionCreditoPrestador._meta.fields
+    ]
+    ordering = ['-created_at', '-id']

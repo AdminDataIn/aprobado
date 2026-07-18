@@ -19,6 +19,7 @@ from contractors.models import (
     ContractorApplication,
     ContractorApplicationDocument,
     DOCUMENTOS_OBLIGATORIOS_PRESTADOR,
+    FormalizacionCreditoPrestador,
     PredecisionPrestadorAudit,
     RequerimientoSubsanacionPrestador,
     RevisionManualPrestador,
@@ -43,6 +44,10 @@ from contractors.services.revision_manual import (
     usuarios_asignables_revision,
 )
 from contractors.services.originacion import originar_credito_prestador_desde_gate
+from contractors.services.formalizacion import (
+    enviar_formalizacion_prestador_a_firma,
+    preparar_formalizacion_credito_prestador,
+)
 from contractors.views import calcular_progreso_documental
 from gestion_creditos.models import OrigenCreditoPrestador
 
@@ -238,6 +243,11 @@ def detalle_prestador_view(request, solicitud_id):
         origen_credito = OrigenCreditoPrestador.objects.select_related(
             'credito', 'credito_libranza'
         ).filter(gate_id=aprobacion_interna.id).first()
+    formalizacion = None
+    if origen_credito:
+        formalizacion = FormalizacionCreditoPrestador.objects.select_related(
+            'pagare', 'credito', 'credito_libranza'
+        ).filter(origen_credito_prestador=origen_credito).first()
     return render(
         request,
         'contractors/admin_detalle_prestador.html',
@@ -274,6 +284,7 @@ def detalle_prestador_view(request, solicitud_id):
             'puede_ver_score': puede_ver_score,
             'aprobacion_interna': aprobacion_interna,
             'origen_credito': origen_credito,
+            'formalizacion': formalizacion,
             'motivos_aprobacion': AprobacionInternaPrestador.Motivo.choices,
             'puede_ver_aprobacion': request.user.has_perm(
                 'contractors.can_view_contractor_internal_approval'
@@ -290,6 +301,28 @@ def detalle_prestador_view(request, solicitud_id):
                 == AprobacionInternaPrestador.Estado.APROBADA_PARA_ORIGINAR
                 and request.user.has_perm(
                     'contractors.can_originate_contractor_credit'
+                )
+            ),
+            'puede_ver_formalizacion': request.user.has_perm(
+                'contractors.can_view_contractor_formalization'
+            ),
+            'puede_preparar_formalizacion': bool(
+                origen_credito
+                and origen_credito.estado == OrigenCreditoPrestador.Estado.COMPLETADO
+                and origen_credito.credito.estado == 'EN_REVISION'
+                and formalizacion is None
+                and request.user.has_perm(
+                    'contractors.can_prepare_contractor_formalization'
+                )
+            ),
+            'puede_reintentar_firma': bool(
+                formalizacion
+                and formalizacion.estado in {
+                    FormalizacionCreditoPrestador.Estado.IDENTIDAD_VALIDADA,
+                    FormalizacionCreditoPrestador.Estado.ERROR_CONTROLADO,
+                }
+                and request.user.has_perm(
+                    'contractors.can_retry_contractor_signature'
                 )
             ),
             'puede_crear_aprobacion': bool(
@@ -415,6 +448,66 @@ def originar_credito_prestador_view(request, gate_id):
                 request,
                 f'Credito {resultado.credito.numero_credito} originado en revision.',
             )
+    return redirect('contractors:admin_detalle', solicitud_id=gate.solicitud_id)
+
+
+@require_POST
+@permiso_interno_requerido('contractors.can_prepare_contractor_formalization')
+def preparar_formalizacion_prestador_view(request, origen_id):
+    origen = get_object_or_404(
+        OrigenCreditoPrestador.objects.select_related('credito'),
+        pk=origen_id,
+    )
+    try:
+        resultado = preparar_formalizacion_credito_prestador(
+            origen,
+            actor=request.user,
+        )
+    except (ValidationError, PermissionDenied, ValueError) as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(
+            request,
+            'La formalizacion existente fue reutilizada.'
+            if resultado.reutilizada
+            else 'El pagare fue generado. La identidad debe validarse antes del envio.',
+        )
+    gate = get_object_or_404(AprobacionInternaPrestador, pk=origen.gate_id)
+    return redirect('contractors:admin_detalle', solicitud_id=gate.solicitud_id)
+
+
+@require_POST
+@permiso_interno_requerido('contractors.can_retry_contractor_signature')
+def enviar_formalizacion_prestador_view(request, formalizacion_id):
+    formalizacion = get_object_or_404(
+        FormalizacionCreditoPrestador.objects.select_related(
+            'origen_credito_prestador'
+        ),
+        pk=formalizacion_id,
+    )
+    try:
+        resultado = enviar_formalizacion_prestador_a_firma(
+            formalizacion,
+            actor=request.user,
+        )
+    except (ValidationError, PermissionDenied, ValueError) as exc:
+        messages.error(request, str(exc))
+    except Exception:
+        logger.exception(
+            'Error controlado al enviar formalizacion_id=%s', formalizacion.id
+        )
+        messages.error(request, 'No fue posible enviar el documento a firma.')
+    else:
+        messages.success(
+            request,
+            'El envio existente fue reutilizado.'
+            if resultado.reutilizada
+            else 'El documento fue enviado a firma.',
+        )
+    gate = get_object_or_404(
+        AprobacionInternaPrestador,
+        pk=formalizacion.origen_credito_prestador.gate_id,
+    )
     return redirect('contractors:admin_detalle', solicitud_id=gate.solicitud_id)
 
 

@@ -1,6 +1,6 @@
 # Flujo end-to-end de Prestadores de Servicios
 
-Estado del documento: **Commit F - originacion central idempotente implementada**.
+Estado del documento: **Commit G - formalizacion y firma controlada implementadas**.
 
 Convenciones:
 
@@ -13,7 +13,9 @@ Convenciones:
 El dominio `contractors` recibe y evalua solicitudes de Prestadores de Servicios. Su
 responsabilidad publica termina en la solicitud y su evaluacion. La accion staff del
 Commit F entrega un expediente inmutable al servicio central de `gestion_creditos`,
-que crea una obligacion exclusivamente en estado `EN_REVISION`.
+que crea una obligacion exclusivamente en estado `EN_REVISION`. Commit G formaliza
+esa obligacion, genera un pagare especifico, exige identidad vigente y coordina la
+firma sin activar, desembolsar, crear cuotas ni registrar pagos.
 
 El modulo conserva trazabilidad desde la solicitud publica hasta la decision interna,
 sin convertir `PREAPROBADO_READ_ONLY` en una aprobacion crediticia o desembolso.
@@ -48,8 +50,10 @@ flowchart TD
     EF -->|PREAPROBADO_READ_ONLY| AI[Aprobacion interna]
     AI -->|APROBADA_PARA_ORIGINAR| EO[Expediente originacion inmutable]
     EO --> OR[Originacion gestion_creditos]
-    OR -. PENDIENTE .-> PG[Pagare]
-    PG -. PENDIENTE .-> FI[Firma]
+    OR --> FO[Formalizacion controlada]
+    FO --> PG[Pagare prestadores]
+    PG --> ID[Identidad validada]
+    ID --> FI[ZapSign / firma]
     FI -. PENDIENTE .-> PA[Pagador / validacion operativa]
     PA -. PENDIENTE .-> DE[Desembolso]
 
@@ -57,8 +61,8 @@ flowchart TD
     classDef partial fill:#fff3cd,stroke:#a16207,color:#123;
     classDef pending fill:#f1f5f9,stroke:#64748b,color:#475569,stroke-dasharray: 5 5;
     class U,P,S,D,AC,SIM,DC,SC,EF,RM,SUB,AI ok;
-    class EO,OR ok;
-    class PG,FI,PA,DE pending;
+    class EO,OR,FO,PG,ID,FI ok;
+    class PA,DE pending;
 ```
 
 ## 4. Flujo end-to-end
@@ -84,6 +88,11 @@ flowchart TD
     N --> O[ExpedienteOriginacionPrestadorDTO]
     O --> P[Servicio central de originacion]
     P --> Q[Credito y CreditoLibranza EN_REVISION]
+    Q --> R[Formalizacion idempotente]
+    R --> S[Pagare prestadores]
+    S --> T[Identidad vigente]
+    T --> U[ZapSign PENDIENTE_FIRMA]
+    U --> V[FIRMA confirmada sin desembolso]
 ```
 
 ## 5. Maquina de estados ContractorApplication
@@ -186,6 +195,7 @@ pagare, firma, obligacion activa ni desembolso.
 | `AutorizacionConsultaDatacreditoPrestador` | consentimiento versionado | hash y referencia | si de autorizacion | solicitud, usuario |
 | `ConsultaDatacreditoSnapshot` | resultado externo reutilizable | hash, resultado normalizado | si del snapshot | referencia logica a solicitud/autorizacion |
 | `OrigenCreditoPrestador` | enlace idempotente gate/obligacion | IDs y clave opaca | si del origen | Credito, CreditoLibranza |
+| `FormalizacionCreditoPrestador` | control de documento, identidad y firma | hashes y estados; no token/raw | si de formalizacion | origen, Credito, CreditoLibranza, Pagare |
 | `SecuenciaNumeroCredito` | consecutivo anual transaccional | no | si de numeracion | ninguna |
 
 ## 10. Servicios
@@ -206,6 +216,10 @@ pagare, firma, obligacion activa ni desembolso.
 | `expediente_originacion` | gate aprobado | DTO inmutable | ninguno | no |
 | `originacion_libranza` | DTO + clave + actor | origen, Credito y detalle | crea obligacion EN_REVISION | si, atomica |
 | `contractors.services.originacion` | gate aprobado + actor | resultado central | timeline allowlist | si |
+| `formalizacion` | origen completado + actor | formalizacion y Pagare | estados/timeline; sin efectos financieros | fases atomicas cortas |
+| `pagare_service.generar_pagare_prestador_pdf` | formalizacion versionada | Pagare/PDF | archivo privado y hash | escritura corta |
+| `zapsign_client.crear_documento` | PDF temporal + firmante | identificador remoto | HTTP fuera de transaccion larga | no |
+| `procesar_callback_formalizacion_prestador` | hash documento + evento | estado firma | firma/timeline; no desembolsa | si, corta |
 
 ## 11. Rutas
 
@@ -231,6 +245,8 @@ son los de django-allauth bajo `/accounts/`; no existen aliases `/login/` o `/re
 | POST | `/gestion/prestadores/<id>/aprobacion-interna/crear/` | `crear_aprobacion_interna_prestador_view` | staff + CSRF | `can_decide_contractor_internal_approval` | crear gate |
 | POST | `/gestion/prestadores/aprobaciones/<gate>/accion/` | `accion_aprobacion_interna_prestador_view` | staff + CSRF | permiso segun accion | decidir gate |
 | POST | `/gestion/prestadores/aprobaciones/<gate>/originar/` | `originar_credito_prestador_view` | staff + CSRF | `can_originate_contractor_credit` | originar EN_REVISION |
+| POST | `/gestion/prestadores/origenes/<origen>/formalizar/` | `preparar_formalizacion_prestador_view` | staff + CSRF | `can_prepare_contractor_formalization` | generar/reusar Pagare |
+| POST | `/gestion/prestadores/formalizaciones/<id>/enviar-firma/` | `enviar_formalizacion_prestador_firma_view` | staff + CSRF | `can_retry_contractor_signature` | enviar/reconciliar firma |
 | POST | `/gestion/prestadores/revisiones/<revision>/accion/` | `accion_revision_prestador_view` | staff + CSRF | permiso segun accion | operar revision |
 | GET | `/gestion/prestadores/documentos/<doc>/descargar/` | `descargar_documento_prestador_staff_view` | staff | permiso de bandeja | descarga interna |
 
@@ -245,6 +261,10 @@ son los de django-allauth bajo `/accounts/`; no existen aliases `/login/` o `/re
 - El versionado de datos personales y actividad usa HMAC; no los copia al snapshot.
 - Timeline y auditorias usan metadata allowlist; no guardan PDF, contrato raw, token,
   credencial ni respuesta raw de DataCredito.
+- Formalizacion conserva unicamente SHA-256 del identificador ZapSign y HMAC de la
+  referencia de identidad; no persiste OTP, URL de firma, token, payload ni biometria.
+- El callback de Prestadores guarda un resumen allowlist en `ZapSignWebhookLog`; el
+  flujo tradicional conserva su contrato existente sin ser reemplazado.
 - El gate aplica `select_for_update` a solicitud/auditoria/gate y constraints unicas.
 
 ## 13. DataCredito
@@ -358,7 +378,7 @@ el mismo gate se rechaza.
 `certificado_laboral` e `ingresos_mensuales` quedan vacios: el contrato de prestacion
 no se disfraza como relacion laboral. Los archivos no se duplican fisicamente.
 
-## 21. Secuencia futura de originacion
+## 21. Secuencia de originacion y formalizacion
 
 ```mermaid
 sequenceDiagram
@@ -366,7 +386,8 @@ sequenceDiagram
     participant Contractors as contractors
     participant Core as gestion_creditos.originacion_libranza
     participant DB
-    participant Formal as formalizacion futura
+    participant Formal as contractors.formalizacion
+    participant Firma as ZapSign
 
     Staff->>Contractors: originar(gate_id, clave_idempotencia)
     Contractors->>Contractors: permiso + PerfilPagador bloqueado
@@ -383,7 +404,17 @@ sequenceDiagram
     end
     Core-->>Contractors: referencia idempotente
     Contractors-->>Staff: originacion registrada/reutilizada
-    Note over Formal: pagare, firma, pagador y desembolso siguen separados
+    Staff->>Formal: preparar(origen)
+    Formal->>DB: crear/reusar formalizacion y Pagare
+    Formal-->>Staff: identidad pendiente
+    Staff->>Formal: enviar tras identidad vigente
+    Formal->>DB: marcar ENVIANDO_A_FIRMA
+    Formal->>Firma: crear documento con external_id determinista
+    Firma-->>Formal: identificador remoto
+    Formal->>DB: guardar solo hash y marcar PENDIENTE_FIRMA
+    Firma->>Formal: callback firmado
+    Formal->>DB: marcar Pagare/Credito FIRMADO
+    Note over Formal,DB: no activa, no desembolsa, no crea cuotas ni pagos
 ```
 
 ## 22. Numeracion y efectos laterales
@@ -400,16 +431,75 @@ crea `HistorialEstado`: la trazabilidad de esta fase queda en `OrigenCreditoPres
 y `TimelinePrestador` (`ORIGINACION_INICIADA`, `COMPLETADA`, `REUTILIZADA` o
 `ERROR_CONTROLADO`).
 
-## 23. Pendientes Commit G
+## 23. Auditoria y formalizacion Commit G
 
-- Formalizacion separada desde un credito `EN_REVISION`.
-- Pagare, firma y ZapSign con contratos de idempotencia propios.
-- Validacion operativa de hechos por empresa sin reutilizar decision crediticia del
-  pagador tradicional.
-- Activacion, amortizacion y desembolso solo despues de formalizacion completa.
-- Prueba de concurrencia real sobre PostgreSQL para complementar constraints y locks.
-- Resolver en un cambio independiente la deuda de migraciones `WhatsAppInternal*`
-  presente en la rama; Commit F no la incluye.
+### Auditoria del flujo existente
+
+- `Pagare` es un `OneToOne` de `Credito` y ya almacena PDF, hash, version y estados.
+- `pagare_service` usa HTML + WeasyPrint y ya centraliza numeracion, render y hash.
+- Las plantillas tradicionales `pagare_v1.0.html` y `pagare_v2.0.html` contienen
+  semantica laboral/desembolso que no se reutiliza para Prestadores.
+- `zapsign_client.ZapSignClient` es el cliente HTTP existente. Se extendio con
+  `external_id` y validacion obligatoria de identidad sin duplicar cliente.
+- El flujo tradicional `preparar_documento_para_firma` genera, cambia estado y agenda
+  el envio con `transaction.on_commit`; permanece intacto.
+- El webhook tradicional marca `FIRMADO` y llama expresamente al desembolso. Esa rama
+  no es segura para Prestadores y no se reutiliza para sus documentos.
+- No existe un OTP interno reusable. La validacion disponible en firma es la
+  verificacion de identidad/selfie de ZapSign. Por eso se implemento una frontera que
+  registra una validacion ya confirmada por proveedor, ligada al titular y con expiry.
+- No se encontraron senales `post_save` que desembolsen por guardar `FIRMADO`; el
+  efecto financiero tradicional es una llamada explicita del webhook legado.
+
+### Decisiones implementadas
+
+- `FormalizacionCreditoPrestador` separa originacion, documento, identidad y firma.
+- La clave `prestador:<credito_id>:formalizacion:<version>` y relaciones `OneToOne`
+  impiden dos formalizaciones o pagares para el mismo origen.
+- El template `pagares/pagare_prestadores_v1.0.html` usa honorarios y contrato de
+  prestacion; no inventa certificado laboral ni afirma un desembolso previo.
+- El PDF se construye desde snapshots ya originados y se bloquea si monto, plazo,
+  tasa, gate o version dejaron de coincidir.
+- La identidad debe pertenecer al usuario del credito y estar vigente. Solo se guarda
+  HMAC de la referencia externa.
+- El envio usa transacciones cortas. La llamada ZapSign ocurre fuera del bloque y
+  fuerza validacion de identidad. Solo se guarda SHA-256 del identificador remoto.
+- Si ya existe hash remoto, el reintento concilia estados sin otro POST. Un estado
+  `ENVIANDO_A_FIRMA` sin identificador se considera resultado incierto y bloquea un
+  reenvio automatico para evitar documentos duplicados.
+- El callback reconoce el documento por hash, es idempotente y solo actualiza firma,
+  historial y timeline. Nunca llama activacion o desembolso.
+- `PerfilPagador` queda bloqueado en vistas y servicio; no se crea
+  `AprobacionPagadorLibranza` ni se usa doble aprobacion tradicional.
+
+### Estados y timeline
+
+```text
+EN_REVISION
+  -> PENDIENTE_VALIDACION_IDENTIDAD
+  -> IDENTIDAD_VALIDADA
+  -> ENVIANDO_A_FIRMA
+  -> PENDIENTE_FIRMA
+  -> FIRMADO (validaciones post-firma pendientes)
+```
+
+Eventos allowlist: `FORMALIZACION_INICIADA`, `PAGARE_GENERADO`,
+`IDENTIDAD_VALIDADA_FIRMA`, `ENVIO_FIRMA_INICIADO`, `PENDIENTE_FIRMA`,
+`FIRMA_CONFIRMADA`, `FIRMA_ERROR_CONTROLADO` y `FORMALIZACION_REUTILIZADA`.
+
+### Pendientes posteriores
+
+- Aprobar juridicamente el texto especifico del pagare antes de habilitar produccion.
+- Conectar la frontera de identidad al callback productivo del proveedor; staff no
+  puede simularla desde la UI.
+- Validar en sandbox que ZapSign respeta `external_id` y la configuracion de selfie.
+- Definir recuperacion privada del PDF firmado sin persistir URL publica.
+- Validacion operativa por empresa/pagador, sin decision crediticia ni doble
+  aprobacion tradicional.
+- Activacion, amortizacion, desembolso, pagos y recaudos en una fase posterior.
+- Prueba de concurrencia real en PostgreSQL para complementar constraints y locks.
+- Resolver por separado la deuda de migraciones `WhatsAppInternal*`; Commit G no la
+  incluye.
 
 ## 24. Historial de commits/fases
 
@@ -421,4 +511,5 @@ y `TimelinePrestador` (`ORIGINACION_INICIADA`, `COMPLETADA`, `REUTILIZADA` o
 | D | IMPLEMENTADO | revision manual, subsanacion y bandeja interna |
 | E | IMPLEMENTADO | gate interno y expediente inmutable |
 | F | IMPLEMENTADO | servicio central idempotente y Credito EN_REVISION |
-| G | PENDIENTE | formalizacion, firma, activacion y desembolso controlados |
+| G | IMPLEMENTADO | formalizacion, pagare, identidad y firma sin efectos financieros |
+| H | PENDIENTE | validacion post-firma, activacion y desembolso controlados |

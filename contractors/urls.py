@@ -53,6 +53,16 @@ urlpatterns = [
         name='admin_originar_credito',
     ),
     path(
+        'gestion/prestadores/origenes/<int:origen_id>/formalizar/',
+        views_admin.preparar_formalizacion_prestador_view,
+        name='admin_preparar_formalizacion',
+    ),
+    path(
+        'gestion/prestadores/formalizaciones/<int:formalizacion_id>/enviar-firma/',
+        views_admin.enviar_formalizacion_prestador_view,
+        name='admin_enviar_formalizacion',
+    ),
+    path(
         'gestion/prestadores/revisiones/<int:revision_id>/accion/',
         views_admin.accion_revision_prestador_view,
         name='admin_accion_revision',

@@ -141,6 +141,38 @@
   </section>
   {% endif %}
 
+  {% if puede_ver_formalizacion or puede_preparar_formalizacion %}
+  <section class="panel">
+    <h2 class="titulo-seccion">Formalización y firma</h2>
+    {% if formalizacion and puede_ver_formalizacion %}
+      <div class="resumen-grid">
+        <div class="dato"><span>Estado</span><strong>{{ formalizacion.get_estado_display }}</strong></div>
+        <div class="dato"><span>Identidad</span><strong>{{ formalizacion.get_estado_identidad_display }}</strong></div>
+        <div class="dato"><span>Pagaré</span><strong>{% if formalizacion.pagare %}{{ formalizacion.pagare.numero_pagare }}{% else %}Pendiente{% endif %}</strong></div>
+        <div class="dato"><span>Intentos de firma</span><strong>{{ formalizacion.intentos_firma }}</strong></div>
+      </div>
+      <div class="alerta-info">
+        La formalización no activa ni desembolsa el crédito. La identidad del titular debe estar
+        vigente antes de enviar el documento a firma.
+      </div>
+      {% if puede_reintentar_firma %}
+        <form method="post" action="{% url 'contractors:admin_enviar_formalizacion' formalizacion.id %}">
+          {% csrf_token %}
+          <button class="boton" type="submit">Enviar o reintentar firma</button>
+        </form>
+      {% endif %}
+    {% elif puede_preparar_formalizacion %}
+      <p>El crédito está originado en revisión y puede preparar su documento de formalización.</p>
+      <form method="post" action="{% url 'contractors:admin_preparar_formalizacion' origen_credito.id %}">
+        {% csrf_token %}
+        <button class="boton" type="submit">Preparar formalización</button>
+      </form>
+    {% else %}
+      <p>No existe una formalización disponible para esta solicitud.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   <section class="panel">
     <h2 class="titulo-seccion">Revisiones manuales</h2>
     {% for revision in revisiones %}

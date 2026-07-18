@@ -1,5 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
+import json
+import tempfile
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -13,6 +15,7 @@ from contractors.models import (
     AprobacionInternaPrestador,
     ContractorApplication,
     ContractorApplicationDocument,
+    FormalizacionCreditoPrestador,
     PredecisionPrestadorAudit,
     RequerimientoSubsanacionPrestador,
     RevisionManualPrestador,
@@ -32,6 +35,12 @@ from contractors.services.expediente_originacion import (
     construir_expediente_originacion_prestador,
 )
 from contractors.services.originacion import originar_credito_prestador_desde_gate
+from contractors.services.formalizacion import (
+    enviar_formalizacion_prestador_a_firma,
+    preparar_formalizacion_credito_prestador,
+    procesar_callback_formalizacion_prestador,
+    registrar_resultado_validacion_identidad_prestador,
+)
 from contractors.tests.test_score_prestadores_v2 import crear_politica_score
 from gestion_creditos.models import (
     AprobacionPagadorLibranza,
@@ -42,6 +51,7 @@ from gestion_creditos.models import (
     HistorialPago,
     OrigenCreditoPrestador,
     Pagare,
+    ZapSignWebhookLog,
 )
 from gestion_creditos.services.originacion_libranza import (
     construir_clave_idempotencia_prestador,
@@ -49,6 +59,33 @@ from gestion_creditos.services.originacion_libranza import (
 )
 from integrations.models import ConsultaDatacreditoSnapshot
 from usuarios.models import PerfilPagador
+
+
+class ClienteFirmaPrueba:
+    def __init__(self, *, token='documento-remoto-1', error=None):
+        from django.db import connection
+
+        self.token = token
+        self.error = error
+        self.llamadas = []
+        self.profundidad_transaccional_inicial = len(connection.atomic_blocks)
+
+    def crear_documento(self, **kwargs):
+        from django.db import connection
+
+        self.llamadas.append({
+            'profundidad_transaccional': len(connection.atomic_blocks),
+            'external_id': kwargs.get('external_id'),
+            'requiere_validacion_identidad': kwargs.get(
+                'require_identity_validation'
+            ),
+        })
+        if self.error:
+            raise self.error
+        return {
+            'token': self.token,
+            'signers': [{'sign_url': 'https://firma.example.test/secreto'}],
+        }
 
 
 @override_settings(
@@ -59,6 +96,11 @@ class AprobacionInternaPrestadorTest(TestCase):
     host = 'contratistas.localhost'
 
     def setUp(self):
+        self.directorio_media = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directorio_media.cleanup)
+        self.override_media = override_settings(MEDIA_ROOT=self.directorio_media.name)
+        self.override_media.enable()
+        self.addCleanup(self.override_media.disable)
         User = get_user_model()
         self.solicitante = User.objects.create_user('prestador-gate', password='test')
         self.analista = User.objects.create_user(
@@ -85,11 +127,15 @@ class AprobacionInternaPrestadorTest(TestCase):
             'can_decide_contractor_internal_approval',
             'can_close_contractor_internal_approval',
             'can_originate_contractor_credit',
+            'can_prepare_contractor_formalization',
+            'can_retry_contractor_signature',
+            'can_view_contractor_formalization',
         )
         self._otorgar(
             self.lector,
             'can_view_contractor_review_queue',
             'can_view_contractor_internal_approval',
+            'can_view_contractor_formalization',
         )
 
     def test_solo_preaprobado_crea_gate_y_es_idempotente(self):
@@ -581,6 +627,309 @@ class AprobacionInternaPrestadorTest(TestCase):
         self.assertContains(response, f'#{self.solicitud.id}')
         self.assertContains(response, 'Aprobaciones internas')
         self.assertNotContains(response, self.solicitud.numero_documento)
+
+    def test_formalizacion_y_pagare_son_idempotentes_y_usan_snapshot_originado(self):
+        origen = self._originar_aprobado()
+
+        primera = preparar_formalizacion_credito_prestador(
+            origen, actor=self.analista
+        )
+        segunda = preparar_formalizacion_credito_prestador(
+            origen, actor=self.analista
+        )
+
+        self.assertFalse(primera.reutilizada)
+        self.assertTrue(segunda.reutilizada)
+        self.assertEqual(primera.formalizacion.pk, segunda.formalizacion.pk)
+        self.assertEqual(FormalizacionCreditoPrestador.objects.count(), 1)
+        self.assertEqual(Pagare.objects.count(), 1)
+        pagare = primera.formalizacion.pagare
+        self.assertEqual(pagare.version_plantilla, 'prestadores-1.0')
+        self.assertEqual(
+            pagare.evidencias['version_origen'], origen.gate_version
+        )
+        self.assertEqual(origen.credito.monto_aprobado, Decimal('3000000'))
+        self.assertEqual(origen.credito.plazo, 6)
+        self.assertEqual(origen.credito.tasa_interes, Decimal('2.2000'))
+        self.assertFalse(origen.credito_libranza.certificado_laboral.name)
+        self.assertTrue(origen.credito_libranza.contrato_prestacion_servicios.name)
+
+    def test_sin_origen_o_gate_aprobado_no_formaliza(self):
+        gate = self._crear_gate()
+        origen = OrigenCreditoPrestador.objects.create(
+            gate_id=gate.id,
+            gate_version=gate.version_datos,
+            clave_idempotencia='origen-no-completado',
+            estado=OrigenCreditoPrestador.Estado.EN_PROCESO,
+        )
+        with self.assertRaises(ValidationError):
+            preparar_formalizacion_credito_prestador(origen, actor=self.analista)
+        self.assertFalse(FormalizacionCreditoPrestador.objects.exists())
+        self.assertFalse(Pagare.objects.exists())
+
+    def test_identidad_requerida_pertenece_al_titular_y_debe_estar_vigente(self):
+        formalizacion = self._preparar_formalizacion()
+        cliente = ClienteFirmaPrueba()
+        with self.assertRaises(ValidationError):
+            enviar_formalizacion_prestador_a_firma(
+                formalizacion, actor=self.analista, cliente=cliente
+            )
+        self.assertEqual(cliente.llamadas, [])
+
+        otro = get_user_model().objects.create_user('otro-firmante', password='test')
+        with self.assertRaises(PermissionDenied):
+            registrar_resultado_validacion_identidad_prestador(
+                formalizacion,
+                usuario=otro,
+                referencia_proveedor='identidad-otro',
+                expira_en=timezone.now() + timedelta(minutes=10),
+            )
+        with self.assertRaises(ValidationError):
+            registrar_resultado_validacion_identidad_prestador(
+                formalizacion,
+                usuario=self.solicitante,
+                referencia_proveedor='identidad-expirada',
+                expira_en=timezone.now() - timedelta(seconds=1),
+            )
+        formalizacion.refresh_from_db()
+        self.assertEqual(
+            formalizacion.estado_identidad,
+            FormalizacionCreditoPrestador.EstadoIdentidad.PENDIENTE,
+        )
+        registrar_resultado_validacion_identidad_prestador(
+            formalizacion,
+            usuario=self.solicitante,
+            referencia_proveedor='identidad-vigente-luego-expirada',
+            expira_en=timezone.now() + timedelta(minutes=10),
+        )
+        FormalizacionCreditoPrestador.objects.filter(pk=formalizacion.pk).update(
+            identidad_expira_en=timezone.now() - timedelta(seconds=1)
+        )
+        with self.assertRaises(ValidationError):
+            enviar_formalizacion_prestador_a_firma(
+                formalizacion,
+                actor=self.analista,
+                cliente=cliente,
+            )
+        formalizacion.refresh_from_db()
+        self.assertEqual(
+            formalizacion.estado_identidad,
+            FormalizacionCreditoPrestador.EstadoIdentidad.EXPIRADA,
+        )
+        self.assertEqual(cliente.llamadas, [])
+
+    def test_envio_ocurre_fuera_de_transaccion_y_no_persiste_token_o_url(self):
+        formalizacion = self._formalizacion_con_identidad()
+        cliente = ClienteFirmaPrueba()
+
+        resultado = enviar_formalizacion_prestador_a_firma(
+            formalizacion, actor=self.analista, cliente=cliente
+        )
+
+        self.assertEqual(len(cliente.llamadas), 1)
+        self.assertEqual(
+            cliente.llamadas[0]['profundidad_transaccional'],
+            cliente.profundidad_transaccional_inicial,
+        )
+        self.assertEqual(
+            cliente.llamadas[0]['external_id'],
+            formalizacion.clave_idempotencia,
+        )
+        self.assertTrue(cliente.llamadas[0]['requiere_validacion_identidad'])
+        resultado.formalizacion.refresh_from_db()
+        resultado.formalizacion.pagare.refresh_from_db()
+        resultado.formalizacion.credito.refresh_from_db()
+        self.assertEqual(
+            resultado.formalizacion.estado,
+            FormalizacionCreditoPrestador.Estado.PENDIENTE_FIRMA,
+        )
+        self.assertEqual(
+            resultado.formalizacion.credito.estado,
+            Credito.EstadoCredito.PENDIENTE_FIRMA,
+        )
+        self.assertTrue(resultado.formalizacion.proveedor_document_id_hash)
+        self.assertFalse(resultado.formalizacion.pagare.zapsign_doc_token)
+        self.assertFalse(resultado.formalizacion.pagare.zapsign_sign_url)
+        self.assertNotIn('documento-remoto-1', str(resultado.formalizacion.__dict__))
+
+    def test_error_zapsign_es_controlado_y_retry_no_duplica_pagare(self):
+        formalizacion = self._formalizacion_con_identidad()
+        with self.assertRaises(RuntimeError):
+            enviar_formalizacion_prestador_a_firma(
+                formalizacion,
+                actor=self.analista,
+                cliente=ClienteFirmaPrueba(error=RuntimeError('proveedor caido')),
+            )
+        formalizacion.refresh_from_db()
+        self.assertEqual(
+            formalizacion.estado,
+            FormalizacionCreditoPrestador.Estado.ERROR_CONTROLADO,
+        )
+        self.assertEqual(Pagare.objects.count(), 1)
+
+        cliente = ClienteFirmaPrueba(token='documento-retry')
+        resultado = enviar_formalizacion_prestador_a_firma(
+            formalizacion, actor=self.analista, cliente=cliente
+        )
+        repetido = enviar_formalizacion_prestador_a_firma(
+            resultado.formalizacion, actor=self.analista, cliente=cliente
+        )
+        self.assertTrue(repetido.reutilizada)
+        self.assertEqual(len(cliente.llamadas), 1)
+        self.assertEqual(Pagare.objects.count(), 1)
+
+    def test_envio_con_resultado_remoto_incierto_no_repite_llamada(self):
+        formalizacion = self._formalizacion_con_identidad()
+        FormalizacionCreditoPrestador.objects.filter(pk=formalizacion.pk).update(
+            estado=FormalizacionCreditoPrestador.Estado.ENVIANDO_A_FIRMA,
+            intentos_firma=1,
+        )
+        formalizacion.refresh_from_db()
+        cliente = ClienteFirmaPrueba(token='documento-que-no-debe-crearse')
+
+        with self.assertRaises(ValidationError):
+            enviar_formalizacion_prestador_a_firma(
+                formalizacion,
+                actor=self.analista,
+                cliente=cliente,
+            )
+
+        self.assertEqual(cliente.llamadas, [])
+        self.assertEqual(Pagare.objects.count(), 1)
+
+    @patch('gestion_creditos.credit_services.iniciar_proceso_desembolso')
+    @patch('gestion_creditos.credit_services.activar_credito')
+    def test_callback_firmado_es_idempotente_y_no_genera_efectos_financieros(
+        self, activar_credito, iniciar_desembolso
+    ):
+        formalizacion = self._formalizacion_con_identidad()
+        resultado_envio = enviar_formalizacion_prestador_a_firma(
+            formalizacion,
+            actor=self.analista,
+            cliente=ClienteFirmaPrueba(token='documento-callback'),
+        )
+
+        primero = procesar_callback_formalizacion_prestador(
+            documento_id='documento-callback',
+            accion='signed',
+            estado_proveedor='signed',
+        )
+        segundo = procesar_callback_formalizacion_prestador(
+            documento_id='documento-callback',
+            accion='signed',
+            estado_proveedor='signed',
+        )
+
+        self.assertEqual(primero['estado'], 'ok')
+        self.assertEqual(segundo['estado'], 'already_processed')
+        resultado_envio.formalizacion.refresh_from_db()
+        resultado_envio.formalizacion.credito.refresh_from_db()
+        self.assertEqual(
+            resultado_envio.formalizacion.estado,
+            FormalizacionCreditoPrestador.Estado.FIRMADO,
+        )
+        self.assertEqual(
+            resultado_envio.formalizacion.credito.estado,
+            Credito.EstadoCredito.FIRMADO,
+        )
+        self.assertIsNone(resultado_envio.formalizacion.credito.fecha_desembolso)
+        self.assertEqual(HistorialPago.objects.count(), 0)
+        self.assertEqual(CuotaAmortizacion.objects.count(), 0)
+        self.assertEqual(AprobacionPagadorLibranza.objects.count(), 0)
+        activar_credito.assert_not_called()
+        iniciar_desembolso.assert_not_called()
+        eventos = self.solicitud.timeline_operativo.filter(
+            tipo_evento=TimelinePrestador.TipoEvento.FIRMA_CONFIRMADA
+        )
+        self.assertEqual(eventos.count(), 1)
+        self.assertNotIn('documento-callback', str(eventos.first().metadata))
+
+    @override_settings(ZAPSIGN_WEBHOOK_SECRET='secreto-webhook')
+    def test_webhook_prestador_guarda_resumen_sanitizado_y_no_token(self):
+        formalizacion = self._formalizacion_con_identidad()
+        enviar_formalizacion_prestador_a_firma(
+            formalizacion,
+            actor=self.analista,
+            cliente=ClienteFirmaPrueba(token='token-webhook-prestador'),
+        )
+        respuesta = self.client.post(
+            '/api/webhooks/zapsign/',
+            data=json.dumps({
+                'token': 'token-webhook-prestador',
+                'event': 'doc_signed',
+                'status': 'signed',
+                'signers': [{
+                    'name': 'Dato que no debe persistirse',
+                    'document': '123456789',
+                    'signed_at': timezone.now().isoformat(),
+                }],
+            }),
+            content_type='application/json',
+            HTTP_X_ZAPSIGN_SECRET='secreto-webhook',
+            HTTP_HOST=self.host,
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        log = ZapSignWebhookLog.objects.get()
+        self.assertTrue(log.doc_token.startswith('sha256:'))
+        self.assertNotIn('token-webhook-prestador', str(log.__dict__))
+        self.assertEqual(set(log.payload), {'event', 'status'})
+        self.assertEqual(log.headers, {})
+
+    def test_perfil_pagador_no_puede_preparar_aunque_tenga_permisos(self):
+        origen = self._originar_aprobado()
+        pagador = get_user_model().objects.create_user(
+            'pagador-formalizacion', password='test', is_staff=True
+        )
+        PerfilPagador.objects.create(usuario=pagador, empresa=self.empresa)
+        self._otorgar(
+            pagador,
+            'can_prepare_contractor_formalization',
+            'can_retry_contractor_signature',
+            'can_view_contractor_formalization',
+        )
+        with self.assertRaises(PermissionDenied):
+            preparar_formalizacion_credito_prestador(origen, actor=pagador)
+        self.assertFalse(FormalizacionCreditoPrestador.objects.exists())
+
+    def test_vista_staff_prepara_y_mi_credito_expone_solo_estado_publico(self):
+        origen = self._originar_aprobado()
+        self.client.force_login(self.analista)
+        respuesta = self.client.post(
+            f'/gestion/prestadores/origenes/{origen.id}/formalizar/',
+            HTTP_HOST=self.host,
+        )
+        self.assertEqual(respuesta.status_code, 302)
+        formalizacion = FormalizacionCreditoPrestador.objects.get()
+
+        self.client.force_login(self.solicitante)
+        response = self.client.get('/mi-credito/', HTTP_HOST=self.host)
+        self.assertContains(response, 'Necesitamos validar tu identidad')
+        self.assertNotContains(response, formalizacion.clave_idempotencia)
+        self.assertNotContains(response, 'ZapSign')
+        self.assertNotContains(response, 'desembolsado')
+        self.assertNotContains(response, 'activo')
+
+    def _originar_aprobado(self):
+        gate = self._crear_gate()
+        aprobar_para_originar(gate, actor=self.analista)
+        return originar_credito_prestador_desde_gate(
+            gate, actor=self.analista
+        ).origen
+
+    def _preparar_formalizacion(self):
+        origen = self._originar_aprobado()
+        return preparar_formalizacion_credito_prestador(
+            origen, actor=self.analista
+        ).formalizacion
+
+    def _formalizacion_con_identidad(self):
+        formalizacion = self._preparar_formalizacion()
+        return registrar_resultado_validacion_identidad_prestador(
+            formalizacion,
+            usuario=self.solicitante,
+            referencia_proveedor=f'identidad-{formalizacion.id}',
+            expira_en=timezone.now() + timedelta(minutes=15),
+        )
 
     def _crear_configuracion(self):
         from contractors.models import ConfiguracionSimuladorPrestador

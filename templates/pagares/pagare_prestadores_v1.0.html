@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Pagaré {{ numero_pagare }}</title>
+  <style>
+    @page { size: Letter; margin: 1.7cm; }
+    * { box-sizing: border-box; }
+    body { color: #17243a; font: 10pt/1.45 Arial, sans-serif; }
+    h1, h2 { color: #0b4f7a; }
+    h1 { margin: 0 0 18px; text-align: center; font-size: 18pt; }
+    h2 { margin: 18px 0 8px; font-size: 11pt; }
+    p { margin: 8px 0; text-align: justify; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+    th, td { border: 1px solid #b9d7de; padding: 7px 9px; text-align: left; }
+    th { width: 24%; background: #eaf8fb; color: #0b4f7a; }
+    .nota { padding: 10px 12px; background: #f4fafc; border-left: 3px solid #10b4d3; }
+    .firma { margin-top: 48px; width: 65%; border-top: 1px solid #17243a; padding-top: 7px; }
+  </style>
+</head>
+<body>
+  <h1>PAGARÉ Y CARTA DE INSTRUCCIONES</h1>
+
+  <table>
+    <tr><th>Pagaré</th><td>{{ numero_pagare }}</td><th>Fecha</th><td>{{ fecha_documento }}</td></tr>
+    <tr><th>Ciudad de firma</th><td colspan="3">{{ ciudad_firma|default:"Por confirmar en la firma" }}</td></tr>
+  </table>
+
+  <h2>Deudor</h2>
+  <table>
+    <tr><th>Nombre</th><td>{{ nombre_prestador }}</td><th>Documento</th><td>{{ tipo_documento }} {{ numero_documento }}</td></tr>
+    <tr><th>Dirección</th><td>{{ direccion }}</td><th>Teléfono</th><td>{{ telefono }}</td></tr>
+    <tr><th>Correo</th><td colspan="3">{{ correo }}</td></tr>
+  </table>
+
+  <h2>Obligación respaldada</h2>
+  <p>
+    Yo, <strong>{{ nombre_prestador }}</strong>, identificado como aparece en este documento,
+    prometo pagar incondicionalmente a la orden de <strong>APROBADO SOLUCIONES DIGITALES S.A.S.</strong>
+    las sumas que se causen si se realiza el desembolso del crédito identificado con este pagaré,
+    conforme a las condiciones autorizadas y aceptadas durante su formalización.
+  </p>
+  <table>
+    <tr><th>Monto autorizado</th><td>{{ monto_credito }} ({{ monto_credito_letras }})</td></tr>
+    <tr><th>Plazo autorizado</th><td>{{ plazo_meses }} meses</td></tr>
+    <tr><th>Tasa mensual</th><td>{{ tasa_mensual }}%</td></tr>
+  </table>
+
+  <h2>Relación contractual informada</h2>
+  <table>
+    <tr><th>Empresa contratante</th><td>{{ empresa_contratante }}</td></tr>
+    <tr><th>Actividad</th><td>{{ cargo_actividad }}</td></tr>
+    <tr><th>Tipo de contrato</th><td>{{ tipo_contrato }}</td></tr>
+    <tr><th>Vigencia</th><td>{{ fecha_inicio_contrato|date:"d/m/Y" }} a {{ fecha_fin_contrato|date:"d/m/Y" }}</td></tr>
+    <tr><th>Valor total</th><td>{{ valor_total_contrato }}</td></tr>
+    <tr><th>Saldo contractual informado</th><td>{{ valor_pendiente_contrato }}</td></tr>
+  </table>
+
+  <h2>Carta de instrucciones</h2>
+  <p>
+    Autorizo de manera expresa e irrevocable a APROBADO SOLUCIONES DIGITALES S.A.S. para completar
+    los espacios en blanco de este pagaré exclusivamente con los valores de la obligación efectivamente
+    desembolsada, sus intereses, costos e impuestos legalmente aplicables, fechas de exigibilidad y
+    demás datos necesarios para hacer efectivo el título, sin exceder las condiciones autorizadas.
+  </p>
+  <p>
+    La firma de este documento no constituye desembolso ni activación del crédito. El descuento sobre
+    honorarios, cuentas de cobro u otros pagos contractuales solo procederá conforme a las autorizaciones
+    y condiciones aplicables al producto.
+  </p>
+
+  <div class="nota">
+    Documento generado desde el expediente autorizado de Prestadores de Servicios.
+    Versión de origen: {{ version_origen }}.
+  </div>
+
+  <div class="firma">
+    <strong>{{ nombre_prestador }}</strong><br>
+    {{ tipo_documento }} {{ numero_documento }}
+  </div>
+</body>
+</html>

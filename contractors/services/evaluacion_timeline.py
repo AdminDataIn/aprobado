@@ -27,6 +27,9 @@ CLAVES_METADATA_PERMITIDAS = {
     'version_configuracion_financiera',
     'monto_autorizado',
     'plazo_autorizado',
+    'formalizacion_id',
+    'pagare_id',
+    'proveedor',
 }
 
 

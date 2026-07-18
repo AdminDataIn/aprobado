@@ -1,6 +1,7 @@
 from contractors.models import (
     AprobacionInternaPrestador,
     ContractorApplication,
+    FormalizacionCreditoPrestador,
     PredecisionPrestadorAudit,
     RequerimientoSubsanacionPrestador,
     RevisionManualPrestador,
@@ -25,6 +26,37 @@ def construir_estado_publico_solicitud(solicitud):
                 estado=OrigenCreditoPrestador.Estado.COMPLETADO,
             ).exists()
             if originada:
+                origen = OrigenCreditoPrestador.objects.filter(
+                    gate_id=aprobacion.id,
+                    estado=OrigenCreditoPrestador.Estado.COMPLETADO,
+                ).first()
+                formalizacion = FormalizacionCreditoPrestador.objects.filter(
+                    origen_credito_prestador=origen
+                ).first()
+                if formalizacion:
+                    if formalizacion.estado == FormalizacionCreditoPrestador.Estado.FIRMADO:
+                        return _estado(
+                            'FIRMA_CONFIRMADA',
+                            'Recibimos correctamente la firma de tus documentos.',
+                            'Estamos realizando las validaciones finales.',
+                            tono='favorable',
+                        )
+                    if formalizacion.estado == FormalizacionCreditoPrestador.Estado.PENDIENTE_FIRMA:
+                        return _estado(
+                            'PENDIENTE_FIRMA',
+                            'Tu documento esta listo para firma.',
+                            'Revisa el canal seguro enviado por el proveedor de firma.',
+                            tono='favorable',
+                        )
+                    if formalizacion.estado in {
+                        FormalizacionCreditoPrestador.Estado.PENDIENTE_VALIDACION_IDENTIDAD,
+                        FormalizacionCreditoPrestador.Estado.IDENTIDAD_VALIDADA,
+                    }:
+                        return _estado(
+                            'IDENTIDAD_PENDIENTE',
+                            'Necesitamos validar tu identidad antes de continuar con la firma.',
+                            'Te informaremos cuando el documento este listo para firmar.',
+                        )
                 return _estado(
                     'ORIGINADA_EN_REVISION',
                     'Tu solicitud está avanzando a la etapa de formalización.',

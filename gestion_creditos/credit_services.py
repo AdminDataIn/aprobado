@@ -174,10 +174,9 @@ def preparar_documento_para_firma(credito, usuario_modificacion):
                     url_pdf_publica = generar_url_publica_temporal(pagare_db)
                     pagare_enviado = enviar_pagare_a_zapsign(pagare_db, url_pdf_publica)
                     logger.info(
-                        "Pagare %s enviado a ZapSign. credito=%s token=%s",
+                        "Pagare %s enviado a ZapSign. credito=%s",
                         pagare_enviado.numero_pagare,
                         pagare_enviado.credito_id,
-                        pagare_enviado.zapsign_doc_token
                     )
 
                     credito_db = pagare_enviado.credito
