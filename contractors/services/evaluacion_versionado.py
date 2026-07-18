@@ -25,6 +25,14 @@ def construir_snapshot_entrada_evaluacion(solicitud):
         'empresa_id': solicitud.empresa_id,
         'documento_hash': _hmac_documento(solicitud.numero_documento),
         'documento_enmascarado': _enmascarar_documento(solicitud.numero_documento),
+        'datos_solicitante_hash': _hmac_campos(
+            solicitud.nombres,
+            solicitud.apellidos,
+            solicitud.celular,
+            solicitud.correo,
+            solicitud.direccion,
+        ),
+        'actividad_contractual_hash': _hmac_campos(solicitud.cargo),
         'monto_solicitado': _decimal_seguro(solicitud.monto_solicitado),
         'plazo_meses': solicitud.plazo_meses,
         'tipo_contrato': solicitud.tipo_contrato,
@@ -111,6 +119,12 @@ def _hash_contrato_guardado(solicitud):
 
 def _hmac_documento(documento):
     normalizado = ''.join(caracter for caracter in str(documento or '') if caracter.isalnum()).upper()
+    secreto = f'contractors-evaluation:{settings.SECRET_KEY}'.encode('utf-8')
+    return hmac.new(secreto, normalizado.encode('utf-8'), hashlib.sha256).hexdigest()
+
+
+def _hmac_campos(*valores):
+    normalizado = '\x1f'.join(str(valor or '').strip() for valor in valores)
     secreto = f'contractors-evaluation:{settings.SECRET_KEY}'.encode('utf-8')
     return hmac.new(secreto, normalizado.encode('utf-8'), hashlib.sha256).hexdigest()
 

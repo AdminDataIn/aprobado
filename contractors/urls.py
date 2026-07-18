@@ -38,6 +38,16 @@ urlpatterns = [
     path('gestion/prestadores/', views_admin.bandeja_prestadores_view, name='admin_bandeja'),
     path('gestion/prestadores/<int:solicitud_id>/', views_admin.detalle_prestador_view, name='admin_detalle'),
     path(
+        'gestion/prestadores/<int:solicitud_id>/aprobacion-interna/crear/',
+        views_admin.crear_aprobacion_interna_prestador_view,
+        name='admin_crear_aprobacion_interna',
+    ),
+    path(
+        'gestion/prestadores/aprobaciones/<int:gate_id>/accion/',
+        views_admin.accion_aprobacion_interna_prestador_view,
+        name='admin_accion_aprobacion_interna',
+    ),
+    path(
         'gestion/prestadores/revisiones/<int:revision_id>/accion/',
         views_admin.accion_revision_prestador_view,
         name='admin_accion_revision',

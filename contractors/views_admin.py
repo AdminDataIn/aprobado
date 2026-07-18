@@ -9,14 +9,26 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
-from contractors.forms import AccionRevisionPrestadorForm
+from contractors.forms import (
+    AccionAprobacionInternaPrestadorForm,
+    AccionRevisionPrestadorForm,
+)
 from contractors.models import (
+    AprobacionInternaPrestador,
     ContractorApplication,
     ContractorApplicationDocument,
     DOCUMENTOS_OBLIGATORIOS_PRESTADOR,
     PredecisionPrestadorAudit,
     RequerimientoSubsanacionPrestador,
     RevisionManualPrestador,
+)
+from contractors.services.aprobacion_interna import (
+    aprobar_para_originar,
+    cancelar_aprobacion_interna,
+    cerrar_sin_originar,
+    crear_o_reutilizar_aprobacion_interna,
+    devolver_a_revision,
+    iniciar_analisis_aprobacion_interna,
 )
 from contractors.services.capacidad_contractual import evaluar_capacidad_contractual_preliminar
 from contractors.services.revision_manual import (
@@ -51,6 +63,9 @@ def permiso_interno_requerido(codename):
 
 @permiso_interno_requerido('contractors.can_view_contractor_review_queue')
 def bandeja_prestadores_view(request):
+    puede_ver_aprobaciones = request.user.has_perm(
+        'contractors.can_view_contractor_internal_approval'
+    )
     revisiones = (
         RevisionManualPrestador.objects
         .select_related(
@@ -69,6 +84,9 @@ def bandeja_prestadores_view(request):
         'fecha_hasta': request.GET.get('fecha_hasta', '').strip(),
         'resultado': request.GET.get('resultado', '').strip(),
         'estado_solicitud': request.GET.get('estado_solicitud', '').strip(),
+        'estado_aprobacion': request.GET.get('estado_aprobacion', '').strip(),
+        'monto_desde': request.GET.get('monto_desde', '').strip(),
+        'monto_hasta': request.GET.get('monto_hasta', '').strip(),
     }
     for campo in ('estado', 'motivo', 'prioridad'):
         if filtros[campo]:
@@ -99,6 +117,75 @@ def bandeja_prestadores_view(request):
     ]
     query = request.GET.copy()
     query.pop('page', None)
+
+    aprobaciones = (
+        AprobacionInternaPrestador.objects
+        .select_related(
+            'solicitud', 'solicitud__empresa', 'auditoria_predecision',
+            'creada_por', 'decidida_por',
+        )
+        .order_by('-creada_en', '-id')
+    )
+    if filtros['estado_aprobacion']:
+        aprobaciones = aprobaciones.filter(estado=filtros['estado_aprobacion'])
+    if filtros['empresa']:
+        aprobaciones = aprobaciones.filter(solicitud__empresa_id=filtros['empresa'])
+    if filtros['asignado_a']:
+        aprobaciones = aprobaciones.filter(decidida_por_id=filtros['asignado_a'])
+    if fecha_desde:
+        aprobaciones = aprobaciones.filter(creada_en__date__gte=fecha_desde)
+    if fecha_hasta:
+        aprobaciones = aprobaciones.filter(creada_en__date__lte=fecha_hasta)
+    if filtros['resultado']:
+        aprobaciones = aprobaciones.filter(
+            auditoria_predecision__resultado=filtros['resultado']
+        )
+    try:
+        if filtros['monto_desde']:
+            aprobaciones = aprobaciones.filter(
+                monto_autorizado__gte=filtros['monto_desde']
+            )
+        if filtros['monto_hasta']:
+            aprobaciones = aprobaciones.filter(
+                monto_autorizado__lte=filtros['monto_hasta']
+            )
+    except (TypeError, ValueError, ValidationError):
+        aprobaciones = aprobaciones.none()
+    pagina_aprobaciones = Paginator(aprobaciones, 25).get_page(
+        request.GET.get('approval_page')
+    )
+    candidatos_gate_qs = (
+        PredecisionPrestadorAudit.objects
+        .filter(
+            resultado=PredecisionPrestadorAudit.Resultado.PREAPROBADO_READ_ONLY,
+            estado_ejecucion=PredecisionPrestadorAudit.EstadoEjecucion.COMPLETADA,
+            aprobaciones_internas__isnull=True,
+        )
+        .select_related('solicitud', 'solicitud__empresa')
+        .order_by('-created_at', '-id')
+    )
+    if filtros['empresa']:
+        candidatos_gate_qs = candidatos_gate_qs.filter(
+            solicitud__empresa_id=filtros['empresa']
+        )
+    if fecha_desde:
+        candidatos_gate_qs = candidatos_gate_qs.filter(created_at__date__gte=fecha_desde)
+    if fecha_hasta:
+        candidatos_gate_qs = candidatos_gate_qs.filter(created_at__date__lte=fecha_hasta)
+    candidatos_gate = []
+    for candidato in candidatos_gate_qs[:100]:
+        ultima = candidato.solicitud.auditorias_predecision.order_by(
+            '-created_at', '-id'
+        ).first()
+        if ultima and ultima.id == candidato.id:
+            candidatos_gate.append(candidato)
+        if len(candidatos_gate) == 25:
+            break
+    if not puede_ver_aprobaciones:
+        pagina_aprobaciones = Paginator(aprobaciones.none(), 25).get_page(1)
+        candidatos_gate = []
+    query_aprobaciones = request.GET.copy()
+    query_aprobaciones.pop('approval_page', None)
     return render(
         request,
         'contractors/admin_bandeja_prestadores.html',
@@ -113,6 +200,11 @@ def bandeja_prestadores_view(request):
             'resultados_predecision': PredecisionPrestadorAudit.Resultado.choices,
             'estados_solicitud': ContractorApplication.Estado.choices,
             'usuarios_asignables': usuarios_asignables_revision(),
+            'pagina_aprobaciones': pagina_aprobaciones,
+            'query_sin_pagina_aprobacion': query_aprobaciones.urlencode(),
+            'estados_aprobacion': AprobacionInternaPrestador.Estado.choices,
+            'candidatos_gate': candidatos_gate,
+            'puede_ver_aprobaciones': puede_ver_aprobaciones,
         },
     )
 
@@ -132,6 +224,9 @@ def detalle_prestador_view(request, solicitud_id):
     revisiones = solicitud.revisiones_manuales.select_related(
         'asignado_a', 'creada_por', 'resuelta_por', 'auditoria_predecision'
     ).prefetch_related('requerimientos_subsanacion')
+    aprobacion_interna = solicitud.aprobaciones_internas.select_related(
+        'auditoria_predecision', 'revision_manual', 'creada_por', 'decidida_por'
+    ).first()
     return render(
         request,
         'contractors/admin_detalle_prestador.html',
@@ -166,8 +261,106 @@ def detalle_prestador_view(request, solicitud_id):
             'puede_resolver': request.user.has_perm('contractors.can_resolve_contractor_review'),
             'puede_solicitar': request.user.has_perm('contractors.can_request_contractor_correction'),
             'puede_ver_score': puede_ver_score,
+            'aprobacion_interna': aprobacion_interna,
+            'motivos_aprobacion': AprobacionInternaPrestador.Motivo.choices,
+            'puede_ver_aprobacion': request.user.has_perm(
+                'contractors.can_view_contractor_internal_approval'
+            ),
+            'puede_decidir_aprobacion': request.user.has_perm(
+                'contractors.can_decide_contractor_internal_approval'
+            ),
+            'puede_cerrar_aprobacion': request.user.has_perm(
+                'contractors.can_close_contractor_internal_approval'
+            ),
+            'puede_crear_aprobacion': bool(
+                auditoria
+                and auditoria.resultado
+                == PredecisionPrestadorAudit.Resultado.PREAPROBADO_READ_ONLY
+                and aprobacion_interna is None
+                and request.user.has_perm(
+                    'contractors.can_decide_contractor_internal_approval'
+                )
+            ),
         },
     )
+
+
+@require_POST
+@permiso_interno_requerido('contractors.can_decide_contractor_internal_approval')
+def crear_aprobacion_interna_prestador_view(request, solicitud_id):
+    solicitud = _obtener_solicitud_staff(solicitud_id)
+    auditoria = solicitud.auditorias_predecision.order_by('-created_at', '-id').first()
+    if auditoria is None:
+        messages.error(request, 'La solicitud no tiene una evaluacion formal finalizada.')
+        return redirect('contractors:admin_detalle', solicitud_id=solicitud.id)
+    try:
+        _, creada = crear_o_reutilizar_aprobacion_interna(
+            auditoria,
+            actor=request.user,
+        )
+    except (ValidationError, PermissionDenied) as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(
+            request,
+            'La aprobacion interna fue creada.' if creada
+            else 'La aprobacion interna existente fue reutilizada.',
+        )
+    return redirect('contractors:admin_detalle', solicitud_id=solicitud.id)
+
+
+@require_POST
+@permiso_interno_requerido('contractors.can_view_contractor_internal_approval')
+def accion_aprobacion_interna_prestador_view(request, gate_id):
+    gate = get_object_or_404(
+        AprobacionInternaPrestador.objects.select_related('solicitud'),
+        pk=gate_id,
+    )
+    form = AccionAprobacionInternaPrestadorForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, 'Revisa los datos de la decision interna.')
+        return redirect('contractors:admin_detalle', solicitud_id=gate.solicitud_id)
+    accion = form.cleaned_data['accion']
+    datos = form.cleaned_data
+    try:
+        if accion == AccionAprobacionInternaPrestadorForm.Accion.INICIAR:
+            iniciar_analisis_aprobacion_interna(gate, actor=request.user)
+        elif accion == AccionAprobacionInternaPrestadorForm.Accion.APROBAR:
+            aprobar_para_originar(
+                gate,
+                actor=request.user,
+                monto_autorizado=datos.get('monto_autorizado'),
+                plazo_autorizado=datos.get('plazo_autorizado'),
+                comentario_interno=datos.get('comentario_interno', ''),
+            )
+        elif accion == AccionAprobacionInternaPrestadorForm.Accion.DEVOLVER:
+            devolver_a_revision(
+                gate,
+                actor=request.user,
+                motivo=datos['motivo'],
+                comentario_interno=datos['comentario_interno'],
+            )
+        elif accion == AccionAprobacionInternaPrestadorForm.Accion.CERRAR:
+            cerrar_sin_originar(
+                gate,
+                actor=request.user,
+                motivo=datos['motivo'],
+                comentario_interno=datos['comentario_interno'],
+            )
+        elif accion == AccionAprobacionInternaPrestadorForm.Accion.CANCELAR:
+            cancelar_aprobacion_interna(
+                gate,
+                actor=request.user,
+                motivo=datos['motivo'],
+                comentario_interno=datos['comentario_interno'],
+            )
+        else:
+            raise ValidationError('La accion no esta permitida.')
+    except (ValidationError, PermissionDenied) as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, 'La decision interna fue registrada.')
+    return redirect('contractors:admin_detalle', solicitud_id=gate.solicitud_id)
 
 
 @require_POST

@@ -309,6 +309,24 @@ class TimelinePrestador(models.Model):
         EVALUACION_REINTENTADA = 'EVALUACION_REINTENTADA', 'Evaluacion reintentada'
         REVISION_RESUELTA = 'REVISION_RESUELTA', 'Revision resuelta'
         REVISION_CANCELADA = 'REVISION_CANCELADA', 'Revision cancelada'
+        APROBACION_INTERNA_CREADA = (
+            'APROBACION_INTERNA_CREADA',
+            'Aprobacion interna creada',
+        )
+        APROBACION_INTERNA_INICIADA = (
+            'APROBACION_INTERNA_INICIADA',
+            'Aprobacion interna iniciada',
+        )
+        APROBADA_PARA_ORIGINAR = (
+            'APROBADA_PARA_ORIGINAR',
+            'Aprobada para originar',
+        )
+        DEVUELTA_A_REVISION = 'DEVUELTA_A_REVISION', 'Devuelta a revision'
+        CERRADA_SIN_ORIGINAR = 'CERRADA_SIN_ORIGINAR', 'Cerrada sin originar'
+        APROBACION_INTERNA_CANCELADA = (
+            'APROBACION_INTERNA_CANCELADA',
+            'Aprobacion interna cancelada',
+        )
 
     solicitud = models.ForeignKey(
         ContractorApplication,
@@ -341,6 +359,179 @@ class TimelinePrestador(models.Model):
 
     def __str__(self):
         return f'{self.tipo_evento} - solicitud {self.solicitud_id}'
+
+
+class AprobacionInternaPrestador(models.Model):
+    class Estado(models.TextChoices):
+        PENDIENTE = 'PENDIENTE', 'Pendiente'
+        EN_ANALISIS = 'EN_ANALISIS', 'En analisis'
+        APROBADA_PARA_ORIGINAR = (
+            'APROBADA_PARA_ORIGINAR',
+            'Aprobada para originar',
+        )
+        DEVUELTA_A_REVISION = 'DEVUELTA_A_REVISION', 'Devuelta a revision'
+        CERRADA_SIN_ORIGINAR = 'CERRADA_SIN_ORIGINAR', 'Cerrada sin originar'
+        CANCELADA = 'CANCELADA', 'Cancelada'
+
+    class Decision(models.TextChoices):
+        APROBAR_PARA_ORIGINAR = (
+            'APROBAR_PARA_ORIGINAR',
+            'Aprobar para originar',
+        )
+        DEVOLVER_A_REVISION = 'DEVOLVER_A_REVISION', 'Devolver a revision'
+        CERRAR_SIN_ORIGINAR = 'CERRAR_SIN_ORIGINAR', 'Cerrar sin originar'
+        CANCELAR = 'CANCELAR', 'Cancelar'
+
+    class Motivo(models.TextChoices):
+        DATOS_MODIFICADOS = 'DATOS_MODIFICADOS', 'Datos modificados'
+        CONTRATO_NO_VIGENTE = 'CONTRATO_NO_VIGENTE', 'Contrato no vigente'
+        EMPRESA_SIN_CONVENIO = 'EMPRESA_SIN_CONVENIO', 'Empresa sin convenio activo'
+        POLITICA_CAMBIO = 'POLITICA_CAMBIO', 'Cambio de politica'
+        CONFIGURACION_FINANCIERA_CAMBIO = (
+            'CONFIGURACION_FINANCIERA_CAMBIO',
+            'Cambio de configuracion financiera',
+        )
+        SIMULACION_INVALIDA = 'SIMULACION_INVALIDA', 'Simulacion no vigente'
+        AUTORIZACION_NO_VIGENTE = (
+            'AUTORIZACION_NO_VIGENTE',
+            'Autorizacion DataCredito no vigente',
+        )
+        SNAPSHOT_NO_VIGENTE = (
+            'SNAPSHOT_NO_VIGENTE',
+            'Snapshot DataCredito no vigente',
+        )
+        REVISION_ACTIVA = 'REVISION_ACTIVA', 'Revision manual activa'
+        SUBSANACION_PENDIENTE = (
+            'SUBSANACION_PENDIENTE',
+            'Subsanacion pendiente',
+        )
+        CIERRE_OPERATIVO = 'CIERRE_OPERATIVO', 'Cierre operativo'
+        CANCELACION_ADMINISTRATIVA = (
+            'CANCELACION_ADMINISTRATIVA',
+            'Cancelacion administrativa',
+        )
+        OTRA_VALIDACION_CONTROLADA = (
+            'OTRA_VALIDACION_CONTROLADA',
+            'Otra validacion controlada',
+        )
+
+    solicitud = models.ForeignKey(
+        ContractorApplication,
+        on_delete=models.PROTECT,
+        related_name='aprobaciones_internas',
+    )
+    auditoria_predecision = models.ForeignKey(
+        PredecisionPrestadorAudit,
+        on_delete=models.PROTECT,
+        related_name='aprobaciones_internas',
+    )
+    revision_manual = models.ForeignKey(
+        'RevisionManualPrestador',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='aprobaciones_internas',
+    )
+    estado = models.CharField(
+        max_length=28,
+        choices=Estado.choices,
+        default=Estado.PENDIENTE,
+    )
+    decision = models.CharField(max_length=28, choices=Decision.choices, blank=True)
+    motivo = models.CharField(max_length=40, choices=Motivo.choices, blank=True)
+    comentario_interno = models.TextField(blank=True)
+
+    version_datos = models.CharField(max_length=64)
+    version_politica = models.CharField(max_length=80)
+    version_configuracion_financiera = models.CharField(max_length=80)
+    tasa_mensual_snapshot = models.DecimalField(max_digits=8, decimal_places=4)
+
+    monto_solicitado_snapshot = models.DecimalField(max_digits=14, decimal_places=2)
+    monto_maximo_score_snapshot = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    monto_maximo_politica_snapshot = models.DecimalField(
+        max_digits=14, decimal_places=2
+    )
+    monto_maximo_capacidad_snapshot = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    monto_maximo_contrato_snapshot = models.DecimalField(
+        max_digits=14, decimal_places=2
+    )
+    monto_maximo_financiero_snapshot = models.DecimalField(
+        max_digits=14, decimal_places=2
+    )
+    monto_maximo_evaluado = models.DecimalField(max_digits=14, decimal_places=2)
+    monto_autorizado = models.DecimalField(max_digits=14, decimal_places=2)
+
+    plazo_solicitado_snapshot = models.PositiveSmallIntegerField()
+    plazo_maximo_score_snapshot = models.PositiveSmallIntegerField(null=True, blank=True)
+    plazo_maximo_politica_snapshot = models.PositiveSmallIntegerField()
+    plazo_maximo_contrato_snapshot = models.PositiveSmallIntegerField()
+    plazo_maximo_financiero_snapshot = models.PositiveSmallIntegerField()
+    plazo_maximo_evaluado = models.PositiveSmallIntegerField()
+    plazo_autorizado = models.PositiveSmallIntegerField()
+
+    creada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='aprobaciones_internas_prestador_creadas',
+    )
+    decidida_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='aprobaciones_internas_prestador_decididas',
+    )
+    creada_en = models.DateTimeField(auto_now_add=True)
+    decidida_en = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-creada_en', '-id']
+        verbose_name = 'Aprobacion interna de prestador'
+        verbose_name_plural = 'Aprobaciones internas de prestadores'
+        indexes = [
+            models.Index(fields=['estado', '-creada_en'], name='prest_aprob_estado_idx'),
+            models.Index(fields=['solicitud', '-creada_en'], name='prest_aprob_solic_idx'),
+            models.Index(fields=['decidida_por', '-decidida_en'], name='prest_aprob_actor_idx'),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['auditoria_predecision'],
+                name='unique_aprobacion_interna_auditoria',
+            ),
+            models.UniqueConstraint(
+                fields=['solicitud'],
+                condition=Q(estado__in=[
+                    'PENDIENTE',
+                    'EN_ANALISIS',
+                    'APROBADA_PARA_ORIGINAR',
+                ]),
+                name='unique_aprobacion_interna_activa',
+            ),
+        ]
+        permissions = [
+            (
+                'can_view_contractor_internal_approval',
+                'Puede ver aprobaciones internas de prestadores',
+            ),
+            (
+                'can_decide_contractor_internal_approval',
+                'Puede decidir aprobaciones internas de prestadores',
+            ),
+            (
+                'can_close_contractor_internal_approval',
+                'Puede cerrar aprobaciones internas de prestadores',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Aprobacion interna {self.id} - solicitud {self.solicitud_id}'
 
 
 class RevisionManualPrestador(models.Model):

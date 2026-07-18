@@ -18,6 +18,13 @@ CLAVES_METADATA_PERMITIDAS = {
     'requerimiento_id',
     'tipo',
     'actor_id',
+    'gate_id',
+    'estado_anterior',
+    'estado_nuevo',
+    'version_politica',
+    'version_configuracion_financiera',
+    'monto_autorizado',
+    'plazo_autorizado',
 }
 
 

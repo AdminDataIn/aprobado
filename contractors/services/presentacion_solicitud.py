@@ -1,4 +1,5 @@
 from contractors.models import (
+    AprobacionInternaPrestador,
     ContractorApplication,
     PredecisionPrestadorAudit,
     RequerimientoSubsanacionPrestador,
@@ -8,12 +9,39 @@ from contractors.models import (
 
 def construir_estado_publico_solicitud(solicitud):
     auditoria = solicitud.auditorias_predecision.order_by('-created_at', '-id').first()
+    aprobacion = solicitud.aprobaciones_internas.order_by('-creada_en', '-id').first()
     requerimiento = solicitud.requerimientos_subsanacion.filter(
         estado=RequerimientoSubsanacionPrestador.Estado.PENDIENTE
     ).order_by('-creado_en', '-id').first()
     validacion_empresa = solicitud.revisiones_manuales.filter(
         estado=RevisionManualPrestador.Estado.PENDIENTE_VALIDACION_EMPRESA
     ).exists()
+
+    if aprobacion:
+        if aprobacion.estado == AprobacionInternaPrestador.Estado.APROBADA_PARA_ORIGINAR:
+            return _estado(
+                'APROBADA_PARA_ORIGINAR',
+                'Tu solicitud super\u00f3 las validaciones internas.',
+                'Est\u00e1 avanzando a la etapa de formalizaci\u00f3n.',
+                tono='favorable',
+            )
+        if aprobacion.estado == AprobacionInternaPrestador.Estado.DEVUELTA_A_REVISION:
+            return _estado(
+                'DEVUELTA_A_REVISION',
+                'Necesitamos realizar una validaci\u00f3n adicional antes de continuar.',
+                'Nuestro equipo revisar\u00e1 nuevamente la informaci\u00f3n registrada.',
+                tono='advertencia',
+            )
+        if aprobacion.estado in {
+            AprobacionInternaPrestador.Estado.PENDIENTE,
+            AprobacionInternaPrestador.Estado.EN_ANALISIS,
+        }:
+            return _estado(
+                'PENDIENTE_APROBACION_INTERNA',
+                'Tu evaluaci\u00f3n inicial fue favorable.',
+                'Estamos realizando las validaciones finales.',
+                tono='favorable',
+            )
 
     if solicitud.estado == ContractorApplication.Estado.EVALUACION_PENDIENTE:
         return _estado(
@@ -61,7 +89,7 @@ def construir_estado_publico_solicitud(solicitud):
             return _estado(
                 'PREAPROBADO_READ_ONLY',
                 'Tu evaluación inicial fue favorable.',
-                'Estamos validando los pasos finales antes de formalizar una oferta.',
+                'Estamos realizando las validaciones finales.',
                 tono='favorable',
             )
         if auditoria.resultado == PredecisionPrestadorAudit.Resultado.BLOQUEADO_READ_ONLY:

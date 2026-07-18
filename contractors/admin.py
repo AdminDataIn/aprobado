@@ -4,6 +4,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.template.response import TemplateResponse
 
 from contractors.models import (
+    AprobacionInternaPrestador,
     AutorizacionConsultaDatacreditoPrestador,
     BandaScorePrestador,
     ConfiguracionSimuladorPrestador,
@@ -252,3 +253,15 @@ class AutorizacionConsultaDatacreditoPrestadorAdmin(AdminAuditoriaSoloLectura):
         campo.name for campo in AutorizacionConsultaDatacreditoPrestador._meta.fields
     ]
     ordering = ['-aceptada_en', '-id']
+
+
+@admin.register(AprobacionInternaPrestador)
+class AprobacionInternaPrestadorAdmin(AdminAuditoriaSoloLectura):
+    list_display = [
+        'id', 'solicitud', 'estado', 'decision', 'monto_autorizado',
+        'plazo_autorizado', 'decidida_por', 'creada_en', 'decidida_en',
+    ]
+    list_filter = ['estado', 'decision', 'motivo', 'version_politica', 'creada_en']
+    search_fields = ['solicitud__id', 'auditoria_predecision__id']
+    readonly_fields = [campo.name for campo in AprobacionInternaPrestador._meta.fields]
+    ordering = ['-creada_en', '-id']

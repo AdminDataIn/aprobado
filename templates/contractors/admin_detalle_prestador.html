@@ -77,6 +77,59 @@
     {% else %}<p>No existe evaluacion formal auditada.</p>{% endif %}
   </section>
 
+  {% if puede_ver_aprobacion or puede_crear_aprobacion %}
+  <section class="panel">
+    <h2 class="titulo-seccion">Aprobacion interna previa a originacion</h2>
+    <p><strong>Este gate no crea Credito, no formaliza una obligacion y no desembolsa.</strong></p>
+    {% if aprobacion_interna %}
+      <div class="grid-3 datos-grid">
+        <div class="dato"><span>Estado</span><strong>{{ aprobacion_interna.get_estado_display }}</strong></div>
+        <div class="dato"><span>Monto maximo evaluado</span><strong>{{ aprobacion_interna.monto_maximo_evaluado }}</strong></div>
+        <div class="dato"><span>Monto autorizado</span><strong>{{ aprobacion_interna.monto_autorizado }}</strong></div>
+        <div class="dato"><span>Plazo maximo evaluado</span><strong>{{ aprobacion_interna.plazo_maximo_evaluado }} meses</strong></div>
+        <div class="dato"><span>Plazo autorizado</span><strong>{{ aprobacion_interna.plazo_autorizado }} meses</strong></div>
+        <div class="dato"><span>Politica / configuracion</span><strong>{{ aprobacion_interna.version_politica }} / {{ aprobacion_interna.version_configuracion_financiera }}</strong></div>
+      </div>
+      {% if puede_decidir_aprobacion and aprobacion_interna.estado == 'PENDIENTE' %}
+        <form method="post" action="{% url 'contractors:admin_accion_aprobacion_interna' aprobacion_interna.id %}">
+          {% csrf_token %}<button class="boton boton-secundario" name="accion" value="INICIAR">Iniciar analisis interno</button>
+        </form>
+      {% endif %}
+      {% if puede_decidir_aprobacion and aprobacion_interna.estado == 'PENDIENTE' or puede_decidir_aprobacion and aprobacion_interna.estado == 'EN_ANALISIS' %}
+        <form method="post" action="{% url 'contractors:admin_accion_aprobacion_interna' aprobacion_interna.id %}" class="formulario-compacto">
+          {% csrf_token %}<input type="hidden" name="accion" value="APROBAR">
+          <label>Monto autorizado <input class="campo" type="number" step="0.01" name="monto_autorizado" value="{{ aprobacion_interna.monto_autorizado }}" max="{{ aprobacion_interna.monto_maximo_evaluado }}"></label>
+          <label>Plazo autorizado <input class="campo" type="number" name="plazo_autorizado" value="{{ aprobacion_interna.plazo_autorizado }}" max="{{ aprobacion_interna.plazo_maximo_evaluado }}"></label>
+          <label>Comentario interno <textarea class="campo" name="comentario_interno" rows="2"></textarea></label>
+          <button class="boton" type="submit">Aprobar para originar</button>
+        </form>
+        <form method="post" action="{% url 'contractors:admin_accion_aprobacion_interna' aprobacion_interna.id %}" class="formulario-compacto">
+          {% csrf_token %}<input type="hidden" name="accion" value="DEVOLVER">
+          <label>Motivo <select class="campo" name="motivo">{% for value, label in motivos_aprobacion %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+          <label>Comentario interno <textarea class="campo" name="comentario_interno" rows="2" required></textarea></label>
+          <button class="boton boton-secundario" type="submit">Devolver a revision</button>
+        </form>
+      {% endif %}
+      {% if puede_cerrar_aprobacion and aprobacion_interna.estado != 'CERRADA_SIN_ORIGINAR' and aprobacion_interna.estado != 'CANCELADA' and aprobacion_interna.estado != 'DEVUELTA_A_REVISION' %}
+        <form method="post" action="{% url 'contractors:admin_accion_aprobacion_interna' aprobacion_interna.id %}" class="formulario-compacto">
+          {% csrf_token %}
+          <label>Motivo <select class="campo" name="motivo">{% for value, label in motivos_aprobacion %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+          <label>Comentario interno <textarea class="campo" name="comentario_interno" rows="2" required></textarea></label>
+          <button class="boton boton-secundario" name="accion" value="CERRAR">Cerrar sin originar</button>
+          {% if aprobacion_interna.estado == 'PENDIENTE' or aprobacion_interna.estado == 'EN_ANALISIS' %}<button class="boton boton-secundario" name="accion" value="CANCELAR">Cancelar</button>{% endif %}
+        </form>
+      {% endif %}
+    {% elif puede_crear_aprobacion %}
+      <p>La predecision read-only es favorable y puede pasar al gate humano final.</p>
+      <form method="post" action="{% url 'contractors:admin_crear_aprobacion_interna' solicitud.id %}">
+        {% csrf_token %}<button class="boton" type="submit">Crear aprobacion interna</button>
+      </form>
+    {% else %}
+      <p>No existe una aprobacion interna para esta solicitud.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   <section class="panel">
     <h2 class="titulo-seccion">Revisiones manuales</h2>
     {% for revision in revisiones %}

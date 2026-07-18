@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 
 from contractors.models import (
+    AprobacionInternaPrestador,
     ContractorApplication,
     ContractorApplicationDocument,
     MAPA_CAMPOS_DOCUMENTOS_PRESTADOR,
@@ -474,6 +475,52 @@ class AccionRevisionPrestadorForm(forms.Form):
             self.add_error('tipo_subsanacion', 'Selecciona el tipo de subsanacion.')
         if accion == self.Accion.RESOLVER and not cleaned.get('resultado'):
             self.add_error('resultado', 'Selecciona el resultado de la revision.')
+        return cleaned
+
+
+class AccionAprobacionInternaPrestadorForm(forms.Form):
+    class Accion:
+        INICIAR = 'INICIAR'
+        APROBAR = 'APROBAR'
+        DEVOLVER = 'DEVOLVER'
+        CERRAR = 'CERRAR'
+        CANCELAR = 'CANCELAR'
+
+    accion = forms.ChoiceField(choices=(
+        (Accion.INICIAR, 'Iniciar analisis'),
+        (Accion.APROBAR, 'Aprobar para originar'),
+        (Accion.DEVOLVER, 'Devolver a revision'),
+        (Accion.CERRAR, 'Cerrar sin originar'),
+        (Accion.CANCELAR, 'Cancelar'),
+    ))
+    motivo = forms.ChoiceField(
+        choices=AprobacionInternaPrestador.Motivo.choices,
+        required=False,
+    )
+    comentario_interno = forms.CharField(
+        required=False,
+        max_length=2000,
+        widget=forms.Textarea(attrs={'rows': 3}),
+    )
+    monto_autorizado = forms.DecimalField(
+        required=False,
+        max_digits=14,
+        decimal_places=2,
+        min_value=Decimal('0.01'),
+    )
+    plazo_autorizado = forms.IntegerField(required=False, min_value=1)
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('accion') in {
+            self.Accion.DEVOLVER,
+            self.Accion.CERRAR,
+            self.Accion.CANCELAR,
+        }:
+            if not cleaned.get('motivo'):
+                self.add_error('motivo', 'Selecciona un motivo controlado.')
+            if not str(cleaned.get('comentario_interno') or '').strip():
+                self.add_error('comentario_interno', 'Registra un comentario interno.')
         return cleaned
 
 
