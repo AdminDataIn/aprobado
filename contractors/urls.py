@@ -63,6 +63,16 @@ urlpatterns = [
         name='admin_enviar_formalizacion',
     ),
     path(
+        'gestion/prestadores/formalizaciones/<int:formalizacion_id>/novedad-operativa/',
+        views_admin.crear_novedad_operativa_prestador_view,
+        name='admin_crear_novedad_operativa',
+    ),
+    path(
+        'gestion/prestadores/novedades/<int:novedad_id>/enviar/',
+        views_admin.enviar_novedad_operativa_prestador_view,
+        name='admin_enviar_novedad_operativa',
+    ),
+    path(
         'gestion/prestadores/revisiones/<int:revision_id>/accion/',
         views_admin.accion_revision_prestador_view,
         name='admin_accion_revision',

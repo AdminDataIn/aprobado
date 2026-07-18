@@ -351,6 +351,34 @@ class TimelinePrestador(models.Model):
             'FORMALIZACION_REUTILIZADA',
             'Formalizacion reutilizada',
         )
+        NOVEDAD_OPERATIVA_GENERADA = (
+            'NOVEDAD_OPERATIVA_GENERADA',
+            'Novedad operativa generada',
+        )
+        NOVEDAD_OPERATIVA_ENVIO_INICIADO = (
+            'NOVEDAD_OPERATIVA_ENVIO_INICIADO',
+            'Envio de novedad operativa iniciado',
+        )
+        NOVEDAD_OPERATIVA_ENVIADA = (
+            'NOVEDAD_OPERATIVA_ENVIADA',
+            'Novedad operativa enviada',
+        )
+        NOVEDAD_OPERATIVA_RECIBIDA = (
+            'NOVEDAD_OPERATIVA_RECIBIDA',
+            'Novedad operativa recibida',
+        )
+        NOVEDAD_OPERATIVA_GESTIONADA = (
+            'NOVEDAD_OPERATIVA_GESTIONADA',
+            'Novedad operativa gestionada',
+        )
+        NOVEDAD_OPERATIVA_ERROR = (
+            'NOVEDAD_OPERATIVA_ERROR',
+            'Error de novedad operativa',
+        )
+        NOVEDAD_OPERATIVA_REENVIO = (
+            'NOVEDAD_OPERATIVA_REENVIO',
+            'Reenvio de novedad operativa',
+        )
 
     solicitud = models.ForeignKey(
         ContractorApplication,
@@ -680,6 +708,125 @@ class FormalizacionCreditoPrestador(models.Model):
 
     def __str__(self):
         return f'Formalizacion {self.id} - credito {self.credito_id}'
+
+
+class NovedadOperativaPrestador(models.Model):
+    class Estado(models.TextChoices):
+        PENDIENTE_ENVIO = 'PENDIENTE_ENVIO', 'Pendiente de envio'
+        ENVIANDO = 'ENVIANDO', 'Enviando'
+        ENVIADA = 'ENVIADA', 'Enviada'
+        RECIBIDA = 'RECIBIDA', 'Recibida'
+        GESTIONADA = 'GESTIONADA', 'Gestionada'
+        ERROR_CONTROLADO = 'ERROR_CONTROLADO', 'Error controlado'
+        CANCELADA = 'CANCELADA', 'Cancelada'
+
+    class TipoNovedad(models.TextChoices):
+        CREDITO_PRESTADOR_FORMALIZADO = (
+            'CREDITO_PRESTADOR_FORMALIZADO',
+            'Credito de prestador formalizado',
+        )
+
+    class CanalEnvio(models.TextChoices):
+        EMAIL = 'EMAIL', 'Correo electronico'
+
+    formalizacion = models.OneToOneField(
+        FormalizacionCreditoPrestador,
+        on_delete=models.PROTECT,
+        related_name='novedad_operativa',
+    )
+    credito = models.OneToOneField(
+        'gestion_creditos.Credito',
+        on_delete=models.PROTECT,
+        related_name='novedad_operativa_prestador',
+    )
+    credito_libranza = models.OneToOneField(
+        'gestion_creditos.CreditoLibranza',
+        on_delete=models.PROTECT,
+        related_name='novedad_operativa_prestador',
+    )
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.PROTECT,
+        related_name='novedades_operativas_prestadores',
+    )
+    clave_idempotencia = models.CharField(max_length=220, unique=True)
+    estado = models.CharField(
+        max_length=24,
+        choices=Estado.choices,
+        default=Estado.PENDIENTE_ENVIO,
+    )
+    tipo_novedad = models.CharField(
+        max_length=40,
+        choices=TipoNovedad.choices,
+        default=TipoNovedad.CREDITO_PRESTADOR_FORMALIZADO,
+    )
+    canal_envio = models.CharField(
+        max_length=20,
+        choices=CanalEnvio.choices,
+        default=CanalEnvio.EMAIL,
+    )
+    intentos_envio = models.PositiveSmallIntegerField(default=0)
+    destinatarios_hash = models.JSONField(default=list, blank=True)
+    destinatarios_enmascarados = models.JSONField(default=list, blank=True)
+    enviada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='novedades_operativas_prestador_enviadas',
+    )
+    recibida_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='novedades_operativas_prestador_recibidas',
+    )
+    gestionada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='novedades_operativas_prestador_gestionadas',
+    )
+    generada_en = models.DateTimeField(auto_now_add=True)
+    enviada_en = models.DateTimeField(null=True, blank=True)
+    recibida_en = models.DateTimeField(null=True, blank=True)
+    gestionada_en = models.DateTimeField(null=True, blank=True)
+    error_codigo = models.CharField(max_length=80, blank=True)
+    error_etapa = models.CharField(max_length=80, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        verbose_name = 'Novedad operativa de prestador'
+        verbose_name_plural = 'Novedades operativas de prestadores'
+        indexes = [
+            models.Index(fields=['estado', '-created_at'], name='prest_nov_estado_idx'),
+            models.Index(fields=['empresa', '-created_at'], name='prest_nov_empresa_idx'),
+        ]
+        permissions = [
+            (
+                'can_create_contractor_operational_notice',
+                'Puede crear novedades operativas de prestadores',
+            ),
+            (
+                'can_retry_contractor_operational_notice',
+                'Puede reintentar novedades operativas de prestadores',
+            ),
+            (
+                'can_view_contractor_operational_notice',
+                'Puede ver novedades operativas de prestadores',
+            ),
+            (
+                'can_acknowledge_contractor_operational_notice',
+                'Puede confirmar y gestionar novedades operativas de prestadores',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Novedad operativa {self.id} - credito {self.credito_id}'
 
 
 class RevisionManualPrestador(models.Model):

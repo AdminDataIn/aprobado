@@ -1,0 +1,52 @@
+{% load static humanize %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Novedades operativas de Prestadores</title>
+  <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+  {% include 'base/favicon.html' %}
+  <style>
+    body { background:#f4f7fb; color:#10233f; font-family:Arial,sans-serif; }
+    .contenedor { max-width:1180px; margin:0 auto; padding:32px 20px 60px; }
+    .cabecera { display:flex; justify-content:space-between; gap:20px; align-items:center; margin-bottom:24px; }
+    .cabecera h1 { margin:0 0 6px; font-size:28px; }
+    .tabla-wrap { overflow:auto; background:#fff; border:1px solid #dce5ef; border-radius:8px; }
+    table { width:100%; border-collapse:collapse; }
+    th,td { padding:14px; text-align:left; border-bottom:1px solid #e8eef5; white-space:nowrap; }
+    th { color:#52657c; font-size:13px; text-transform:uppercase; }
+    .estado { font-weight:700; color:#087aa2; }
+    .accion { color:#087aa2; font-weight:700; text-decoration:none; }
+    .vacio { padding:32px; text-align:center; color:#64748b; }
+  </style>
+</head>
+<body>
+  <main class="contenedor">
+    <header class="cabecera">
+      <div><h1>Novedades operativas de Prestadores</h1><p>{{ empresa.nombre }}</p></div>
+      <a class="accion" href="{% url 'pagador:dashboard' %}">Volver al panel</a>
+    </header>
+    <div class="tabla-wrap">
+      <table>
+        <thead><tr><th>Credito</th><th>Titular</th><th>Documento</th><th>Monto</th><th>Firma</th><th>Estado</th><th></th></tr></thead>
+        <tbody>
+          {% for fila in filas %}
+            <tr>
+              <td>{{ fila.dto.numero_credito }}</td>
+              <td>{{ fila.dto.titular_nombre }}</td>
+              <td>{{ fila.dto.documento_enmascarado }}</td>
+              <td>${{ fila.dto.monto_formalizado|floatformat:0|intcomma }}</td>
+              <td>{{ fila.dto.fecha_firma|date:"Y-m-d H:i" }}</td>
+              <td class="estado">{{ fila.novedad.get_estado_display }}</td>
+              <td><a class="accion" href="{% url 'pagador:prestadores_novedad_detalle' fila.novedad.id %}">Ver novedad</a></td>
+            </tr>
+          {% empty %}
+            <tr><td class="vacio" colspan="7">No hay novedades operativas disponibles.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </main>
+</body>
+</html>

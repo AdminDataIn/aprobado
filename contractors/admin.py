@@ -12,6 +12,7 @@ from contractors.models import (
     ContractorApplication,
     ContractorApplicationDocument,
     FormalizacionCreditoPrestador,
+    NovedadOperativaPrestador,
     PredecisionPrestadorAudit,
     RequerimientoSubsanacionPrestador,
     RevisionManualPrestador,
@@ -284,4 +285,16 @@ class FormalizacionCreditoPrestadorAdmin(AdminAuditoriaSoloLectura):
     readonly_fields = [
         campo.name for campo in FormalizacionCreditoPrestador._meta.fields
     ]
+    ordering = ['-created_at', '-id']
+
+
+@admin.register(NovedadOperativaPrestador)
+class NovedadOperativaPrestadorAdmin(AdminAuditoriaSoloLectura):
+    list_display = [
+        'id', 'credito', 'empresa', 'estado', 'canal_envio', 'intentos_envio',
+        'generada_en', 'enviada_en', 'recibida_en', 'gestionada_en',
+    ]
+    list_filter = ['estado', 'canal_envio', 'tipo_novedad', 'empresa', 'created_at']
+    search_fields = ['credito__numero_credito', 'clave_idempotencia', 'empresa__nombre']
+    readonly_fields = [campo.name for campo in NovedadOperativaPrestador._meta.fields]
     ordering = ['-created_at', '-id']

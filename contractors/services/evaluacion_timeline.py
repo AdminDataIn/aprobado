@@ -30,6 +30,9 @@ CLAVES_METADATA_PERMITIDAS = {
     'formalizacion_id',
     'pagare_id',
     'proveedor',
+    'novedad_id',
+    'empresa_id',
+    'canal',
 }
 
 

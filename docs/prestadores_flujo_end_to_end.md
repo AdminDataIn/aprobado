@@ -494,8 +494,6 @@ Eventos allowlist: `FORMALIZACION_INICIADA`, `PAGARE_GENERADO`,
   puede simularla desde la UI.
 - Validar en sandbox que ZapSign respeta `external_id` y la configuracion de selfie.
 - Definir recuperacion privada del PDF firmado sin persistir URL publica.
-- Validacion operativa por empresa/pagador, sin decision crediticia ni doble
-  aprobacion tradicional.
 - Activacion, amortizacion, desembolso, pagos y recaudos en una fase posterior.
 - Prueba de concurrencia real en PostgreSQL para complementar constraints y locks.
 - Resolver por separado la deuda de migraciones `WhatsAppInternal*`; Commit G no la
@@ -512,4 +510,92 @@ Eventos allowlist: `FORMALIZACION_INICIADA`, `PAGARE_GENERADO`,
 | E | IMPLEMENTADO | gate interno y expediente inmutable |
 | F | IMPLEMENTADO | servicio central idempotente y Credito EN_REVISION |
 | G | IMPLEMENTADO | formalizacion, pagare, identidad y firma sin efectos financieros |
-| H | PENDIENTE | validacion post-firma, activacion y desembolso controlados |
+| H | IMPLEMENTADO | novedad operativa post-firma con empresa/pagador, sin decision crediticia |
+
+## 25. Operacion post-firma Commit H
+
+### Auditoria y decision de estado
+
+- `Notificacion` es una alerta generica por usuario y no conserva idempotencia,
+  recepcion, gestion ni relaciones completas con formalizacion y empresa. No se usa
+  como fuente de verdad para esta etapa.
+- Los correos existentes a pagadores usan `PerfilPagador`, `Empresa` y la
+  infraestructura SMTP de Django. Se reutiliza ese canal, no la logica de decision.
+- `PENDIENTE_TRANSFERENCIA` habilita vistas y servicios administrativos de
+  transferencia. Para evitar efectos financieros, el credito permanece `FIRMADO`.
+- La novedad `GESTIONADA` es la unica senal de que termino la operacion empresarial;
+  no cambia el estado financiero ni ejecuta transferencia.
+
+### Modelo, DTO e idempotencia
+
+`NovedadOperativaPrestador` enlaza mediante relaciones protegidas y unicas la
+formalizacion, `Credito`, `CreditoLibranza` y `Empresa`. La clave determinista
+`prestador:<credito_id>:novedad-operativa:<formalizacion_id>` evita duplicados.
+
+Estados:
+
+```text
+PENDIENTE_ENVIO -> ENVIANDO -> ENVIADA -> RECIBIDA -> GESTIONADA
+                              \-> ERROR_CONTROLADO -> reintento controlado
+```
+
+El DTO contiene solo identificadores operativos, nombre, documento enmascarado,
+monto/plazo formalizados, fecha de firma y fechas contractuales. No incluye score,
+DataCredito, fraude, comentarios internos, tokens ni payloads externos.
+
+### Destinatarios, envio y recepcion
+
+- Los destinatarios son usuarios activos con `PerfilPagador.es_pagador=True` de la
+  misma empresa y correo configurado. Nunca se usa el correo libre del solicitante.
+- La transaccion corta marca `ENVIANDO` e incrementa el intento. El correo se envia
+  fuera del bloque y otra transaccion registra `ENVIADA` o `ERROR_CONTROLADO`.
+- Solo se persisten HMAC del correo y una version enmascarada de cada destinatario.
+- Un pagador autenticado, de la empresa correcta y con permiso explicito puede
+  confirmar recepcion y luego marcar la novedad como gestionada. Ambas acciones son
+  POST, CSRF e idempotentes.
+- El pagador no puede originar, formalizar, cambiar condiciones, decidir credito,
+  activar, desembolsar ni ejecutar transferencias desde este flujo.
+
+### Rutas y permisos
+
+Staff:
+
+- `POST /gestion/prestadores/formalizaciones/<id>/novedad-operativa/`
+- `POST /gestion/prestadores/novedades/<id>/enviar/`
+- `can_create_contractor_operational_notice`
+- `can_retry_contractor_operational_notice`
+- `can_view_contractor_operational_notice`
+
+Pagador:
+
+- `GET /pagador/prestadores/novedades/`
+- `GET /pagador/prestadores/novedades/<id>/`
+- `POST /pagador/prestadores/novedades/<id>/confirmar-recepcion/`
+- `POST /pagador/prestadores/novedades/<id>/marcar-gestionada/`
+- `can_view_contractor_operational_notice`
+- `can_acknowledge_contractor_operational_notice`
+
+No se usan `AprobacionPagadorLibranza`, niveles, doble aprobacion ni helpers de
+decision de libranza tradicional.
+
+### Timeline y secuencia
+
+Eventos allowlist: `NOVEDAD_OPERATIVA_GENERADA`,
+`NOVEDAD_OPERATIVA_ENVIO_INICIADO`, `NOVEDAD_OPERATIVA_ENVIADA`,
+`NOVEDAD_OPERATIVA_RECIBIDA`, `NOVEDAD_OPERATIVA_GESTIONADA`,
+`NOVEDAD_OPERATIVA_ERROR` y `NOVEDAD_OPERATIVA_REENVIO`. La metadata se limita a
+IDs, canal, actor y estado.
+
+```mermaid
+flowchart LR
+    F[FIRMADO] --> N[Novedad operativa]
+    N --> E[ENVIADA]
+    E --> R[RECIBIDA]
+    R --> G[GESTIONADA]
+    G --> T[Fase futura de transferencia]
+    T -. pendiente .-> D[Desembolso]
+    D -. pendiente .-> A[Activacion]
+```
+
+Commit H no crea cuotas, pagos, recaudos ni aprobaciones del pagador. Transferencia,
+desembolso y activacion permanecen pendientes para una fase posterior y explicita.

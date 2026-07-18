@@ -20,6 +20,7 @@ from contractors.models import (
     ContractorApplicationDocument,
     DOCUMENTOS_OBLIGATORIOS_PRESTADOR,
     FormalizacionCreditoPrestador,
+    NovedadOperativaPrestador,
     PredecisionPrestadorAudit,
     RequerimientoSubsanacionPrestador,
     RevisionManualPrestador,
@@ -47,6 +48,10 @@ from contractors.services.originacion import originar_credito_prestador_desde_ga
 from contractors.services.formalizacion import (
     enviar_formalizacion_prestador_a_firma,
     preparar_formalizacion_credito_prestador,
+)
+from contractors.services.novedad_operativa import (
+    crear_o_reutilizar_novedad_operativa_prestador,
+    enviar_novedad_operativa_prestador,
 )
 from contractors.views import calcular_progreso_documental
 from gestion_creditos.models import OrigenCreditoPrestador
@@ -248,6 +253,11 @@ def detalle_prestador_view(request, solicitud_id):
         formalizacion = FormalizacionCreditoPrestador.objects.select_related(
             'pagare', 'credito', 'credito_libranza'
         ).filter(origen_credito_prestador=origen_credito).first()
+    novedad_operativa = None
+    if formalizacion:
+        novedad_operativa = NovedadOperativaPrestador.objects.filter(
+            formalizacion=formalizacion
+        ).first()
     return render(
         request,
         'contractors/admin_detalle_prestador.html',
@@ -285,6 +295,7 @@ def detalle_prestador_view(request, solicitud_id):
             'aprobacion_interna': aprobacion_interna,
             'origen_credito': origen_credito,
             'formalizacion': formalizacion,
+            'novedad_operativa': novedad_operativa,
             'motivos_aprobacion': AprobacionInternaPrestador.Motivo.choices,
             'puede_ver_aprobacion': request.user.has_perm(
                 'contractors.can_view_contractor_internal_approval'
@@ -323,6 +334,37 @@ def detalle_prestador_view(request, solicitud_id):
                 }
                 and request.user.has_perm(
                     'contractors.can_retry_contractor_signature'
+                )
+            ),
+            'puede_ver_novedad_operativa': request.user.has_perm(
+                'contractors.can_view_contractor_operational_notice'
+            ),
+            'puede_crear_novedad_operativa': bool(
+                formalizacion
+                and formalizacion.estado
+                == FormalizacionCreditoPrestador.Estado.FIRMADO
+                and novedad_operativa is None
+                and request.user.has_perm(
+                    'contractors.can_create_contractor_operational_notice'
+                )
+            ),
+            'puede_enviar_novedad_operativa': bool(
+                novedad_operativa
+                and (
+                    (
+                        novedad_operativa.estado
+                        == NovedadOperativaPrestador.Estado.PENDIENTE_ENVIO
+                        and request.user.has_perm(
+                            'contractors.can_create_contractor_operational_notice'
+                        )
+                    )
+                    or (
+                        novedad_operativa.estado
+                        == NovedadOperativaPrestador.Estado.ERROR_CONTROLADO
+                        and request.user.has_perm(
+                            'contractors.can_retry_contractor_operational_notice'
+                        )
+                    )
                 )
             ),
             'puede_crear_aprobacion': bool(
@@ -507,6 +549,67 @@ def enviar_formalizacion_prestador_view(request, formalizacion_id):
     gate = get_object_or_404(
         AprobacionInternaPrestador,
         pk=formalizacion.origen_credito_prestador.gate_id,
+    )
+    return redirect('contractors:admin_detalle', solicitud_id=gate.solicitud_id)
+
+
+@require_POST
+@permiso_interno_requerido('contractors.can_create_contractor_operational_notice')
+def crear_novedad_operativa_prestador_view(request, formalizacion_id):
+    formalizacion = get_object_or_404(
+        FormalizacionCreditoPrestador,
+        pk=formalizacion_id,
+    )
+    try:
+        resultado = crear_o_reutilizar_novedad_operativa_prestador(
+            formalizacion,
+            actor=request.user,
+        )
+    except (ValidationError, PermissionDenied) as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(
+            request,
+            'La novedad operativa existente fue reutilizada.'
+            if resultado.reutilizada
+            else 'La novedad operativa fue generada sin modificar el credito.',
+        )
+    gate = get_object_or_404(
+        AprobacionInternaPrestador,
+        pk=formalizacion.origen_credito_prestador.gate_id,
+    )
+    return redirect('contractors:admin_detalle', solicitud_id=gate.solicitud_id)
+
+
+@require_POST
+@permiso_interno_requerido('contractors.can_view_contractor_operational_notice')
+def enviar_novedad_operativa_prestador_view(request, novedad_id):
+    novedad = get_object_or_404(
+        NovedadOperativaPrestador.objects.select_related(
+            'formalizacion__origen_credito_prestador'
+        ),
+        pk=novedad_id,
+    )
+    try:
+        resultado = enviar_novedad_operativa_prestador(
+            novedad,
+            actor=request.user,
+        )
+    except (ValidationError, PermissionDenied) as exc:
+        messages.error(request, str(exc))
+    except Exception:
+        logger.exception('Error controlado al enviar novedad_id=%s', novedad.id)
+        messages.error(request, 'No fue posible enviar la novedad operativa.')
+    else:
+        messages.success(
+            request,
+            'El envio ya estaba registrado.'
+            if resultado.reutilizado
+            else f'Novedad enviada a {resultado.destinatarios} destinatario(s).',
+        )
+    gate = get_object_or_404(
+        AprobacionInternaPrestador,
+        pk=novedad.formalizacion.origen_credito_prestador.gate_id,
     )
     return redirect('contractors:admin_detalle', solicitud_id=gate.solicitud_id)
 

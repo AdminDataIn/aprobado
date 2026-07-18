@@ -173,6 +173,35 @@
   </section>
   {% endif %}
 
+  {% if puede_ver_novedad_operativa or puede_crear_novedad_operativa %}
+  <section class="panel">
+    <h2 class="titulo-seccion">Novedad operativa posterior a firma</h2>
+    <p><strong>Esta etapa no desembolsa, activa ni modifica las condiciones del credito.</strong></p>
+    {% if novedad_operativa and puede_ver_novedad_operativa %}
+      <div class="resumen-grid">
+        <div class="dato"><span>Estado</span><strong>{{ novedad_operativa.get_estado_display }}</strong></div>
+        <div class="dato"><span>Canal</span><strong>{{ novedad_operativa.get_canal_envio_display }}</strong></div>
+        <div class="dato"><span>Intentos</span><strong>{{ novedad_operativa.intentos_envio }}</strong></div>
+        <div class="dato"><span>Generada</span><strong>{{ novedad_operativa.generada_en|date:"Y-m-d H:i" }}</strong></div>
+      </div>
+      {% if puede_enviar_novedad_operativa %}
+        <form method="post" action="{% url 'contractors:admin_enviar_novedad_operativa' novedad_operativa.id %}">
+          {% csrf_token %}
+          <button class="boton" type="submit">Enviar novedad operativa</button>
+        </form>
+      {% endif %}
+    {% elif puede_crear_novedad_operativa %}
+      <p>La firma esta confirmada y puede generarse la comunicacion operativa para la empresa.</p>
+      <form method="post" action="{% url 'contractors:admin_crear_novedad_operativa' formalizacion.id %}">
+        {% csrf_token %}
+        <button class="boton" type="submit">Generar novedad operativa</button>
+      </form>
+    {% else %}
+      <p>No existe una novedad operativa disponible.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   <section class="panel">
     <h2 class="titulo-seccion">Revisiones manuales</h2>
     {% for revision in revisiones %}

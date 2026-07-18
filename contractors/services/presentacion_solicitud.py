@@ -2,6 +2,7 @@ from contractors.models import (
     AprobacionInternaPrestador,
     ContractorApplication,
     FormalizacionCreditoPrestador,
+    NovedadOperativaPrestador,
     PredecisionPrestadorAudit,
     RequerimientoSubsanacionPrestador,
     RevisionManualPrestador,
@@ -35,10 +36,24 @@ def construir_estado_publico_solicitud(solicitud):
                 ).first()
                 if formalizacion:
                     if formalizacion.estado == FormalizacionCreditoPrestador.Estado.FIRMADO:
+                        novedad = NovedadOperativaPrestador.objects.filter(
+                            formalizacion=formalizacion
+                        ).first()
+                        if novedad and novedad.estado in {
+                            NovedadOperativaPrestador.Estado.ENVIADA,
+                            NovedadOperativaPrestador.Estado.RECIBIDA,
+                            NovedadOperativaPrestador.Estado.GESTIONADA,
+                        }:
+                            return _estado(
+                                'FORMALIZACION_OPERATIVA_FINAL',
+                                'Tu solicitud esta avanzando en la etapa final de formalizacion operativa.',
+                                'Te informaremos cuando finalicen las validaciones operativas.',
+                                tono='favorable',
+                            )
                         return _estado(
                             'FIRMA_CONFIRMADA',
-                            'Recibimos correctamente la firma de tus documentos.',
-                            'Estamos realizando las validaciones finales.',
+                            'Recibimos correctamente tu firma y estamos completando las validaciones operativas finales.',
+                            'Tu credito permanece en formalizacion y aun no ha sido transferido.',
                             tono='favorable',
                         )
                     if formalizacion.estado == FormalizacionCreditoPrestador.Estado.PENDIENTE_FIRMA:

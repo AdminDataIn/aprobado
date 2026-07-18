@@ -8,6 +8,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -16,6 +17,7 @@ from contractors.models import (
     ContractorApplication,
     ContractorApplicationDocument,
     FormalizacionCreditoPrestador,
+    NovedadOperativaPrestador,
     PredecisionPrestadorAudit,
     RequerimientoSubsanacionPrestador,
     RevisionManualPrestador,
@@ -40,6 +42,14 @@ from contractors.services.formalizacion import (
     preparar_formalizacion_credito_prestador,
     procesar_callback_formalizacion_prestador,
     registrar_resultado_validacion_identidad_prestador,
+)
+from contractors.services.novedad_operativa import (
+    confirmar_recepcion_novedad_operativa_prestador,
+    construir_dto_novedad_operativa_prestador,
+    crear_o_reutilizar_novedad_operativa_prestador,
+    enviar_novedad_operativa_prestador,
+    marcar_novedad_operativa_prestador_gestionada,
+    obtener_destinatarios_novedad_operativa_prestador,
 )
 from contractors.tests.test_score_prestadores_v2 import crear_politica_score
 from gestion_creditos.models import (
@@ -88,6 +98,23 @@ class ClienteFirmaPrueba:
         }
 
 
+class ClienteNovedadPrueba:
+    def __init__(self, *, error=None):
+        self.error = error
+        self.llamadas = []
+        self.profundidad_transaccional_inicial = len(connection.atomic_blocks)
+
+    def __call__(self, *, dto, destinatarios):
+        self.llamadas.append({
+            'dto': dto,
+            'destinatarios': list(destinatarios),
+            'profundidad_transaccional': len(connection.atomic_blocks),
+        })
+        if self.error:
+            raise self.error
+        return True
+
+
 @override_settings(
     DATACREDITO_AUTHORIZATION_TEXT_VERSION='uat-gate-v1',
     DATACREDITO_AUTHORIZATION_TEXT='Autorizacion controlada para pruebas del gate.',
@@ -130,6 +157,9 @@ class AprobacionInternaPrestadorTest(TestCase):
             'can_prepare_contractor_formalization',
             'can_retry_contractor_signature',
             'can_view_contractor_formalization',
+            'can_create_contractor_operational_notice',
+            'can_retry_contractor_operational_notice',
+            'can_view_contractor_operational_notice',
         )
         self._otorgar(
             self.lector,
@@ -908,6 +938,394 @@ class AprobacionInternaPrestadorTest(TestCase):
         self.assertNotContains(response, 'ZapSign')
         self.assertNotContains(response, 'desembolsado')
         self.assertNotContains(response, 'activo')
+
+    def test_novedad_exige_formalizacion_y_credito_firmados(self):
+        formalizacion = self._preparar_formalizacion()
+        with self.assertRaises(ValidationError):
+            crear_o_reutilizar_novedad_operativa_prestador(
+                formalizacion,
+                actor=self.analista,
+            )
+
+        FormalizacionCreditoPrestador.objects.filter(pk=formalizacion.pk).update(
+            estado=FormalizacionCreditoPrestador.Estado.FIRMADO,
+            firmada_en=timezone.now(),
+        )
+        formalizacion.refresh_from_db()
+        with self.assertRaises(ValidationError):
+            crear_o_reutilizar_novedad_operativa_prestador(
+                formalizacion,
+                actor=self.analista,
+            )
+        self.assertFalse(NovedadOperativaPrestador.objects.exists())
+
+    @patch('gestion_creditos.credit_services.iniciar_proceso_desembolso')
+    @patch('gestion_creditos.credit_services.activar_credito')
+    @patch(
+        'gestion_creditos.services.aprobacion_pagador_libranza.'
+        'decidir_solicitud_libranza_por_pagador'
+    )
+    def test_novedad_firmada_es_idempotente_y_sin_efectos_financieros(
+        self, decidir_pagador, activar_credito, iniciar_desembolso
+    ):
+        formalizacion = self._formalizacion_firmada()
+        credito = formalizacion.credito
+        condiciones = (credito.monto_aprobado, credito.plazo, credito.tasa_interes)
+
+        primera = crear_o_reutilizar_novedad_operativa_prestador(
+            formalizacion,
+            actor=self.analista,
+        )
+        segunda = crear_o_reutilizar_novedad_operativa_prestador(
+            formalizacion,
+            actor=self.analista,
+        )
+
+        self.assertFalse(primera.reutilizada)
+        self.assertTrue(segunda.reutilizada)
+        self.assertEqual(primera.novedad.pk, segunda.novedad.pk)
+        self.assertEqual(NovedadOperativaPrestador.objects.count(), 1)
+        credito.refresh_from_db()
+        self.assertEqual(
+            (credito.monto_aprobado, credito.plazo, credito.tasa_interes),
+            condiciones,
+        )
+        self.assertEqual(credito.estado, Credito.EstadoCredito.FIRMADO)
+        self.assertIsNone(credito.fecha_desembolso)
+        self.assertEqual(HistorialPago.objects.count(), 0)
+        self.assertEqual(CuotaAmortizacion.objects.count(), 0)
+        self.assertEqual(AprobacionPagadorLibranza.objects.count(), 0)
+        decidir_pagador.assert_not_called()
+        activar_credito.assert_not_called()
+        iniciar_desembolso.assert_not_called()
+
+    def test_dto_y_destinatarios_son_sanitizados_y_pertenecen_a_empresa(self):
+        self.solicitante.email = 'solicitante-libre@example.test'
+        self.solicitante.save(update_fields=['email'])
+        formalizacion = self._formalizacion_firmada()
+        novedad = crear_o_reutilizar_novedad_operativa_prestador(
+            formalizacion,
+            actor=self.analista,
+        ).novedad
+        pagador = self._crear_pagador(
+            'pagador-destino',
+            self.empresa,
+            email='operaciones@empresa.test',
+        )
+        otra_empresa = Empresa.objects.create(
+            nombre='Empresa ajena',
+            convenio_activo=True,
+        )
+        self._crear_pagador(
+            'pagador-ajeno-destino',
+            otra_empresa,
+            email='ajeno@empresa.test',
+        )
+
+        dto = construir_dto_novedad_operativa_prestador(novedad)
+        destinatarios = obtener_destinatarios_novedad_operativa_prestador(
+            self.empresa
+        )
+
+        self.assertEqual(destinatarios, [pagador.email])
+        self.assertNotIn(self.solicitante.email, destinatarios)
+        self.assertNotIn(self.solicitud.numero_documento, str(dto.como_dict()))
+        self.assertEqual(
+            dto.documento_enmascarado,
+            f'****{self.solicitud.numero_documento[-4:]}',
+        )
+        self.assertNotIn('score', dto.como_dict())
+        self.assertNotIn('datacredito', dto.como_dict())
+
+    def test_envio_ocurre_fuera_de_transaccion_y_persiste_solo_destinos_seguros(self):
+        formalizacion = self._formalizacion_firmada()
+        novedad = crear_o_reutilizar_novedad_operativa_prestador(
+            formalizacion,
+            actor=self.analista,
+        ).novedad
+        self._crear_pagador(
+            'pagador-envio',
+            self.empresa,
+            email='operativo@empresa.test',
+        )
+        cliente = ClienteNovedadPrueba()
+
+        resultado = enviar_novedad_operativa_prestador(
+            novedad,
+            actor=self.analista,
+            cliente=cliente,
+        )
+
+        self.assertFalse(resultado.reutilizado)
+        self.assertEqual(len(cliente.llamadas), 1)
+        self.assertEqual(
+            cliente.llamadas[0]['profundidad_transaccional'],
+            cliente.profundidad_transaccional_inicial,
+        )
+        resultado.novedad.refresh_from_db()
+        self.assertEqual(
+            resultado.novedad.estado,
+            NovedadOperativaPrestador.Estado.ENVIADA,
+        )
+        self.assertEqual(resultado.novedad.intentos_envio, 1)
+        self.assertEqual(resultado.novedad.destinatarios_enmascarados, [
+            'o***@empresa.test'
+        ])
+        self.assertNotIn('operativo@empresa.test', str(resultado.novedad.__dict__))
+        formalizacion.credito.refresh_from_db()
+        self.assertEqual(formalizacion.credito.estado, Credito.EstadoCredito.FIRMADO)
+
+    def test_error_email_y_retry_no_duplican_novedad(self):
+        formalizacion = self._formalizacion_firmada()
+        novedad = crear_o_reutilizar_novedad_operativa_prestador(
+            formalizacion,
+            actor=self.analista,
+        ).novedad
+        self._crear_pagador(
+            'pagador-retry',
+            self.empresa,
+            email='retry@empresa.test',
+        )
+        with self.assertRaises(RuntimeError):
+            enviar_novedad_operativa_prestador(
+                novedad,
+                actor=self.analista,
+                cliente=ClienteNovedadPrueba(error=RuntimeError('correo caido')),
+            )
+        novedad.refresh_from_db()
+        self.assertEqual(
+            novedad.estado,
+            NovedadOperativaPrestador.Estado.ERROR_CONTROLADO,
+        )
+
+        cliente = ClienteNovedadPrueba()
+        resultado = enviar_novedad_operativa_prestador(
+            novedad,
+            actor=self.analista,
+            cliente=cliente,
+        )
+        repetido = enviar_novedad_operativa_prestador(
+            resultado.novedad,
+            actor=self.analista,
+            cliente=cliente,
+        )
+        self.assertTrue(repetido.reutilizado)
+        self.assertEqual(len(cliente.llamadas), 1)
+        self.assertEqual(NovedadOperativaPrestador.objects.count(), 1)
+        resultado.novedad.refresh_from_db()
+        self.assertEqual(resultado.novedad.intentos_envio, 2)
+
+    def test_pagador_solo_gestiona_novedad_de_su_empresa_e_idempotente(self):
+        formalizacion = self._formalizacion_firmada()
+        novedad = crear_o_reutilizar_novedad_operativa_prestador(
+            formalizacion,
+            actor=self.analista,
+        ).novedad
+        pagador = self._crear_pagador(
+            'pagador-propio',
+            self.empresa,
+            email='propio@empresa.test',
+            permisos=(
+                'can_view_contractor_operational_notice',
+                'can_acknowledge_contractor_operational_notice',
+            ),
+        )
+        otra_empresa = Empresa.objects.create(
+            nombre='Empresa ownership', convenio_activo=True
+        )
+        pagador_ajeno = self._crear_pagador(
+            'pagador-ownership-ajeno',
+            otra_empresa,
+            email='ownership-ajeno@empresa.test',
+            permisos=(
+                'can_view_contractor_operational_notice',
+                'can_acknowledge_contractor_operational_notice',
+            ),
+        )
+        enviar_novedad_operativa_prestador(
+            novedad,
+            actor=self.analista,
+            cliente=ClienteNovedadPrueba(),
+        )
+        novedad.refresh_from_db()
+
+        with self.assertRaises(PermissionDenied):
+            confirmar_recepcion_novedad_operativa_prestador(
+                novedad,
+                actor=pagador_ajeno,
+            )
+        self.client.force_login(pagador_ajeno)
+        respuesta = self.client.get(
+            f'/pagador/prestadores/novedades/{novedad.id}/'
+        )
+        self.assertEqual(respuesta.status_code, 404)
+
+        primera = confirmar_recepcion_novedad_operativa_prestador(
+            novedad,
+            actor=pagador,
+        )
+        segunda = confirmar_recepcion_novedad_operativa_prestador(
+            primera.novedad,
+            actor=pagador,
+        )
+        self.assertFalse(primera.reutilizada)
+        self.assertTrue(segunda.reutilizada)
+        gestionada = marcar_novedad_operativa_prestador_gestionada(
+            segunda.novedad,
+            actor=pagador,
+        )
+        self.assertEqual(
+            gestionada.novedad.estado,
+            NovedadOperativaPrestador.Estado.GESTIONADA,
+        )
+        formalizacion.credito.refresh_from_db()
+        self.assertEqual(formalizacion.credito.estado, Credito.EstadoCredito.FIRMADO)
+
+    def test_ui_pagador_solo_expone_acciones_operativas(self):
+        formalizacion = self._formalizacion_firmada()
+        novedad = crear_o_reutilizar_novedad_operativa_prestador(
+            formalizacion,
+            actor=self.analista,
+        ).novedad
+        pagador = self._crear_pagador(
+            'pagador-ui-novedad',
+            self.empresa,
+            email='ui@empresa.test',
+            permisos=(
+                'can_view_contractor_operational_notice',
+                'can_acknowledge_contractor_operational_notice',
+            ),
+        )
+        enviar_novedad_operativa_prestador(
+            novedad,
+            actor=self.analista,
+            cliente=ClienteNovedadPrueba(),
+        )
+        self.client.force_login(pagador)
+        listado = self.client.get('/pagador/prestadores/novedades/')
+        detalle = self.client.get(
+            f'/pagador/prestadores/novedades/{novedad.id}/'
+        )
+        self.assertEqual(listado.status_code, 200)
+        self.assertEqual(detalle.status_code, 200)
+        self.assertContains(detalle, 'Confirmar recepci')
+        for texto in ('Aprobar', 'Rechazar', 'DataCr', 'score'):
+            self.assertNotContains(detalle, texto)
+
+    def test_perfil_pagador_no_puede_generar_novedad_aunque_sea_staff(self):
+        formalizacion = self._formalizacion_firmada()
+        pagador = self._crear_pagador(
+            'pagador-staff-novedad',
+            self.empresa,
+            email='staff@empresa.test',
+            is_staff=True,
+            permisos=(
+                'can_create_contractor_operational_notice',
+                'can_retry_contractor_operational_notice',
+                'can_view_contractor_operational_notice',
+                'can_acknowledge_contractor_operational_notice',
+            ),
+        )
+        with self.assertRaises(PermissionDenied):
+            crear_o_reutilizar_novedad_operativa_prestador(
+                formalizacion,
+                actor=pagador,
+            )
+        self.assertFalse(NovedadOperativaPrestador.objects.exists())
+
+    def test_timeline_novedad_es_sanitizado(self):
+        formalizacion = self._formalizacion_firmada()
+        novedad = crear_o_reutilizar_novedad_operativa_prestador(
+            formalizacion,
+            actor=self.analista,
+        ).novedad
+        self._crear_pagador(
+            'pagador-timeline',
+            self.empresa,
+            email='timeline@empresa.test',
+        )
+        enviar_novedad_operativa_prestador(
+            novedad,
+            actor=self.analista,
+            cliente=ClienteNovedadPrueba(),
+        )
+        eventos = self.solicitud.timeline_operativo.filter(
+            tipo_evento__in=[
+                TimelinePrestador.TipoEvento.NOVEDAD_OPERATIVA_GENERADA,
+                TimelinePrestador.TipoEvento.NOVEDAD_OPERATIVA_ENVIO_INICIADO,
+                TimelinePrestador.TipoEvento.NOVEDAD_OPERATIVA_ENVIADA,
+            ]
+        )
+        self.assertEqual(eventos.count(), 3)
+        texto = str(list(eventos.values_list('metadata', flat=True)))
+        self.assertNotIn(self.solicitud.numero_documento, texto)
+        self.assertNotIn('timeline@empresa.test', texto)
+        self.assertNotIn('score', texto.lower())
+        self.assertLessEqual(
+            set(eventos.first().metadata),
+            {'novedad_id', 'credito_id', 'empresa_id', 'actor_id', 'canal', 'estado'},
+        )
+
+    def test_mi_credito_refleja_etapa_operativa_sin_afirmar_transferencia(self):
+        formalizacion = self._formalizacion_firmada()
+        self.client.force_login(self.solicitante)
+        respuesta = self.client.get('/mi-credito/', HTTP_HOST=self.host)
+        self.assertContains(respuesta, 'validaciones operativas finales')
+        self.assertNotContains(respuesta, 'transferencia realizada')
+
+        novedad = crear_o_reutilizar_novedad_operativa_prestador(
+            formalizacion,
+            actor=self.analista,
+        ).novedad
+        self._crear_pagador(
+            'pagador-ux',
+            self.empresa,
+            email='ux@empresa.test',
+        )
+        enviar_novedad_operativa_prestador(
+            novedad,
+            actor=self.analista,
+            cliente=ClienteNovedadPrueba(),
+        )
+        respuesta = self.client.get('/mi-credito/', HTTP_HOST=self.host)
+        self.assertContains(respuesta, 'etapa final de formalizacion operativa')
+        self.assertNotContains(respuesta, 'pagador aprobo')
+        self.assertNotContains(respuesta, 'desembolsado')
+
+    def _crear_pagador(
+        self,
+        username,
+        empresa,
+        *,
+        email,
+        permisos=(),
+        is_staff=False,
+    ):
+        usuario = get_user_model().objects.create_user(
+            username,
+            password='test',
+            email=email,
+            is_staff=is_staff,
+        )
+        PerfilPagador.objects.create(usuario=usuario, empresa=empresa, es_pagador=True)
+        if permisos:
+            self._otorgar(usuario, *permisos)
+        return usuario
+
+    def _formalizacion_firmada(self):
+        formalizacion = self._formalizacion_con_identidad()
+        enviar_formalizacion_prestador_a_firma(
+            formalizacion,
+            actor=self.analista,
+            cliente=ClienteFirmaPrueba(token=f'firma-novedad-{formalizacion.id}'),
+        )
+        procesar_callback_formalizacion_prestador(
+            documento_id=f'firma-novedad-{formalizacion.id}',
+            accion='signed',
+            estado_proveedor='signed',
+        )
+        formalizacion.refresh_from_db()
+        return formalizacion
 
     def _originar_aprobado(self):
         gate = self._crear_gate()
