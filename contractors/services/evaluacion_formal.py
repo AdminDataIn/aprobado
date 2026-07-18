@@ -66,6 +66,8 @@ def evaluar_solicitud_prestador(
         modo_datacredito=modo_datacredito,
     )
     if inicio.reutilizada or inicio.en_proceso:
+        if inicio.reutilizada:
+            _crear_revisiones_operativas(inicio.auditoria, solicitado_por)
         return inicio
 
     auditoria = inicio.auditoria
@@ -214,6 +216,7 @@ def _finalizar_evaluacion(*, auditoria, predecision, datacredito, usuario):
             },
             usuario=usuario,
         )
+        _crear_revisiones_operativas(auditoria_bloqueada, usuario)
         return ResultadoEvaluacionFormalPrestador(auditoria=auditoria_bloqueada)
 
     score = predecision.score_resultado
@@ -305,6 +308,13 @@ def _registrar_cierre_timeline(solicitud, auditoria, usuario):
             visible_cliente=True,
             usuario=usuario,
         )
+    _crear_revisiones_operativas(auditoria, usuario)
+
+
+def _crear_revisiones_operativas(auditoria, usuario):
+    from contractors.services.revision_manual import crear_revisiones_para_auditoria
+
+    return crear_revisiones_para_auditoria(auditoria, usuario=usuario)
 
 
 def _snapshot_datacredito_allowlist(resultado):

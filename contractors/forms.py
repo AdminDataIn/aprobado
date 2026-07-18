@@ -3,12 +3,15 @@ import re
 
 from django import forms
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 
 from contractors.models import (
     ContractorApplication,
     ContractorApplicationDocument,
     MAPA_CAMPOS_DOCUMENTOS_PRESTADOR,
+    RequerimientoSubsanacionPrestador,
+    RevisionManualPrestador,
 )
 from gestion_creditos.models import Empresa
 
@@ -423,3 +426,114 @@ class CambiarEstadoPrestadorForm(forms.Form):
         ),
         widget=forms.Select(attrs={'class': 'campo'}),
     )
+
+
+class AccionRevisionPrestadorForm(forms.Form):
+    class Accion:
+        ASIGNAR = 'ASIGNAR'
+        INICIAR = 'INICIAR'
+        SOLICITAR_SUBSANACION = 'SOLICITAR_SUBSANACION'
+        VALIDAR_EMPRESA = 'VALIDAR_EMPRESA'
+        REINTENTAR = 'REINTENTAR'
+        RESOLVER = 'RESOLVER'
+        CANCELAR = 'CANCELAR'
+
+    accion = forms.ChoiceField(choices=(
+        (Accion.ASIGNAR, 'Asignar revision'),
+        (Accion.INICIAR, 'Iniciar analisis'),
+        (Accion.SOLICITAR_SUBSANACION, 'Solicitar subsanacion'),
+        (Accion.VALIDAR_EMPRESA, 'Solicitar validacion de empresa'),
+        (Accion.REINTENTAR, 'Reintentar evaluacion'),
+        (Accion.RESOLVER, 'Resolver revision'),
+        (Accion.CANCELAR, 'Cancelar revision'),
+    ))
+    asignado_a = forms.ModelChoiceField(queryset=get_user_model().objects.none(), required=False)
+    tipo_subsanacion = forms.ChoiceField(
+        choices=RequerimientoSubsanacionPrestador.Tipo.choices,
+        required=False,
+    )
+    resultado = forms.ChoiceField(
+        choices=RevisionManualPrestador.Resultado.choices,
+        required=False,
+    )
+    comentario_interno = forms.CharField(
+        required=False,
+        max_length=2000,
+        widget=forms.Textarea(attrs={'rows': 3}),
+    )
+
+    def __init__(self, *args, usuarios_asignables=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        ids = [usuario.pk for usuario in usuarios_asignables]
+        self.fields['asignado_a'].queryset = get_user_model().objects.filter(pk__in=ids)
+
+    def clean(self):
+        cleaned = super().clean()
+        accion = cleaned.get('accion')
+        if accion == self.Accion.SOLICITAR_SUBSANACION and not cleaned.get('tipo_subsanacion'):
+            self.add_error('tipo_subsanacion', 'Selecciona el tipo de subsanacion.')
+        if accion == self.Accion.RESOLVER and not cleaned.get('resultado'):
+            self.add_error('resultado', 'Selecciona el resultado de la revision.')
+        return cleaned
+
+
+class AtenderSubsanacionPrestadorForm(forms.Form):
+    CAMPOS_PERSONALES = ('nombres', 'apellidos', 'celular', 'correo', 'direccion')
+    CAMPOS_CONTRACTUALES = (
+        'cargo', 'tipo_contrato', 'fecha_inicio_contrato', 'fecha_fin_contrato',
+        'duracion_contrato_meses', 'estado_contractual_declarado',
+        'valor_total_contrato', 'valor_pagado_contrato', 'valor_pendiente_cobrar',
+        'observaciones_contrato',
+    )
+
+    def __init__(self, *args, requerimiento, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.requerimiento = requerimiento
+        tipo = requerimiento.tipo
+        if tipo in {
+            RequerimientoSubsanacionPrestador.Tipo.NUEVO_CONTRATO,
+            RequerimientoSubsanacionPrestador.Tipo.ACTUALIZAR_CONTRATO,
+            RequerimientoSubsanacionPrestador.Tipo.DOCUMENTO_CONTRACTUAL,
+        }:
+            self.fields['archivo'] = forms.FileField(
+                label='Contrato vigente en PDF',
+                widget=forms.FileInput(attrs={'accept': 'application/pdf'}),
+            )
+        elif tipo == RequerimientoSubsanacionPrestador.Tipo.DOCUMENTO_IDENTIDAD:
+            self.fields['tipo_documento_carga'] = forms.ChoiceField(
+                label='Cara del documento',
+                choices=(
+                    (ContractorApplicationDocument.TipoDocumento.CEDULA_FRONTAL, 'Cedula frontal'),
+                    (ContractorApplicationDocument.TipoDocumento.CEDULA_TRASERA, 'Cedula trasera'),
+                ),
+            )
+            self.fields['archivo'] = forms.FileField(
+                label='Imagen del documento',
+                widget=forms.FileInput(attrs={'accept': 'image/jpeg,image/png'}),
+            )
+        elif tipo == RequerimientoSubsanacionPrestador.Tipo.CERTIFICACION_BANCARIA:
+            self.fields['archivo'] = forms.FileField(
+                label='Certificacion bancaria en PDF',
+                widget=forms.FileInput(attrs={'accept': 'application/pdf'}),
+            )
+        elif tipo == RequerimientoSubsanacionPrestador.Tipo.INFORMACION_PERSONAL:
+            self._agregar_campos_modelo(self.CAMPOS_PERSONALES)
+        elif tipo == RequerimientoSubsanacionPrestador.Tipo.INFORMACION_CONTRACTUAL:
+            self._agregar_campos_modelo(self.CAMPOS_CONTRACTUALES)
+
+    def _agregar_campos_modelo(self, nombres):
+        solicitud = self.requerimiento.solicitud
+        for nombre in nombres:
+            campo_modelo = ContractorApplication._meta.get_field(nombre)
+            campo = campo_modelo.formfield()
+            campo.required = False
+            campo.initial = getattr(solicitud, nombre)
+            self.fields[nombre] = campo
+
+    @property
+    def campos_actualizables(self):
+        if self.requerimiento.tipo == RequerimientoSubsanacionPrestador.Tipo.INFORMACION_PERSONAL:
+            return self.CAMPOS_PERSONALES
+        if self.requerimiento.tipo == RequerimientoSubsanacionPrestador.Tipo.INFORMACION_CONTRACTUAL:
+            return self.CAMPOS_CONTRACTUALES
+        return ()

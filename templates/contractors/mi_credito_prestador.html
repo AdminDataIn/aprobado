@@ -28,7 +28,7 @@
               {% elif solicitud.estado == 'EVALUACION_PENDIENTE' %}Evaluación pendiente
               {% elif solicitud.estado == 'EN_EVALUACION' %}En evaluación
               {% elif solicitud.estado == 'EVALUACION_COMPLETADA' %}Evaluación completada
-              {% elif solicitud.estado == 'EN_REVISION' %}Revisión manual
+              {% elif solicitud.estado == 'EN_REVISION_MANUAL' %}Revisión manual
               {% else %}Requiere validación{% endif %}
             </span>
             <a class="boton boton-secundario contractors-new-request" href="{% url 'contractors:solicitar' %}">Nueva solicitud</a>
@@ -41,13 +41,17 @@
           <div class="review-state-icon" aria-hidden="true"><strong>#{{ solicitud.id }}</strong></div>
           <div class="review-state-content">
             <span class="review-state-badge">Estado de la solicitud</span>
+            {% if estado_publico_principal %}
+            <h2 id="estado-solicitud-title">{{ estado_publico_principal.titulo }}</h2>
+            <p>{{ estado_publico_principal.detalle }}</p>
+            {% else %}
             <h2 id="estado-solicitud-title">
               {% if solicitud.estado == 'DOCUMENTOS_PENDIENTES' %}Completa la documentación de tu solicitud
               {% elif solicitud.estado == 'DOCUMENTOS_CARGADOS' %}Recibimos tu documentación
               {% elif solicitud.estado == 'EVALUACION_PENDIENTE' %}Tu solicitud está pendiente de evaluación
               {% elif solicitud.estado == 'EN_EVALUACION' %}Tu solicitud está en evaluación
               {% elif solicitud.estado == 'EVALUACION_COMPLETADA' %}La evaluación operativa fue completada
-              {% elif solicitud.estado == 'EN_REVISION' %}Tu solicitud requiere revisión manual
+              {% elif solicitud.estado == 'EN_REVISION_MANUAL' %}Tu solicitud requiere revisión manual
               {% else %}Tu solicitud requiere validación{% endif %}
             </h2>
             <p>
@@ -57,6 +61,7 @@
                 Revisa la información pendiente y completa la simulación para registrar las condiciones solicitadas.
               {% endif %}
             </p>
+            {% endif %}
           </div>
           <div class="review-state-time">
             <small>Etapa actual</small>
@@ -66,7 +71,7 @@
               {% elif solicitud.estado == 'EVALUACION_PENDIENTE' %}Evaluación pendiente
               {% elif solicitud.estado == 'EN_EVALUACION' %}Evaluación
               {% elif solicitud.estado == 'EVALUACION_COMPLETADA' %}Evaluación completada
-              {% elif solicitud.estado == 'EN_REVISION' %}Revisión manual
+              {% elif solicitud.estado == 'EN_REVISION_MANUAL' %}Revisión manual
               {% else %}Validación{% endif %}
             </strong>
             <span>Consulta aquí los avances</span>
@@ -101,7 +106,9 @@
         </div>
 
         <div class="contractors-credit-actions">
-          {% if progreso.porcentaje < 100 %}
+          {% if estado_publico_principal.requerimiento %}
+            <a class="boton" href="{% url 'contractors:atender_subsanacion' solicitud.id estado_publico_principal.requerimiento.id %}">Atender requerimiento</a>
+          {% elif progreso.porcentaje < 100 %}
             <a class="boton" href="{% url 'contractors:solicitar' %}?solicitud_id={{ solicitud.id }}">Continuar solicitud</a>
           {% elif not solicitud.monto_solicitado or not solicitud.plazo_meses %}
             <a class="boton" href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">Simular</a>

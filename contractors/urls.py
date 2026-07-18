@@ -27,11 +27,21 @@ urlpatterns = [
     path('simular/', views.simular_prestador_view, name='simular'),
     path('simular/calcular/', views.calcular_simulacion_prestador_view, name='calcular_simulacion'),
     path('mi-credito/', views.mi_credito_prestador_view, name='mi_credito'),
+    path(
+        'mi-credito/solicitud/<int:solicitud_id>/subsanacion/<int:requerimiento_id>/',
+        views.atender_subsanacion_prestador_view,
+        name='atender_subsanacion',
+    ),
     path('terminos-y-condiciones/', views.legal_prestadores_view, {'seccion': 'terminos'}, name='terminos'),
     path('politica-de-privacidad/', views.legal_prestadores_view, {'seccion': 'privacidad'}, name='privacidad'),
     path('centrales-de-informacion/', views.legal_prestadores_view, {'seccion': 'centrales'}, name='centrales_informacion'),
     path('gestion/prestadores/', views_admin.bandeja_prestadores_view, name='admin_bandeja'),
     path('gestion/prestadores/<int:solicitud_id>/', views_admin.detalle_prestador_view, name='admin_detalle'),
+    path(
+        'gestion/prestadores/revisiones/<int:revision_id>/accion/',
+        views_admin.accion_revision_prestador_view,
+        name='admin_accion_revision',
+    ),
     path(
         'gestion/prestadores/documentos/<int:documento_id>/descargar/',
         views_admin.descargar_documento_prestador_staff_view,

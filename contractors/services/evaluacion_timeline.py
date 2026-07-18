@@ -14,6 +14,10 @@ CLAVES_METADATA_PERMITIDAS = {
     'reutilizado',
     'error_codigo',
     'version_datos',
+    'revision_id',
+    'requerimiento_id',
+    'tipo',
+    'actor_id',
 }
 
 

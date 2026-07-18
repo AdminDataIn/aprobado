@@ -1,209 +1,130 @@
 {% extends "contractors/base.html" %}
-{% block title %}Detalle Prestador | Aprobado{% endblock %}
+{% block title %}Detalle de revision | Aprobado{% endblock %}
 {% block content %}
 <section class="hero">
-  <p class="eyebrow">Detalle interno</p>
+  <p class="eyebrow">Detalle interno Aprobado</p>
   <h1>Solicitud #{{ solicitud.id }}</h1>
   <p>{{ solicitud.nombre_completo }} - {{ solicitud.empresa.nombre }}</p>
 </section>
 
 <main class="contenedor">
   <section class="grid-3">
-    <article class="panel tarjeta-resumen">
-      <span class="dato-label">Estado</span>
-      <strong>{{ solicitud.get_estado_display }}</strong>
-      <span>Operacion interna</span>
-    </article>
-    <article class="panel tarjeta-resumen">
-      <span class="dato-label">Documentos</span>
-      <strong>{{ progreso_documental.cargados }}/{{ progreso_documental.total }}</strong>
-      <span>{{ progreso_documental.porcentaje }}% cargado</span>
-    </article>
-    <article class="panel tarjeta-resumen">
-      <span class="dato-label">Predecision</span>
-      <strong>{{ predecision.resultado }}</strong>
-      <span>Informativa interna</span>
-    </article>
+    <article class="panel tarjeta-resumen"><span class="dato-label">Estado</span><strong>{{ solicitud.get_estado_display }}</strong></article>
+    <article class="panel tarjeta-resumen"><span class="dato-label">Documentos</span><strong>{{ progreso_documental.cargados }}/{{ progreso_documental.total }}</strong></article>
+    <article class="panel tarjeta-resumen"><span class="dato-label">Resultado read-only</span><strong>{% if auditoria %}{{ auditoria.get_resultado_display }}{% else %}Sin evaluacion formal{% endif %}</strong></article>
   </section>
 
   <section class="panel">
-    <h2 class="titulo-seccion">Datos de la solicitud</h2>
+    <h2 class="titulo-seccion">Datos basicos sanitizados</h2>
     <div class="grid-2 datos-grid">
-      <div class="dato"><span>Usuario</span><strong>{{ solicitud.usuario.email|default:solicitud.usuario.username }}</strong></div>
       <div class="dato"><span>Prestador</span><strong>{{ solicitud.nombre_completo }}</strong></div>
-      <div class="dato"><span>Documento</span><strong>{{ solicitud.tipo_documento }} {{ solicitud.numero_documento }}</strong></div>
-      <div class="dato"><span>Celular</span><strong>{{ solicitud.celular }}</strong></div>
-      <div class="dato"><span>Correo</span><strong>{{ solicitud.correo }}</strong></div>
-      <div class="dato"><span>Direccion</span><strong>{{ solicitud.direccion }}</strong></div>
+      <div class="dato"><span>Documento</span><strong>{{ documento_enmascarado }}</strong></div>
       <div class="dato"><span>Empresa</span><strong>{{ solicitud.empresa.nombre }}</strong></div>
       <div class="dato"><span>Cargo o actividad</span><strong>{{ solicitud.cargo }}</strong></div>
-      <div class="dato"><span>Tipo de contrato</span><strong>{{ solicitud.get_tipo_contrato_display }}</strong></div>
-      <div class="dato"><span>Escenario</span><strong>{{ solicitud.get_escenario_credito_display }}</strong></div>
-      <div class="dato"><span>Fecha solicitud</span><strong>{{ solicitud.created_at|date:"Y-m-d" }}</strong></div>
-      <div class="dato"><span>Última actualización</span><strong>{{ solicitud.updated_at|date:"Y-m-d H:i" }}</strong></div>
+      <div class="dato"><span>Estado contractual</span><strong>{{ solicitud.get_estado_contractual_declarado_display }}</strong></div>
+      <div class="dato"><span>Fechas</span><strong>{{ solicitud.fecha_inicio_contrato|default:"Pendiente" }} - {{ solicitud.fecha_fin_contrato|default:"No determinable" }}</strong></div>
+      <div class="dato"><span>Valor total</span><strong>{{ solicitud.valor_total_contrato|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Valor pagado</span><strong>{{ solicitud.valor_pagado_contrato|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Valor pendiente</span><strong>{{ solicitud.valor_pendiente_cobrar|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Monto / plazo solicitado</span><strong>{{ solicitud.monto_solicitado|default:"Pendiente" }} / {{ solicitud.plazo_meses|default:"Pendiente" }} meses</strong></div>
     </div>
-  </section>
-
-  <section class="panel">
-    <h2 class="titulo-seccion">Datos contractuales</h2>
-    <div class="grid-2 datos-grid">
-      <div class="dato"><span>Fecha inicio</span><strong>{{ solicitud.fecha_inicio_contrato|default:"Pendiente" }}</strong></div>
-      <div class="dato"><span>Fecha fin</span><strong>{{ solicitud.fecha_fin_contrato|default:"Pendiente" }}</strong></div>
-      <div class="dato"><span>Valor total contrato</span><strong>{{ solicitud.valor_total_contrato|default:"Pendiente" }}</strong></div>
-      <div class="dato"><span>Valor pagado del contrato</span><strong>{{ solicitud.valor_pagado_contrato|default:"Pendiente" }}</strong></div>
-      <div class="dato"><span>Valor pendiente por cobrar</span><strong>{{ solicitud.valor_pendiente_cobrar|default:"Pendiente" }}</strong></div>
-      <div class="dato"><span>Monto solicitado</span><strong>{{ solicitud.monto_solicitado|default:"Pendiente" }}</strong></div>
-      <div class="dato"><span>Plazo solicitado</span><strong>{{ solicitud.plazo_meses|default:"Pendiente" }} meses</strong></div>
-      <div class="dato"><span>Observaciones</span><strong>{{ solicitud.observaciones_contrato|default:"Sin observaciones" }}</strong></div>
-    </div>
-  </section>
-
-  <section class="panel">
-    <h2 class="titulo-seccion">Autorizaciones registradas</h2>
-    <div class="grid-2 datos-grid">
-      <div class="dato"><span>Términos y condiciones</span><strong>{% if solicitud.acepta_terminos %}Aceptados{% else %}No aceptados{% endif %}</strong></div>
-      <div class="dato"><span>Política de privacidad</span><strong>{% if solicitud.acepta_politica_privacidad %}Aceptada{% else %}No aceptada{% endif %}</strong></div>
-      <div class="dato"><span>Análisis contractual asistido</span><strong>{% if solicitud.autoriza_analisis_contractual_asistido %}Autorizado{% else %}No autorizado{% endif %}</strong></div>
-      <div class="dato"><span>Consulta futura a centrales</span><strong>{% if solicitud.autoriza_consulta_centrales %}Autorizada{% else %}No autorizada{% endif %}</strong></div>
-    </div>
-    <p class="subtitulo-seccion">Este registro no ejecuta consultas externas ni decisiones financieras.</p>
   </section>
 
   <section class="panel">
     <h2 class="titulo-seccion">Análisis contractual asistido</h2>
     <div class="grid-3 datos-grid">
-      <div class="dato"><span>Estado</span><strong>{{ solicitud.get_estado_analisis_contractual_display }}</strong></div>
-      <div class="dato"><span>Fecha</span><strong>{{ solicitud.fecha_analisis_contractual|date:"Y-m-d H:i"|default:"No ejecutado" }}</strong></div>
-      <div class="dato"><span>Confianza</span><strong>{{ solicitud.metadata_analisis_contractual.confianza_general|default:"0.00" }}</strong></div>
+      <div class="dato"><span>Estado</span><strong>{{ analisis_contractual_detalle.estado }}</strong></div>
+      <div class="dato"><span>Fecha</span><strong>{{ analisis_contractual_detalle.fecha|date:"Y-m-d H:i"|default:"No ejecutado" }}</strong></div>
+      <div class="dato"><span>Confianza</span><strong>{{ analisis_contractual_detalle.confianza }}</strong></div>
     </div>
-    {% with metadata=solicitud.metadata_analisis_contractual %}
-      {% if metadata.empresa_sugerida %}
-        <p><strong>Empresa sugerida:</strong> {{ metadata.empresa_sugerida.nombre }} ({{ metadata.empresa_sugerida.tipo_coincidencia }})</p>
-      {% endif %}
-      {% if metadata.datos_sugeridos %}
-        <div class="grid-2 datos-grid">
-          <div class="dato"><span>Cargo o servicio sugerido</span><strong>{{ metadata.datos_sugeridos.cargo_o_servicio|default:"No detectado" }}</strong></div>
-          <div class="dato"><span>Fecha inicio sugerida</span><strong>{{ metadata.datos_sugeridos.fecha_inicio_contrato|default:"No detectada" }}</strong></div>
-          <div class="dato"><span>Fecha fin sugerida</span><strong>{{ metadata.datos_sugeridos.fecha_fin_contrato|default:"No detectada" }}</strong></div>
-          <div class="dato"><span>Valor total sugerido</span><strong>{{ metadata.datos_sugeridos.valor_total_contrato|default:"No detectado" }}</strong></div>
-        </div>
-      {% endif %}
-      {% if metadata.advertencias %}
-        <h3>Advertencias</h3>
-        <ul class="lista-alertas">{% for advertencia in metadata.advertencias %}<li>{{ advertencia }}</li>{% endfor %}</ul>
-      {% endif %}
-      {% if metadata.bloqueos %}
-        <h3>Bloqueos</h3>
-        <ul class="lista-alertas">{% for bloqueo in metadata.bloqueos %}<li>{{ bloqueo }}</li>{% endfor %}</ul>
-      {% endif %}
-    {% endwith %}
-    <p class="subtitulo-seccion">No se almacena ni se muestra el texto completo del contrato.</p>
+    {% if analisis_contractual_detalle.empresa_sugerida.nombre %}
+      <p><strong>Empresa sugerida:</strong> {{ analisis_contractual_detalle.empresa_sugerida.nombre }}{% if analisis_contractual_detalle.empresa_sugerida.tipo_coincidencia %} ({{ analisis_contractual_detalle.empresa_sugerida.tipo_coincidencia }}){% endif %}</p>
+    {% endif %}
+    {% if analisis_contractual_detalle.advertencias %}<h3>Advertencias</h3><ul class="lista-alertas">{% for item in analisis_contractual_detalle.advertencias %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+    {% if analisis_contractual_detalle.bloqueos %}<h3>Bloqueos</h3><ul class="lista-alertas">{% for item in analisis_contractual_detalle.bloqueos %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
   </section>
 
   <section class="panel">
-    <div class="encabezado-panel">
-      <div>
-        <h2 class="titulo-seccion">Documentos</h2>
-        <p class="subtitulo-seccion">Progreso: {{ progreso_documental.cargados }}/{{ progreso_documental.total }} documentos obligatorios.</p>
-      </div>
+    <h2 class="titulo-seccion">Capacidad contractual preliminar</h2>
+    <div class="grid-3 datos-grid">
+      <div class="dato"><span>Calculable</span><strong>{% if simulacion_preliminar.calculable %}Si{% else %}No{% endif %}</strong></div>
+      <div class="dato"><span>Cuota preliminar</span><strong>{{ simulacion_preliminar.cuota_estimada_preliminar|default:"No calculable" }}</strong></div>
+      <div class="dato"><span>Compromiso</span><strong>{{ simulacion_preliminar.porcentaje_compromiso_valor_pendiente|default:"No calculable" }}</strong></div>
     </div>
-    <div class="progreso" aria-label="Progreso documental">
-      <span style="width: {{ progreso_documental.porcentaje }}%;"></span>
-    </div>
+    {% if simulacion_preliminar.advertencias %}<h3>Advertencias</h3><ul class="lista-alertas">{% for item in simulacion_preliminar.advertencias %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+    {% if simulacion_preliminar.bloqueos %}<h3>Bloqueos</h3><ul class="lista-alertas">{% for item in simulacion_preliminar.bloqueos %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+  </section>
+
+  <section class="panel">
+    <h2 class="titulo-seccion">Documentos</h2>
     <div class="lista-documentos">
       {% for tipo, etiqueta, documento in estado_documentos %}
-        <article class="documento {% if documento %}cargado{% endif %}">
-          <div>
-            <strong>{{ etiqueta }}</strong>
-            {% if documento %}
-              <p><span class="estado-pill estado-ok">Cargado</span></p>
-            {% else %}
-              <p><span class="estado-pill estado-warn">Pendiente</span></p>
-            {% endif %}
-          </div>
-          {% if documento %}
-            <a class="boton boton-secundario" href="{% url 'contractors:admin_descargar_documento' documento.id %}">Abrir documento</a>
-          {% endif %}
-        </article>
+        <article class="documento {% if documento %}cargado{% endif %}"><div><strong>{{ etiqueta }}</strong><p>{% if documento %}Cargado{% else %}Pendiente{% endif %}</p></div>{% if documento %}<a class="boton boton-secundario" href="{% url 'contractors:admin_descargar_documento' documento.id %}">Abrir documento</a>{% endif %}</article>
       {% endfor %}
     </div>
-    {% if documentos_pendientes %}
-      <p class="alerta">Pendientes: {{ documentos_pendientes|join:", " }}</p>
-    {% endif %}
   </section>
 
   <section class="panel alerta-info">
-    <h2 class="titulo-seccion">Predecision informativa interna</h2>
-    <p>No constituye aprobacion, originacion, pagare ni desembolso.</p>
-    <div class="grid-3">
-      <article class="tarjeta-resumen">
-        <span class="dato-label">Resultado</span>
-        <strong>{{ predecision.resultado }}</strong>
-        <span>Read-only</span>
-      </article>
-      <article class="tarjeta-resumen">
-        <span class="dato-label">Puntaje informativo</span>
-        <strong>{{ predecision.puntaje_informativo|default:"No calculable" }}</strong>
-        <span>No productivo</span>
-      </article>
-      <article class="tarjeta-resumen">
-        <span class="dato-label">Fuente</span>
-        <strong>Preliminar</strong>
-        <span>Sin DataCredito ni risk avanzado</span>
-      </article>
-    </div>
-    <p>{{ predecision.resumen }}</p>
-    {% if predecision.razones %}
-      <h3>Razones</h3>
-      <ul class="lista-alertas">{% for razon in predecision.razones %}<li>{{ razon }}</li>{% endfor %}</ul>
-    {% endif %}
-    {% if predecision.alertas %}
-      <h3>Alertas</h3>
-      <ul class="lista-alertas">{% for alerta in predecision.alertas %}<li>{{ alerta }}</li>{% endfor %}</ul>
-    {% endif %}
-    {% if predecision.datos_faltantes %}
-      <h3>Datos faltantes</h3>
-      <ul class="lista-alertas">{% for faltante in predecision.datos_faltantes %}<li>{{ faltante }}</li>{% endfor %}</ul>
-    {% endif %}
+    <h2 class="titulo-seccion">Ultima predecision auditada</h2>
+    <p><strong>No constituye aprobacion, originacion ni desembolso.</strong></p>
+    {% if auditoria_detalle %}
+      <p>Resultado: <strong>{{ auditoria_detalle.resultado }}</strong></p>
+      <p>{{ auditoria_detalle.resumen }}</p>
+      {% if auditoria_detalle.razones %}<h3>Razones controladas</h3><ul class="lista-alertas">{% for item in auditoria_detalle.razones %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+      {% if auditoria_detalle.alertas %}<h3>Alertas controladas</h3><ul class="lista-alertas">{% for item in auditoria_detalle.alertas %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+      {% if auditoria_detalle.bloqueos %}<h3>Bloqueos controlados</h3><ul class="lista-alertas">{% for item in auditoria_detalle.bloqueos %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+      {% if puede_ver_score %}<p>Score interno: <strong>{{ auditoria_detalle.score|default:"No disponible" }}</strong></p>{% endif %}
+    {% else %}<p>No existe evaluacion formal auditada.</p>{% endif %}
   </section>
 
   <section class="panel">
-    <h2 class="titulo-seccion">Simulacion preliminar read-only</h2>
-    {% if simulacion_preliminar.calculable %}
-      <div class="grid-2">
-        <article class="tarjeta-resumen">
-          <span class="dato-label">Cuota estimada preliminar</span>
-          <strong>{{ simulacion_preliminar.cuota_estimada_preliminar }}</strong>
-        </article>
-        <article class="tarjeta-resumen">
-          <span class="dato-label">Porcentaje sobre valor pendiente</span>
-          <strong>{{ simulacion_preliminar.porcentaje_compromiso_valor_pendiente|default:"No calculable" }}%</strong>
-        </article>
-      </div>
-    {% else %}
-      <p class="alerta">No se puede calcular con los datos actuales.</p>
-    {% endif %}
-    {% if simulacion_preliminar.advertencias %}
-      <h3>Advertencias</h3>
-      <ul class="lista-alertas">{% for advertencia in simulacion_preliminar.advertencias %}<li>{{ advertencia }}</li>{% endfor %}</ul>
-    {% endif %}
-    {% if simulacion_preliminar.bloqueos %}
-      <h3>Datos pendientes</h3>
-      <ul class="lista-alertas">{% for bloqueo in simulacion_preliminar.bloqueos %}<li>{{ bloqueo }}</li>{% endfor %}</ul>
-    {% endif %}
+    <h2 class="titulo-seccion">Revisiones manuales</h2>
+    {% for revision in revisiones %}
+      <article class="documento">
+        <div>
+          <strong>#{{ revision.id }} - {{ revision.get_motivo_display }}</strong>
+          <p>{{ revision.get_estado_display }} | {{ revision.get_prioridad_display }} | {% if revision.asignado_a %}{{ revision.asignado_a.get_username }}{% else %}Sin asignar{% endif %}</p>
+        </div>
+        {% if revision.estado != 'RESUELTA' and revision.estado != 'CANCELADA' %}
+        <form method="post" action="{% url 'contractors:admin_accion_revision' revision.id %}" class="formulario-compacto">
+          {% csrf_token %}
+          {% if puede_asignar %}
+            <label>Asignar a <select name="asignado_a" class="campo"><option value="">Asignarme</option>{% for usuario in usuarios_asignables %}<option value="{{ usuario.id }}">{{ usuario.get_username }}</option>{% endfor %}</select></label>
+            <button class="boton boton-secundario" name="accion" value="ASIGNAR">Asignar revision</button>
+          {% endif %}
+          {% if puede_resolver %}<button class="boton boton-secundario" name="accion" value="INICIAR">Iniciar analisis</button><button class="boton boton-secundario" name="accion" value="REINTENTAR">Reintentar evaluacion</button>{% endif %}
+        </form>
+        {% if puede_solicitar %}
+        <form method="post" action="{% url 'contractors:admin_accion_revision' revision.id %}" class="formulario-compacto">
+          {% csrf_token %}<input type="hidden" name="accion" value="SOLICITAR_SUBSANACION">
+          <label>Subsanacion <select name="tipo_subsanacion" class="campo">{% for value, label in tipos_subsanacion %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+          <label>Detalle interno <textarea name="comentario_interno" class="campo" rows="2"></textarea></label>
+          <button class="boton" type="submit">Solicitar correccion</button>
+        </form>
+        <form method="post" action="{% url 'contractors:admin_accion_revision' revision.id %}">{% csrf_token %}<input type="hidden" name="accion" value="VALIDAR_EMPRESA"><button class="boton boton-secundario">Solicitar validacion empresa</button></form>
+        {% endif %}
+        {% if puede_resolver %}
+        <form method="post" action="{% url 'contractors:admin_accion_revision' revision.id %}" class="formulario-compacto">
+          {% csrf_token %}<input type="hidden" name="accion" value="RESOLVER">
+          <label>Resultado <select name="resultado" class="campo">{% for value, label in resultados_revision %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+          <label>Comentario interno <textarea name="comentario_interno" class="campo" rows="2"></textarea></label>
+          <button class="boton" type="submit">Resolver</button>
+        </form>
+        {% endif %}
+        {% endif %}
+      </article>
+    {% empty %}<p>No hay revisiones registradas.</p>{% endfor %}
   </section>
 
   <section class="panel">
-    <h2 class="titulo-seccion">Cambio manual de estado</h2>
-    <p class="subtitulo-seccion">Accion operativa limitada a estados no financieros.</p>
-    <form method="post" class="formulario-compacto">
-      {% csrf_token %}
-      {{ form_estado.as_p }}
-      <div class="acciones">
-        <button class="boton" type="submit">Actualizar estado</button>
-        <a class="boton boton-secundario" href="{% url 'contractors:admin_bandeja' %}">Volver a bandeja</a>
-      </div>
-    </form>
+    <h2 class="titulo-seccion">Requerimientos de subsanacion</h2>
+    <div class="tabla-responsive"><table class="tabla"><thead><tr><th>Tipo</th><th>Estado</th><th>Mensaje publico</th><th>Fecha</th></tr></thead><tbody>{% for item in requerimientos %}<tr><td>{{ item.get_tipo_display }}</td><td>{{ item.get_estado_display }}</td><td>{{ item.mensaje_publico }}</td><td>{{ item.creado_en|date:"Y-m-d H:i" }}</td></tr>{% empty %}<tr><td colspan="4">Sin requerimientos.</td></tr>{% endfor %}</tbody></table></div>
   </section>
+
+  <section class="panel">
+    <h2 class="titulo-seccion">Timeline operativo</h2>
+    <div class="tabla-responsive"><table class="tabla"><thead><tr><th>Fecha</th><th>Evento</th><th>Usuario</th><th>Descripcion</th></tr></thead><tbody>{% for evento in timeline %}<tr><td>{{ evento.created_at|date:"Y-m-d H:i" }}</td><td>{{ evento.get_tipo_evento_display }}</td><td>{{ evento.creado_por.get_username|default:"Sistema" }}</td><td>{{ evento.descripcion }}</td></tr>{% empty %}<tr><td colspan="4">Sin eventos.</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+  <a class="boton boton-secundario" href="{% url 'contractors:admin_bandeja' %}">Volver a bandeja</a>
 </main>
 {% endblock %}

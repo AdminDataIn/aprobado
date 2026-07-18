@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import redirect, render
@@ -13,11 +14,17 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from contractors.forms import DocumentoPrestadorForm, SimulacionPrestadorForm, SolicitudPrestadorForm
+from contractors.forms import (
+    AtenderSubsanacionPrestadorForm,
+    DocumentoPrestadorForm,
+    SimulacionPrestadorForm,
+    SolicitudPrestadorForm,
+)
 from contractors.models import (
     ContractorApplication,
     ContractorApplicationDocument,
     DOCUMENTOS_OBLIGATORIOS_PRESTADOR,
+    RequerimientoSubsanacionPrestador,
 )
 from contractors.services.capacidad_contractual import (
     evaluar_capacidad_contractual_preliminar,
@@ -44,6 +51,8 @@ from contractors.services.evaluacion_versionado import construir_version_datos
 from contractors.services.autorizacion_datacredito import (
     registrar_autorizacion_datacredito_desde_solicitud,
 )
+from contractors.services.presentacion_solicitud import construir_estado_publico_solicitud
+from contractors.services.subsanacion import atender_requerimiento_subsanacion
 
 
 CLAVE_SESION_ANALISIS_CONTRATO = 'contractors_analisis_contrato_v1'
@@ -631,7 +640,10 @@ def mi_credito_prestador_view(request):
         ContractorApplication.objects
         .filter(usuario=request.user)
         .select_related('empresa')
-        .prefetch_related('documentos')
+        .prefetch_related(
+            'documentos', 'auditorias_predecision', 'requerimientos_subsanacion',
+            'revisiones_manuales',
+        )
         .order_by('-created_at', '-id')
     )
     solicitudes_con_progreso = [
@@ -639,6 +651,13 @@ def mi_credito_prestador_view(request):
         for solicitud in solicitudes
     ]
     solicitud_principal = solicitudes_con_progreso[0] if solicitudes_con_progreso else None
+    estados_publicos = {
+        solicitud.id: construir_estado_publico_solicitud(solicitud)
+        for solicitud, _progreso in solicitudes_con_progreso
+    }
+    estado_publico_principal = (
+        estados_publicos.get(solicitud_principal[0].id) if solicitud_principal else None
+    )
     return render(
         request,
         'contractors/mi_credito_prestador.html',
@@ -646,7 +665,56 @@ def mi_credito_prestador_view(request):
             'solicitudes_con_progreso': solicitudes_con_progreso,
             'solicitud_principal': solicitud_principal,
             'solicitudes_anteriores': solicitudes_con_progreso[1:],
+            'estados_publicos': estados_publicos,
+            'estado_publico_principal': estado_publico_principal,
         },
+    )
+
+
+@login_required
+def atender_subsanacion_prestador_view(request, solicitud_id, requerimiento_id):
+    try:
+        requerimiento = (
+            RequerimientoSubsanacionPrestador.objects
+            .select_related('solicitud', 'revision')
+            .get(
+                id=requerimiento_id,
+                solicitud_id=solicitud_id,
+                solicitud__usuario=request.user,
+            )
+        )
+    except RequerimientoSubsanacionPrestador.DoesNotExist as exc:
+        raise Http404('Requerimiento no encontrado.') from exc
+
+    if request.method == 'POST':
+        form = AtenderSubsanacionPrestadorForm(
+            request.POST,
+            request.FILES,
+            requerimiento=requerimiento,
+        )
+        if form.is_valid():
+            try:
+                atender_requerimiento_subsanacion(
+                    requerimiento,
+                    form=form,
+                    usuario=request.user,
+                )
+            except ValidationError as exc:
+                form.add_error(None, str(exc))
+            except Exception:
+                form.add_error(None, 'No fue posible registrar la informacion. Intenta nuevamente.')
+            else:
+                messages.success(
+                    request,
+                    'La informacion fue registrada y quedo pendiente de validacion interna.',
+                )
+                return redirect('contractors:mi_credito')
+    else:
+        form = AtenderSubsanacionPrestadorForm(requerimiento=requerimiento)
+    return render(
+        request,
+        'contractors/atender_subsanacion_prestador.html',
+        {'requerimiento': requerimiento, 'solicitud': requerimiento.solicitud, 'form': form},
     )
 
 

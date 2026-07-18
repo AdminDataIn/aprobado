@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -14,6 +15,7 @@ from contractors.models import (
     ConfiguracionSimuladorPrestador,
     ContractorApplication,
     ContractorApplicationDocument,
+    RevisionManualPrestador,
     TimelinePrestador,
 )
 from contractors.forms import SolicitudPrestadorForm
@@ -51,6 +53,15 @@ class PortalMinimoPrestadoresTest(TestCase):
             password='123456',
             is_staff=True,
         )
+        self.staff.user_permissions.add(*Permission.objects.filter(
+            codename__in=[
+                'can_view_contractor_review_queue',
+                'can_assign_contractor_review',
+                'can_resolve_contractor_review',
+                'can_request_contractor_correction',
+                'can_view_contractor_score_details',
+            ]
+        ))
         self.empresa = Empresa.objects.create(
             nombre='Empresa Convenio',
             convenio_activo=True,
@@ -1316,15 +1327,19 @@ class PortalMinimoPrestadoresTest(TestCase):
 
     def test_staff_accede_a_bandeja_y_ve_solicitud(self):
         solicitud = self._crear_solicitud(self.usuario)
+        RevisionManualPrestador.objects.create(
+            solicitud=solicitud,
+            motivo=RevisionManualPrestador.Motivo.OTRA_REVISION_CONTROLADA,
+        )
         self.client.force_login(self.staff)
 
         response = self.client.get('/gestion/prestadores/', HTTP_HOST=self.host)
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, f'#{solicitud.id}')
-        self.assertContains(response, solicitud.nombre_completo)
+        self.assertContains(response, 'P.')
         self.assertContains(response, solicitud.empresa.nombre)
-        self.assertContains(response, 'Ver detalle')
+        self.assertContains(response, 'Ver evaluacion')
 
     def test_staff_accede_al_detalle(self):
         solicitud = self._crear_solicitud(self.usuario)
@@ -1333,12 +1348,11 @@ class PortalMinimoPrestadoresTest(TestCase):
         response = self.client.get(f'/gestion/prestadores/{solicitud.id}/', HTTP_HOST=self.host)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Datos de la solicitud')
-        self.assertContains(response, 'Datos contractuales')
-        self.assertContains(response, 'Simulacion preliminar read-only')
-        self.assertContains(response, 'Predecision informativa interna')
-        self.assertContains(response, 'Autorizaciones registradas')
-        self.assertContains(response, 'Consulta futura a centrales')
+        self.assertContains(response, 'Datos basicos sanitizados')
+        self.assertContains(response, 'Capacidad contractual preliminar')
+        self.assertContains(response, 'Ultima predecision auditada')
+        self.assertContains(response, 'Revisiones manuales')
+        self.assertNotContains(response, solicitud.numero_documento)
 
     def test_staff_puede_ver_documentos_cargados(self):
         solicitud = self._crear_solicitud(self.usuario)
@@ -1360,37 +1374,45 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertContains(detalle, 'Abrir documento')
         self.assertEqual(descarga.status_code, 200)
 
-    def test_staff_puede_cambiar_estado_a_en_revision(self):
+    def test_staff_puede_iniciar_revision_sin_crear_credito(self):
         solicitud = self._crear_solicitud(self.usuario)
+        revision = RevisionManualPrestador.objects.create(
+            solicitud=solicitud,
+            motivo=RevisionManualPrestador.Motivo.OTRA_REVISION_CONTROLADA,
+        )
         self.client.force_login(self.staff)
         creditos_antes = Credito.objects.count()
         creditos_libranza_antes = CreditoLibranza.objects.count()
 
         response = self.client.post(
-            f'/gestion/prestadores/{solicitud.id}/',
-            {'estado': ContractorApplication.Estado.EN_REVISION_MANUAL},
+            f'/gestion/prestadores/revisiones/{revision.id}/accion/',
+            {'accion': 'INICIAR'},
             HTTP_HOST=self.host,
         )
 
-        solicitud.refresh_from_db()
+        revision.refresh_from_db()
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(solicitud.estado, ContractorApplication.Estado.EN_REVISION_MANUAL)
+        self.assertEqual(revision.estado, RevisionManualPrestador.Estado.EN_ANALISIS)
         self.assertEqual(Credito.objects.count(), creditos_antes)
         self.assertEqual(CreditoLibranza.objects.count(), creditos_libranza_antes)
 
-    def test_usuario_normal_no_puede_cambiar_estado(self):
+    def test_usuario_normal_no_puede_operar_revision(self):
         solicitud = self._crear_solicitud(self.usuario)
+        revision = RevisionManualPrestador.objects.create(
+            solicitud=solicitud,
+            motivo=RevisionManualPrestador.Motivo.OTRA_REVISION_CONTROLADA,
+        )
         self.client.force_login(self.usuario)
 
         response = self.client.post(
-            f'/gestion/prestadores/{solicitud.id}/',
-            {'estado': ContractorApplication.Estado.EN_REVISION_MANUAL},
+            f'/gestion/prestadores/revisiones/{revision.id}/accion/',
+            {'accion': 'INICIAR'},
             HTTP_HOST=self.host,
         )
 
-        solicitud.refresh_from_db()
+        revision.refresh_from_db()
         self.assertEqual(response.status_code, 403)
-        self.assertEqual(solicitud.estado, ContractorApplication.Estado.DOCUMENTOS_PENDIENTES)
+        self.assertEqual(revision.estado, RevisionManualPrestador.Estado.ABIERTA)
 
     def test_predecision_no_evaluable_si_faltan_datos_criticos(self):
         solicitud = self._crear_solicitud(
@@ -1466,7 +1488,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(resultado.datos_faltantes, [])
         self.assertIsNotNone(resultado.puntaje_informativo)
 
-    def test_detalle_staff_muestra_predecision(self):
+    def test_detalle_staff_muestra_espacio_de_predecision_formal(self):
         solicitud = self._crear_solicitud(
             self.usuario,
             valor_total='12000000',
@@ -1481,8 +1503,9 @@ class PortalMinimoPrestadoresTest(TestCase):
         response = self.client.get(f'/gestion/prestadores/{solicitud.id}/', HTTP_HOST=self.host)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'PREAPROBABLE')
-        self.assertContains(response, 'No constituye aprobacion, originacion, pagare ni desembolso.')
+        self.assertContains(response, 'Ultima predecision auditada')
+        self.assertContains(response, 'No constituye aprobacion, originacion ni desembolso.')
+        self.assertNotContains(response, 'Puntaje informativo')
 
     def test_predecision_no_crea_creditos_ni_cambia_estado(self):
         solicitud = self._crear_solicitud(

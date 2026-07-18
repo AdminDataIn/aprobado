@@ -297,6 +297,19 @@ class TimelinePrestador(models.Model):
         DATACREDITO_CONSULTADO = 'DATACREDITO_CONSULTADO', 'DataCrédito consultado'
         DATACREDITO_ERROR = 'DATACREDITO_ERROR', 'Error DataCrédito'
 
+        REVISION_CREADA = 'REVISION_CREADA', 'Revision creada'
+        REVISION_ASIGNADA = 'REVISION_ASIGNADA', 'Revision asignada'
+        REVISION_INICIADA = 'REVISION_INICIADA', 'Revision iniciada'
+        SUBSANACION_SOLICITADA = 'SUBSANACION_SOLICITADA', 'Subsanacion solicitada'
+        SUBSANACION_ATENDIDA = 'SUBSANACION_ATENDIDA', 'Subsanacion atendida'
+        VALIDACION_EMPRESA_SOLICITADA = (
+            'VALIDACION_EMPRESA_SOLICITADA',
+            'Validacion de empresa solicitada',
+        )
+        EVALUACION_REINTENTADA = 'EVALUACION_REINTENTADA', 'Evaluacion reintentada'
+        REVISION_RESUELTA = 'REVISION_RESUELTA', 'Revision resuelta'
+        REVISION_CANCELADA = 'REVISION_CANCELADA', 'Revision cancelada'
+
     solicitud = models.ForeignKey(
         ContractorApplication,
         on_delete=models.PROTECT,
@@ -328,6 +341,220 @@ class TimelinePrestador(models.Model):
 
     def __str__(self):
         return f'{self.tipo_evento} - solicitud {self.solicitud_id}'
+
+
+class RevisionManualPrestador(models.Model):
+    class Estado(models.TextChoices):
+        ABIERTA = 'ABIERTA', 'Abierta'
+        ASIGNADA = 'ASIGNADA', 'Asignada'
+        EN_ANALISIS = 'EN_ANALISIS', 'En analisis'
+        PENDIENTE_SOLICITANTE = 'PENDIENTE_SOLICITANTE', 'Pendiente del solicitante'
+        PENDIENTE_VALIDACION_EMPRESA = (
+            'PENDIENTE_VALIDACION_EMPRESA',
+            'Pendiente de validacion de empresa',
+        )
+        RESUELTA = 'RESUELTA', 'Resuelta'
+        CANCELADA = 'CANCELADA', 'Cancelada'
+
+    class Motivo(models.TextChoices):
+        CONTRATO_NO_DETERMINABLE = 'CONTRATO_NO_DETERMINABLE', 'Contrato no determinable'
+        CONTRATO_SUSPENDIDO = 'CONTRATO_SUSPENDIDO', 'Contrato suspendido'
+        CONTRATO_VENCIDO = 'CONTRATO_VENCIDO', 'Contrato vencido'
+        DOCUMENTOS_INCOMPLETOS = 'DOCUMENTOS_INCOMPLETOS', 'Documentos incompletos'
+        IDENTIDAD_INCONSISTENTE = 'IDENTIDAD_INCONSISTENTE', 'Identidad inconsistente'
+        CAPACIDAD_NO_DETERMINABLE = (
+            'CAPACIDAD_NO_DETERMINABLE',
+            'Capacidad no determinable',
+        )
+        CAPACIDAD_EXCEDIDA = 'CAPACIDAD_EXCEDIDA', 'Capacidad excedida'
+        DATACREDITO_NO_DISPONIBLE = (
+            'DATACREDITO_NO_DISPONIBLE',
+            'Validacion externa no disponible',
+        )
+        DATACREDITO_ERROR = 'DATACREDITO_ERROR', 'Error de validacion externa'
+        DATOS_MODIFICADOS = 'DATOS_MODIFICADOS', 'Datos modificados'
+        POLITICA_INCOMPATIBLE = 'POLITICA_INCOMPATIBLE', 'Politica incompatible'
+        VALIDACION_EMPRESA_REQUERIDA = (
+            'VALIDACION_EMPRESA_REQUERIDA',
+            'Validacion de empresa requerida',
+        )
+        OTRA_REVISION_CONTROLADA = (
+            'OTRA_REVISION_CONTROLADA',
+            'Otra revision controlada',
+        )
+
+    class Prioridad(models.TextChoices):
+        BAJA = 'BAJA', 'Baja'
+        MEDIA = 'MEDIA', 'Media'
+        ALTA = 'ALTA', 'Alta'
+        CRITICA = 'CRITICA', 'Critica'
+
+    class Resultado(models.TextChoices):
+        CONTINUAR_EVALUACION = 'CONTINUAR_EVALUACION', 'Continuar evaluacion'
+        SOLICITAR_NUEVO_CONTRATO = (
+            'SOLICITAR_NUEVO_CONTRATO',
+            'Solicitar nuevo contrato',
+        )
+        SOLICITAR_DOCUMENTO = 'SOLICITAR_DOCUMENTO', 'Solicitar documento'
+        SOLICITAR_CORRECCION_INFORMACION = (
+            'SOLICITAR_CORRECCION_INFORMACION',
+            'Solicitar correccion de informacion',
+        )
+        SOLICITAR_VALIDACION_EMPRESA = (
+            'SOLICITAR_VALIDACION_EMPRESA',
+            'Solicitar validacion de empresa',
+        )
+        MANTENER_BLOQUEO = 'MANTENER_BLOQUEO', 'Mantener bloqueo'
+        CERRAR_SIN_CONTINUAR = 'CERRAR_SIN_CONTINUAR', 'Cerrar sin continuar'
+
+    solicitud = models.ForeignKey(
+        ContractorApplication,
+        on_delete=models.PROTECT,
+        related_name='revisiones_manuales',
+    )
+    auditoria_predecision = models.ForeignKey(
+        PredecisionPrestadorAudit,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='revisiones_manuales',
+    )
+    estado = models.CharField(max_length=36, choices=Estado.choices, default=Estado.ABIERTA)
+    motivo = models.CharField(max_length=40, choices=Motivo.choices)
+    prioridad = models.CharField(
+        max_length=12,
+        choices=Prioridad.choices,
+        default=Prioridad.MEDIA,
+    )
+    asignado_a = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='revisiones_prestador_asignadas',
+    )
+    creada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='revisiones_prestador_creadas',
+    )
+    resuelta_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='revisiones_prestador_resueltas',
+    )
+    comentario_interno = models.TextField(blank=True)
+    resultado = models.CharField(max_length=44, choices=Resultado.choices, blank=True)
+    creada_en = models.DateTimeField(auto_now_add=True)
+    asignada_en = models.DateTimeField(null=True, blank=True)
+    resuelta_en = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-creada_en', '-id']
+        verbose_name = 'Revision manual de prestador'
+        verbose_name_plural = 'Revisiones manuales de prestadores'
+        indexes = [
+            models.Index(fields=['estado', 'prioridad', '-creada_en'], name='prest_rev_estado_prio_idx'),
+            models.Index(fields=['solicitud', '-creada_en'], name='prest_rev_solic_fecha_idx'),
+            models.Index(fields=['asignado_a', 'estado'], name='prest_rev_asignado_idx'),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['solicitud', 'motivo'],
+                condition=Q(estado__in=[
+                    'ABIERTA',
+                    'ASIGNADA',
+                    'EN_ANALISIS',
+                    'PENDIENTE_SOLICITANTE',
+                    'PENDIENTE_VALIDACION_EMPRESA',
+                ]),
+                name='unique_revision_activa_solic_motivo',
+            ),
+        ]
+        permissions = [
+            ('can_view_contractor_review_queue', 'Puede ver la bandeja de revision de prestadores'),
+            ('can_assign_contractor_review', 'Puede asignar revisiones de prestadores'),
+            ('can_resolve_contractor_review', 'Puede resolver revisiones de prestadores'),
+            ('can_request_contractor_correction', 'Puede solicitar correcciones a prestadores'),
+            ('can_view_contractor_score_details', 'Puede ver el detalle de score de prestadores'),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            anterior = type(self).objects.filter(pk=self.pk).values_list('estado', flat=True).first()
+            if anterior == self.Estado.RESUELTA:
+                raise ValidationError('Una revision resuelta es inmutable.')
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'Revision {self.id} - solicitud {self.solicitud_id}'
+
+
+class RequerimientoSubsanacionPrestador(models.Model):
+    class Tipo(models.TextChoices):
+        NUEVO_CONTRATO = 'NUEVO_CONTRATO', 'Nuevo contrato'
+        ACTUALIZAR_CONTRATO = 'ACTUALIZAR_CONTRATO', 'Actualizar contrato'
+        DOCUMENTO_IDENTIDAD = 'DOCUMENTO_IDENTIDAD', 'Documento de identidad'
+        DOCUMENTO_CONTRACTUAL = 'DOCUMENTO_CONTRACTUAL', 'Documento contractual'
+        CERTIFICACION_BANCARIA = 'CERTIFICACION_BANCARIA', 'Certificacion bancaria'
+        INFORMACION_CONTRACTUAL = 'INFORMACION_CONTRACTUAL', 'Informacion contractual'
+        INFORMACION_PERSONAL = 'INFORMACION_PERSONAL', 'Informacion personal'
+
+    class Estado(models.TextChoices):
+        PENDIENTE = 'PENDIENTE', 'Pendiente'
+        ATENDIDO = 'ATENDIDO', 'Atendido'
+        VALIDADO = 'VALIDADO', 'Validado'
+        RECHAZADO = 'RECHAZADO', 'Rechazado'
+        CANCELADO = 'CANCELADO', 'Cancelado'
+
+    solicitud = models.ForeignKey(
+        ContractorApplication,
+        on_delete=models.PROTECT,
+        related_name='requerimientos_subsanacion',
+    )
+    revision = models.ForeignKey(
+        RevisionManualPrestador,
+        on_delete=models.PROTECT,
+        related_name='requerimientos_subsanacion',
+    )
+    tipo = models.CharField(max_length=32, choices=Tipo.choices)
+    estado = models.CharField(max_length=12, choices=Estado.choices, default=Estado.PENDIENTE)
+    mensaje_publico = models.CharField(max_length=500)
+    detalle_interno = models.TextField(blank=True)
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='subsanaciones_prestador_creadas',
+    )
+    creado_en = models.DateTimeField(auto_now_add=True)
+    atendido_en = models.DateTimeField(null=True, blank=True)
+    cerrado_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-creado_en', '-id']
+        verbose_name = 'Requerimiento de subsanacion de prestador'
+        verbose_name_plural = 'Requerimientos de subsanacion de prestadores'
+        indexes = [
+            models.Index(fields=['solicitud', 'estado'], name='prest_subsan_solic_estado_idx'),
+            models.Index(fields=['revision', '-creado_en'], name='prest_subsan_revision_idx'),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['solicitud', 'tipo'],
+                condition=Q(estado='PENDIENTE'),
+                name='unique_subsanacion_pendiente_tipo',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} - solicitud {self.solicitud_id}'
 
 
 class AutorizacionConsultaDatacreditoPrestador(models.Model):

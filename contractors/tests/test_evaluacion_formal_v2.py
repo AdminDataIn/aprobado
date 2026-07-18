@@ -20,6 +20,7 @@ from contractors.models import (
     ContractorApplication,
     ContractorApplicationDocument,
     PredecisionPrestadorAudit,
+    RevisionManualPrestador,
     TimelinePrestador,
 )
 from contractors.services.evaluacion_formal import evaluar_solicitud_prestador
@@ -173,6 +174,8 @@ class EvaluacionFormalPrestadorV2Test(TestCase):
         resultado = evaluar_solicitud_prestador(self.solicitud, solicitado_por=self.staff)
 
         self.assertEqual(resultado.auditoria.resultado, 'REQUIERE_REVISION_MANUAL')
+        revision = RevisionManualPrestador.objects.get(solicitud=self.solicitud)
+        self.assertEqual(revision.motivo, RevisionManualPrestador.Motivo.CONTRATO_SUSPENDIDO)
         self.assertEqual(AprobacionPagadorLibranza.objects.count(), 0)
         self.assertEqual(Credito.objects.count(), 0)
         self.assertNotIn(

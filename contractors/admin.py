@@ -11,6 +11,8 @@ from contractors.models import (
     ContractorApplication,
     ContractorApplicationDocument,
     PredecisionPrestadorAudit,
+    RequerimientoSubsanacionPrestador,
+    RevisionManualPrestador,
     TimelinePrestador,
 )
 
@@ -212,6 +214,26 @@ class TimelinePrestadorAdmin(AdminAuditoriaSoloLectura):
     search_fields = ['solicitud__id', 'titulo']
     readonly_fields = [campo.name for campo in TimelinePrestador._meta.fields]
     ordering = ['-created_at', '-id']
+
+
+@admin.register(RevisionManualPrestador)
+class RevisionManualPrestadorAdmin(AdminAuditoriaSoloLectura):
+    list_display = [
+        'id', 'solicitud', 'estado', 'motivo', 'prioridad', 'asignado_a', 'creada_en',
+    ]
+    list_filter = ['estado', 'motivo', 'prioridad', 'creada_en']
+    search_fields = ['solicitud__id', 'solicitud__nombres', 'solicitud__apellidos']
+    readonly_fields = [campo.name for campo in RevisionManualPrestador._meta.fields]
+    ordering = ['-creada_en', '-id']
+
+
+@admin.register(RequerimientoSubsanacionPrestador)
+class RequerimientoSubsanacionPrestadorAdmin(AdminAuditoriaSoloLectura):
+    list_display = ['id', 'solicitud', 'revision', 'tipo', 'estado', 'creado_en']
+    list_filter = ['tipo', 'estado', 'creado_en']
+    search_fields = ['solicitud__id']
+    readonly_fields = [campo.name for campo in RequerimientoSubsanacionPrestador._meta.fields]
+    ordering = ['-creado_en', '-id']
 
 
 @admin.register(AutorizacionConsultaDatacreditoPrestador)
