@@ -22,7 +22,10 @@ from contractors.forms import SolicitudPrestadorForm
 from contractors.services.analisis_contrato import ResultadoAnalisisContrato
 from contractors.services.analisis_contrato_ia import analizar_contrato_con_openai
 from contractors.services.analisis_contractual_seguro import MENSAJE_DOCUMENTO_DIFERENTE
-from contractors.services.capacidad_contractual import simular_credito_prestador_informativo
+from contractors.services.capacidad_contractual import (
+    ConfiguracionSimuladorNoDisponible,
+    simular_credito_prestador_informativo,
+)
 from contractors.services.predecision import (
     RESULTADO_NO_EVALUABLE,
     RESULTADO_PREAPROBABLE,
@@ -69,6 +72,16 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.otra_empresa = Empresa.objects.create(
             nombre='Otra Empresa Convenio',
             convenio_activo=True,
+        )
+        self.configuracion_simulador = ConfiguracionSimuladorPrestador.objects.create(
+            nombre='Configuracion financiera de pruebas del portal',
+            version='portal-tests-v1',
+            activo=True,
+            monto_minimo=Decimal('1000000'),
+            monto_maximo=Decimal('10000000'),
+            plazo_minimo_meses=3,
+            plazo_maximo_meses=24,
+            tasa_mensual=Decimal('2.2000'),
         )
 
     def test_raiz_subdominio_redirige_a_solicitar(self):
@@ -1092,10 +1105,11 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertNotContains(response, 'access_token')
         self.assertContains(response, "registerButton.textContent = 'Registrando...'")
 
-    def test_simulador_usa_defaults_financieros_para_diez_millones(self):
+    def test_simulador_usa_configuracion_persistida_para_diez_millones(self):
         resultado = simular_credito_prestador_informativo(
             monto=Decimal('10000000'),
             plazo_meses=12,
+            configuracion=self.configuracion_simulador,
         )
 
         self.assertEqual(resultado.costo_originacion, Decimal('1000000.00'))
@@ -1105,14 +1119,13 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(resultado.capital_total_financiado, Decimal('11427110.00'))
 
     def test_simulador_usa_configuracion_activa(self):
-        configuracion = ConfiguracionSimuladorPrestador.objects.create(
-            nombre='Configuración de prueba',
-            porcentaje_originacion=Decimal('8'),
-            porcentaje_iva_originacion=Decimal('19'),
-            porcentaje_fondo_garantia=Decimal('1.5'),
-            porcentaje_seguro_vida_primera_cuota=Decimal('0.25'),
-            tasa_mensual=Decimal('2.1'),
-        )
+        configuracion = self.configuracion_simulador
+        configuracion.porcentaje_originacion = Decimal('8')
+        configuracion.porcentaje_iva_originacion = Decimal('19')
+        configuracion.porcentaje_fondo_garantia = Decimal('1.5')
+        configuracion.porcentaje_seguro_vida_primera_cuota = Decimal('0.25')
+        configuracion.tasa_mensual = Decimal('2.1')
+        configuracion.save()
 
         resultado = simular_credito_prestador_informativo(
             monto=Decimal('10000000'),
@@ -1132,13 +1145,11 @@ class PortalMinimoPrestadoresTest(TestCase):
         solicitud.save(update_fields=['estado_analisis_contractual'])
         self.client.force_login(self.usuario)
         self._cargar_documentos_obligatorios(solicitud)
-        ConfiguracionSimuladorPrestador.objects.create(
-            nombre='Configuración activa',
-            porcentaje_originacion=Decimal('8'),
-            porcentaje_iva_originacion=Decimal('19'),
-            porcentaje_fondo_garantia=Decimal('1.5'),
-            porcentaje_seguro_vida_primera_cuota=Decimal('0.25'),
-        )
+        self.configuracion_simulador.porcentaje_originacion = Decimal('8')
+        self.configuracion_simulador.porcentaje_iva_originacion = Decimal('19')
+        self.configuracion_simulador.porcentaje_fondo_garantia = Decimal('1.5')
+        self.configuracion_simulador.porcentaje_seguro_vida_primera_cuota = Decimal('0.25')
+        self.configuracion_simulador.save()
         response = self.client.post(
             '/simular/calcular/',
             data='{"solicitud_id": %s, "monto": "10000000", "plazo_meses": 12}' % solicitud.id,
@@ -1151,6 +1162,40 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(resultado['costo_originacion'], '800000.00')
         self.assertEqual(resultado['fondo_garantia'], '150000.00')
         self.assertEqual(resultado['seguro_vida'], '25000.00')
+
+    def test_simulador_sin_configuracion_no_usa_fallback_ni_permite_calculo(self):
+        ConfiguracionSimuladorPrestador.objects.all().delete()
+        solicitud = self._crear_solicitud(self.usuario, monto=None, plazo=None)
+        solicitud.estado_analisis_contractual = (
+            ContractorApplication.EstadoAnalisisContractual.COMPLETADO
+        )
+        solicitud.save(update_fields=['estado_analisis_contractual'])
+        self.client.force_login(self.usuario)
+        self._cargar_documentos_obligatorios(solicitud)
+        solicitud.estado_analisis_contractual = (
+            ContractorApplication.EstadoAnalisisContractual.COMPLETADO
+        )
+        solicitud.save(update_fields=['estado_analisis_contractual'])
+        with self.assertRaises(ConfiguracionSimuladorNoDisponible):
+            simular_credito_prestador_informativo(
+                monto=Decimal('3000000'),
+                plazo_meses=8,
+            )
+
+        pagina = self.client.get(
+            f'/simular/?solicitud_id={solicitud.id}',
+            HTTP_HOST=self.host,
+        )
+        self.assertContains(pagina, 'temporalmente no disponible')
+        self.assertNotContains(pagina, 'max="24"')
+
+        calculo = self.client.post(
+            '/simular/calcular/',
+            data='{"solicitud_id": %s, "monto": "3000000", "plazo_meses": 8}' % solicitud.id,
+            content_type='application/json',
+            HTTP_HOST=self.host,
+        )
+        self.assertEqual(calculo.status_code, 503, calculo.content)
 
     def test_post_simulador_guarda_monto_plazo_sin_crear_credito(self):
         solicitud = self._crear_solicitud(

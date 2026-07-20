@@ -1,11 +1,14 @@
 from datetime import timedelta
 from decimal import Decimal
+from io import StringIO
 from unittest.mock import patch
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
+from django.core.exceptions import PermissionDenied
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.db import connection
 from django.test import RequestFactory, TestCase
 from django.utils import timezone
@@ -26,6 +29,7 @@ from contractors.models import (
 from contractors.services.evaluacion_formal import evaluar_solicitud_prestador
 from contractors.tests.test_score_prestadores_v2 import crear_politica_score
 from gestion_creditos.models import AprobacionPagadorLibranza, Credito, CreditoLibranza, Empresa
+from usuarios.models import PerfilPagador
 
 
 class EvaluacionFormalPrestadorV2Test(TestCase):
@@ -72,6 +76,38 @@ class EvaluacionFormalPrestadorV2Test(TestCase):
         self.assertFalse(consulta_mock.called)
         self.assertEqual(resultado.auditoria.resultado, 'NO_EVALUABLE')
         self.assertIsNone(resultado.auditoria.score)
+
+    def test_reevaluacion_tras_configurar_politica_conserva_auditoria_no_evaluable(self):
+        with patch(
+            'contractors.services.evaluacion_formal.obtener_evaluacion_datacredito_prestador'
+        ) as consulta_inicial:
+            inicial = evaluar_solicitud_prestador(self.solicitud, solicitado_por=self.staff)
+        self.assertFalse(consulta_inicial.called)
+        auditoria_inicial_id = inicial.auditoria.id
+        clave_inicial = inicial.auditoria.clave_idempotencia
+        self.assertEqual(inicial.auditoria.version_politica, 'politica_no_configurada')
+
+        self.configuracion_financiera.delete()
+        call_command('configurar_politica_prestadores_demo', stdout=StringIO())
+
+        with patch(
+            'contractors.services.evaluacion_formal.obtener_evaluacion_datacredito_prestador',
+            return_value=self._datacredito(950),
+        ), patch(
+            'contractors.services.predecision.obtener_autorizacion_datacredito_vigente',
+            return_value=object(),
+        ), patch(
+            'contractors.score.componentes.obtener_autorizacion_datacredito_vigente',
+            return_value=object(),
+        ):
+            nueva = evaluar_solicitud_prestador(self.solicitud, solicitado_por=self.staff)
+
+        inicial.auditoria.refresh_from_db()
+        self.assertNotEqual(nueva.auditoria.id, auditoria_inicial_id)
+        self.assertNotEqual(nueva.auditoria.clave_idempotencia, clave_inicial)
+        self.assertEqual(inicial.auditoria.resultado, 'NO_EVALUABLE')
+        self.assertEqual(inicial.auditoria.version_politica, 'politica_no_configurada')
+        self.assertEqual(self.solicitud.auditorias_predecision.count(), 2)
 
     @patch('contractors.services.predecision.obtener_autorizacion_datacredito_vigente', return_value=object())
     @patch('contractors.score.componentes.obtener_autorizacion_datacredito_vigente', return_value=object())
@@ -223,6 +259,27 @@ class EvaluacionFormalPrestadorV2Test(TestCase):
             resultado.auditoria.snapshot_salida
         )
         self.assertNotIn(self.solicitud.numero_documento, contenido)
+
+    def test_servicio_bloquea_perfil_pagador_con_permiso_accidental(self):
+        pagador = get_user_model().objects.create_user(
+            username='pagador-evaluacion-formal',
+            password='test-password',
+            is_staff=True,
+        )
+        PerfilPagador.objects.create(usuario=pagador, empresa=self.empresa)
+        pagador.user_permissions.add(
+            Permission.objects.get(codename='can_evaluate_contractor_application')
+        )
+
+        with self.assertRaises(PermissionDenied):
+            evaluar_solicitud_prestador(self.solicitud, solicitado_por=pagador)
+
+        self.solicitud.refresh_from_db()
+        self.assertEqual(
+            self.solicitud.estado,
+            ContractorApplication.Estado.EVALUACION_PENDIENTE,
+        )
+        self.assertFalse(self.solicitud.auditorias_predecision.exists())
 
     def _datacredito(self, score):
         return ResultadoConsultaDatacreditoPrestador(

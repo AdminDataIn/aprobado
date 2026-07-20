@@ -599,3 +599,141 @@ flowchart LR
 
 Commit H no crea cuotas, pagos, recaudos ni aprobaciones del pagador. Transferencia,
 desembolso y activacion permanecen pendientes para una fase posterior y explicita.
+
+## 26. Checkpoint funcional pre-Commit I
+
+### Punto de entrada operativo
+
+Las solicitudes en `EVALUACION_PENDIENTE` y las ejecuciones recuperables visibles en
+`EN_EVALUACION` aparecen al inicio de `/gestion/prestadores/`. La sección muestra
+identificación enmascarada, empresa, monto/plazo, análisis contractual, progreso
+documental y acceso al detalle. Una solicitud existente, incluida la solicitud local
+`#5`, aparece por su estado sin correcciones manuales ni datos artificiales.
+
+El detalle presenta autorización DataCrédito vigente, estado de ejecución, última
+predecisión y score únicamente para usuarios con el permiso reservado. El botón
+`Ejecutar evaluación` solo aparece para `EVALUACION_PENDIENTE` y llama mediante POST
+a:
+
+```text
+/gestion/prestadores/solicitudes/<id>/evaluar/
+```
+
+La ruta exige staff y `can_evaluate_contractor_application`, usa CSRF y bloquea
+`PerfilPagador` tanto en la vista como en `evaluar_solicitud_prestador`.
+
+### Servicio, idempotencia y colas de resultado
+
+La vista no contiene lógica de proveedor ni score. Reutiliza
+`evaluar_solicitud_prestador`, que bloquea la solicitud, calcula versión y clave de
+idempotencia, reutiliza snapshots DataCrédito vigentes y evita otra auditoría para la
+misma combinación de datos, política y configuración. La consulta externa permanece
+fuera de transacciones largas.
+
+```text
+EVALUACION_PENDIENTE
+  -> EN_EVALUACION
+  -> PREAPROBADO_READ_ONLY      -> Preaprobados pendientes
+  -> REQUIERE_REVISION_MANUAL   -> Revisiones manuales
+  -> BLOQUEADO_READ_ONLY        -> Resultado final en detalle
+  -> NO_EVALUABLE / ERROR       -> Revisión o error controlado
+```
+
+Este checkpoint no crea `Credito`, `CreditoLibranza` ni
+`AprobacionPagadorLibranza`; tampoco origina, activa o desembolsa. La bandeja sigue
+siendo backoffice interno y posteriormente deberá integrarse al backoffice unificado
+sin depender del subdominio de Prestadores.
+
+### Pendientes UX registrados
+
+- La parametrizacion financiera del simulador se resuelve en el Fix 2 descrito en
+  la seccion siguiente; ya no existe fallback silencioso a 24 meses.
+- La vista documental requiere un rediseño posterior.
+- El botón público `Ver estado` es redundante y debe revisarse por separado.
+- El mapa y la geolocalización permanecen pendientes.
+
+Estos pendientes no se resuelven en este checkpoint.
+
+## 27. Parametrizacion financiera y politica DEMO (Fix 2)
+
+### Fuente unica y comportamiento sin configuracion
+
+`ConfiguracionSimuladorPrestador` es la fuente persistida de monto, plazo, tasa y
+costos del simulador. `ConfiguracionScorePrestador` referencia explicitamente esa
+configuracion financiera y `BandaScorePrestador` permanece como inline del Admin.
+No se construyen objetos transitorios ni se consultan settings como respaldo.
+
+Si no existe configuracion financiera activa, `/simular/` muestra un estado
+controlado, no renderiza controles financieros y el endpoint de calculo responde
+`503` sin registrar monto, plazo o snapshot. Si falta la politica score, la
+evaluacion formal conserva `NO_EVALUABLE` y `politica_no_configurada`; no se crea
+una politica implicita.
+
+Las restricciones administrativas y de modelo exigen:
+
+- una sola configuracion financiera activa y versionada;
+- una sola politica score activa;
+- pesos iguales a `1.00000`;
+- monto y plazo de politica no superiores a la configuracion financiera;
+- tasa de referencia igual a la tasa financiera;
+- cinco bandas sin solapamientos ni vacios, dentro de los limites de la politica;
+- inmutabilidad semantica de configuraciones y bandas usadas por auditorias.
+
+Los historicos inactivos se conservan. Una nueva semantica exige una nueva version.
+
+### Bootstrap LOCAL/DEMO
+
+El bootstrap es manual e idempotente; no es una migracion de datos ni se ejecuta al
+desplegar:
+
+```text
+python manage.py configurar_politica_prestadores_demo
+```
+
+Crea o reutiliza `prestadores-demo-v1` y `prestadores-score-demo-v1`. Aborta si
+encuentra otra configuracion o politica activa, y nunca modifica silenciosamente una
+version existente con valores diferentes.
+
+Valores financieros DEMO:
+
+| Parametro | Valor |
+|---|---:|
+| monto minimo | 1.000.000 |
+| monto maximo | 10.000.000 |
+| plazo | 3 a 8 meses |
+| tasa mensual | 2,2000% |
+| originacion | 10% |
+| IVA originacion | 19% |
+| fondo garantia | 2% |
+| seguro primera cuota | 0,3711% |
+
+La tasa historica `1,9000%` provenia del default original del simulador y de sus
+fallbacks. La evidencia versionada de score, aprobacion interna y originacion usa
+`2,2000%`; por eso el comando la declara mediante `TASA_MENSUAL_DEMO`. Esta decision
+solo alinea el entorno DEMO y no constituye una politica productiva aprobada.
+
+Pesos DEMO: DataCredito `0,45`, capacidad `0,30`, comportamiento `0,08`, riesgo
+`0,12` y referencias `0,05`. Las referencias no son obligatorias y la politica DEMO
+permite redistribuir componentes faltantes. Umbrales: Premium `850`, Alta `750`,
+Media `680` y Entrada `600`.
+
+Bandas DEMO:
+
+| Banda | Rango | Monto maximo | Plazo maximo | Resultado |
+|---|---:|---:|---:|---|
+| Revision | 0-599 | 0 | 0 | revision manual |
+| Entrada | 600-679 | 3.000.000 | 4 | preaprobado read-only |
+| Media | 680-749 | 5.000.000 | 6 | preaprobado read-only |
+| Alta | 750-849 | 8.000.000 | 8 | preaprobado read-only |
+| Premium | 850-1000 | 10.000.000 | 8 | preaprobado read-only |
+
+### Auditoria y reevaluacion
+
+La auditoria local `#1` de la solicitud `#5` conserva su resultado
+`NO_EVALUABLE`, version `politica_no_configurada` y configuracion financiera vacia.
+No se reescribe ni elimina. Al instalar una politica y usar el servicio formal de
+reintento, la version de politica cambia la clave de idempotencia y permite crear una
+nueva `PredecisionPrestadorAudit`, dejando intacta la anterior.
+
+Este Fix no consulta DataCredito real, no crea `Credito` o `CreditoLibranza`, no
+origina, no desembolsa y no activa obligaciones.

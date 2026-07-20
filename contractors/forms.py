@@ -2,7 +2,6 @@ from decimal import Decimal, InvalidOperation
 import re
 
 from django import forms
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 
@@ -88,22 +87,21 @@ class SimulacionPrestadorForm(forms.Form):
     def __init__(self, *args, **kwargs):
         configuracion = kwargs.pop('configuracion', None)
         super().__init__(*args, **kwargs)
-        monto_minimo = Decimal(str(
-            configuracion.monto_minimo
-            if configuracion else getattr(settings, 'CONTRACTORS_MIN_AMOUNT', '1000000')
-        ))
-        monto_maximo = Decimal(str(
-            configuracion.monto_maximo
-            if configuracion else getattr(settings, 'CONTRACTORS_MAX_AMOUNT', '10000000')
-        ))
-        plazo_minimo = int(
-            configuracion.plazo_minimo_meses
-            if configuracion else getattr(settings, 'CONTRACTORS_MIN_TERM_MONTHS', 3)
-        )
-        plazo_maximo = int(
-            configuracion.plazo_maximo_meses
-            if configuracion else getattr(settings, 'CONTRACTORS_MAX_TERM_MONTHS', 24)
-        )
+        self.configuracion_disponible = configuracion is not None
+        if configuracion is None:
+            self.monto_minimo = None
+            self.monto_maximo = None
+            self.plazo_minimo = None
+            self.plazo_maximo = None
+            for campo in self.fields.values():
+                campo.required = False
+                campo.disabled = True
+            return
+
+        monto_minimo = Decimal(str(configuracion.monto_minimo))
+        monto_maximo = Decimal(str(configuracion.monto_maximo))
+        plazo_minimo = int(configuracion.plazo_minimo_meses)
+        plazo_maximo = int(configuracion.plazo_maximo_meses)
 
         self.fields['monto'].min_value = monto_minimo
         self.fields['monto'].max_value = monto_maximo
@@ -123,6 +121,8 @@ class SimulacionPrestadorForm(forms.Form):
         self.plazo_maximo = plazo_maximo
 
     def clean_monto(self):
+        if not self.configuracion_disponible:
+            return self.cleaned_data.get('monto')
         monto = self.cleaned_data['monto']
         if monto < self.monto_minimo or monto > self.monto_maximo:
             raise forms.ValidationError(
@@ -131,12 +131,22 @@ class SimulacionPrestadorForm(forms.Form):
         return monto
 
     def clean_plazo_meses(self):
+        if not self.configuracion_disponible:
+            return self.cleaned_data.get('plazo_meses')
         plazo = self.cleaned_data['plazo_meses']
         if plazo < self.plazo_minimo or plazo > self.plazo_maximo:
             raise forms.ValidationError(
                 f'El plazo debe estar entre {self.plazo_minimo} y {self.plazo_maximo} meses.'
             )
         return plazo
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if not self.configuracion_disponible:
+            raise forms.ValidationError(
+                'La simulacion no esta disponible porque falta configuracion financiera activa.'
+            )
+        return cleaned_data
 
 
 class SolicitudPrestadorForm(forms.ModelForm):

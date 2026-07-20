@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import logging
 from types import SimpleNamespace
 
 from django.conf import settings
@@ -53,6 +54,9 @@ from contractors.services.autorizacion_datacredito import (
 )
 from contractors.services.presentacion_solicitud import construir_estado_publico_solicitud
 from contractors.services.subsanacion import atender_requerimiento_subsanacion
+
+
+logger = logging.getLogger(__name__)
 
 
 CLAVE_SESION_ANALISIS_CONTRATO = 'contractors_analisis_contrato_v1'
@@ -483,20 +487,26 @@ def simular_prestador_view(request):
     solicitud = _obtener_solicitud_del_usuario(solicitud_id, request.user)
     documentos_cargados = _solicitud_tiene_documentos_obligatorios(solicitud)
     progreso_documental = calcular_progreso_documental(solicitud)
+    configuracion = obtener_configuracion_simulador_prestador()
+    if configuracion is None:
+        logger.error(
+            'Simulador de prestadores sin configuracion financiera activa. solicitud_id=%s',
+            solicitud.id,
+        )
     capacidad_contractual = evaluar_capacidad_contractual_preliminar(
         solicitud,
         documentos_completos=documentos_cargados,
+        configuracion=configuracion,
     )
     analisis_habilita_simulacion = solicitud.estado_analisis_contractual in ESTADOS_ANALISIS_PERMITIDOS
-    puede_registrar = documentos_cargados and analisis_habilita_simulacion
-    configuracion = obtener_configuracion_simulador_prestador()
+    puede_registrar = bool(
+        configuracion and documentos_cargados and analisis_habilita_simulacion
+    )
     monto_inicial = solicitud.monto_solicitado or (
-        configuracion.monto_minimo
-        if configuracion else getattr(settings, 'CONTRACTORS_MIN_AMOUNT', 1000000)
+        configuracion.monto_minimo if configuracion else None
     )
     plazo_inicial = solicitud.plazo_meses or (
-        configuracion.plazo_minimo_meses
-        if configuracion else getattr(settings, 'CONTRACTORS_MIN_TERM_MONTHS', 3)
+        configuracion.plazo_minimo_meses if configuracion else None
     )
     initial = {'monto': monto_inicial, 'plazo_meses': plazo_inicial}
     form = SimulacionPrestadorForm(
@@ -607,6 +617,19 @@ def calcular_simulacion_prestador_view(request):
         return JsonResponse({'ok': False, 'error': 'El análisis contractual debe estar vigente.'}, status=400)
 
     configuracion = obtener_configuracion_simulador_prestador()
+    if configuracion is None:
+        logger.error(
+            'Calculo de simulacion bloqueado por configuracion financiera ausente. '
+            'solicitud_id=%s',
+            solicitud.id,
+        )
+        return JsonResponse(
+            {
+                'ok': False,
+                'error': 'La simulacion no esta disponible temporalmente por configuracion.',
+            },
+            status=503,
+        )
     form = SimulacionPrestadorForm(
         {
             'monto': payload.get('monto'),

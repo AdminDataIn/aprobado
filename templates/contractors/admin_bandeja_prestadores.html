@@ -1,13 +1,20 @@
 {% extends "contractors/base.html" %}
-{% block title %}Bandeja de revision | Aprobado{% endblock %}
+{% block title %}Gestión de Prestadores de Servicios | Aprobado{% endblock %}
 {% block content %}
 <section class="hero">
-  <p class="eyebrow">Gestion interna Aprobado</p>
-  <h1>Bandeja de revision de Prestadores de Servicios</h1>
-  <p>Decisiones y subsanaciones operativas. Esta bandeja no origina ni aprueba creditos.</p>
+  <p class="eyebrow">Gestión interna Aprobado</p>
+  <h1>Gestión de Prestadores de Servicios</h1>
+  <p>Seguimiento de solicitudes, evaluaciones, revisiones y aprobaciones internas.</p>
 </section>
 
 <main class="contenedor">
+  <section class="grid-2" aria-label="Resumen operativo">
+    <article class="panel tarjeta-resumen"><span>Pendientes de evaluación</span><strong>{{ resumen_bandeja.pendientes }}</strong></article>
+    <article class="panel tarjeta-resumen"><span>Revisiones manuales</span><strong>{{ resumen_bandeja.revisiones }}</strong></article>
+    <article class="panel tarjeta-resumen"><span>Preaprobados</span><strong>{{ resumen_bandeja.preaprobados }}</strong></article>
+    <article class="panel tarjeta-resumen"><span>Aprobaciones internas</span><strong>{{ resumen_bandeja.aprobaciones }}</strong></article>
+  </section>
+
   <section class="panel">
     <form method="get" class="grid-3 formulario-compacto" aria-label="Filtros de revision">
       <label>Estado
@@ -42,61 +49,39 @@
     </form>
   </section>
 
-  {% if puede_ver_aprobaciones %}
   <section class="panel">
-    <h2 class="titulo-seccion">Preaprobados pendientes de aprobacion interna</h2>
-    <p>El resultado read-only no crea credito ni habilita desembolso.</p>
+    <h2 class="titulo-seccion">Solicitudes pendientes de evaluación</h2>
+    <p>La evaluación formal consulta los servicios configurados y registra una predecisión auditable. No crea crédito.</p>
     <div class="tabla-responsive">
       <table class="tabla">
-        <thead><tr><th>Solicitud</th><th>Empresa</th><th>Resultado</th><th>Monto sugerido</th><th>Fecha</th><th>Accion</th></tr></thead>
+        <thead><tr><th>Solicitud</th><th>Solicitante</th><th>Empresa</th><th>Monto / plazo</th><th>Análisis contractual</th><th>Documentos</th><th>Fecha</th><th>Acción</th></tr></thead>
         <tbody>
-        {% for auditoria in candidatos_gate %}
+        {% for fila in filas_pendientes %}
           <tr>
-            <td>#{{ auditoria.solicitud_id }}</td>
-            <td>{{ auditoria.solicitud.empresa.nombre }}</td>
-            <td>Preaprobado pendiente de aprobacion interna</td>
-            <td>{{ auditoria.snapshot_salida.monto_maximo_sugerido|default:"No disponible" }}</td>
-            <td>{{ auditoria.finalizada_en|date:"Y-m-d H:i" }}</td>
-            <td><a class="boton boton-secundario" href="{% url 'contractors:admin_detalle' auditoria.solicitud_id %}">Ver evaluacion</a></td>
+            <td><strong>#{{ fila.solicitud.id }}</strong><br><small>{{ fila.documento }}</small></td>
+            <td>{{ fila.solicitante }}</td>
+            <td>{{ fila.solicitud.empresa.nombre }}</td>
+            <td>{{ fila.solicitud.monto_solicitado|default:"Pendiente" }} / {{ fila.solicitud.plazo_meses|default:"Pendiente" }} meses</td>
+            <td>{{ fila.solicitud.get_estado_analisis_contractual_display }}</td>
+            <td>{{ fila.progreso.cargados }}/{{ fila.progreso.total }}</td>
+            <td>{{ fila.solicitud.created_at|date:"Y-m-d H:i" }}</td>
+            <td><a class="boton boton-secundario" href="{% url 'contractors:admin_detalle' fila.solicitud.id %}">Ver detalle</a></td>
           </tr>
-        {% empty %}<tr><td colspan="6">No hay preaprobados pendientes.</td></tr>{% endfor %}
+        {% empty %}<tr><td colspan="8">No hay solicitudes pendientes de evaluación.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>
-  </section>
-
-  <section class="panel">
-    <h2 class="titulo-seccion">Aprobaciones internas</h2>
-    <div class="tabla-responsive">
-      <table class="tabla">
-        <thead><tr><th>Solicitud</th><th>Empresa</th><th>Estado</th><th>Analista</th><th>Monto</th><th>Plazo</th><th>Fecha</th><th>Accion</th></tr></thead>
-        <tbody>
-        {% for gate in pagina_aprobaciones.object_list %}
-          <tr>
-            <td>#{{ gate.solicitud_id }}</td>
-            <td>{{ gate.solicitud.empresa.nombre }}</td>
-            <td>{{ gate.get_estado_display }}</td>
-            <td>{{ gate.decidida_por.get_username|default:gate.creada_por.get_username|default:"Pendiente" }}</td>
-            <td>{{ gate.monto_autorizado }}</td>
-            <td>{{ gate.plazo_autorizado }} meses</td>
-            <td>{{ gate.creada_en|date:"Y-m-d H:i" }}</td>
-            <td><a class="boton boton-secundario" href="{% url 'contractors:admin_detalle' gate.solicitud_id %}">Ver aprobacion</a></td>
-          </tr>
-        {% empty %}<tr><td colspan="8">No hay aprobaciones internas para los filtros.</td></tr>{% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% if pagina_aprobaciones.paginator.num_pages > 1 %}
-      <nav class="acciones" aria-label="Paginacion de aprobaciones internas">
-        {% if pagina_aprobaciones.has_previous %}<a class="boton boton-secundario" href="?{% if query_sin_pagina_aprobacion %}{{ query_sin_pagina_aprobacion }}&{% endif %}approval_page={{ pagina_aprobaciones.previous_page_number }}">Anterior</a>{% endif %}
-        <span>Pagina {{ pagina_aprobaciones.number }} de {{ pagina_aprobaciones.paginator.num_pages }}</span>
-        {% if pagina_aprobaciones.has_next %}<a class="boton boton-secundario" href="?{% if query_sin_pagina_aprobacion %}{{ query_sin_pagina_aprobacion }}&{% endif %}approval_page={{ pagina_aprobaciones.next_page_number }}">Siguiente</a>{% endif %}
+    {% if pagina_pendientes.paginator.num_pages > 1 %}
+      <nav class="acciones" aria-label="Paginación de solicitudes pendientes">
+        {% if pagina_pendientes.has_previous %}<a class="boton boton-secundario" href="?{% if query_sin_pagina_evaluacion %}{{ query_sin_pagina_evaluacion }}&{% endif %}evaluation_page={{ pagina_pendientes.previous_page_number }}">Anterior</a>{% endif %}
+        <span>Página {{ pagina_pendientes.number }} de {{ pagina_pendientes.paginator.num_pages }}</span>
+        {% if pagina_pendientes.has_next %}<a class="boton boton-secundario" href="?{% if query_sin_pagina_evaluacion %}{{ query_sin_pagina_evaluacion }}&{% endif %}evaluation_page={{ pagina_pendientes.next_page_number }}">Siguiente</a>{% endif %}
       </nav>
     {% endif %}
   </section>
-  {% endif %}
 
   <section class="panel">
+    <h2 class="titulo-seccion">Revisiones manuales</h2>
     <div class="tabla-responsive">
       <table class="tabla">
         <thead><tr><th>Solicitud</th><th>Solicitante</th><th>Empresa</th><th>Estado operativo</th><th>Predecision</th><th>Motivo</th><th>Prioridad</th><th>Asignado</th><th>Antiguedad</th><th>Fecha</th><th>Accion</th></tr></thead>
@@ -129,5 +114,59 @@
       </nav>
     {% endif %}
   </section>
+
+  {% if puede_ver_aprobaciones %}
+  <section class="panel">
+    <h2 class="titulo-seccion">Preaprobados pendientes de aprobación interna</h2>
+    <p>El resultado read-only no crea crédito ni habilita desembolso.</p>
+    <div class="tabla-responsive">
+      <table class="tabla">
+        <thead><tr><th>Solicitud</th><th>Empresa</th><th>Resultado</th><th>Monto sugerido</th><th>Fecha</th><th>Acción</th></tr></thead>
+        <tbody>
+        {% for auditoria in candidatos_gate %}
+          <tr>
+            <td>#{{ auditoria.solicitud_id }}</td>
+            <td>{{ auditoria.solicitud.empresa.nombre }}</td>
+            <td>Preaprobado pendiente de aprobación interna</td>
+            <td>{{ auditoria.snapshot_salida.monto_maximo_sugerido|default:"No disponible" }}</td>
+            <td>{{ auditoria.finalizada_en|date:"Y-m-d H:i" }}</td>
+            <td><a class="boton boton-secundario" href="{% url 'contractors:admin_detalle' auditoria.solicitud_id %}">Ver evaluación</a></td>
+          </tr>
+        {% empty %}<tr><td colspan="6">No hay preaprobados pendientes.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2 class="titulo-seccion">Aprobaciones internas</h2>
+    <div class="tabla-responsive">
+      <table class="tabla">
+        <thead><tr><th>Solicitud</th><th>Empresa</th><th>Estado</th><th>Analista</th><th>Monto</th><th>Plazo</th><th>Fecha</th><th>Acción</th></tr></thead>
+        <tbody>
+        {% for gate in pagina_aprobaciones.object_list %}
+          <tr>
+            <td>#{{ gate.solicitud_id }}</td>
+            <td>{{ gate.solicitud.empresa.nombre }}</td>
+            <td>{{ gate.get_estado_display }}</td>
+            <td>{{ gate.decidida_por.get_username|default:gate.creada_por.get_username|default:"Pendiente" }}</td>
+            <td>{{ gate.monto_autorizado }}</td>
+            <td>{{ gate.plazo_autorizado }} meses</td>
+            <td>{{ gate.creada_en|date:"Y-m-d H:i" }}</td>
+            <td><a class="boton boton-secundario" href="{% url 'contractors:admin_detalle' gate.solicitud_id %}">Ver aprobación</a></td>
+          </tr>
+        {% empty %}<tr><td colspan="8">No hay aprobaciones internas para los filtros.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if pagina_aprobaciones.paginator.num_pages > 1 %}
+      <nav class="acciones" aria-label="Paginación de aprobaciones internas">
+        {% if pagina_aprobaciones.has_previous %}<a class="boton boton-secundario" href="?{% if query_sin_pagina_aprobacion %}{{ query_sin_pagina_aprobacion }}&{% endif %}approval_page={{ pagina_aprobaciones.previous_page_number }}">Anterior</a>{% endif %}
+        <span>Página {{ pagina_aprobaciones.number }} de {{ pagina_aprobaciones.paginator.num_pages }}</span>
+        {% if pagina_aprobaciones.has_next %}<a class="boton boton-secundario" href="?{% if query_sin_pagina_aprobacion %}{{ query_sin_pagina_aprobacion }}&{% endif %}approval_page={{ pagina_aprobaciones.next_page_number }}">Siguiente</a>{% endif %}
+      </nav>
+    {% endif %}
+  </section>
+  {% endif %}
 </main>
 {% endblock %}

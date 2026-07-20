@@ -34,6 +34,10 @@ from contractors.services.aprobacion_interna import (
     iniciar_analisis_aprobacion_interna,
 )
 from contractors.services.capacidad_contractual import evaluar_capacidad_contractual_preliminar
+from contractors.services.autorizacion_datacredito import (
+    obtener_autorizacion_datacredito_vigente,
+)
+from contractors.services.evaluacion_formal import evaluar_solicitud_prestador
 from contractors.services.revision_manual import (
     asignar_revision,
     cancelar_revision,
@@ -104,6 +108,20 @@ def bandeja_prestadores_view(request):
         'monto_desde': request.GET.get('monto_desde', '').strip(),
         'monto_hasta': request.GET.get('monto_hasta', '').strip(),
     }
+    solicitudes_pendientes = (
+        ContractorApplication.objects
+        .filter(estado__in={
+            ContractorApplication.Estado.EVALUACION_PENDIENTE,
+            ContractorApplication.Estado.EN_EVALUACION,
+        })
+        .select_related('usuario', 'empresa')
+        .prefetch_related('documentos')
+        .order_by('created_at', 'id')
+    )
+    if filtros['empresa']:
+        solicitudes_pendientes = solicitudes_pendientes.filter(
+            empresa_id=filtros['empresa']
+        )
     for campo in ('estado', 'motivo', 'prioridad'):
         if filtros[campo]:
             revisiones = revisiones.filter(**{campo: filtros[campo]})
@@ -115,8 +133,14 @@ def bandeja_prestadores_view(request):
     fecha_hasta = parse_date(filtros['fecha_hasta'])
     if fecha_desde:
         revisiones = revisiones.filter(creada_en__date__gte=fecha_desde)
+        solicitudes_pendientes = solicitudes_pendientes.filter(
+            created_at__date__gte=fecha_desde
+        )
     if fecha_hasta:
         revisiones = revisiones.filter(creada_en__date__lte=fecha_hasta)
+        solicitudes_pendientes = solicitudes_pendientes.filter(
+            created_at__date__lte=fecha_hasta
+        )
     if filtros['resultado']:
         revisiones = revisiones.filter(auditoria_predecision__resultado=filtros['resultado'])
     if filtros['estado_solicitud']:
@@ -133,6 +157,21 @@ def bandeja_prestadores_view(request):
     ]
     query = request.GET.copy()
     query.pop('page', None)
+
+    pagina_pendientes = Paginator(solicitudes_pendientes, 25).get_page(
+        request.GET.get('evaluation_page')
+    )
+    filas_pendientes = [
+        {
+            'solicitud': solicitud,
+            'solicitante': _enmascarar_nombre(solicitud.nombre_completo),
+            'documento': _enmascarar_documento(solicitud.numero_documento),
+            'progreso': calcular_progreso_documental(solicitud),
+        }
+        for solicitud in pagina_pendientes.object_list
+    ]
+    query_pendientes = request.GET.copy()
+    query_pendientes.pop('evaluation_page', None)
 
     aprobaciones = (
         AprobacionInternaPrestador.objects
@@ -188,6 +227,7 @@ def bandeja_prestadores_view(request):
         candidatos_gate_qs = candidatos_gate_qs.filter(created_at__date__gte=fecha_desde)
     if fecha_hasta:
         candidatos_gate_qs = candidatos_gate_qs.filter(created_at__date__lte=fecha_hasta)
+    total_candidatos_gate = candidatos_gate_qs.count()
     candidatos_gate = []
     for candidato in candidatos_gate_qs[:100]:
         ultima = candidato.solicitud.auditorias_predecision.order_by(
@@ -200,6 +240,7 @@ def bandeja_prestadores_view(request):
     if not puede_ver_aprobaciones:
         pagina_aprobaciones = Paginator(aprobaciones.none(), 25).get_page(1)
         candidatos_gate = []
+        total_candidatos_gate = 0
     query_aprobaciones = request.GET.copy()
     query_aprobaciones.pop('approval_page', None)
     return render(
@@ -208,6 +249,9 @@ def bandeja_prestadores_view(request):
         {
             'pagina': pagina,
             'filas': filas,
+            'pagina_pendientes': pagina_pendientes,
+            'filas_pendientes': filas_pendientes,
+            'query_sin_pagina_evaluacion': query_pendientes.urlencode(),
             'filtros': filtros,
             'query_sin_pagina': query.urlencode(),
             'estados_revision': RevisionManualPrestador.Estado.choices,
@@ -221,6 +265,12 @@ def bandeja_prestadores_view(request):
             'estados_aprobacion': AprobacionInternaPrestador.Estado.choices,
             'candidatos_gate': candidatos_gate,
             'puede_ver_aprobaciones': puede_ver_aprobaciones,
+            'resumen_bandeja': {
+                'pendientes': solicitudes_pendientes.count(),
+                'revisiones': revisiones.count(),
+                'preaprobados': total_candidatos_gate,
+                'aprobaciones': aprobaciones.count() if puede_ver_aprobaciones else 0,
+            },
         },
     )
 
@@ -236,6 +286,7 @@ def detalle_prestador_view(request, solicitud_id):
     ]
     progreso = calcular_progreso_documental(solicitud)
     auditoria = solicitud.auditorias_predecision.order_by('-created_at', '-id').first()
+    autorizacion_datacredito = obtener_autorizacion_datacredito_vigente(solicitud)
     puede_ver_score = request.user.has_perm('contractors.can_view_contractor_score_details')
     revisiones = solicitud.revisiones_manuales.select_related(
         'asignado_a', 'creada_por', 'resuelta_por', 'auditoria_predecision'
@@ -280,6 +331,14 @@ def detalle_prestador_view(request, solicitud_id):
             ),
             'auditoria': auditoria,
             'auditoria_detalle': _construir_detalle_auditoria(auditoria, puede_ver_score),
+            'estado_evaluacion': _construir_estado_evaluacion(solicitud, auditoria),
+            'autorizacion_datacredito_vigente': autorizacion_datacredito is not None,
+            'puede_ejecutar_evaluacion': bool(
+                solicitud.estado == ContractorApplication.Estado.EVALUACION_PENDIENTE
+                and request.user.has_perm(
+                    'contractors.can_evaluate_contractor_application'
+                )
+            ),
             'revisiones': revisiones,
             'requerimientos': solicitud.requerimientos_subsanacion.select_related(
                 'revision', 'creado_por'
@@ -378,6 +437,41 @@ def detalle_prestador_view(request, solicitud_id):
             ),
         },
     )
+
+
+@require_POST
+@permiso_interno_requerido('contractors.can_evaluate_contractor_application')
+def ejecutar_evaluacion_prestador_view(request, solicitud_id):
+    solicitud = _obtener_solicitud_staff(solicitud_id)
+    try:
+        resultado = evaluar_solicitud_prestador(
+            solicitud,
+            solicitado_por=request.user,
+        )
+    except (ValidationError, PermissionDenied) as exc:
+        messages.error(request, str(exc))
+    else:
+        if resultado.en_proceso:
+            messages.warning(request, 'La evaluacion ya se encuentra en proceso.')
+        elif resultado.reutilizada:
+            messages.info(
+                request,
+                'Se reutilizo la evaluacion vigente; no se realizo una consulta duplicada.',
+            )
+        elif (
+            resultado.auditoria.estado_ejecucion
+            == PredecisionPrestadorAudit.EstadoEjecucion.ERROR_CONTROLADO
+        ):
+            messages.error(
+                request,
+                'La evaluacion termino con un error controlado. Revisa el detalle.',
+            )
+        else:
+            messages.success(
+                request,
+                'La evaluacion formal fue ejecutada y auditada.',
+            )
+    return redirect('contractors:admin_detalle', solicitud_id=solicitud.id)
 
 
 @require_POST
@@ -749,6 +843,25 @@ def _construir_detalle_auditoria(auditoria, puede_ver_score):
             'score': auditoria.score,
         })
     return detalle
+
+
+def _construir_estado_evaluacion(solicitud, auditoria):
+    if solicitud.estado == ContractorApplication.Estado.EN_EVALUACION:
+        codigo = PredecisionPrestadorAudit.EstadoEjecucion.EN_PROCESO
+    elif auditoria is not None:
+        codigo = auditoria.estado_ejecucion
+    else:
+        codigo = PredecisionPrestadorAudit.EstadoEjecucion.PENDIENTE
+    etiquetas = {
+        PredecisionPrestadorAudit.EstadoEjecucion.PENDIENTE: 'Pendiente',
+        PredecisionPrestadorAudit.EstadoEjecucion.EN_PROCESO: 'En proceso',
+        PredecisionPrestadorAudit.EstadoEjecucion.COMPLETADA: 'Completada',
+        PredecisionPrestadorAudit.EstadoEjecucion.ERROR_CONTROLADO: 'Error controlado',
+    }
+    return {
+        'codigo': codigo,
+        'etiqueta': etiquetas.get(codigo, 'No determinada'),
+    }
 
 
 def _lista_auditoria_controlada(valores):

@@ -339,7 +339,11 @@ def _validar_actor(usuario):
         return
     if not getattr(usuario, 'is_authenticated', False):
         raise PermissionDenied('Debes iniciar sesion para ejecutar la evaluacion.')
-    if not usuario.is_staff or not usuario.has_perm(
-        'contractors.can_evaluate_contractor_application'
+    if (
+        not usuario.is_staff
+        or hasattr(usuario, 'perfil_pagador')
+        or not usuario.has_perm(
+            'contractors.can_evaluate_contractor_application'
+        )
     ):
         raise PermissionDenied('No tienes permiso para ejecutar la evaluacion formal.')

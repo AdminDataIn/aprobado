@@ -1,6 +1,7 @@
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.forms.models import BaseInlineFormSet
 from django.template.response import TemplateResponse
 
 from contractors.models import (
@@ -125,8 +126,47 @@ class ConfiguracionSimuladorPrestadorAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at']
 
 
+class BandaScorePrestadorInlineFormSet(BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        bandas = []
+        for form in self.forms:
+            datos = form.cleaned_data
+            if not datos or datos.get('DELETE'):
+                continue
+            minimo = datos.get('score_min')
+            maximo = datos.get('score_max')
+            monto = datos.get('monto_maximo')
+            plazo = datos.get('plazo_maximo')
+            if None in {minimo, monto, plazo}:
+                continue
+            limite = 1000 if maximo is None else maximo
+            if minimo > limite:
+                raise ValidationError('El score minimo no puede superar el maximo.')
+            if plazo > self.instance.plazo_maximo_politica:
+                raise ValidationError('Una banda supera el plazo maximo de la politica.')
+            if monto > self.instance.monto_maximo_politica:
+                raise ValidationError('Una banda supera el monto maximo de la politica.')
+            bandas.append((minimo, limite, datos.get('nombre')))
+
+        bandas.sort(key=lambda item: item[0])
+        for anterior, actual in zip(bandas, bandas[1:]):
+            if actual[0] <= anterior[1]:
+                raise ValidationError('Las bandas de score no pueden solaparse.')
+        if self.instance.activa:
+            if len(bandas) != len(BandaScorePrestador.Nombre.values):
+                raise ValidationError('Una politica activa debe tener exactamente cinco bandas.')
+            if bandas[0][0] != 0 or bandas[-1][1] != 1000:
+                raise ValidationError('Las bandas activas deben cubrir el rango completo 0 a 1000.')
+            if any(actual[0] != anterior[1] + 1 for anterior, actual in zip(bandas, bandas[1:])):
+                raise ValidationError('Las bandas activas no pueden dejar vacios de score.')
+
+
 class BandaScorePrestadorInline(admin.TabularInline):
     model = BandaScorePrestador
+    formset = BandaScorePrestadorInlineFormSet
     extra = 0
 
 

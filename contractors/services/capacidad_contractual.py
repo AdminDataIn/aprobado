@@ -1,19 +1,13 @@
 from dataclasses import dataclass, field
 from decimal import Decimal, ROUND_HALF_UP
 
-from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
 
-TASA_MENSUAL_PRELIMINAR_DEFAULT = Decimal('0.019')
-PLAZO_MAXIMO_MESES_DEFAULT = 24
-MONTO_MINIMO_DEFAULT = Decimal('1000000')
-MONTO_MAXIMO_DEFAULT = Decimal('10000000')
-TASA_ORIGINACION_DEFAULT = Decimal('0.10')
-TASA_IVA_DEFAULT = Decimal('0.19')
-TASA_SEGURO_VIDA_DEFAULT = Decimal('0.003711')
-TASA_GARANTIA_DEFAULT = Decimal('0.02')
+class ConfiguracionSimuladorNoDisponible(ValidationError):
+    pass
 
 
 @dataclass(frozen=True)
@@ -25,7 +19,7 @@ class ResultadoCapacidadContractualPreliminar:
     plazo_solicitado: int | None
     cuota_estimada_preliminar: Decimal | None
     porcentaje_compromiso_valor_pendiente: Decimal | None
-    tasa_mensual_preliminar: Decimal
+    tasa_mensual_preliminar: Decimal | None
     documentos_completos: bool
     calculable: bool
     advertencias: list[str] = field(default_factory=list)
@@ -80,10 +74,15 @@ def obtener_configuracion_simulador_prestador():
         )
         .first()
     )
-    if politica and politica.configuracion_financiera_id:
-        return politica.configuracion_financiera
+    if politica:
+        configuracion = politica.configuracion_financiera
+        if configuracion and configuracion.activo and configuracion.version:
+            return configuracion
+        return None
 
-    return ConfiguracionSimuladorPrestador.objects.filter(activo=True).first()
+    return ConfiguracionSimuladorPrestador.objects.filter(
+        activo=True,
+    ).exclude(version='').first()
 
 
 def snapshot_configuracion_financiera(configuracion):
@@ -121,76 +120,51 @@ def obtener_version_politica_simulador(configuracion):
 
 
 def obtener_configuracion_publica_simulador_prestador(configuracion=None):
-    monto_minimo = Decimal(str(
-        configuracion.monto_minimo
-        if configuracion else getattr(settings, 'CONTRACTORS_MIN_AMOUNT', MONTO_MINIMO_DEFAULT)
-    ))
-    monto_maximo = Decimal(str(
-        configuracion.monto_maximo
-        if configuracion else getattr(settings, 'CONTRACTORS_MAX_AMOUNT', MONTO_MAXIMO_DEFAULT)
-    ))
-    plazo_minimo = int(
-        configuracion.plazo_minimo_meses
-        if configuracion else getattr(settings, 'CONTRACTORS_MIN_TERM_MONTHS', 3)
-    )
-    plazo_maximo = int(
-        configuracion.plazo_maximo_meses
-        if configuracion else getattr(settings, 'CONTRACTORS_MAX_TERM_MONTHS', PLAZO_MAXIMO_MESES_DEFAULT)
-    )
+    if configuracion is None:
+        return {'disponible': False}
     return {
-        'monto_minimo': str(monto_minimo),
-        'monto_maximo': str(monto_maximo),
-        'plazo_minimo_meses': plazo_minimo,
-        'plazo_maximo_meses': plazo_maximo,
-        'tasa_mensual': str(_tasa_configurada(
-            configuracion, 'tasa_mensual',
-            'CONTRACTORS_PRELIMINARY_MONTHLY_RATE', TASA_MENSUAL_PRELIMINAR_DEFAULT,
-        )),
-        'tasa_originacion': str(_tasa_configurada(
-            configuracion, 'porcentaje_originacion',
-            'CONTRACTORS_PRELIMINARY_ORIGINATION_RATE', TASA_ORIGINACION_DEFAULT,
-        )),
-        'tasa_iva_originacion': str(_tasa_configurada(
-            configuracion, 'porcentaje_iva_originacion',
-            'CONTRACTORS_PRELIMINARY_VAT_RATE', TASA_IVA_DEFAULT,
-        )),
-        'tasa_fondo_garantia': str(_tasa_configurada(
-            configuracion, 'porcentaje_fondo_garantia',
-            'CONTRACTORS_PRELIMINARY_GUARANTEE_RATE', TASA_GARANTIA_DEFAULT,
-        )),
-        'tasa_seguro_vida': str(_tasa_configurada(
-            configuracion, 'porcentaje_seguro_vida_primera_cuota',
-            'CONTRACTORS_PRELIMINARY_LIFE_INSURANCE_RATE', TASA_SEGURO_VIDA_DEFAULT,
-        )),
+        'disponible': True,
+        'version': configuracion.version,
+        'monto_minimo': str(configuracion.monto_minimo),
+        'monto_maximo': str(configuracion.monto_maximo),
+        'plazo_minimo_meses': configuracion.plazo_minimo_meses,
+        'plazo_maximo_meses': configuracion.plazo_maximo_meses,
+        'tasa_mensual': str(_porcentaje_como_tasa(configuracion.tasa_mensual)),
+        'tasa_originacion': str(_porcentaje_como_tasa(configuracion.porcentaje_originacion)),
+        'tasa_iva_originacion': str(
+            _porcentaje_como_tasa(configuracion.porcentaje_iva_originacion)
+        ),
+        'tasa_fondo_garantia': str(
+            _porcentaje_como_tasa(configuracion.porcentaje_fondo_garantia)
+        ),
+        'tasa_seguro_vida': str(
+            _porcentaje_como_tasa(configuracion.porcentaje_seguro_vida_primera_cuota)
+        ),
     }
 
 
 def simular_credito_prestador_informativo(*, monto, plazo_meses, configuracion=None):
+    if configuracion is None:
+        raise ConfiguracionSimuladorNoDisponible(
+            'La simulacion no esta disponible porque falta configuracion financiera activa.'
+        )
     monto = _decimal_or_none(monto)
     plazo_meses = int(plazo_meses)
     if monto is None or monto <= 0 or plazo_meses <= 0:
         raise ValueError('Monto y plazo deben ser mayores a cero.')
+    if monto < configuracion.monto_minimo or monto > configuracion.monto_maximo:
+        raise ValueError('El monto esta fuera de la configuracion financiera activa.')
+    if (
+        plazo_meses < configuracion.plazo_minimo_meses
+        or plazo_meses > configuracion.plazo_maximo_meses
+    ):
+        raise ValueError('El plazo esta fuera de la configuracion financiera activa.')
 
-    tasa_mensual = _tasa_configurada(
-        configuracion, 'tasa_mensual',
-        'CONTRACTORS_PRELIMINARY_MONTHLY_RATE', TASA_MENSUAL_PRELIMINAR_DEFAULT,
-    )
-    tasa_originacion = _tasa_configurada(
-        configuracion, 'porcentaje_originacion',
-        'CONTRACTORS_PRELIMINARY_ORIGINATION_RATE', TASA_ORIGINACION_DEFAULT,
-    )
-    tasa_iva = _tasa_configurada(
-        configuracion, 'porcentaje_iva_originacion',
-        'CONTRACTORS_PRELIMINARY_VAT_RATE', TASA_IVA_DEFAULT,
-    )
-    tasa_seguro = _tasa_configurada(
-        configuracion, 'porcentaje_seguro_vida_primera_cuota',
-        'CONTRACTORS_PRELIMINARY_LIFE_INSURANCE_RATE', TASA_SEGURO_VIDA_DEFAULT,
-    )
-    tasa_garantia = _tasa_configurada(
-        configuracion, 'porcentaje_fondo_garantia',
-        'CONTRACTORS_PRELIMINARY_GUARANTEE_RATE', TASA_GARANTIA_DEFAULT,
-    )
+    tasa_mensual = _porcentaje_como_tasa(configuracion.tasa_mensual)
+    tasa_originacion = _porcentaje_como_tasa(configuracion.porcentaje_originacion)
+    tasa_iva = _porcentaje_como_tasa(configuracion.porcentaje_iva_originacion)
+    tasa_seguro = _porcentaje_como_tasa(configuracion.porcentaje_seguro_vida_primera_cuota)
+    tasa_garantia = _porcentaje_como_tasa(configuracion.porcentaje_fondo_garantia)
 
     costo_originacion = _redondear(monto * tasa_originacion)
     iva_originacion = _redondear(costo_originacion * tasa_iva)
@@ -219,17 +193,24 @@ def simular_credito_prestador_informativo(*, monto, plazo_meses, configuracion=N
     )
 
 
-def evaluar_capacidad_contractual_preliminar(solicitud, documentos_completos=False):
-    tasa_mensual = _decimal_setting(
-        'CONTRACTORS_PRELIMINARY_MONTHLY_RATE',
-        TASA_MENSUAL_PRELIMINAR_DEFAULT,
-    )
-    plazo_maximo = int(getattr(settings, 'CONTRACTORS_MAX_TERM_MONTHS', PLAZO_MAXIMO_MESES_DEFAULT))
-    monto_minimo = _decimal_setting('CONTRACTORS_MIN_AMOUNT', MONTO_MINIMO_DEFAULT)
-    monto_maximo = _decimal_setting('CONTRACTORS_MAX_AMOUNT', MONTO_MAXIMO_DEFAULT)
-
+def evaluar_capacidad_contractual_preliminar(
+    solicitud, documentos_completos=False, configuracion=None,
+):
+    configuracion = configuracion or obtener_configuracion_simulador_prestador()
     advertencias = []
     bloqueos = []
+
+    if configuracion is None:
+        bloqueos.append('La configuracion financiera del simulador no esta disponible.')
+        tasa_mensual = None
+        plazo_maximo = None
+        monto_minimo = None
+        monto_maximo = None
+    else:
+        tasa_mensual = _porcentaje_como_tasa(configuracion.tasa_mensual)
+        plazo_maximo = configuracion.plazo_maximo_meses
+        monto_minimo = configuracion.monto_minimo
+        monto_maximo = configuracion.monto_maximo
 
     valor_total = _decimal_or_none(solicitud.valor_total_contrato)
     valor_pendiente = _decimal_or_none(solicitud.valor_pendiente_cobrar)
@@ -246,9 +227,9 @@ def evaluar_capacidad_contractual_preliminar(solicitud, documentos_completos=Fal
 
     if monto is None:
         bloqueos.append('Ingresa el monto solicitado.')
-    elif monto < monto_minimo:
+    elif monto_minimo is not None and monto < monto_minimo:
         advertencias.append('El monto solicitado esta por debajo del minimo preliminar configurado.')
-    elif monto > monto_maximo:
+    elif monto_maximo is not None and monto > monto_maximo:
         advertencias.append('El monto solicitado supera el maximo preliminar configurado.')
 
     if valor_pendiente is not None and monto is not None and monto > valor_pendiente:
@@ -258,7 +239,7 @@ def evaluar_capacidad_contractual_preliminar(solicitud, documentos_completos=Fal
         bloqueos.append('Ingresa el plazo solicitado.')
     elif plazo <= 0:
         bloqueos.append('El plazo solicitado debe ser mayor a cero.')
-    elif plazo > plazo_maximo:
+    elif plazo_maximo is not None and plazo > plazo_maximo:
         advertencias.append('El plazo solicitado supera el maximo preliminar configurado.')
 
     if solicitud.fecha_fin_contrato and solicitud.fecha_fin_contrato < timezone.localdate():
@@ -300,15 +281,8 @@ def _calcular_cuota_estimada(monto, plazo_meses, tasa_mensual):
     return _redondear(cuota)
 
 
-def _decimal_setting(nombre, default):
-    valor = getattr(settings, nombre, default)
-    return Decimal(str(valor))
-
-
-def _tasa_configurada(configuracion, campo, setting_name, default):
-    if configuracion is not None:
-        return Decimal(str(getattr(configuracion, campo))) / Decimal('100')
-    return _decimal_setting(setting_name, default)
+def _porcentaje_como_tasa(valor):
+    return Decimal(str(valor)) / Decimal('100')
 
 
 def _decimal_or_none(valor):

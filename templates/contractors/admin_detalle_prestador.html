@@ -15,6 +15,41 @@
   </section>
 
   <section class="panel">
+    <div class="encabezado-panel">
+      <div>
+        <p class="eyebrow">Evaluación formal</p>
+        <h2 class="titulo-seccion">Estado de la evaluación</h2>
+        <p class="subtitulo-seccion">Orquesta DataCrédito, score y predecisión mediante el servicio formal auditable.</p>
+      </div>
+      <span class="estado-pill">{{ estado_evaluacion.etiqueta }}</span>
+    </div>
+    <div class="grid-3 datos-grid">
+      <div class="dato"><span>Solicitud</span><strong>{{ solicitud.get_estado_display }}</strong></div>
+      <div class="dato"><span>Autorización DataCrédito</span><strong>{% if autorizacion_datacredito_vigente %}Vigente{% elif solicitud.autoriza_consulta_centrales %}Pendiente de evidencia vigente{% else %}No autorizada{% endif %}</strong></div>
+      <div class="dato"><span>Resultado</span><strong>{% if auditoria %}{{ auditoria.get_resultado_display }}{% else %}Pendiente{% endif %}</strong></div>
+    </div>
+    {% if estado_evaluacion.codigo == 'EN_PROCESO' %}
+      <div class="alerta-info">La evaluación está en proceso. No se iniciará una ejecución paralela.</div>
+    {% elif estado_evaluacion.codigo == 'ERROR_CONTROLADO' %}
+      <div class="alerta-info">La última evaluación terminó con un error controlado. Consulta la revisión manual y las acciones disponibles.</div>
+      {% if puede_ejecutar_evaluacion %}
+        <form method="post" action="{% url 'contractors:admin_ejecutar_evaluacion' solicitud.id %}">
+          {% csrf_token %}
+          <button class="boton" type="submit">Reintentar evaluación</button>
+        </form>
+      {% endif %}
+    {% elif puede_ejecutar_evaluacion %}
+      <form method="post" action="{% url 'contractors:admin_ejecutar_evaluacion' solicitud.id %}">
+        {% csrf_token %}
+        <button class="boton" type="submit">Ejecutar evaluación</button>
+      </form>
+    {% elif solicitud.estado == 'EVALUACION_PENDIENTE' %}
+      <p class="ayuda">Tu perfil no tiene permiso para ejecutar la evaluación formal.</p>
+    {% endif %}
+    <p class="ayuda"><strong>No constituye aprobación, originación, activación ni desembolso.</strong></p>
+  </section>
+
+  <section class="panel">
     <h2 class="titulo-seccion">Datos basicos sanitizados</h2>
     <div class="grid-2 datos-grid">
       <div class="dato"><span>Prestador</span><strong>{{ solicitud.nombre_completo }}</strong></div>

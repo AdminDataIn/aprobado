@@ -16,6 +16,7 @@
         </div>
       {% endif %}
 
+      {% if configuracion_simulador %}
       <div class="simulador-hero">
         <div class="simulador-text-content">
           <span class="simulador-eyebrow">SIMULACIÓN INFORMATIVA</span>
@@ -95,6 +96,16 @@
           </form>
         </div>
       </div>
+      {% else %}
+        <div class="simulador-configuracion-ausente" role="alert">
+          <strong>SimulaciÃ³n temporalmente no disponible</strong>
+          <p>
+            AÃºn no existe una configuraciÃ³n financiera activa para Prestadores de
+            Servicios. No se calcularÃ¡n ni registrarÃ¡n valores hasta que sea configurada.
+          </p>
+          <a href="{% url 'contractors:mi_credito' %}">Volver a Mi crÃ©dito</a>
+        </div>
+      {% endif %}
     </div>
   </section>
 </main>
@@ -104,6 +115,9 @@
   .simulador-gate { margin-bottom: 20px; padding: 16px 20px; border-left: 4px solid #f59e0b; background: #fff7ed; color: #78350f; border-radius: 8px; }
   .simulador-gate p { margin: 5px 0; }
   .simulador-gate a { display: inline-flex; margin-top: 6px; color: #075985; font-weight: 700; }
+  .simulador-configuracion-ausente { padding: 22px; border: 1px solid #fed7aa; border-radius: 8px; background: #fff7ed; color: #7c2d12; }
+  .simulador-configuracion-ausente p { max-width: 720px; line-height: 1.55; }
+  .simulador-configuracion-ausente a { color: #075985; font-weight: 700; }
   .simulador-legal-note { color: #64748b; font-size: 13px; line-height: 1.5; }
   .simulador-status { min-height: 20px; color: #64748b; font-size: 13px; }
   .simulador-status.is-error { color: #b42318; }

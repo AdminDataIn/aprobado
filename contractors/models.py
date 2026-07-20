@@ -1111,7 +1111,7 @@ class ConfiguracionSimuladorPrestador(models.Model):
     monto_minimo = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('1000000'))
     monto_maximo = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('10000000'))
     plazo_minimo_meses = models.PositiveSmallIntegerField(default=3)
-    plazo_maximo_meses = models.PositiveSmallIntegerField(default=24)
+    plazo_maximo_meses = models.PositiveSmallIntegerField(default=8)
     tasa_mensual = models.DecimalField(
         max_digits=8,
         decimal_places=4,
@@ -1158,12 +1158,54 @@ class ConfiguracionSimuladorPrestador(models.Model):
                 condition=~Q(version=''),
                 name='unique_simulador_prestador_version',
             ),
+            models.UniqueConstraint(
+                fields=['activo'],
+                condition=Q(activo=True),
+                name='unique_simulador_prestador_activo',
+            ),
         ]
         verbose_name = 'Configuración del simulador de prestadores'
         verbose_name_plural = 'Configuraciones del simulador de prestadores'
 
     def __str__(self):
         return self.nombre
+
+    def clean(self):
+        super().clean()
+        errores = {}
+        if self.monto_minimo > self.monto_maximo:
+            errores['monto_maximo'] = 'El monto maximo no puede ser menor al monto minimo.'
+        if self.plazo_minimo_meses > self.plazo_maximo_meses:
+            errores['plazo_maximo_meses'] = (
+                'El plazo maximo no puede ser menor al plazo minimo.'
+            )
+        if self.activo and not self.version:
+            errores['version'] = 'Una configuracion activa debe estar versionada.'
+        if errores:
+            raise ValidationError(errores)
+        self._validar_inmutabilidad_si_fue_usada()
+
+    def _validar_inmutabilidad_si_fue_usada(self):
+        if not self.pk:
+            return
+        anterior = type(self).objects.filter(pk=self.pk).first()
+        if anterior is None or not anterior.version:
+            return
+        if not PredecisionPrestadorAudit.objects.filter(
+            version_configuracion_financiera=anterior.version,
+        ).exists():
+            return
+        campos_semanticos = (
+            'version', 'monto_minimo', 'monto_maximo', 'plazo_minimo_meses',
+            'plazo_maximo_meses', 'tasa_mensual', 'porcentaje_originacion',
+            'porcentaje_iva_originacion', 'porcentaje_fondo_garantia',
+            'porcentaje_seguro_vida_primera_cuota', 'texto_nota_simulacion',
+        )
+        if any(getattr(anterior, campo) != getattr(self, campo) for campo in campos_semanticos):
+            raise ValidationError(
+                'Una configuracion financiera usada en auditorias no puede cambiar de '
+                'significado; crea una nueva version.'
+            )
 
 
 class ConfiguracionScorePrestador(models.Model):
@@ -1279,10 +1321,10 @@ class ConfiguracionScorePrestador(models.Model):
                     ),
                 })
             inconsistencias = []
-            if self.monto_maximo_politica != configuracion.monto_maximo:
-                inconsistencias.append('monto maximo')
-            if self.plazo_maximo_politica != configuracion.plazo_maximo_meses:
-                inconsistencias.append('plazo maximo')
+            if self.monto_maximo_politica > configuracion.monto_maximo:
+                inconsistencias.append('monto maximo superior al financiero')
+            if self.plazo_maximo_politica > configuracion.plazo_maximo_meses:
+                inconsistencias.append('plazo maximo superior al financiero')
             if self.tasa_mensual_referencia != configuracion.tasa_mensual:
                 inconsistencias.append('tasa mensual')
             if inconsistencias:
@@ -1382,6 +1424,14 @@ class BandaScorePrestador(models.Model):
             raise ValidationError('El score minimo no puede superar el maximo.')
         if not self.configuracion_id:
             return
+        if self.plazo_maximo > self.configuracion.plazo_maximo_politica:
+            raise ValidationError({
+                'plazo_maximo': 'El plazo de la banda no puede superar el de la politica.',
+            })
+        if self.monto_maximo > self.configuracion.monto_maximo_politica:
+            raise ValidationError({
+                'monto_maximo': 'El monto de la banda no puede superar el de la politica.',
+            })
         bandas = type(self).objects.filter(configuracion_id=self.configuracion_id)
         if self.pk:
             bandas = bandas.exclude(pk=self.pk)
