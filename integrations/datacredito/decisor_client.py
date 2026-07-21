@@ -3,6 +3,7 @@ import requests
 from integrations.datacredito.auth import SERVICIO_DECISOR, obtener_token_cacheado, validar_consumo_real_habilitado
 from integrations.datacredito.dto import EntradaMiDecisor, ResultadoMiDecisorRawSeguro
 from integrations.datacredito.exceptions import DatacreditoProviderError, DatacreditoTimeoutError
+from integrations.datacredito.http import crear_session_datacredito
 from integrations.datacredito.settings import obtener_configuracion_datacredito
 
 
@@ -16,8 +17,8 @@ def consultar_midecisor_persona_juridica(entrada: EntradaMiDecisor, session=None
 
 def _consultar_midecisor(entrada, tipo_persona, session=None):
     configuracion = validar_consumo_real_habilitado(obtener_configuracion_datacredito())
-    token = obtener_token_cacheado(servicio=SERVICIO_DECISOR, session=session)
-    cliente_http = session or requests
+    cliente_http = session if session is not None else crear_session_datacredito(configuracion)
+    token = obtener_token_cacheado(servicio=SERVICIO_DECISOR, session=cliente_http)
     headers = {
         'Authorization': token.authorization_header,
         'Content-Type': 'application/json',

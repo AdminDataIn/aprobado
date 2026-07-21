@@ -11,6 +11,7 @@ from integrations.datacredito.exceptions import (
     DatacreditoProviderError,
     DatacreditoTimeoutError,
 )
+from integrations.datacredito.http import crear_session_datacredito
 from integrations.datacredito.settings import (
     obtener_configuracion_datacredito,
     obtener_credenciales_oauth as obtener_credenciales_oauth_configuracion,
@@ -56,7 +57,7 @@ def generar_token(servicio=SERVICIO_DECISOR, session=None):
     if servicio == SERVICIO_HISTORIAL and configuracion.usa_legacy_historial:
         logger.warning('DataCredito Historial usa credenciales legacy genericas. Migrar a DATACREDITO_HDC_*')
 
-    cliente_http = session or requests
+    cliente_http = session if session is not None else crear_session_datacredito(configuracion)
     headers = {
         'client_id': credenciales.client_id,
         'client_secret': credenciales.client_secret,
@@ -126,7 +127,7 @@ def revocar_token(token=None, servicio=SERVICIO_DECISOR, session=None):
     if not token:
         return {'revocado': False, 'reason': 'sin_token_cacheado'}
 
-    cliente_http = session or requests
+    cliente_http = session if session is not None else crear_session_datacredito(configuracion)
     headers = {'token': token.access_token}
     try:
         respuesta = cliente_http.post(

@@ -377,6 +377,32 @@ class DatacreditoSnapshotV2Test(TestCase):
             set(ResultadoNormalizadoDatacreditoPrestador.__dataclass_fields__),
         )
 
+    @override_settings(
+        DATACREDITO_PROXY_URL='socks5h://usuario:clave@127.0.0.1:1080'
+    )
+    @patch('contractors.services.datacredito_evaluacion.consultar_proveedor_datacredito_prestador')
+    def test_snapshot_no_persiste_configuracion_proxy(self, consultar):
+        consultar.return_value = self._resultado_proveedor()
+
+        resultado = obtener_evaluacion_datacredito_prestador(
+            self.solicitud,
+            solicitado_por=self.usuario,
+        )
+
+        snapshot = ConsultaDatacreditoSnapshot.objects.get(pk=resultado.snapshot_id)
+        persistido = json.dumps(
+            {
+                'resultado_normalizado': snapshot.resultado_normalizado,
+                'error_codigo': snapshot.error_codigo,
+                'error_tipo': snapshot.error_tipo,
+                'codigo_funcional': snapshot.codigo_funcional,
+            },
+            sort_keys=True,
+        )
+        self.assertNotIn('proxy', persistido.lower())
+        self.assertNotIn('socks5h://', persistido)
+        self.assertNotIn('usuario:clave', persistido)
+
     def _resultado_proveedor(self, servicio='decisor'):
         return ResultadoProveedorDatacreditoPrestador(
             estado_snapshot=ConsultaDatacreditoSnapshot.Estado.EXITOSO,

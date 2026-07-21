@@ -11,6 +11,7 @@ from integrations.datacredito.exceptions import (
     DatacreditoProviderError,
     DatacreditoTimeoutError,
 )
+from integrations.datacredito.http import crear_session_datacredito
 from integrations.datacredito.settings import obtener_configuracion_datacredito
 
 
@@ -27,8 +28,8 @@ def consultar_historial_credito(entrada: EntradaHistorialCredito, session=None):
             f"Faltan credenciales DataCredito historial: {', '.join(faltantes)}"
         )
 
-    token = obtener_token_cacheado(servicio=SERVICIO_HISTORIAL, session=session)
-    cliente_http = session or requests
+    cliente_http = session if session is not None else crear_session_datacredito(configuracion)
+    token = obtener_token_cacheado(servicio=SERVICIO_HISTORIAL, session=cliente_http)
     headers = {
         'Authorization': token.authorization_header,
         'Content-Type': 'application/json',

@@ -737,3 +737,32 @@ nueva `PredecisionPrestadorAudit`, dejando intacta la anterior.
 
 Este Fix no consulta DataCredito real, no crea `Credito` o `CreditoLibranza`, no
 origina, no desembolsa y no activa obligaciones.
+
+## 28. Proxy local opcional para DataCredito (Fix 3)
+
+La salida HTTP de OAuth, MiDecisor, HDCPlus y revocacion usa una misma
+`requests.Session`. Por defecto la sesion es directa. Para una prueba LOCAL/DEMO
+controlada puede configurarse un proxy SOCKS sin modificar los interruptores de
+consumo:
+
+```text
+DATACREDITO_PROXY_URL=socks5h://127.0.0.1:1080
+```
+
+El tunel local puede abrirse por separado:
+
+```text
+ssh -N -D 127.0.0.1:1080 usuario@servidor
+```
+
+El esquema `socks5h` resuelve DNS a traves del proxy. Requiere instalar las
+dependencias del proyecto, que incluyen `PySocks`:
+
+```text
+python -m pip install -r requirements.txt
+```
+
+La URL del proxy no se registra ni se persiste en snapshots; los logs solo indican
+si existe configuracion. La verificacion TLS de `requests` permanece activa. Esta
+opcion esta destinada a ejecuciones locales/DEMO; produccion normalmente debe usar
+conexion directa dejando `DATACREDITO_PROXY_URL` vacia.

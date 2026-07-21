@@ -1,7 +1,7 @@
 import json
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from django.conf import settings
 
@@ -50,6 +50,7 @@ class ConfiguracionDatacredito:
     credenciales_decisor: CredencialesOAuthDecisor
     credenciales_historial: CredencialesOAuthHistorial
     credenciales_servicio_historial: CredencialesServicioHistorial
+    proxy_url: str = field(default='', repr=False)
     usa_legacy_decisor: bool = False
     usa_legacy_historial: bool = False
     parametros_historial: tuple[dict, ...] = ()
@@ -160,6 +161,7 @@ def obtener_configuracion_datacredito():
         revoke_token_url=getattr(settings, 'DATACREDITO_REVOKE_TOKEN_URL', '') or REVOKE_TOKEN_URLS[ambiente],
         midecisor_url=getattr(settings, 'DATACREDITO_MIDECISOR_URL', '') or MIDECISOR_URLS[ambiente],
         historial_url=getattr(settings, 'DATACREDITO_HISTORIAL_URL', '') or HISTORIAL_URLS[ambiente],
+        proxy_url=str(getattr(settings, 'DATACREDITO_PROXY_URL', '') or '').strip(),
         credenciales=credenciales_legacy,
         credenciales_decisor=credenciales_decisor,
         credenciales_historial=credenciales_historial,
