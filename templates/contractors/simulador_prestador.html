@@ -7,6 +7,7 @@
 <main class="simulador-main">
   <section class="simulador-hero-section">
     <div class="simulador-container">
+      {% include "contractors/components/breadcrumb.html" with current_label="Simulación" %}
       {% if not documentos_cargados or not analisis_habilita_simulacion %}
         <div class="simulador-gate" role="alert">
           <strong>Completa la información requerida</strong>
@@ -19,13 +20,13 @@
       {% if configuracion_simulador %}
       <div class="simulador-hero">
         <div class="simulador-text-content">
-          <span class="simulador-eyebrow">SIMULACIÓN INFORMATIVA</span>
-          <h1>Simula tu crédito para Prestadores de Servicios</h1>
+          <span class="simulador-eyebrow">SIMULACIÓN INFORMATIVA · DEMO</span>
+          <h1>Define las condiciones de tu solicitud</h1>
           <p>Selecciona el monto y el plazo que mejor se ajusten al valor pendiente de tu contrato. Revisa la cuota estimada, los costos asociados y el capital total financiado antes de registrar la solicitud.</p>
           <p class="simulador-legal-note">La simulación es informativa. La aprobación estará sujeta al análisis documental, validación de identidad, evaluación de riesgo y consulta ante centrales de información.</p>
           <button type="submit" class="simulador-cta-button simulador-submit simulador-register-cta"
                   form="simulator-form" data-register-application
-                  {% if not puede_registrar %}disabled{% endif %}>Registrar solicitud</button>
+                  {% if not puede_registrar %}disabled{% endif %}>Guardar condiciones solicitadas</button>
         </div>
 
         <div class="simulador-card">
@@ -41,6 +42,12 @@
             {{ form.non_field_errors }}
 
             <div class="simulador-form-step active">
+              <div class="cp-section-header">
+                <div>
+                  <h2>Personaliza tu solicitud</h2>
+                  <p>Puedes modificar el monto y el plazo antes de guardar.</p>
+                </div>
+              </div>
               <div class="simulador-slider-container">
                 <div class="simulador-slider-title">¿Cuánto necesitas?</div>
                 <div class="simulador-range-container">
@@ -75,7 +82,13 @@
                 {{ form.plazo_meses.errors }}
               </div>
 
-              <div class="simulador-results-container">
+              <div class="cp-section-header">
+                <div>
+                  <h2>Resumen informativo</h2>
+                  <p>Los cargos se muestran de forma separada para que puedas revisarlos.</p>
+                </div>
+              </div>
+              <div class="simulador-results-container" aria-label="Resultado de la simulación">
                 <div class="simulador-result-row"><label class="simulador-result-label">Monto solicitado:</label><input class="simulador-result-input" data-result="monto_solicitado" value="--" readonly></div>
                 <div class="simulador-result-row"><label class="simulador-result-label">Costo de originación:</label><input class="simulador-result-input" data-result="costo_originacion" value="--" readonly></div>
                 <div class="simulador-result-row"><label class="simulador-result-label">IVA sobre costo de originación:</label><input class="simulador-result-input" data-result="iva_costo_originacion" value="--" readonly></div>
@@ -88,7 +101,7 @@
                 <div class="simulador-result-row"><label class="simulador-result-label simulador-cuota-label">Cuota mensual:</label><input class="simulador-result-input simulador-cuota-input" data-result="cuota_mensual" value="--" readonly></div>
               </div>
 
-              <p class="simulador-legal-note">
+              <p class="simulador-legal-note" role="note">
                 {% if configuracion_simulador.texto_nota_simulacion %}{{ configuracion_simulador.texto_nota_simulacion }}{% else %}Los valores son estimados y están sujetos al análisis de riesgo y la validación documental.{% endif %}
               </p>
               <p id="simulator-status" class="simulador-status" aria-live="polite">Calculando simulación...</p>
@@ -109,26 +122,6 @@
     </div>
   </section>
 </main>
-
-<style>
-  .simulador-eyebrow { display: inline-block; margin-bottom: 10px; color: #22d3ee; font-size: 12px; font-weight: 700; }
-  .simulador-gate { margin-bottom: 20px; padding: 16px 20px; border-left: 4px solid #f59e0b; background: #fff7ed; color: #78350f; border-radius: 8px; }
-  .simulador-gate p { margin: 5px 0; }
-  .simulador-gate a { display: inline-flex; margin-top: 6px; color: #075985; font-weight: 700; }
-  .simulador-configuracion-ausente { padding: 22px; border: 1px solid #fed7aa; border-radius: 8px; background: #fff7ed; color: #7c2d12; }
-  .simulador-configuracion-ausente p { max-width: 720px; line-height: 1.55; }
-  .simulador-configuracion-ausente a { color: #075985; font-weight: 700; }
-  .simulador-legal-note { color: #64748b; font-size: 13px; line-height: 1.5; }
-  .simulador-status { min-height: 20px; color: #64748b; font-size: 13px; }
-  .simulador-status.is-error { color: #b42318; }
-  .simulador-submit { width: 100%; border: 0; cursor: pointer; }
-  .simulador-register-cta { margin-top: 18px; }
-  .simulador-submit:disabled { opacity: .5; cursor: not-allowed; }
-  .simulador-total-row { border-top: 2px solid #06b6d4; padding-top: 10px; }
-  .simulador-total-row label, .simulador-total-row input { font-weight: 700; }
-  .simulador-cuota-label, .simulador-cuota-input { color: #06b6d4 !important; font-weight: 700 !important; }
-  .errorlist { margin: 8px 0; padding-left: 20px; color: #b42318; font-size: 13px; }
-</style>
 
 {{ configuracion_publica_simulador|json_script:"simulator-public-config" }}
 <script>

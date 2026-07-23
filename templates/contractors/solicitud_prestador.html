@@ -2,11 +2,13 @@
 {% block title %}Solicita tu Crédito | Prestadores de Servicios{% endblock %}
 {% block content %}
 <main class="form-container">
+  {% include "contractors/components/breadcrumb.html" with current_label="Solicitud" %}
   <div class="form-content prestadores-wizard">
     <aside class="form-sidebar">
       <div class="form-title">
-        <h1>Solicita tu Crédito para Prestadores de Servicios</h1>
-        <p>Registra tus datos, carga tus documentos y confirma la información de tu contrato antes de continuar.</p>
+        <span class="cp-eyebrow">Proceso digital</span>
+        <h1>Solicita tu crédito</h1>
+        <p>Registra tus datos, carga tus documentos y confirma la información de tu contrato.</p>
       </div>
 
       <div class="step-list" aria-label="Pasos de la solicitud">
@@ -358,113 +360,6 @@
   </div>
 </div>
 
-<style>
-  .prestadores-wizard .document-flow { display: grid; gap: 12px; }
-  .prestadores-wizard .document-section { padding: 12px 14px; border: 1px solid #d3e1ec; border-radius: 10px; background: #f8fbff; }
-  .prestadores-wizard .document-section > h3 { margin: 0 0 5px; color: var(--cyan-2); font-size: 14px; font-weight: 600; }
-  .prestadores-wizard .identity-document-rows { display: grid; }
-  .prestadores-wizard .document-row { display: grid; grid-template-columns: minmax(180px, 1fr) auto minmax(170px, .9fr); align-items: center; gap: 12px; padding: 9px 0; }
-  .prestadores-wizard .identity-document-card { display: flex; align-items: center; justify-content: flex-start; flex-wrap: wrap; gap: 10px 14px; }
-  .prestadores-wizard .identity-document-card .document-card-header { flex: 0 1 350px; min-width: 220px; }
-  .prestadores-wizard .identity-document-card .document-upload-actions,
-  .prestadores-wizard .identity-document-card .document-compact-status { flex: 0 0 auto; }
-  .prestadores-wizard .identity-document-card .errorlist { flex-basis: 100%; }
-  .prestadores-wizard .identity-document-rows .document-row + .document-row { border-top: 1px solid #dce6ed; }
-  .prestadores-wizard .document-row .errorlist { grid-column: 1 / -1; margin: 0; }
-  .prestadores-wizard .document-file-row { grid-template-columns: minmax(290px, 1fr) minmax(170px, 1fr) minmax(90px, .8fr); }
-  .prestadores-wizard .document-file-row > .document-card-header,
-  .prestadores-wizard .document-file-row > .documento-input,
-  .prestadores-wizard .document-file-row > .document-file-status { margin: 0; }
-  .prestadores-wizard .document-file-row > .documento-input,
-  .prestadores-wizard .contract-upload-row > .documento-input { display: none; }
-  .prestadores-wizard .document-card-header { margin: 0; }
-  .prestadores-wizard .document-card-header strong { font-size: 16px; font-weight: 600; }
-  .prestadores-wizard .document-card-header small { margin-top: 2px; font-size: 12px; }
-  .prestadores-wizard .document-card-icon { min-width: 36px; height: 36px; border-radius: 9px; }
-  .prestadores-wizard .document-upload-actions { margin: 0; white-space: nowrap; }
-  .prestadores-wizard .document-file-status { padding: 8px 10px; border-radius: 8px; }
-  .prestadores-wizard .status-icon { width: 25px; height: 25px; }
-  .prestadores-wizard .status-label { display: none; }
-  .prestadores-wizard .status-value { font-size: 12px; font-weight: 600; }
-  .prestadores-wizard .identity-document-card .documento-input { display: none; }
-  .prestadores-wizard .contract-document-card { display: grid; gap: 12px; background: #f4fcff; border-color: #b8e7f3; }
-  .prestadores-wizard .document-compact-status,
-  .prestadores-wizard .contract-upload-status { display: inline-flex; align-items: center; justify-content: flex-start; gap: 7px; color: #64748b; font-size: 13px; white-space: nowrap; }
-  .prestadores-wizard .document-compact-status .status-icon,
-  .prestadores-wizard .contract-upload-status .status-icon { width: 20px; height: 20px; border: 1px solid #94a3b8; background: transparent; color: #64748b; font-size: 11px; }
-  .prestadores-wizard .document-compact-status.has-file,
-  .prestadores-wizard .contract-upload-status.has-file { color: #15803d; font-weight: 600; }
-  .prestadores-wizard .document-compact-status.has-file .status-icon,
-  .prestadores-wizard .contract-upload-status.has-file .status-icon { border-color: #86efac; background: #dcfce7; color: #15803d; }
-  .prestadores-wizard .file-select-button { border: 1px solid #94a3b8; border-radius: 8px; background: #fff; color: var(--azul); }
-  .prestadores-wizard .contract-upload-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
-  .prestadores-wizard .contract-upload-status,
-  .prestadores-wizard .contract-document-card .authorization-card-compact,
-  .prestadores-wizard .contract-document-card .contract-ai-panel { margin: 0; }
-  .prestadores-wizard .contract-upload-status { min-width: 0; max-width: 100%; }
-  .prestadores-wizard .contract-upload-status .status-value { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .prestadores-wizard .contract-analysis-spinner { width: 18px; height: 18px; flex: 0 0 18px; border: 2px solid #bae6fd; border-top-color: var(--cyan); border-radius: 50%; animation: contract-analysis-spin .75s linear infinite; }
-  .prestadores-wizard .contract-analysis-spinner[hidden] { display: none; }
-  @keyframes contract-analysis-spin { to { transform: rotate(360deg); } }
-  .prestadores-wizard .contract-analysis-result:empty { display: none; }
-  .prestadores-wizard .contract-analysis-result { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; width: 100%; padding: 12px; border: 1px solid #bae6fd; border-radius: 10px; background: #f8fcff; }
-  .prestadores-wizard .contract-analysis-summary { display: flex; align-items: center; padding: 9px 11px; border: 1px solid #a7e8c3; border-radius: 8px; background: #effcf4; color: #166534; font-size: 13px; font-weight: 700; }
-  .prestadores-wizard .contract-analysis-summary.is-blocked { border-color: #fdba74; background: #fff7ed; color: #9a3412; }
-  .prestadores-wizard .contract-analysis-summary-item { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; border-radius: 999px; background: #e8f6fc; color: #334155; font-size: 12px; }
-  .prestadores-wizard .contract-analysis-summary-item strong { color: var(--azul); }
-  .prestadores-wizard .contract-analysis-summary-item.is-blocked { background: #fff1e8; color: #9a3412; }
-  .prestadores-wizard .contract-analysis-section { width: 100%; padding: 10px 12px; border: 1px solid #dbe7ef; border-radius: 9px; background: #fff; }
-  .prestadores-wizard .contract-analysis-section > strong { display: block; margin-bottom: 6px; color: var(--azul); font-size: 13px; }
-  .prestadores-wizard .contract-analysis-section ul { margin: 0; padding-left: 19px; }
-  .prestadores-wizard .contract-analysis-section li { margin: 3px 0; line-height: 1.4; overflow-wrap: anywhere; }
-  .prestadores-wizard .contract-analysis-warnings { border-color: #fde68a; background: #fffbeb; color: #92400e; }
-  .prestadores-wizard .contract-analysis-blocks { border-color: #fdba74; background: #fff7ed; color: #9a3412; }
-  .prestadores-wizard .contract-analysis-data-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 14px; margin: 0; }
-  .prestadores-wizard .contract-analysis-data-item { min-width: 0; }
-  .prestadores-wizard .contract-analysis-data-item dt { color: #64748b; font-size: 11px; font-weight: 600; text-transform: uppercase; }
-  .prestadores-wizard .contract-analysis-data-item dd { margin: 2px 0 0; color: #0f2744; font-size: 13px; overflow-wrap: anywhere; }
-  .authorization-card-compact { background: #f8fbff; border-color: #c8eafa; color: var(--azul); }
-  .authorization-card-compact { margin-top: 10px; padding: 12px 13px; }
-  .authorization-card-compact label { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0 0; font-size: 13px; line-height: 1.4; }
-  .legal-authorizations { display: grid; gap: 10px; }
-  .legal-authorizations > strong { margin-bottom: 2px; }
-  .legal-authorization-row { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: start; gap: 10px; }
-  .legal-authorization-row .authorization-checkbox { width: 17px; height: 17px; margin: 2px 0 0; }
-  .legal-authorization-row label { margin: 0; color: var(--azul); font-size: 13px; line-height: 1.5; cursor: pointer; }
-  .legal-authorization-row a { color: var(--cyan-2); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
-  .legal-authorizations .errorlist { margin: -5px 0 0 30px; }
-  .camera-modal { position: fixed; inset: 0; z-index: 1100; display: none; align-items: center; justify-content: center; padding: 20px; background: rgba(7, 26, 51, .82); }
-  .camera-modal.visible { display: flex; }
-  .camera-modal-dialog { display: flex; flex-direction: column; width: min(720px, 100%); max-height: calc(100vh - 40px); overflow: hidden; border-radius: 14px; background: #fff; box-shadow: 0 24px 70px rgba(0, 0, 0, .3); }
-  .camera-modal-header { display: flex; justify-content: space-between; gap: 16px; padding: 20px 22px 15px; border-bottom: 1px solid var(--borde); }
-  .camera-modal-header h3 { margin: 0 0 5px; color: var(--azul); }
-  .camera-modal-header p { margin: 0; color: var(--muted); }
-  .camera-close-button { border: 0; background: transparent; color: var(--muted); font-size: 28px; cursor: pointer; }
-  .camera-modal-body { min-height: 0; overflow-y: auto; padding: 16px 22px 20px; }
-  .camera-preview-shell { position: relative; min-height: 220px; overflow: hidden; border-radius: 12px; background: var(--azul); }
-  .camera-preview-shell video,
-  .camera-preview-shell img { display: block; width: 100%; min-height: 220px; max-height: 65vh; object-fit: contain; }
-  .camera-preview-shell canvas { display: none !important; }
-  .camera-preview-shell [hidden] { display: none !important; }
-  .camera-preview-guide { position: absolute; inset: 12%; border: 2px dashed rgba(255, 255, 255, .92); border-radius: 12px; pointer-events: none; }
-  .camera-status-message { margin: 13px 0; color: var(--muted); }
-  .camera-modal-footer { position: sticky; bottom: -20px; z-index: 2; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin: 0 -4px; padding: 10px 4px 0; background: #fff; }
-  body.camera-open { overflow: hidden; }
-  @media (max-width: 720px) {
-    .prestadores-wizard .document-row,
-    .prestadores-wizard .document-file-row { grid-template-columns: 1fr; gap: 8px; }
-    .prestadores-wizard .identity-document-card { display: grid; grid-template-columns: 1fr; align-items: start; }
-    .prestadores-wizard .identity-document-card .document-card-header { min-width: 0; }
-    .prestadores-wizard .contract-upload-row { grid-template-columns: 1fr; }
-    .prestadores-wizard .contract-analysis-data-list { grid-template-columns: 1fr; }
-    .prestadores-wizard .document-file-status { width: 100%; }
-    .camera-modal { padding: 10px; }
-    .camera-modal-dialog { max-height: calc(100vh - 20px); }
-    .camera-modal-header { padding: 15px 16px 12px; }
-    .camera-modal-body { padding: 12px 16px 16px; }
-    .camera-modal-footer { bottom: -16px; }
-  }
-</style>
 
 <script>
   document.addEventListener('DOMContentLoaded', function () {
@@ -738,7 +633,7 @@
       const icono = estado.querySelector('.status-icon');
       if (valorEstado) {
         valorEstado.textContent = campo.id === 'id_contrato_actual'
-          ? `Contrato cargado: ${(archivo && archivo.name ? archivo.name : 'contrato.pdf').split(/[\\/]/).pop()}`
+          ? 'Contrato cargado correctamente'
           : 'OK';
       }
       if (icono) icono.textContent = '✓';

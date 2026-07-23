@@ -8,9 +8,8 @@
     </div>
 
     <nav class="nav-links" aria-label="Navegación Prestadores de Servicios">
-      <a href="{% url 'contractors:solicitar' %}" class="nav-link">Solicitar</a>
-      <a href="{% url 'contractors:mi_credito' %}" class="nav-link">Mi crédito</a>
-      <a href="{% url 'contractors:simular' %}" class="nav-link">Simular</a>
+      <a href="{% url 'contractors:solicitar' %}" class="nav-link" {% if request.resolver_match.url_name == 'solicitar' %}aria-current="page"{% endif %}>Solicitar</a>
+      <a href="{% url 'contractors:mi_credito' %}" class="nav-link" {% if request.resolver_match.url_name == 'mi_credito' %}aria-current="page"{% endif %}>Mi crédito</a>
     </nav>
 
     <div class="navbar-right">
@@ -47,9 +46,8 @@
       <button id="menu-close" class="menu-close" type="button" aria-label="Cerrar menú">&times;</button>
     </div>
     <nav class="mobile-nav-links" aria-label="Navegación móvil Prestadores de Servicios">
-      <a href="{% url 'contractors:solicitar' %}" class="mobile-nav-link">Solicitar</a>
-      <a href="{% url 'contractors:mi_credito' %}" class="mobile-nav-link">Mi crédito</a>
-      <a href="{% url 'contractors:simular' %}" class="mobile-nav-link">Simular</a>
+      <a href="{% url 'contractors:solicitar' %}" class="mobile-nav-link" {% if request.resolver_match.url_name == 'solicitar' %}aria-current="page"{% endif %}>Solicitar</a>
+      <a href="{% url 'contractors:mi_credito' %}" class="mobile-nav-link" {% if request.resolver_match.url_name == 'mi_credito' %}aria-current="page"{% endif %}>Mi crédito</a>
       {% if request.user.is_authenticated %}
       <span class="mobile-nav-link contractors-user-label">{{ request.user.get_full_name|default:request.user.email|default:request.user.username|truncatechars:28 }}</span>
       <form id="contractors-logout-form-mobile" method="post" action="/accounts/logout/">
@@ -107,6 +105,13 @@
   .navbar-prestadores .nav-link:hover,
   .navbar-prestadores .mobile-nav-link:hover {
     color: #22d3ee;
+  }
+
+  .navbar-prestadores .nav-link[aria-current="page"] {
+    color: #67e8f9;
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 8px;
   }
 
   .navbar-prestadores .navbar-right {

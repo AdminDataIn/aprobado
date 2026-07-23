@@ -1,0 +1,66 @@
+{% extends "contractors/base.html" %}
+{% block title %}{{ documento_publico.etiqueta }} | Prestadores de Servicios{% endblock %}
+
+{% block content %}
+<main class="cp-page">
+  <div class="cp-shell">
+    {% url 'contractors:documentos' solicitud.id as documents_url %}
+    {% include "contractors/components/breadcrumb.html" with back_url=documents_url back_label="Documentos" current_label=documento_publico.etiqueta %}
+
+    <header class="cp-page-header">
+      <div>
+        <span class="cp-eyebrow">Documento protegido</span>
+        <h1 class="cp-title">{{ documento_publico.etiqueta }}</h1>
+        <p class="cp-description">{{ documento_publico.descripcion }}</p>
+      </div>
+      <span class="cp-status-badge cp-status-badge--ok">Archivo recibido</span>
+    </header>
+
+    {% include "contractors/components/application_summary.html" %}
+
+    <div class="cp-detail-layout">
+      <section class="cp-surface cp-detail-main" aria-labelledby="document-preview-title">
+        <div class="cp-section-header">
+          <div>
+            <h2 id="document-preview-title">Vista del documento</h2>
+            <p>El archivo se sirve desde una ruta protegida asociada a tu usuario.</p>
+          </div>
+        </div>
+
+        <div class="cp-document-preview">
+          <div>
+            <span class="cp-document-preview-icon" aria-hidden="true">{{ documento_publico.formato }}</span>
+            <h3>{{ documento_publico.etiqueta }}</h3>
+            <p>Abre el archivo en una pestaña segura para consultarlo con su resolución original.</p>
+            <a
+              class="cp-button"
+              href="{% url 'contractors:descargar_documento' solicitud.id documento.id %}"
+              target="_blank"
+              rel="noopener"
+            >Abrir documento</a>
+          </div>
+        </div>
+      </section>
+
+      <aside class="cp-surface cp-detail-aside" aria-labelledby="document-info-title">
+        <div class="cp-section-header">
+          <div><h2 id="document-info-title">Información</h2></div>
+        </div>
+        <dl class="cp-data-list">
+          <div class="cp-data-row"><dt>Tipo</dt><dd>{{ documento_publico.etiqueta }}</dd></div>
+          <div class="cp-data-row"><dt>Formato</dt><dd>{{ documento_publico.formato }}</dd></div>
+          <div class="cp-data-row"><dt>Última carga</dt><dd>{{ documento.updated_at|date:'d/m/Y, g:i a' }}</dd></div>
+          <div class="cp-data-row"><dt>Acceso</dt><dd>Privado</dd></div>
+        </dl>
+        <div class="cp-alert" role="note">
+          <strong>Protección de documentos</strong>
+          <p>No compartas este archivo ni dejes la sesión abierta en equipos públicos.</p>
+        </div>
+        <div class="cp-actions">
+          <a class="cp-button cp-button--secondary" href="{% url 'contractors:documentos' solicitud.id %}">Volver a documentos</a>
+        </div>
+      </aside>
+    </div>
+  </div>
+</main>
+{% endblock %}

@@ -15,6 +15,7 @@ from contractors.models import (
     ConfiguracionSimuladorPrestador,
     ContractorApplication,
     ContractorApplicationDocument,
+    RequerimientoSubsanacionPrestador,
     RevisionManualPrestador,
     TimelinePrestador,
 )
@@ -415,10 +416,10 @@ class PortalMinimoPrestadoresTest(TestCase):
         response = self.client.get('/mi-credito/', HTTP_HOST=self.host)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'class="page-header-modern"')
-        self.assertContains(response, 'class="review-state-layout"')
-        self.assertContains(response, f'Solicitud <strong>#{propia.id}</strong>')
-        self.assertContains(response, 'Consulta el estado de tu solicitud y revisa los próximos pasos del proceso.')
+        self.assertContains(response, 'class="cp-page-header"')
+        self.assertContains(response, 'class="cp-dashboard-hero"')
+        self.assertContains(response, f'<strong>#{propia.id}</strong>')
+        self.assertContains(response, 'Consulta el avance, tus condiciones guardadas y las acciones disponibles.')
         self.assertNotContains(response, '<table')
         self.assertContains(response, propia.empresa.nombre)
         self.assertNotContains(response, self.otra_empresa.nombre)
@@ -432,11 +433,11 @@ class PortalMinimoPrestadoresTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['solicitud_principal'][0], principal)
-        self.assertContains(response, f'Solicitud <strong>#{principal.id}</strong>')
+        self.assertContains(response, f'<strong>#{principal.id}</strong>')
         self.assertContains(response, 'Solicitudes anteriores')
         self.assertContains(response, f'<strong>#{anterior.id}</strong>')
-        self.assertContains(response, 'class="contractors-history-list"')
-        self.assertContains(response, 'class="contractors-history-row"')
+        self.assertContains(response, 'class="cp-history-list"')
+        self.assertContains(response, 'class="cp-history-row"')
         self.assertNotContains(response, 'class="info-card-item"')
 
     def test_nueva_solicitud_esta_en_encabezado_y_acciones_tienen_jerarquia(self):
@@ -450,16 +451,16 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(
             response,
-            'class="boton boton-secundario contractors-new-request"',
+            'class="cp-button cp-button--secondary cp-new-request"',
             count=1,
         )
-        self.assertContains(response, 'Ver estado')
-        self.assertContains(response, 'class="contractors-secondary-actions"')
-        self.assertContains(response, 'Ver resumen')
-        self.assertContains(response, 'Ver documentos')
+        self.assertNotContains(response, 'Ver estado')
+        self.assertContains(response, 'Continuar simulación')
+        self.assertContains(response, 'class="cp-quick-actions"')
+        self.assertNotContains(response, 'href="#estado-solicitud-title"')
         self.assertLess(
-            contenido.index('contractors-new-request'),
-            contenido.index('class="review-state-layout"'),
+            contenido.index('class="cp-page-header"'),
+            contenido.index('class="cp-dashboard-hero"'),
         )
 
     def test_usuario_no_puede_ver_documentos_de_solicitud_ajena(self):
@@ -544,6 +545,8 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.client.force_login(self.usuario)
         response = self.client.get(url, HTTP_HOST=self.host)
         self.assertEqual(response.status_code, 200)
+        self.assertIn('contrato-vigente.pdf', response['Content-Disposition'])
+        self.assertNotIn('contrato.pdf', response['Content-Disposition'])
 
         self.client.force_login(self.otro_usuario)
         response = self.client.get(url, HTTP_HOST=self.host)
@@ -591,6 +594,201 @@ class PortalMinimoPrestadoresTest(TestCase):
         response = self.client.get(f'/simular/?solicitud_id={solicitud.id}', HTTP_HOST=self.host)
 
         self.assertEqual(response.status_code, 404)
+
+    def test_propietario_ve_documentos_con_navegacion_y_pendientes_diferenciados(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        self.client.force_login(self.usuario)
+
+        response = self.client.get(
+            f'/solicitud/{solicitud.id}/documentos/',
+            HTTP_HOST=self.host,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Ruta de navegación')
+        self.assertContains(response, 'Completa tus documentos')
+        self.assertContains(response, 'data-state="PENDIENTE"', count=4)
+        self.assertContains(response, 'Pendiente')
+        self.assertContains(response, 'Continuar solicitud')
+        self.assertContains(response, 'Volver a Mi crédito')
+        self.assertContains(response, 'data-target="document-file-', count=4)
+
+    def test_documento_cargado_muestra_estado_fecha_y_no_nombre_interno(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        self.client.force_login(self.usuario)
+        self._cargar_documento(
+            solicitud,
+            ContractorApplicationDocument.TipoDocumento.CONTRATO,
+            'nombre-interno-no-mostrar.pdf',
+        )
+
+        response = self.client.get(
+            f'/solicitud/{solicitud.id}/documentos/',
+            HTTP_HOST=self.host,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-state="CARGADO"')
+        self.assertContains(response, 'Cargado')
+        self.assertContains(response, 'Cargado el')
+        self.assertContains(response, 'Consultar')
+        self.assertContains(response, 'Reemplazar')
+        self.assertNotContains(response, 'nombre-interno-no-mostrar.pdf')
+
+    def test_documento_reemplazado_muestra_estado_publico(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        self.client.force_login(self.usuario)
+        self._cargar_documento(
+            solicitud,
+            ContractorApplicationDocument.TipoDocumento.CONTRATO,
+            'contrato-inicial.pdf',
+        )
+        documento = solicitud.documentos.get(
+            tipo_documento=ContractorApplicationDocument.TipoDocumento.CONTRATO,
+        )
+        ContractorApplicationDocument.objects.filter(pk=documento.pk).update(
+            created_at=timezone.now() - timedelta(minutes=2),
+        )
+
+        self._cargar_documento(
+            solicitud,
+            ContractorApplicationDocument.TipoDocumento.CONTRATO,
+            'contrato-reemplazo.pdf',
+        )
+        response = self.client.get(
+            f'/solicitud/{solicitud.id}/documentos/',
+            HTTP_HOST=self.host,
+        )
+
+        self.assertContains(response, 'data-state="REEMPLAZADO"')
+        self.assertContains(response, 'Reemplazado')
+        self.assertNotContains(response, 'contrato-reemplazo.pdf')
+
+    def test_vista_documento_es_contextual_privada_y_no_expone_nombre_fisico(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        documento = ContractorApplicationDocument.objects.create(
+            solicitud=solicitud,
+            tipo_documento=ContractorApplicationDocument.TipoDocumento.CONTRATO,
+            archivo=SimpleUploadedFile(
+                'nombre-fisico-privado.pdf',
+                b'%PDF-1.4 contrato',
+                content_type='application/pdf',
+            ),
+            uploaded_by=self.usuario,
+        )
+        url = f'/solicitud/{solicitud.id}/documentos/{documento.id}/'
+
+        self.client.force_login(self.usuario)
+        response = self.client.get(url, HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Documento protegido')
+        self.assertContains(response, 'Contrato vigente')
+        self.assertContains(response, 'Abrir documento')
+        self.assertNotContains(response, 'nombre-fisico-privado.pdf')
+        self.assertNotContains(response, documento.archivo.name)
+
+        self.client.force_login(self.otro_usuario)
+        response_ajena = self.client.get(url, HTTP_HOST=self.host)
+        self.assertEqual(response_ajena.status_code, 404)
+
+    def test_documento_con_subsanacion_muestra_correccion_sin_detalle_interno(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        revision = RevisionManualPrestador.objects.create(
+            solicitud=solicitud,
+            motivo=RevisionManualPrestador.Motivo.OTRA_REVISION_CONTROLADA,
+        )
+        RequerimientoSubsanacionPrestador.objects.create(
+            solicitud=solicitud,
+            revision=revision,
+            tipo=RequerimientoSubsanacionPrestador.Tipo.DOCUMENTO_CONTRACTUAL,
+            mensaje_publico='Carga una versión legible del contrato.',
+            detalle_interno='Regla interna que no debe mostrarse.',
+        )
+        self.client.force_login(self.usuario)
+
+        response = self.client.get(
+            f'/solicitud/{solicitud.id}/documentos/',
+            HTTP_HOST=self.host,
+        )
+
+        self.assertContains(response, 'Requiere corrección')
+        self.assertContains(response, 'Carga una versión legible del contrato.')
+        self.assertNotContains(response, 'Regla interna que no debe mostrarse.')
+
+    def test_cta_y_estado_publico_no_exponen_enum_tecnico(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        solicitud.estado = ContractorApplication.Estado.EN_EVALUACION
+        solicitud.save(update_fields=['estado', 'updated_at'])
+        self.client.force_login(self.usuario)
+
+        response = self.client.get('/mi-credito/', HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'En evaluación')
+        self.assertContains(response, 'Ver detalle de la solicitud')
+        self.assertContains(response, 'Actualizado el')
+        self.assertContains(response, 'Resumen de los pasos de tu solicitud.')
+        self.assertNotContains(response, 'EN_EVALUACION')
+        self.assertNotContains(response, 'PREAPROBADO_READ_ONLY')
+        self.assertNotContains(response, 'href="#estado-solicitud-title"')
+
+    def test_condiciones_guardadas_se_consultan_sin_abrir_simulador_vacio(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        solicitud.monto_solicitado = Decimal('3500000')
+        solicitud.plazo_meses = 6
+        solicitud.monto_simulado = Decimal('3500000')
+        solicitud.plazo_simulado_meses = 6
+        solicitud.tasa_mensual_simulacion = Decimal('2.2000')
+        solicitud.version_configuracion_financiera_simulacion = 'portal-tests-v1'
+        solicitud.version_politica_simulacion = 'score-tests-v1'
+        solicitud.monto_maximo_configuracion_simulacion = Decimal('10000000')
+        solicitud.plazo_maximo_configuracion_simulacion = 24
+        solicitud.simulada_en = timezone.now()
+        solicitud.save()
+        self.client.force_login(self.usuario)
+
+        dashboard = self.client.get('/mi-credito/', HTTP_HOST=self.host)
+        condiciones = self.client.get(
+            f'/mi-credito/solicitud/{solicitud.id}/condiciones/',
+            HTTP_HOST=self.host,
+        )
+
+        self.assertContains(dashboard, 'Ver condiciones solicitadas')
+        self.assertContains(
+            dashboard,
+            f'/mi-credito/solicitud/{solicitud.id}/condiciones/',
+        )
+        self.assertEqual(condiciones.status_code, 200)
+        self.assertContains(condiciones, 'Condiciones solicitadas')
+        self.assertContains(condiciones, '$3.500.000')
+        self.assertContains(condiciones, '6 meses')
+        self.assertContains(condiciones, '2,20%')
+        self.assertContains(condiciones, 'portal-tests-v1')
+        self.assertContains(condiciones, 'Detalle histórico no disponible')
+        self.assertNotContains(condiciones, 'simulador-range-1')
+
+    def test_condiciones_sin_snapshot_muestran_estado_controlado_y_respetan_owner(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        url = f'/mi-credito/solicitud/{solicitud.id}/condiciones/'
+
+        self.client.force_login(self.usuario)
+        response = self.client.get(url, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Aún no hay condiciones guardadas')
+        self.assertContains(response, f'/simular/?solicitud_id={solicitud.id}')
+
+        self.client.force_login(self.otro_usuario)
+        response_ajena = self.client.get(url, HTTP_HOST=self.host)
+        self.assertEqual(response_ajena.status_code, 404)
+
+    def test_navbar_no_expone_simulador_sin_solicitud(self):
+        self.client.force_login(self.usuario)
+        response = self.client.get('/solicitar/', HTTP_HOST=self.host)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, '<a href="/simular/" class="nav-link"')
+        self.assertContains(response, 'aria-current="page"')
 
     def test_simulador_exige_login(self):
         solicitud = self._crear_solicitud(self.usuario)
@@ -724,7 +922,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertContains(response, 'id="contract_analysis_spinner"')
         self.assertContains(response, 'Analizando...')
         self.assertContains(response, 'Estamos revisando el contrato. Esto puede tardar unos segundos.')
-        self.assertContains(response, 'Contrato cargado:')
+        self.assertContains(response, 'Contrato cargado correctamente')
         self.assertContains(response, 'contract-analysis-summary')
         self.assertContains(response, 'contract-analysis-warnings')
         self.assertContains(response, 'contract-analysis-blocks')
@@ -1050,7 +1248,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         response = self.client.get(f'/simular/?solicitud_id={solicitud.id}', HTTP_HOST=self.host)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Simula tu crédito para Prestadores de Servicios')
+        self.assertContains(response, 'Define las condiciones de tu solicitud')
         self.assertContains(response, '¿Cuánto necesitas?')
         self.assertContains(response, '¿En cuántos meses deseas pagarlo?')
         self.assertContains(response, 'Costo de originación')
@@ -1085,7 +1283,7 @@ class PortalMinimoPrestadoresTest(TestCase):
             'validación de identidad, evaluación de riesgo y consulta ante centrales de información.',
         )
         self.assertContains(response, 'form="simulator-form" data-register-application')
-        self.assertContains(response, '>Registrar solicitud</button>')
+        self.assertContains(response, '>Guardar condiciones solicitadas</button>')
         self.assertContains(response, '<form method="post"', count=1)
         contenido = response.content.decode('utf-8')
         self.assertLess(

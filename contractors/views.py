@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import logging
+from pathlib import Path
 from types import SimpleNamespace
 
 from django.conf import settings
@@ -52,7 +53,13 @@ from contractors.services.evaluacion_versionado import construir_version_datos
 from contractors.services.autorizacion_datacredito import (
     registrar_autorizacion_datacredito_desde_solicitud,
 )
-from contractors.services.presentacion_solicitud import construir_estado_publico_solicitud
+from contractors.services.presentacion_solicitud import (
+    construir_condiciones_guardadas,
+    construir_detalle_documento_publico,
+    construir_estado_publico_solicitud,
+    construir_presentacion_documentos,
+    construir_timeline_publico_solicitud,
+)
 from contractors.services.subsanacion import atender_requerimiento_subsanacion
 
 
@@ -434,15 +441,15 @@ def documentos_prestador_view(request, solicitud_id):
     else:
         form = DocumentoPrestadorForm()
 
+    estado_documentos = construir_presentacion_documentos(
+        solicitud,
+        DOCUMENTOS_OBLIGATORIOS_PRESTADOR,
+    )
     documentos = {
-        documento.tipo_documento: documento
-        for documento in solicitud.documentos.all()
+        item['tipo']: item['documento']
+        for item in estado_documentos
+        if item['documento']
     }
-    etiquetas = dict(ContractorApplicationDocument.TipoDocumento.choices)
-    estado_documentos = [
-        (tipo, etiquetas.get(tipo, tipo), documentos.get(tipo))
-        for tipo in DOCUMENTOS_OBLIGATORIOS_PRESTADOR
-    ]
     documentos_pendientes = [
         tipo for tipo in DOCUMENTOS_OBLIGATORIOS_PRESTADOR if tipo not in documentos
     ]
@@ -463,6 +470,25 @@ def documentos_prestador_view(request, solicitud_id):
 
 
 @login_required
+def ver_documento_prestador_view(request, solicitud_id, documento_id):
+    solicitud = _obtener_solicitud_del_usuario(solicitud_id, request.user)
+    try:
+        documento = solicitud.documentos.get(id=documento_id)
+    except ContractorApplicationDocument.DoesNotExist as exc:
+        raise Http404('Documento no encontrado.') from exc
+
+    return render(
+        request,
+        'contractors/detalle_documento_prestador.html',
+        {
+            'solicitud': solicitud,
+            'documento': documento,
+            'documento_publico': construir_detalle_documento_publico(documento),
+        },
+    )
+
+
+@login_required
 def descargar_documento_prestador_view(request, solicitud_id, documento_id):
     solicitud = _obtener_solicitud_del_usuario(solicitud_id, request.user)
     try:
@@ -470,10 +496,18 @@ def descargar_documento_prestador_view(request, solicitud_id, documento_id):
     except ContractorApplicationDocument.DoesNotExist as exc:
         raise Http404('Documento no encontrado.') from exc
 
+    detalle_publico = construir_detalle_documento_publico(documento)
+    extension = Path(documento.archivo.name).suffix.lower()
+    if extension not in {'.jpg', '.jpeg', '.png', '.pdf'}:
+        extension = '.jpg' if documento.tipo_documento in {
+            ContractorApplicationDocument.TipoDocumento.CEDULA_FRONTAL,
+            ContractorApplicationDocument.TipoDocumento.CEDULA_TRASERA,
+        } else '.pdf'
+
     return FileResponse(
         documento.archivo.open('rb'),
         as_attachment=False,
-        filename=documento.archivo.name.split('/')[-1],
+        filename=f"{detalle_publico['nombre_descarga']}{extension}",
     )
 
 
@@ -669,14 +703,15 @@ def mi_credito_prestador_view(request):
         )
         .order_by('-created_at', '-id')
     )
-    solicitudes_con_progreso = [
-        (solicitud, calcular_progreso_documental(solicitud))
-        for solicitud in solicitudes
-    ]
+    solicitudes_con_progreso = []
+    for solicitud in solicitudes:
+        progreso = calcular_progreso_documental(solicitud)
+        estado_publico = construir_estado_publico_solicitud(solicitud)
+        solicitudes_con_progreso.append((solicitud, progreso, estado_publico))
     solicitud_principal = solicitudes_con_progreso[0] if solicitudes_con_progreso else None
     estados_publicos = {
-        solicitud.id: construir_estado_publico_solicitud(solicitud)
-        for solicitud, _progreso in solicitudes_con_progreso
+        solicitud.id: estado_publico
+        for solicitud, _progreso, estado_publico in solicitudes_con_progreso
     }
     estado_publico_principal = (
         estados_publicos.get(solicitud_principal[0].id) if solicitud_principal else None
@@ -690,6 +725,28 @@ def mi_credito_prestador_view(request):
             'solicitudes_anteriores': solicitudes_con_progreso[1:],
             'estados_publicos': estados_publicos,
             'estado_publico_principal': estado_publico_principal,
+            'timeline_publico_principal': (
+                construir_timeline_publico_solicitud(
+                    solicitud_principal[0],
+                    solicitud_principal[1],
+                    estado_publico_principal,
+                )
+                if solicitud_principal else None
+            ),
+        },
+    )
+
+
+@login_required
+def condiciones_solicitud_prestador_view(request, solicitud_id):
+    solicitud = _obtener_solicitud_del_usuario(solicitud_id, request.user)
+    return render(
+        request,
+        'contractors/condiciones_solicitud_prestador.html',
+        {
+            'solicitud': solicitud,
+            'condiciones': construir_condiciones_guardadas(solicitud),
+            'estado_publico': construir_estado_publico_solicitud(solicitud),
         },
     )
 

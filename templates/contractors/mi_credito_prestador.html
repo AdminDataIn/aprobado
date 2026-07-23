@@ -1,166 +1,124 @@
-{% extends 'contractors/base.html' %}
+{% extends "contractors/base.html" %}
 {% load static humanize %}
-
 {% block title %}Mi crédito | Prestadores de Servicios{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'css/dashboard_emprendimiento.css' %}">
-
-<main class="contractors-credit-dashboard">
-  {% if solicitud_principal %}
-    {% with solicitud=solicitud_principal.0 progreso=solicitud_principal.1 %}
-      <section class="page-header-modern">
-        <div class="header-content contractors-header-content">
+<main class="cp-page">
+  <div class="cp-shell">
+    {% if solicitud_principal %}
+      {% with solicitud=solicitud_principal.0 progreso=solicitud_principal.1 estado_publico=solicitud_principal.2 %}
+        <header class="cp-page-header">
           <div>
-            <span class="credit-type-badge">Prestadores de Servicios</span>
-            <h1 class="header-title">Mi crédito</h1>
-            <p class="contractors-credit-copy">Consulta el estado de tu solicitud y revisa los próximos pasos del proceso.</p>
-            <div class="contractors-header-meta">
-              <span class="header-meta">Solicitud <strong>#{{ solicitud.id }}</strong></span>
-              <span class="header-meta">Registrada el <strong>{{ solicitud.created_at|date:'d/m/Y' }}</strong></span>
-              <span class="header-meta">Empresa <strong>{{ solicitud.empresa.nombre }}</strong></span>
+            <span class="cp-eyebrow">Prestadores de Servicios</span>
+            <h1 class="cp-title">Mi crédito</h1>
+            <p class="cp-description">Consulta el avance, tus condiciones guardadas y las acciones disponibles.</p>
+          </div>
+          <a class="cp-button cp-button--secondary cp-new-request" href="{% url 'contractors:solicitar' %}">Nueva solicitud</a>
+        </header>
+
+        {% include "contractors/components/application_summary.html" with estado_publico=estado_publico %}
+
+        <section class="cp-dashboard-hero" aria-labelledby="application-status-title">
+          <div>
+            <span class="cp-status-badge status-tone-{{ estado_publico.tono }}">{{ estado_publico.etiqueta }}</span>
+            <h1 id="application-status-title">{{ estado_publico.titulo }}</h1>
+            <p>{{ estado_publico.detalle }}</p>
+            {% if estado_publico.requerimiento %}
+              <div class="cp-alert cp-alert--warning" role="status">
+                <strong>Necesitamos información adicional</strong>
+                <p>{{ estado_publico.requerimiento.mensaje_publico }}</p>
+              </div>
+            {% endif %}
+          </div>
+          <div class="cp-dashboard-progress">
+            <small>Avance del proceso</small>
+            <strong>Etapa {{ timeline_publico_principal.etapa_actual }} de {{ timeline_publico_principal.total_etapas }}</strong>
+            <div class="cp-progress-track" role="progressbar" aria-valuemin="1" aria-valuemax="4" aria-valuenow="{{ timeline_publico_principal.etapa_actual }}">
+              <span style="width: {% widthratio timeline_publico_principal.etapa_actual timeline_publico_principal.total_etapas 100 %}%"></span>
             </div>
+            <time datetime="{{ solicitud.updated_at|date:'c' }}">Actualizado el {{ solicitud.updated_at|date:'d/m/Y, g:i a' }}</time>
           </div>
-          <div class="contractors-header-actions">
-            <span class="status-badge-modern contractors-status-badge status-{{ solicitud.estado|lower }}">
-              {% if solicitud.estado == 'DOCUMENTOS_PENDIENTES' %}Documentación pendiente
-              {% elif solicitud.estado == 'DOCUMENTOS_CARGADOS' %}Documentación completa
-              {% elif solicitud.estado == 'EVALUACION_PENDIENTE' %}Evaluación pendiente
-              {% elif solicitud.estado == 'EN_EVALUACION' %}En evaluación
-              {% elif solicitud.estado == 'EVALUACION_COMPLETADA' %}Evaluación completada
-              {% elif solicitud.estado == 'EN_REVISION_MANUAL' %}Revisión manual
-              {% else %}Requiere validación{% endif %}
-            </span>
-            <a class="boton boton-secundario contractors-new-request" href="{% url 'contractors:solicitar' %}">Nueva solicitud</a>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <section class="review-state-layout" aria-labelledby="estado-solicitud-title">
-        <div class="review-state-hero">
-          <div class="review-state-icon" aria-hidden="true"><strong>#{{ solicitud.id }}</strong></div>
-          <div class="review-state-content">
-            <span class="review-state-badge">Estado de la solicitud</span>
-            {% if estado_publico_principal %}
-            <h2 id="estado-solicitud-title">{{ estado_publico_principal.titulo }}</h2>
-            <p>{{ estado_publico_principal.detalle }}</p>
-            {% else %}
-            <h2 id="estado-solicitud-title">
-              {% if solicitud.estado == 'DOCUMENTOS_PENDIENTES' %}Completa la documentación de tu solicitud
-              {% elif solicitud.estado == 'DOCUMENTOS_CARGADOS' %}Recibimos tu documentación
-              {% elif solicitud.estado == 'EVALUACION_PENDIENTE' %}Tu solicitud está pendiente de evaluación
-              {% elif solicitud.estado == 'EN_EVALUACION' %}Tu solicitud está en evaluación
-              {% elif solicitud.estado == 'EVALUACION_COMPLETADA' %}La evaluación operativa fue completada
-              {% elif solicitud.estado == 'EN_REVISION_MANUAL' %}Tu solicitud requiere revisión manual
-              {% else %}Tu solicitud requiere validación{% endif %}
-            </h2>
-            <p>
-              {% if solicitud.monto_solicitado and solicitud.plazo_meses %}
-                Registramos las condiciones seleccionadas. El proceso continuará con las validaciones internas correspondientes.
-              {% else %}
-                Revisa la información pendiente y completa la simulación para registrar las condiciones solicitadas.
-              {% endif %}
-            </p>
-            {% endif %}
-          </div>
-          <div class="review-state-time">
-            <small>Etapa actual</small>
-            <strong>
-              {% if progreso.porcentaje < 100 %}Documentos
-              {% elif not solicitud.monto_solicitado or not solicitud.plazo_meses %}Simulación
-              {% elif solicitud.estado == 'EVALUACION_PENDIENTE' %}Evaluación pendiente
-              {% elif solicitud.estado == 'EN_EVALUACION' %}Evaluación
-              {% elif solicitud.estado == 'EVALUACION_COMPLETADA' %}Evaluación completada
-              {% elif solicitud.estado == 'EN_REVISION_MANUAL' %}Revisión manual
-              {% else %}Validación{% endif %}
-            </strong>
-            <span>Consulta aquí los avances</span>
-          </div>
+        <div class="cp-dashboard-grid">
+          <section class="cp-surface cp-dashboard-section" aria-labelledby="application-summary-title">
+            <div class="cp-section-header"><div><h2 id="application-summary-title">Resumen</h2><p>Información principal registrada en tu solicitud.</p></div></div>
+            <dl class="cp-data-list">
+              <div class="cp-data-row"><dt>Monto solicitado</dt><dd>{% if solicitud.monto_solicitado %}${{ solicitud.monto_solicitado|floatformat:0|intcomma }}{% else %}Pendiente{% endif %}</dd></div>
+              <div class="cp-data-row"><dt>Plazo</dt><dd>{% if solicitud.plazo_meses %}{{ solicitud.plazo_meses }} meses{% else %}Pendiente{% endif %}</dd></div>
+              <div class="cp-data-row"><dt>Empresa</dt><dd>{{ solicitud.empresa.nombre }}</dd></div>
+              <div class="cp-data-row"><dt>Contrato</dt><dd>{{ solicitud.get_estado_contrato_display|default:'Pendiente de confirmación' }}</dd></div>
+              <div class="cp-data-row"><dt>Documentos</dt><dd>{{ progreso.cargados }} de {{ progreso.total }}</dd></div>
+            </dl>
+          </section>
+
+          <section class="cp-surface cp-dashboard-section" aria-labelledby="application-timeline-title">
+            <div class="cp-section-header"><div><h2 id="application-timeline-title">Proceso</h2><p>Resumen de los pasos de tu solicitud.</p></div></div>
+            <ol class="cp-timeline">
+              {% for evento in timeline_publico_principal.eventos %}
+                <li class="cp-timeline-item {% if evento.estado == 'COMPLETADO' %}is-complete{% elif evento.estado == 'ACTUAL' %}is-current{% endif %}">
+                  <span class="cp-timeline-marker" aria-hidden="true">{% if evento.estado == 'COMPLETADO' %}✓{% else %}{{ forloop.counter }}{% endif %}</span>
+                  <span class="cp-timeline-copy">
+                    <strong>{{ evento.titulo }}</strong>
+                    <span>{{ evento.detalle }}</span>
+                    {% if evento.fecha %}<time datetime="{{ evento.fecha|date:'c' }}">{{ evento.fecha|date:'d/m/Y' }}</time>{% endif %}
+                  </span>
+                </li>
+              {% endfor %}
+            </ol>
+          </section>
         </div>
 
-        <div class="review-state-cards contractors-review-grid">
-          <article class="review-state-card">
-            <h3>Detalle de la solicitud</h3>
-            <div class="review-state-row"><span>Número</span><strong>#{{ solicitud.id }}</strong></div>
-            <div class="review-state-row"><span>Empresa</span><strong>{{ solicitud.empresa.nombre }}</strong></div>
-            <div class="review-state-row"><span>Monto solicitado</span><strong>{% if solicitud.monto_solicitado %}${{ solicitud.monto_solicitado|floatformat:0|intcomma }}{% else %}Pendiente{% endif %}</strong></div>
-            <div class="review-state-row"><span>Plazo</span><strong>{% if solicitud.plazo_meses %}{{ solicitud.plazo_meses }} meses{% else %}Pendiente{% endif %}</strong></div>
-            <div class="review-state-row"><span>Análisis contractual</span><strong>{{ solicitud.get_estado_analisis_contractual_display }}</strong></div>
-          </article>
-
-          <article class="review-state-card">
-            <h3>Próximos pasos</h3>
-            <ul class="review-state-steps">
-              <li class="done"><span aria-hidden="true">✓</span><span>Información personal registrada.</span></li>
-              <li class="{% if progreso.porcentaje == 100 %}done{% else %}active{% endif %}">
-                <span aria-hidden="true">{% if progreso.porcentaje == 100 %}✓{% else %}2{% endif %}</span>
-                <span>Documentos: {{ progreso.cargados }} de {{ progreso.total }} cargados.</span>
-              </li>
-              <li class="{% if solicitud.monto_solicitado and solicitud.plazo_meses %}done{% elif progreso.porcentaje == 100 %}active{% endif %}">
-                <span aria-hidden="true">{% if solicitud.monto_solicitado and solicitud.plazo_meses %}✓{% else %}3{% endif %}</span>
-                <span>Registrar monto y plazo de la simulación.</span>
-              </li>
-              <li class="{% if solicitud.monto_solicitado and solicitud.plazo_meses %}active{% endif %}"><span aria-hidden="true">4</span><span>Validación documental y análisis interno.</span></li>
-            </ul>
-          </article>
-        </div>
-
-        <div class="contractors-credit-actions">
-          {% if estado_publico_principal.requerimiento %}
-            <a class="boton" href="{% url 'contractors:atender_subsanacion' solicitud.id estado_publico_principal.requerimiento.id %}">Atender requerimiento</a>
-          {% elif progreso.porcentaje < 100 %}
-            <a class="boton" href="{% url 'contractors:solicitar' %}?solicitud_id={{ solicitud.id }}">Continuar solicitud</a>
-          {% elif not solicitud.monto_solicitado or not solicitud.plazo_meses %}
-            <a class="boton" href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">Simular</a>
-          {% else %}
-            <a class="boton" href="#estado-solicitud-title">Ver estado</a>
+        <nav class="cp-quick-actions" aria-label="Acciones de la solicitud">
+          {% if estado_publico.accion == 'SUBSANACION' and estado_publico.requerimiento %}
+            <a class="cp-button" href="{% url 'contractors:atender_subsanacion' solicitud.id estado_publico.requerimiento.id %}">{{ estado_publico.accion_etiqueta }}</a>
+          {% elif estado_publico.accion == 'DOCUMENTOS' %}
+            <a class="cp-button" href="{% url 'contractors:documentos' solicitud.id %}">{{ estado_publico.accion_etiqueta }}</a>
+          {% elif estado_publico.accion == 'SIMULACION' %}
+            <a class="cp-button" href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">{{ estado_publico.accion_etiqueta }}</a>
+          {% elif estado_publico.accion == 'CONDICIONES' %}
+            <a class="cp-button" href="{% url 'contractors:condiciones_solicitud' solicitud.id %}">{{ estado_publico.accion_etiqueta }}</a>
           {% endif %}
-          <div class="contractors-secondary-actions" aria-label="Acciones de la solicitud">
-            {% if solicitud.monto_solicitado and solicitud.plazo_meses %}
-              <a class="boton boton-secundario" href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">Ver resumen</a>
-            {% endif %}
-            <a class="boton boton-secundario" href="{% url 'contractors:documentos' solicitud.id %}">Ver documentos</a>
-          </div>
-        </div>
-      </section>
-    {% endwith %}
+          {% if estado_publico.accion != 'DOCUMENTOS' %}
+            <a class="cp-button cp-button--secondary" href="{% url 'contractors:documentos' solicitud.id %}">Documentos</a>
+          {% endif %}
+          {% if solicitud.simulada_en and estado_publico.accion != 'CONDICIONES' %}
+            <a class="cp-button cp-button--secondary" href="{% url 'contractors:condiciones_solicitud' solicitud.id %}">Ver condiciones solicitadas</a>
+          {% endif %}
+        </nav>
+      {% endwith %}
 
-    {% if solicitudes_anteriores %}
-      <section class="payment-card contractors-history" aria-labelledby="historial-title">
-        <h2 id="historial-title">Solicitudes anteriores</h2>
-        <div class="contractors-history-list">
-          {% for solicitud, progreso in solicitudes_anteriores %}
-            <article class="contractors-history-row">
-              <div class="contractors-history-id">
-                <strong>#{{ solicitud.id }}</strong>
-                <small>{{ solicitud.created_at|date:'d/m/Y' }}</small>
-              </div>
-              <div class="contractors-history-company">
-                <small>Empresa</small>
-                <strong>{{ solicitud.empresa.nombre }}</strong>
-              </div>
-              <div class="contractors-history-data">
-                <span>{% if solicitud.monto_solicitado %}${{ solicitud.monto_solicitado|floatformat:0|intcomma }}{% else %}Monto pendiente{% endif %}</span>
-                <span>{% if solicitud.plazo_meses %}{{ solicitud.plazo_meses }} meses{% else %}Plazo pendiente{% endif %}</span>
-              </div>
-              <div class="contractors-history-state">
-                <span>{{ solicitud.get_estado_display }}</span>
-                <small>{{ progreso.cargados }}/{{ progreso.total }} documentos</small>
-              </div>
-              <a class="contractors-history-link" href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">Consultar</a>
-            </article>
-          {% endfor %}
-        </div>
+      {% if solicitudes_anteriores %}
+        <section class="cp-surface cp-history" aria-labelledby="previous-applications-title">
+          <div class="cp-section-header"><div><h2 id="previous-applications-title">Solicitudes anteriores</h2><p>Consulta el registro de procesos anteriores.</p></div></div>
+          <div class="cp-history-list">
+            {% for solicitud, progreso, estado_publico in solicitudes_anteriores %}
+              <article class="cp-history-row">
+                <div class="cp-history-cell"><small>Solicitud</small><strong>#{{ solicitud.id }}</strong></div>
+                <div class="cp-history-cell"><small>Empresa</small><strong>{{ solicitud.empresa.nombre }}</strong></div>
+                <div class="cp-history-cell"><small>Condiciones</small><strong>{% if solicitud.monto_solicitado %}${{ solicitud.monto_solicitado|floatformat:0|intcomma }} · {{ solicitud.plazo_meses }} meses{% else %}Pendientes{% endif %}</strong></div>
+                <div class="cp-history-cell"><small>Estado</small><strong>{{ estado_publico.etiqueta }}</strong></div>
+                {% if progreso.porcentaje < 100 %}
+                  <a class="cp-button cp-button--quiet" href="{% url 'contractors:documentos' solicitud.id %}">Completar</a>
+                {% elif solicitud.simulada_en %}
+                  <a class="cp-button cp-button--quiet" href="{% url 'contractors:condiciones_solicitud' solicitud.id %}">Consultar</a>
+                {% else %}
+                  <a class="cp-button cp-button--quiet" href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">Continuar</a>
+                {% endif %}
+              </article>
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+    {% else %}
+      <section class="cp-surface cp-empty-state">
+        <span class="cp-eyebrow">Prestadores de Servicios</span>
+        <h1>Aún no tienes solicitudes</h1>
+        <p>Registra la información de tu contrato para iniciar el proceso.</p>
+        <a class="cp-button" href="{% url 'contractors:solicitar' %}">Iniciar solicitud</a>
       </section>
     {% endif %}
-  {% else %}
-    <section class="payment-card empty-state contractors-empty-state">
-      <span class="credit-type-badge">Prestadores de Servicios</span>
-      <h1>Aún no tienes solicitudes</h1>
-      <p>Inicia una solicitud y registra la información de tu contrato para continuar con el proceso.</p>
-      <a class="boton" href="{% url 'contractors:solicitar' %}">Solicitar crédito</a>
-    </section>
-  {% endif %}
+  </div>
 </main>
 
 {% for message in messages %}
@@ -168,87 +126,26 @@
     <div id="modalSolicitudRegistrada" class="div-prin-modal" style="display:flex" data-auto-open="true">
       <div class="modal-contenido" role="dialog" aria-modal="true" aria-labelledby="modalSolicitudTitulo">
         <button type="button" class="close-span" data-close-registration-modal aria-label="Cerrar">&times;</button>
-        <div class="div-log-mod">
-          <a href="{% url 'contractors:mi_credito' %}" class="logo" aria-label="Aprobado">
-            <img src="{% static 'images/logo.png' %}" alt="Aprobado">
-          </a>
-        </div>
+        <div class="div-log-mod"><img src="{% static 'images/logo.png' %}" alt="Aprobado"></div>
         <div id="mensajeModal">
           <h2 id="modalSolicitudTitulo">Solicitud registrada correctamente</h2>
-          <p>Hemos registrado las condiciones de tu solicitud. Ahora iniciaremos la validación documental y el análisis de riesgo. Podrás consultar el avance desde Mi crédito.</p>
+          <p>Registramos tus condiciones. Ahora continuaremos con las validaciones correspondientes.</p>
           <p><strong>La simulación no representa una aprobación definitiva.</strong></p>
-          <button type="button" class="boton" data-close-registration-modal>Entendido</button>
+          <button type="button" class="cp-button" data-close-registration-modal>Entendido</button>
         </div>
       </div>
     </div>
   {% endif %}
 {% endfor %}
 
-<style>
-  .contractors-credit-dashboard { width: min(1120px, calc(100% - 32px)); margin: 32px auto 64px; }
-  .contractors-header-content { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
-  .contractors-credit-copy { margin: 12px 0; color: #475569; line-height: 1.55; }
-  .contractors-header-meta { display: flex; flex-wrap: wrap; gap: 12px 22px; }
-  .contractors-header-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
-  .contractors-new-request { white-space: nowrap; }
-  .contractors-status-badge { flex: 0 0 auto; background: linear-gradient(135deg, #e0f2fe, #dbeafe); color: #075985; }
-  .contractors-review-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-  .review-state-content h2 { margin: 6px 0 8px; color: #003893; font-size: clamp(21px, 2vw, 28px); line-height: 1.2; }
-  .review-state-card h3, .contractors-history h2 { margin: 0 0 14px; color: #0f172a; font-size: 18px; }
-  .review-state-steps li > span:first-child { display: inline-flex; flex: 0 0 24px; width: 24px; height: 24px; align-items: center; justify-content: center; border-radius: 50%; background: #e2e8f0; color: #64748b; font-size: 12px; font-weight: 800; }
-  .review-state-steps li.done > span:first-child { background: #d1fae5; color: #047857; }
-  .review-state-steps li.active > span:first-child { background: #dbeafe; color: #1d4ed8; }
-  .contractors-credit-actions, .contractors-secondary-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-  .contractors-credit-actions { align-items: center; justify-content: space-between; margin-top: 18px; }
-  .contractors-secondary-actions { margin-left: auto; }
-  .contractors-history { margin-top: 28px; }
-  .contractors-history-list { display: grid; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; }
-  .contractors-history-row { display: grid; grid-template-columns: 90px minmax(190px, 1.5fr) minmax(160px, 1fr) minmax(150px, 1fr) auto; align-items: center; gap: 16px; padding: 13px 15px; background: #fff; }
-  .contractors-history-row + .contractors-history-row { border-top: 1px solid #e2e8f0; }
-  .contractors-history-id, .contractors-history-company, .contractors-history-state { display: grid; gap: 2px; min-width: 0; }
-  .contractors-history-row small { color: #64748b; font-size: 12px; }
-  .contractors-history-company strong { overflow: hidden; color: #0f172a; text-overflow: ellipsis; white-space: nowrap; }
-  .contractors-history-data { display: flex; flex-wrap: wrap; gap: 5px 12px; color: #334155; font-size: 13px; }
-  .contractors-history-state > span { width: max-content; padding: 5px 9px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 12px; font-weight: 700; }
-  .contractors-history-link { color: #0369a1; font-size: 13px; font-weight: 800; text-decoration: none; }
-  .contractors-history-link:hover { text-decoration: underline; }
-  .contractors-empty-state { max-width: 760px; margin: 70px auto; }
-  #mensajeModal h2 { margin: 0 0 14px; color: #111827; font-size: 22px; }
-  #mensajeModal p { margin: 0 0 16px; }
-  #mensajeModal .boton { margin-top: 4px; }
-  @media (max-width: 760px) {
-    .contractors-header-content { align-items: flex-start; flex-direction: column; }
-    .contractors-header-actions { width: 100%; align-items: flex-start; }
-    .review-state-hero { grid-template-columns: 1fr; }
-    .review-state-time { width: 100%; }
-    .contractors-review-grid { grid-template-columns: 1fr; }
-    .contractors-history-row { grid-template-columns: 72px minmax(0, 1fr) auto; gap: 10px; }
-    .contractors-history-data, .contractors-history-state { grid-column: 2 / -1; }
-    .contractors-history-link { grid-column: 3; grid-row: 1; }
-    .contractors-credit-actions .boton { width: 100%; }
-    .contractors-secondary-actions { width: 100%; margin-left: 0; }
-  }
-</style>
-
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   const modal = document.getElementById('modalSolicitudRegistrada');
   if (!modal) return;
-
-  function closeModal() {
-    modal.style.display = 'none';
-    modal.removeAttribute('data-auto-open');
-  }
-
-  modal.querySelectorAll('[data-close-registration-modal]').forEach(button => {
-    button.addEventListener('click', closeModal);
-  });
-  modal.addEventListener('click', event => {
-    if (event.target === modal) closeModal();
-  });
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape') closeModal();
-  });
+  function closeModal() { modal.style.display = 'none'; modal.removeAttribute('data-auto-open'); }
+  modal.querySelectorAll('[data-close-registration-modal]').forEach(button => button.addEventListener('click', closeModal));
+  modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') closeModal(); });
 });
 </script>
 {% endblock %}

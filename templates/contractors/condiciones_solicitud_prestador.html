@@ -1,0 +1,88 @@
+{% extends "contractors/base.html" %}
+{% load humanize %}
+{% block title %}Condiciones solicitadas | Prestadores de Servicios{% endblock %}
+
+{% block content %}
+<main class="cp-page">
+  <div class="cp-shell">
+    {% include "contractors/components/breadcrumb.html" with current_label="Condiciones solicitadas" %}
+
+    <header class="cp-page-header">
+      <div>
+        <span class="cp-eyebrow">Consulta read-only</span>
+        <h1 class="cp-title">Condiciones solicitadas</h1>
+        <p class="cp-description">
+          Este es el registro guardado cuando confirmaste la simulación. Consultarlo no
+          recalcula valores ni modifica tu solicitud.
+        </p>
+      </div>
+      <span class="cp-status-badge">Carácter informativo</span>
+    </header>
+
+    {% include "contractors/components/application_summary.html" with estado_publico=estado_publico %}
+
+    {% if condiciones.disponible %}
+      <section class="cp-financial-highlight" aria-label="Condiciones principales">
+        <div>
+          <small>Monto solicitado</small>
+          <strong>${{ condiciones.monto|floatformat:0|intcomma }}</strong>
+        </div>
+        <div>
+          <small>Plazo solicitado</small>
+          <strong>{{ condiciones.plazo_meses }} meses</strong>
+        </div>
+        <div>
+          <small>Tasa mensual aplicada</small>
+          <strong>{{ condiciones.tasa_mensual_porcentaje|floatformat:2 }}%</strong>
+        </div>
+      </section>
+
+      <div class="cp-detail-layout">
+        <section class="cp-surface cp-detail-main" aria-labelledby="conditions-detail-title">
+          <div class="cp-section-header">
+            <div>
+              <h2 id="conditions-detail-title">Detalle guardado</h2>
+              <p>Valores de trazabilidad asociados a la simulación confirmada.</p>
+            </div>
+          </div>
+          <dl class="cp-data-list">
+            <div class="cp-data-row"><dt>Fecha de simulación</dt><dd>{{ condiciones.fecha|date:'d/m/Y, g:i a' }}</dd></div>
+            <div class="cp-data-row"><dt>Versión de configuración</dt><dd>{{ condiciones.version_configuracion }}</dd></div>
+            <div class="cp-data-row"><dt>Versión de política</dt><dd>{{ condiciones.version_politica|default:'No registrada' }}</dd></div>
+            <div class="cp-data-row"><dt>Monto máximo configurado</dt><dd>{% if condiciones.monto_maximo_configuracion %}${{ condiciones.monto_maximo_configuracion|floatformat:0|intcomma }}{% else %}<span class="cp-empty-value">No registrado</span>{% endif %}</dd></div>
+            <div class="cp-data-row"><dt>Plazo máximo configurado</dt><dd>{% if condiciones.plazo_maximo_configuracion %}{{ condiciones.plazo_maximo_configuracion }} meses{% else %}<span class="cp-empty-value">No registrado</span>{% endif %}</dd></div>
+          </dl>
+        </section>
+
+        <aside class="cp-surface cp-detail-aside" aria-labelledby="cost-summary-title">
+          <div class="cp-section-header">
+            <div><h2 id="cost-summary-title">Cuota y cargos</h2></div>
+          </div>
+          <div class="cp-alert cp-alert--warning" role="status">
+            <strong>Detalle histórico no disponible</strong>
+            <p>Esta versión del snapshot no almacenó cuota ni cargos desagregados. No los recalculamos para evitar mostrar valores distintos a los confirmados.</p>
+          </div>
+          <p class="cp-description">La aprobación final depende de las validaciones documentales y de riesgo.</p>
+        </aside>
+      </div>
+    {% else %}
+      <section class="cp-surface cp-empty-state" aria-labelledby="conditions-empty-title">
+        <span class="cp-eyebrow">Sin registro confirmado</span>
+        <h1 id="conditions-empty-title">Aún no hay condiciones guardadas</h1>
+        <p>Completa los documentos y confirma una simulación para consultar aquí su registro.</p>
+        <div class="cp-actions">
+          <a class="cp-button cp-button--secondary" href="{% url 'contractors:documentos' solicitud.id %}">Revisar documentos</a>
+          <a class="cp-button" href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">Ir al simulador</a>
+        </div>
+      </section>
+    {% endif %}
+
+    <div class="cp-quick-actions" aria-label="Acciones de condiciones">
+      <a class="cp-button cp-button--secondary" href="{% url 'contractors:mi_credito' %}">Volver a Mi crédito</a>
+      {% if condiciones.disponible and estado_publico.accion == 'SIMULACION' %}
+        <a class="cp-button" href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">Modificar condiciones</a>
+      {% endif %}
+    </div>
+  </div>
+</main>
+{% endblock %}

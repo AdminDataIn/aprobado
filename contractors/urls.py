@@ -20,6 +20,11 @@ urlpatterns = [
         name='analizar_contrato',
     ),
     path(
+        'solicitud/<int:solicitud_id>/documentos/<int:documento_id>/',
+        views.ver_documento_prestador_view,
+        name='ver_documento',
+    ),
+    path(
         'solicitud/<int:solicitud_id>/documentos/<int:documento_id>/descargar/',
         views.descargar_documento_prestador_view,
         name='descargar_documento',
@@ -27,6 +32,11 @@ urlpatterns = [
     path('simular/', views.simular_prestador_view, name='simular'),
     path('simular/calcular/', views.calcular_simulacion_prestador_view, name='calcular_simulacion'),
     path('mi-credito/', views.mi_credito_prestador_view, name='mi_credito'),
+    path(
+        'mi-credito/solicitud/<int:solicitud_id>/condiciones/',
+        views.condiciones_solicitud_prestador_view,
+        name='condiciones_solicitud',
+    ),
     path(
         'mi-credito/solicitud/<int:solicitud_id>/subsanacion/<int:requerimiento_id>/',
         views.atender_subsanacion_prestador_view,

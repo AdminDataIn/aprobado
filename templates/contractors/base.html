@@ -7,6 +7,8 @@
   <title>{% block title %}Prestadores de Servicios | Aprobado{% endblock %}</title>
   {% include 'base/favicon.html' %}
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <link rel="stylesheet" href="{% static 'css/contractors-portal.css' %}">
+  {% block extra_css %}{% endblock %}
   <style>
     :root {
       --azul: #071a33;
@@ -680,7 +682,7 @@
     }
   </style>
 </head>
-<body>
+<body class="contractors-portal">
   {% include "base/navbar_contractors.html" %}
   {% if messages %}
     <div class="mensajes">
