@@ -1940,7 +1940,11 @@ class ReestructuracionCredito(models.Model):
     """
     class TipoAbono(models.TextChoices):
         NORMAL = 'NORMAL', 'Abono Normal'
-        CAPITAL = 'CAPITAL', 'Abono a Capital'
+        CAPITAL = 'CAPITAL', 'Abono a Capital - reducir cuota'
+        CAPITAL_REDUCIR_PLAZO = (
+            'CAPITAL_REDUCIR_PLAZO',
+            'Abono a Capital - reducir plazo',
+        )
         MAYOR = 'MAYOR', 'Abono Mayor (>2 cuotas)'
 
     credito = models.ForeignKey(
@@ -1957,7 +1961,7 @@ class ReestructuracionCredito(models.Model):
         help_text="Monto total abonado que generó la reestructuración"
     )
     tipo_abono = models.CharField(
-        max_length=20,
+        max_length=32,
         choices=TipoAbono.choices,
         default=TipoAbono.NORMAL
     )
