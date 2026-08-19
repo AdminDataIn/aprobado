@@ -1,11 +1,68 @@
 from .common import *
 from .common import _build_capacidad_descuento_context
-from gestion_creditos.models import DetalleContablePago
+from gestion_creditos.models import DetalleContablePago, ReestructuracionCredito
 from gestion_creditos.forms import ComprobantePagoExistenteForm
 from gestion_creditos.services.advisors import filter_creditos_by_asesor
 from libranza.services.special_case_audit import create_special_case_audit
 from libranza.services.special_case_originator import SpecialCaseOriginationError, originate_special_case_libranza
 from libranza.services.special_cases import SpecialCaseSimulationInput, SpecialCaseSimulationError, simulate_special_case_libranza
+
+
+def _sumar_cuotas(cuotas, atributo):
+    return sum(
+        (getattr(cuota, atributo) or Decimal('0.00') for cuota in cuotas),
+        Decimal('0.00'),
+    )
+
+
+def _build_admin_amortization_presentation(credito, cuotas):
+    cuotas_pagadas = [cuota for cuota in cuotas if cuota.pagada]
+    cuotas_pendientes = [cuota for cuota in cuotas if not cuota.pagada]
+    abonos_extraordinarios = list(
+        credito.reestructuraciones
+        .filter(tipo_abono__in=[
+            ReestructuracionCredito.TipoAbono.CAPITAL,
+            ReestructuracionCredito.TipoAbono.CAPITAL_REDUCIR_PLAZO,
+        ])
+        .select_related('pago_relacionado')
+        .order_by('fecha_reestructuracion', 'id')
+    )
+
+    total_cuotas_pagadas = sum(
+        (
+            cuota.monto_pagado
+            if cuota.monto_pagado is not None
+            else (cuota.valor_cuota or Decimal('0.00'))
+            for cuota in cuotas_pagadas
+        ),
+        Decimal('0.00'),
+    )
+
+    return {
+        'cuotas_pagadas_tabla': cuotas_pagadas,
+        'cuotas_pendientes_tabla': cuotas_pendientes,
+        'historico_pagado': {
+            'cantidad_cuotas': len(cuotas_pagadas),
+            'capital_amortizado': _sumar_cuotas(cuotas_pagadas, 'capital_a_pagar'),
+            'intereses_pagados': _sumar_cuotas(cuotas_pagadas, 'interes_a_pagar'),
+            'total_cuotas_pagadas': total_cuotas_pagadas,
+        },
+        'plan_vigente': {
+            'cantidad_cuotas': len(cuotas_pendientes),
+            'capital_pendiente': credito.capital_pendiente or Decimal('0.00'),
+            'intereses_futuros': _sumar_cuotas(cuotas_pendientes, 'interes_a_pagar'),
+            'saldo_programado_pendiente': credito.saldo_pendiente or Decimal('0.00'),
+            'proximo_vencimiento': (
+                credito.fecha_proximo_pago
+                or (cuotas_pendientes[0].fecha_vencimiento if cuotas_pendientes else None)
+            ),
+        },
+        'abonos_extraordinarios': abonos_extraordinarios,
+        'total_abonos_extraordinarios': sum(
+            (abono.monto_abonado for abono in abonos_extraordinarios),
+            Decimal('0.00'),
+        ),
+    }
 
 
 def _admin_empresas_choices():
@@ -614,7 +671,13 @@ def detalle_credito_view(request, credito_id):
     cuotas_restantes = resumen_pagos['cuotas_restantes']
 
     # Tabla de amortización (si existe)
-    tabla_amortizacion = credito.tabla_amortizacion.all().order_by('numero_cuota')
+    tabla_amortizacion = list(
+        credito.tabla_amortizacion.all().order_by('numero_cuota')
+    )
+    presentacion_amortizacion = _build_admin_amortization_presentation(
+        credito,
+        tabla_amortizacion,
+    )
 
     pagador_decision = None
     pagador_aprobado = False
@@ -660,6 +723,7 @@ def detalle_credito_view(request, credito_id):
         'cuotas_restantes': cuotas_restantes,
         'monto_total_pagado': monto_total_pagado,
         'tabla_amortizacion': tabla_amortizacion,  #  NUEVA: Tabla de amortización
+        **presentacion_amortizacion,
         'pagador_decision': pagador_decision,
         'pagador_aprobado': pagador_aprobado,
         'pagador_rechazado': pagador_rechazado,

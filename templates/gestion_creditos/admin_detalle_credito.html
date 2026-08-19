@@ -315,12 +315,10 @@
                                 </tr>
                             </thead>
                             <tbody>
-                            {% for cuota in tabla_amortizacion %}
-                                <tr {% if cuota.pagada %}class="table-success" style="opacity: 0.7;"{% endif %}>
+                            {% for cuota in cuotas_pagadas_tabla %}
+                                <tr class="table-success" style="opacity: 0.7;">
                                     <td class="text-center">
-                                        <span class="badge {% if cuota.pagada %}bg-success{% else %}bg-warning{% endif %}">
-                                            {{ cuota.numero_cuota }}
-                                        </span>
+                                        <span class="badge bg-success">{{ cuota.numero_cuota }}</span>
                                     </td>
                                     <td>{{ cuota.fecha_vencimiento|date:"d/m/Y" }}</td>
                                     <td class="text-end">${{ cuota.capital_a_pagar|intcomma }}</td>
@@ -328,25 +326,84 @@
                                     <td class="text-end fw-bold">${{ cuota.valor_cuota|intcomma }}</td>
                                     <td class="text-end text-muted">${{ cuota.saldo_capital_pendiente|intcomma }}</td>
                                     <td class="text-center">
-                                        {% if cuota.pagada %}
-                                            <i class="bi bi-check-circle-fill text-success" title="Pagada el {{ cuota.fecha_pago|date:'d/m/Y' }}"></i>
-                                        {% else %}
-                                            <i class="bi bi-clock text-warning" title="Pendiente"></i>
-                                        {% endif %}
+                                        <i class="bi bi-check-circle-fill text-success" title="Pagada el {{ cuota.fecha_pago|date:'d/m/Y' }}"></i>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+
+                            {% for abono in abonos_extraordinarios %}
+                                <tr class="table-info">
+                                    <td colspan="7" class="p-3">
+                                        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
+                                            <div>
+                                                <div class="small text-uppercase fw-semibold text-primary mb-1">
+                                                    <i class="bi bi-arrow-down-circle me-1"></i>Abono extraordinario a capital
+                                                </div>
+                                                <strong>{{ abono.fecha_reestructuracion|date:"d/m/Y" }}</strong>
+                                                <span class="ms-2 badge bg-primary-subtle text-primary">
+                                                    {% if abono.tipo_abono == 'CAPITAL_REDUCIR_PLAZO' %}Reducción de plazo{% else %}Reducción de cuota{% endif %}
+                                                </span>
+                                            </div>
+                                            <div class="fs-5 fw-bold text-primary">${{ abono.monto_abonado|intcomma }}</div>
+                                        </div>
+                                        <div class="row g-2 mt-2 small">
+                                            <div class="col-md-4">Capital anterior: <strong>${{ abono.capital_pendiente_anterior|intcomma }}</strong></div>
+                                            <div class="col-md-4">Capital nuevo: <strong>${{ abono.capital_pendiente_nuevo|intcomma }}</strong></div>
+                                            <div class="col-md-4">Ahorro de intereses: <strong>${{ abono.ahorro_intereses|intcomma }}</strong></div>
+                                            <div class="col-md-4">Saldo anterior: <strong>${{ abono.saldo_pendiente_anterior|intcomma }}</strong></div>
+                                            <div class="col-md-4">Saldo nuevo: <strong>${{ abono.saldo_pendiente_nuevo|intcomma }}</strong></div>
+                                            <div class="col-md-4">Plazo restante: <strong>{{ abono.plazo_restante_anterior }} → {{ abono.plazo_restante_nuevo }} cuotas</strong></div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+
+                            {% for cuota in cuotas_pendientes_tabla %}
+                                <tr>
+                                    <td class="text-center">
+                                        <span class="badge bg-warning">{{ cuota.numero_cuota }}</span>
+                                    </td>
+                                    <td>{{ cuota.fecha_vencimiento|date:"d/m/Y" }}</td>
+                                    <td class="text-end">${{ cuota.capital_a_pagar|intcomma }}</td>
+                                    <td class="text-end">${{ cuota.interes_a_pagar|intcomma }}</td>
+                                    <td class="text-end fw-bold">${{ cuota.valor_cuota|intcomma }}</td>
+                                    <td class="text-end text-muted">${{ cuota.saldo_capital_pendiente|intcomma }}</td>
+                                    <td class="text-center">
+                                        <i class="bi bi-clock text-warning" title="Pendiente"></i>
                                     </td>
                                 </tr>
                             {% endfor %}
                             </tbody>
-                            <tfoot class="table-light">
-                                <tr class="fw-bold">
-                                    <td colspan="2" class="text-end">TOTALES:</td>
-                                    <td class="text-end">${{ tabla_amortizacion|sum_attr:"capital_a_pagar"|intcomma }}</td>
-                                    <td class="text-end">${{ tabla_amortizacion|sum_attr:"interes_a_pagar"|intcomma }}</td>
-                                    <td class="text-end">${{ tabla_amortizacion|sum_attr:"valor_cuota"|intcomma }}</td>
-                                    <td colspan="2"></td>
-                                </tr>
-                            </tfoot>
                         </table>
+
+                        <div class="row g-3 mt-2" data-amortization-summary>
+                            <div class="col-lg-4">
+                                <section class="h-100 border rounded p-3 bg-light">
+                                    <h3 class="h6 text-uppercase mb-3">Histórico pagado</h3>
+                                    <div class="d-flex justify-content-between mb-2"><span>Cuotas pagadas</span><strong>{{ historico_pagado.cantidad_cuotas }}</strong></div>
+                                    <div class="d-flex justify-content-between mb-2"><span>Capital amortizado</span><strong>${{ historico_pagado.capital_amortizado|intcomma }}</strong></div>
+                                    <div class="d-flex justify-content-between mb-2"><span>Intereses pagados</span><strong>${{ historico_pagado.intereses_pagados|intcomma }}</strong></div>
+                                    <div class="d-flex justify-content-between border-top pt-2"><span>Total pagado en cuotas</span><strong>${{ historico_pagado.total_cuotas_pagadas|intcomma }}</strong></div>
+                                </section>
+                            </div>
+                            <div class="col-lg-4">
+                                <section class="h-100 border rounded p-3">
+                                    <h3 class="h6 text-uppercase mb-3">Abonos extraordinarios</h3>
+                                    <div class="d-flex justify-content-between"><span>Eventos registrados</span><strong>{{ abonos_extraordinarios|length }}</strong></div>
+                                    <div class="d-flex justify-content-between border-top pt-2 mt-2"><span>Total abonado</span><strong>${{ total_abonos_extraordinarios|intcomma }}</strong></div>
+                                </section>
+                            </div>
+                            <div class="col-lg-4">
+                                <section class="h-100 border border-primary-subtle rounded p-3 bg-primary-subtle">
+                                    <h3 class="h6 text-uppercase mb-3">Plan vigente</h3>
+                                    <div class="d-flex justify-content-between mb-2"><span>Cuotas restantes</span><strong>{{ plan_vigente.cantidad_cuotas }}</strong></div>
+                                    <div class="d-flex justify-content-between mb-2"><span>Capital pendiente</span><strong>${{ plan_vigente.capital_pendiente|intcomma }}</strong></div>
+                                    <div class="d-flex justify-content-between mb-2"><span>Intereses futuros</span><strong>${{ plan_vigente.intereses_futuros|intcomma }}</strong></div>
+                                    <div class="d-flex justify-content-between mb-2"><span>Saldo total programado</span><strong>${{ plan_vigente.saldo_programado_pendiente|intcomma }}</strong></div>
+                                    <div class="d-flex justify-content-between border-top pt-2"><span>Próximo vencimiento</span><strong>{{ plan_vigente.proximo_vencimiento|date:"d/m/Y"|default:"Sin fecha" }}</strong></div>
+                                </section>
+                            </div>
+                        </div>
 
                         <!-- Leyenda -->
                         <div class="mt-3 p-3" style="background-color: #f8f9fa; border-radius: 0.5rem;">

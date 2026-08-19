@@ -30,3 +30,23 @@ class LibranzaFormJavaScriptTests(SimpleTestCase):
 
         self.assertIn("libranza:simulador", source)
         self.assertNotIn("libranza:simulacion", source)
+
+    def test_company_selection_uses_delegated_pointer_event(self):
+        source = self._template_source()
+
+        self.assertIn("event.target.closest('.company-search-option')", source)
+        self.assertIn("const selectionEvent = window.PointerEvent ? 'pointerdown' : 'mousedown';", source)
+        self.assertIn(
+            "empresaResultados.addEventListener(selectionEvent, seleccionarEmpresaDesdeEvento);",
+            source,
+        )
+        self.assertIn("event.preventDefault();", source)
+        self.assertNotIn("window.setTimeout(limpiarResultadosEmpresa, 180);", source)
+
+    def test_company_selection_persists_id_and_keyboard_support(self):
+        source = self._template_source()
+
+        self.assertIn("empresaHiddenInput.value = empresa.id;", source)
+        self.assertIn("empresaBusquedaInput.value = empresa.razon_social || empresa.nombre;", source)
+        self.assertIn("empresaHiddenInput.value = '';", source)
+        self.assertIn("if (event.detail === 0)", source)
