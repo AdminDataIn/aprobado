@@ -26,6 +26,10 @@ from .services.marketplace_service import (
     notificar_empresa_estado_publicacion,
 )
 from usuarios.investor_activation_service import enviar_invitacion_inversionista
+from gestion_creditos.services.anulacion_credito import (
+    MOTIVO_ANULACION_ERROR_DATOS,
+    anular_credito_por_error_datos,
+)
 
 # Hotfix de etiquetas con tildes para el index de admin.
 # Evita tocar masivamente cadenas en modelos por ahora.
@@ -79,7 +83,43 @@ class CreditoAdmin(admin.ModelAdmin):
     list_filter = ('linea', 'estado', 'fecha_solicitud')
     search_fields = ('usuario__username', 'numero_credito')
     readonly_fields = ('numero_credito', 'fecha_solicitud', 'fecha_actualizacion', 'linea', 'usuario')
+    actions = ('anular_por_error_datos',)
     inlines = [] #! Inlines se determinan dinámicamente
+
+    @admin.action(description='Anular por error de datos', permissions=['change'])
+    def anular_por_error_datos(self, request, queryset):
+        anulados = 0
+        ya_anulados = 0
+        errores = []
+
+        for credito in queryset.iterator():
+            try:
+                resultado = anular_credito_por_error_datos(
+                    credito=credito,
+                    actor=request.user,
+                    motivo=MOTIVO_ANULACION_ERROR_DATOS,
+                )
+                if resultado.ya_estaba_anulado:
+                    ya_anulados += 1
+                else:
+                    anulados += 1
+            except ValidationError as exc:
+                errores.append(f'{credito.numero_credito}: {" ".join(exc.messages)}')
+
+        if anulados:
+            self.message_user(
+                request,
+                f'{anulados} credito(s) anulado(s) sin eliminar su trazabilidad.',
+                level=messages.SUCCESS,
+            )
+        if ya_anulados:
+            self.message_user(
+                request,
+                f'{ya_anulados} credito(s) ya estaban anulados.',
+                level=messages.INFO,
+            )
+        for error in errores:
+            self.message_user(request, error, level=messages.ERROR)
 
     def get_readonly_fields(self, request, obj=None):
         # Inicia con los campos de solo lectura definidos en la clase

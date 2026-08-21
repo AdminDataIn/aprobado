@@ -7,9 +7,10 @@ import requests
 import logging
 from typing import Dict, Optional
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
-from gestion_creditos.models import Pagare
+from gestion_creditos.models import Credito, Pagare
 
 logger = logging.getLogger('zapsign')
 
@@ -319,49 +320,62 @@ def enviar_pagare_a_zapsign(pagare: Pagare, url_pdf_publica: str) -> Pagare:
         ValueError: Si el pagaré no está en estado válido
     """
 
-    # Validaciones
-    if pagare.estado != Pagare.EstadoPagare.CREATED:
-        raise ValueError(f"El pagaré debe estar en estado CREATED, actual: {pagare.estado}")
-
-    credito = pagare.credito
-    detalle = credito.detalle
-    usuario = credito.usuario
-
-    if not detalle:
-        raise ValueError("El credito no tiene detalle asociado")
-
-    # Preparar datos del firmante
-    nombre_firmante, email_firmante, emails_copia = _obtener_datos_firmante(credito, detalle, usuario)
-
-    if not nombre_firmante:
-        raise ValueError("No se puede determinar el nombre del firmante")
-
-    if not email_firmante:
-        raise ValueError("El usuario no tiene email configurado")
-
-    # Crear cliente ZapSign
-    client = ZapSignClient()
+    if not getattr(pagare, 'pk', None):
+        raise ValueError("El pagaré debe existir antes de enviarlo a ZapSign")
 
     try:
-        # Enviar documento a ZapSign
-        logger.info(f"Enviando pagaré {pagare.numero_pagare} a ZapSign")
+        with transaction.atomic():
+            referencia_pagare = Pagare.objects.only('pk', 'credito_id').get(pk=pagare.pk)
+            credito = (
+                Credito.objects
+                .select_for_update(of=('self',))
+                .get(pk=referencia_pagare.credito_id)
+            )
+            pagare = Pagare.objects.select_for_update().get(pk=referencia_pagare.pk)
 
-        response_data = client.crear_documento(
-            nombre=f"Pagaré {credito.numero_credito}",
-            url_pdf=url_pdf_publica,
-            email_firmante=email_firmante,
-            nombre_firmante=nombre_firmante,
-            brand_name="Aprobado"
-        )
+            if credito.estado == Credito.EstadoCredito.ANULADO:
+                raise ValueError("No se puede enviar un pagaré de un crédito ANULADO")
+            if pagare.estado != Pagare.EstadoPagare.CREATED:
+                raise ValueError(
+                    f"El pagaré debe estar en estado CREATED, actual: {pagare.estado}"
+                )
 
-        sign_url = response_data['signers'][0].get('sign_url')
+            detalle = credito.detalle
+            usuario = credito.usuario
+            if not detalle:
+                raise ValueError("El credito no tiene detalle asociado")
 
-        # Actualizar pagar? con datos de ZapSign
-        pagare.zapsign_doc_token = response_data['token']
-        pagare.zapsign_sign_url = sign_url
-        pagare.estado = Pagare.EstadoPagare.SENT
-        pagare.fecha_envio = timezone.now()
-        pagare.save()
+            nombre_firmante, email_firmante, emails_copia = _obtener_datos_firmante(
+                credito,
+                detalle,
+                usuario,
+            )
+            if not nombre_firmante:
+                raise ValueError("No se puede determinar el nombre del firmante")
+            if not email_firmante:
+                raise ValueError("El usuario no tiene email configurado")
+
+            client = ZapSignClient()
+
+            # Enviar documento a ZapSign mientras se conservan los bloqueos.
+            logger.info(f"Enviando pagaré {pagare.numero_pagare} a ZapSign")
+
+            response_data = client.crear_documento(
+                nombre=f"Pagaré {credito.numero_credito}",
+                url_pdf=url_pdf_publica,
+                email_firmante=email_firmante,
+                nombre_firmante=nombre_firmante,
+                brand_name="Aprobado"
+            )
+
+            sign_url = response_data['signers'][0].get('sign_url')
+
+            # Persistir la referencia externa antes de liberar los bloqueos.
+            pagare.zapsign_doc_token = response_data['token']
+            pagare.zapsign_sign_url = sign_url
+            pagare.estado = Pagare.EstadoPagare.SENT
+            pagare.fecha_envio = timezone.now()
+            pagare.save()
 
         enviar_email_local = getattr(settings, 'ZAPSIGN_SEND_LOCAL_EMAIL', False)
         enviar_copias_firma = getattr(settings, 'ZAPSIGN_SEND_COPY_EMAILS', False)
@@ -397,6 +411,9 @@ def enviar_pagare_a_zapsign(pagare: Pagare, url_pdf_publica: str) -> Pagare:
         )
 
         return pagare
+
+    except ValueError:
+        raise
 
     except ZapSignAPIError as e:
         logger.error(f"Error al enviar pagaré {pagare.numero_pagare} a ZapSign: {str(e)}")

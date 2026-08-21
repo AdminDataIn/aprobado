@@ -477,6 +477,7 @@ class Credito(models.Model):
         ACTIVO = 'ACTIVO', 'Activo'
         EN_MORA = 'EN_MORA', 'En Mora'
         PAGADO = 'PAGADO', 'Pagado'
+        ANULADO = 'ANULADO', 'Anulado'
 
     # Campos comunes a todos los créditos
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='creditos')
@@ -637,6 +638,14 @@ class Credito(models.Model):
                 if credito_anterior.estado == self.EstadoCredito.PAGADO:
                     raise ValidationError(
                         'Un crédito en estado "Pagado" no puede cambiar de estado.'
+                    )
+
+                if (
+                    credito_anterior.estado == self.EstadoCredito.ANULADO
+                    and self.estado != self.EstadoCredito.ANULADO
+                ):
+                    raise ValidationError(
+                        'Un crédito en estado "Anulado" no puede cambiar de estado.'
                     )
                     
             except Credito.DoesNotExist:

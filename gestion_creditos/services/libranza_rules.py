@@ -8,12 +8,16 @@ from django.utils import timezone
 from gestion_creditos.models import Credito, CreditoLibranza
 
 
-ESTADOS_BLOQUEO_SOLICITUD_LIBRANZA = (
-    Credito.EstadoCredito.ACTIVO,
-    Credito.EstadoCredito.EN_MORA,
-    Credito.EstadoCredito.PENDIENTE_FIRMA,
-    Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA,
-    Credito.EstadoCredito.APROBADO_PAGADOR,
+ESTADOS_TERMINALES_NO_BLOQUEANTES_LIBRANZA = (
+    Credito.EstadoCredito.RECHAZADO,
+    Credito.EstadoCredito.PAGADO,
+    Credito.EstadoCredito.ANULADO,
+)
+
+ESTADOS_BLOQUEO_SOLICITUD_LIBRANZA = tuple(
+    estado
+    for estado, _label in Credito.EstadoCredito.choices
+    if estado not in ESTADOS_TERMINALES_NO_BLOQUEANTES_LIBRANZA
 )
 
 LIBRANZA_MONTO_MINIMO_SOLICITUD = 100000
@@ -42,10 +46,8 @@ def obtener_creditos_libranza_bloqueantes(cedula):
     return (
         CreditoLibranza.objects
         .select_related('credito')
-        .filter(
-            cedula=cedula,
-            credito__estado__in=ESTADOS_BLOQUEO_SOLICITUD_LIBRANZA,
-        )
+        .filter(cedula=cedula)
+        .exclude(credito__estado__in=ESTADOS_TERMINALES_NO_BLOQUEANTES_LIBRANZA)
         .order_by('-credito__fecha_solicitud')
     )
 
