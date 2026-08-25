@@ -121,6 +121,15 @@ def analizar_contrato_seguro(*, solicitud, documento):
         )
 
     datos = resultado.datos_sugeridos()
+    forma_pago = _normalizar_forma_pago(resultado.forma_pago)
+    datos.update({
+        'forma_pago': forma_pago,
+        'frecuencia_pago': str(resultado.frecuencia_pago or '')[:120],
+        'forma_pago_mensual': forma_pago == 'MENSUAL',
+        'evidencia_forma_pago': str(resultado.evidencia_forma_pago or '')[:500],
+        'confianza_forma_pago': str(resultado.confianza_forma_pago),
+        'fuente_forma_pago': resultado.fuente,
+    })
     datos['valor_pendiente_estimado'] = str(valor_pendiente) if valor_pendiente is not None else ''
     datos['documento_detectado'] = _enmascarar_documento(documento_detectado)
 
@@ -151,6 +160,14 @@ def analizar_contrato_seguro(*, solicitud, documento):
         },
         'empresa_sugerida': empresa_sugerida,
         'datos_sugeridos': datos,
+        'forma_pago_contractual': {
+            'forma_pago': forma_pago,
+            'frecuencia_pago': datos['frecuencia_pago'],
+            'forma_pago_mensual': forma_pago == 'MENSUAL',
+            'evidencia': datos['evidencia_forma_pago'],
+            'confianza': datos['confianza_forma_pago'],
+            'fuente': resultado.fuente,
+        },
         'diagnostico': diagnostico,
     }
     seguro = ResultadoAnalisisContractualSeguro(
@@ -343,3 +360,12 @@ def _enmascarar_documento(valor):
 
 def _deduplicar(valores):
     return list(dict.fromkeys(valor for valor in valores if valor))
+
+
+def _normalizar_forma_pago(valor):
+    normalizado = str(valor or '').strip().upper().replace(' ', '_')
+    permitidos = {
+        'MENSUAL', 'QUINCENAL', 'SEMANAL', 'POR_ENTREGABLE',
+        'CONTRA_FACTURA', 'VARIABLE', 'NO_IDENTIFICADA', 'OTRO',
+    }
+    return normalizado if normalizado in permitidos else 'NO_IDENTIFICADA'

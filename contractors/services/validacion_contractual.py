@@ -18,6 +18,8 @@ class ResultadoValidacionContractualPrestador:
     meses_financiables: int
     capacidad_automatica: bool
     obligacion_monetaria: bool
+    forma_pago: str
+    forma_pago_mensual: bool
     requiere_revision_manual: bool
     requiere_validacion_empresa: bool
     razones: tuple[str, ...]
@@ -67,6 +69,15 @@ def validar_contrato_prestador(solicitud, *, fecha_corte=None):
             bloqueos.append('contrato:valores_financieros_incoherentes')
     obligacion_monetaria = pendiente is not None and pendiente > 0
 
+    forma_pago = str(
+        solicitud.forma_pago or ContractorApplication.FormaPago.NO_IDENTIFICADA
+    )
+    if forma_pago == ContractorApplication.FormaPago.NO_IDENTIFICADA:
+        alertas.append('contrato:forma_pago_no_identificada')
+    elif forma_pago != ContractorApplication.FormaPago.MENSUAL:
+        bloqueos.append('contrato:forma_pago_no_mensual')
+    forma_pago_mensual = forma_pago == ContractorApplication.FormaPago.MENSUAL
+
     fecha_fin = solicitud.fecha_fin_contrato
     if fecha_fin is None and solicitud.fecha_inicio_contrato and solicitud.duracion_contrato_meses:
         fecha_fin = solicitud.fecha_inicio_contrato + relativedelta(
@@ -112,6 +123,7 @@ def validar_contrato_prestador(solicitud, *, fecha_corte=None):
         and documento_coincide is True
         and not requiere_validacion_empresa
         and obligacion_monetaria
+        and forma_pago_mensual
         and meses_financiables > 0
         and not bloqueos
     )
@@ -121,6 +133,8 @@ def validar_contrato_prestador(solicitud, *, fecha_corte=None):
         meses_financiables=meses_financiables,
         capacidad_automatica=capacidad_automatica,
         obligacion_monetaria=obligacion_monetaria,
+        forma_pago=forma_pago,
+        forma_pago_mensual=forma_pago_mensual,
         requiere_revision_manual=bool(alertas) and not bool(bloqueos),
         requiere_validacion_empresa=requiere_validacion_empresa,
         razones=tuple(dict.fromkeys(razones)),

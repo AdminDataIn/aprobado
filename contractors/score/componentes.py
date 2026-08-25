@@ -4,6 +4,8 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from contractors.models import ContractorApplication, ContractorApplicationDocument
 from contractors.services.autorizacion_datacredito import obtener_autorizacion_datacredito_vigente
 from contractors.services.capacidad_contractual import simular_credito_prestador_informativo
+from contractors.services.endeudamiento import calcular_carga_financiera_prestador
+from contractors.services.ingreso_contractual import calcular_ingreso_contractual_mensual
 from contractors.services.validacion_contractual import validar_contrato_prestador
 from contractors.score.dto import ComponenteScorePrestador
 
@@ -13,6 +15,8 @@ Q4 = Decimal('0.0001')
 
 
 def construir_componentes_score(solicitud, politica, datacredito):
+    if politica.usa_fuentes_duales:
+        return construir_componentes_score_dual(solicitud, politica, datacredito)
     normalizado = datacredito.resultado_normalizado if datacredito else None
     datacredito_componente = componente_datacredito(normalizado, politica)
     capacidad_componente, variables_capacidad = componente_capacidad(
@@ -49,6 +53,54 @@ def construir_componentes_score(solicitud, politica, datacredito):
     )
 
 
+def construir_componentes_score_dual(solicitud, politica, centrales):
+    decisor = getattr(centrales, 'decisor', None)
+    historial = getattr(centrales, 'historial', None)
+    normalizado_decisor = getattr(decisor, 'resultado_normalizado', None)
+    normalizado_hdc = getattr(historial, 'resultado_normalizado', None)
+    componente_midecisor = componente_datacredito(normalizado_decisor, politica)
+    componente_midecisor = replace(
+        componente_midecisor,
+        nombre='datacredito_score',
+        peso_configurado=politica.peso_midecisor,
+        fuente='midecisor_normalizado',
+        razones=('Score crediticio externo normalizado, fuente MiDecisor.',),
+    )
+    componente_hdcplus = componente_hdc(normalizado_hdc, politica)
+    capacidad_componente, variables_capacidad = componente_capacidad_dual(
+        solicitud,
+        normalizado_hdc,
+        politica,
+    )
+    riesgo_componente, bloqueos_riesgo = componente_riesgo(
+        solicitud,
+        None,
+        politica,
+    )
+    comportamiento_componente = componente_comportamiento(solicitud, politica)
+    referencias_componente = ComponenteScorePrestador(
+        nombre='referencias',
+        disponible=False,
+        score=None,
+        peso_configurado=politica.peso_referencias,
+        razones=('No existen referencias verificadas en el flujo actual.',),
+        fuente='no_disponible',
+    )
+    return (
+        (
+            componente_midecisor,
+            componente_hdcplus,
+            capacidad_componente,
+            comportamiento_componente,
+            riesgo_componente,
+            referencias_componente,
+        ),
+        variables_capacidad,
+        tuple(bloqueos_riesgo),
+        {'disponible': False, 'score': None, 'fuente': 'no_disponible'},
+    )
+
+
 def componente_datacredito(normalizado, politica):
     score = getattr(normalizado, 'score_externo', None) if normalizado else None
     if score is None or not 0 <= int(score) <= 1000:
@@ -64,6 +116,7 @@ def componente_datacredito(normalizado, politica):
         nombre='datacredito',
         disponible=True,
         score=Decimal(int(score)),
+        valor_original=int(score),
         peso_configurado=politica.peso_datacredito,
         razones=('Score externo normalizado disponible.',),
         alertas=tuple(getattr(normalizado, 'alertas', ()) or ()),
@@ -71,7 +124,34 @@ def componente_datacredito(normalizado, politica):
     )
 
 
-def componente_capacidad(solicitud, normalizado, politica):
+def componente_hdc(normalizado, politica):
+    peso = (
+        politica.peso_hdcplus
+        if politica.peso_hdcplus is not None
+        else Decimal('0.00000')
+    )
+    if normalizado is None:
+        return ComponenteScorePrestador(
+            nombre='hdcplus',
+            disponible=False,
+            score=None,
+            peso_configurado=peso,
+            razones=('HDCPlus no entrego informacion normalizada utilizable.',),
+            fuente='hdcplus_normalizado',
+        )
+    return ComponenteScorePrestador(
+        nombre='hdcplus',
+        disponible=True,
+        score=None,
+        peso_configurado=peso,
+        razones=(
+            'HDCPlus es una fuente informativa requerida para capacidad y no genera score.',
+        ),
+        fuente='hdcplus_normalizado_informativo_v2',
+    )
+
+
+def componente_capacidad(solicitud, normalizado, politica, usar_carga_total=False):
     faltantes = []
     validacion_contractual = validar_contrato_prestador(solicitud)
     meses_restantes = validacion_contractual.meses_financiables
@@ -114,7 +194,6 @@ def componente_capacidad(solicitud, normalizado, politica):
         ), variables
 
     ingreso = (valor_pendiente / Decimal(meses_restantes)).quantize(Q2, rounding=ROUND_HALF_UP)
-    ingreso_disponible = max(Decimal('0'), ingreso - obligaciones)
     simulador = politica.configuracion_financiera
     simulacion = simular_credito_prestador_informativo(
         monto=monto,
@@ -122,9 +201,19 @@ def componente_capacidad(solicitud, normalizado, politica):
         configuracion=simulador,
     )
     cuota = simulacion.cuota_mensual
-    relacion = None if ingreso_disponible <= 0 else (
-        cuota / ingreso_disponible
-    ).quantize(Q4, rounding=ROUND_HALF_UP)
+    carga = None
+    ingreso_disponible = max(Decimal('0'), ingreso - obligaciones)
+    if usar_carga_total:
+        carga = calcular_carga_financiera_prestador(
+            ingreso_contractual=ingreso,
+            cuota_existente=obligaciones,
+            cuota_nueva=cuota,
+        )
+        relacion = carga.relacion_cuota_ingreso
+    else:
+        relacion = None if ingreso_disponible <= 0 else (
+            cuota / ingreso_disponible
+        ).quantize(Q4, rounding=ROUND_HALF_UP)
     maximo = politica.cuota_ingreso_maxima
     if relacion is None or maximo <= 0:
         score = Decimal('0')
@@ -133,8 +222,12 @@ def componente_capacidad(solicitud, normalizado, politica):
             Decimal('0'),
             (Decimal('1') - (relacion / maximo)) * Decimal('1000'),
         ).quantize(Q2, rounding=ROUND_HALF_UP)
+    cuota_nueva_maxima = (
+        carga.cuota_nueva_maxima(maximo)
+        if carga is not None else ingreso_disponible * maximo
+    )
     capacidad_monto = _valor_presente(
-        ingreso_disponible * maximo,
+        cuota_nueva_maxima,
         min(int(plazo), meses_restantes, politica.plazo_maximo_politica),
         politica.tasa_mensual_referencia / Decimal('100'),
     )
@@ -142,6 +235,10 @@ def componente_capacidad(solicitud, normalizado, politica):
         'ingreso_contractual_estimado': ingreso,
         'ingreso_disponible': ingreso_disponible,
         'cuota_solicitada': cuota,
+        'cuota_total_con_nueva_solicitud': (
+            carga.cuota_total if carga is not None else obligaciones + cuota
+        ),
+        'cuota_nueva_maxima_politica': cuota_nueva_maxima,
         'relacion_cuota_ingreso': relacion,
         'capacidad_monto_teorica': capacidad_monto,
     })
@@ -156,6 +253,99 @@ def componente_capacidad(solicitud, normalizado, politica):
         razones=('Capacidad calculada con ingreso contractual, obligaciones y cuota solicitada.',),
         alertas=alertas,
         fuente='capacidad_contractual_verificable_v1',
+    ), variables
+
+
+def componente_capacidad_dual(solicitud, normalizado, politica):
+    validacion = validar_contrato_prestador(solicitud)
+    ingreso = calcular_ingreso_contractual_mensual(
+        solicitud,
+        tolerancia=politica.tolerancia_ingreso_contractual,
+        validacion_contractual=validacion,
+    )
+    cuota_existente = _decimal(
+        getattr(normalizado, 'cuota_mensual_total', None) if normalizado else None
+    )
+    monto = _decimal(solicitud.monto_solicitado)
+    plazo = solicitud.plazo_meses
+    faltantes = list(ingreso.bloqueos)
+    if cuota_existente is None:
+        faltantes.append('HDCPlus no entrego la cuota mensual existente.')
+    if monto is None or monto <= 0 or not plazo:
+        faltantes.append('Monto o plazo solicitado no disponible.')
+
+    variables = {
+        'version_calculo_ingreso': ingreso.version,
+        'metodo_ingreso_contractual': ingreso.metodo,
+        'meses_restantes_contrato': ingreso.meses_restantes,
+        'ingreso_contractual_estimado': ingreso.ingreso_mensual,
+        'valor_total_contrato': ingreso.valor_total,
+        'saldo_contractual_pendiente': ingreso.saldo_pendiente,
+        'valor_mensual_explicito': ingreso.valor_mensual_explicito,
+        'obligaciones_mensuales': cuota_existente,
+        'otros_compromisos_conocidos': Decimal('0.00'),
+        'ingreso_disponible': None,
+        'cuota_solicitada': None,
+        'cuota_total_con_nueva_solicitud': None,
+        'relacion_cuota_ingreso': None,
+        'cuota_ingreso_maxima': politica.cuota_ingreso_maxima,
+        'capacidad_disponible': None,
+        'capacidad_monto_teorica': None,
+    }
+    if faltantes:
+        return ComponenteScorePrestador(
+            nombre='capacidad',
+            disponible=False,
+            score=None,
+            peso_configurado=politica.peso_capacidad,
+            razones=tuple(dict.fromkeys(faltantes)),
+            alertas=ingreso.alertas,
+            fuente='capacidad_financiera_prestador_v2',
+        ), variables
+
+    simulacion = simular_credito_prestador_informativo(
+        monto=monto,
+        plazo_meses=plazo,
+        configuracion=politica.configuracion_financiera,
+    )
+    carga = calcular_carga_financiera_prestador(
+        ingreso_contractual=ingreso.ingreso_mensual,
+        cuota_existente=cuota_existente,
+        cuota_nueva=simulacion.cuota_mensual,
+    )
+    limite = politica.cuota_ingreso_maxima
+    capacidad_disponible = carga.capacidad_disponible(limite)
+    relacion = carga.relacion_cuota_ingreso
+    score = max(
+        Decimal('0'),
+        (Decimal('1') - (relacion / limite)) * Decimal('1000'),
+    ).quantize(Q2, rounding=ROUND_HALF_UP) if limite > 0 else Decimal('0')
+    capacidad_monto = _valor_presente(
+        capacidad_disponible,
+        min(int(plazo), ingreso.meses_restantes, politica.plazo_maximo_politica),
+        politica.tasa_mensual_referencia / Decimal('100'),
+    )
+    variables.update({
+        'ingreso_disponible': carga.ingreso_disponible,
+        'cuota_solicitada': simulacion.cuota_mensual,
+        'cuota_total_con_nueva_solicitud': carga.cuota_total,
+        'relacion_cuota_ingreso': relacion,
+        'capacidad_disponible': capacidad_disponible,
+        'capacidad_monto_teorica': capacidad_monto,
+    })
+    alertas = list(ingreso.alertas)
+    if simulacion.cuota_mensual > capacidad_disponible:
+        alertas.append('La cuota nueva supera la capacidad mensual disponible.')
+    return ComponenteScorePrestador(
+        nombre='capacidad',
+        disponible=True,
+        score=min(Decimal('1000'), score),
+        peso_configurado=politica.peso_capacidad,
+        razones=(
+            'Capacidad calculada una sola vez con cuota HDC, cuota nueva e ingreso contractual mensual.',
+        ),
+        alertas=tuple(dict.fromkeys(alertas)),
+        fuente='capacidad_financiera_prestador_v2',
     ), variables
 
 
@@ -233,17 +423,6 @@ def componente_riesgo(solicitud, normalizado, politica):
     }:
         evidencias.append(True)
 
-    mora_severa = getattr(normalizado, 'mora_severa', None) if normalizado else None
-    mora_dias = getattr(normalizado, 'mora_maxima_dias', None) if normalizado else None
-    if mora_severa is True or (
-        mora_dias is not None and mora_dias >= politica.mora_bloqueo_dias
-    ):
-        bloqueos.append('datacredito:mora_supera_umbral_bloqueante')
-    elif mora_severa is False or mora_dias is not None:
-        evidencias.append(True)
-    else:
-        alertas.append('DataCredito no entrego una senal concluyente de mora.')
-
     if not evidencias and not bloqueos:
         return ComponenteScorePrestador(
             nombre='riesgo',
@@ -255,14 +434,14 @@ def componente_riesgo(solicitud, normalizado, politica):
             fuente='reglas_riesgo_verificables_v1',
         ), bloqueos
     score = Decimal('0') if bloqueos else (
-        Decimal(len(evidencias)) / Decimal('3') * Decimal('1000')
+        Decimal(len(evidencias)) / Decimal('2') * Decimal('1000')
     ).quantize(Q2, rounding=ROUND_HALF_UP)
     return ComponenteScorePrestador(
         nombre='riesgo',
         disponible=True,
         score=min(Decimal('1000'), score),
         peso_configurado=politica.peso_riesgo,
-        razones=('Solo se evaluaron identidad, contrato y mora externa verificables.',),
+        razones=('Solo se evaluaron identidad y coherencia contractual verificables.',),
         alertas=tuple(alertas),
         fuente='reglas_riesgo_verificables_v1',
     ), bloqueos
@@ -280,6 +459,29 @@ def aplicar_pesos(componentes, permite_redistribuir):
                 peso = componente.peso_configurado / peso_disponible
         resultado.append(replace(componente, peso_aplicado=peso.quantize(Decimal('0.00001'))))
     return tuple(resultado)
+
+
+def _combinar_senales_riesgo(decisor, historial):
+    if decisor is None:
+        return historial
+    if historial is None:
+        return decisor
+
+    class SenalesRiesgo:
+        mora_severa = bool(
+            getattr(decisor, 'mora_severa', False)
+            or getattr(historial, 'mora_severa', False)
+        )
+        mora_actual = bool(
+            getattr(decisor, 'mora_actual', False)
+            or getattr(historial, 'mora_actual', False)
+        )
+        mora_maxima_dias = max(
+            getattr(decisor, 'mora_maxima_dias', None) or 0,
+            getattr(historial, 'mora_maxima_dias', None) or 0,
+        )
+
+    return SenalesRiesgo()
 
 
 def _valor_presente(cuota, plazo, tasa):

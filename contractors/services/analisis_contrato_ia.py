@@ -86,6 +86,10 @@ def _normalizar(datos, *, modelo):
         valor_pagado_estimado=_decimal(datos.get('valor_pagado_estimado')),
         valor_pendiente_estimado=_decimal(datos.get('valor_pendiente_estimado')),
         valor_mensual_o_honorarios=_decimal(datos.get('valor_mensual_o_honorarios')),
+        forma_pago=_forma_pago(datos.get('forma_pago')),
+        frecuencia_pago=str(datos.get('frecuencia_pago') or '')[:120],
+        evidencia_forma_pago=str(datos.get('evidencia_forma_pago') or '')[:500],
+        confianza_forma_pago=_confianza(datos.get('confianza_forma_pago')),
         duracion_meses_contrato=_entero(datos.get('duracion_meses_contrato')),
         confianza_general=_confianza(datos.get('confianza_general')),
         advertencias=tuple(str(item) for item in datos.get('advertencias') or ()),
@@ -116,6 +120,10 @@ def _prompt_seguro():
         'cargo_o_servicio, tipo_contrato, fecha_inicio_contrato, fecha_fin_contrato, '
         'valor_total_contrato, valor_pagado_estimado, valor_pendiente_estimado, '
         'valor_mensual_o_honorarios, duracion_meses_contrato, confianza_general y advertencias. '
+        'Incluye forma_pago, frecuencia_pago, evidencia_forma_pago y confianza_forma_pago. '
+        'forma_pago debe ser MENSUAL, QUINCENAL, SEMANAL, POR_ENTREGABLE, '
+        'CONTRA_FACTURA, VARIABLE, NO_IDENTIFICADA u OTRO. evidencia_forma_pago debe '
+        'ser un fragmento breve, máximo 300 caracteres, que soporte la clasificación. '
         'tipo_contrato debe ser PRESTACION_SERVICIOS, LABORAL u OTRO; usa cadena vacía si no hay evidencia. '
         'Las fechas deben usar YYYY-MM-DD y los valores deben ser numéricos sin símbolos.'
     )
@@ -165,3 +173,12 @@ def _entero(valor):
         return int(valor) if valor not in (None, '') else None
     except (TypeError, ValueError):
         return None
+
+
+def _forma_pago(valor):
+    normalizado = str(valor or '').strip().upper().replace(' ', '_')
+    permitidos = {
+        'MENSUAL', 'QUINCENAL', 'SEMANAL', 'POR_ENTREGABLE',
+        'CONTRA_FACTURA', 'VARIABLE', 'NO_IDENTIFICADA', 'OTRO',
+    }
+    return normalizado if normalizado in permitidos else 'NO_IDENTIFICADA'

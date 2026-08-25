@@ -11,6 +11,13 @@ from contractors.score.motor import evaluar_score_prestador
 from contractors.services.autorizacion_datacredito import obtener_autorizacion_datacredito_vigente
 from contractors.services.capacidad_contractual import evaluar_capacidad_contractual_preliminar
 from contractors.services.validacion_contractual import validar_contrato_prestador
+from contractors.services.centrales_riesgo import (
+    ESTADO_COMPLETA,
+    ESTADO_NO_EVALUABLE,
+    ESTADO_PARCIAL,
+    ESTADO_REVISION_MANUAL,
+)
+from integrations.models import ConsultaDatacreditoSnapshot
 
 
 RESULTADO_PREAPROBABLE = 'PREAPROBABLE'
@@ -101,7 +108,23 @@ def evaluar_predecision_prestador(solicitud, documentos_completos=False):
     )
 
 
-def evaluar_predecision_formal_prestador(*, solicitud, politica, datacredito):
+def evaluar_predecision_formal_prestador(
+    *, solicitud, politica, datacredito=None, centrales=None
+):
+    if politica.usa_fuentes_duales:
+        return _evaluar_predecision_dual(
+            solicitud=solicitud,
+            politica=politica,
+            centrales=centrales,
+        )
+    return _evaluar_predecision_fuente_unica(
+        solicitud=solicitud,
+        politica=politica,
+        datacredito=datacredito,
+    )
+
+
+def _evaluar_predecision_fuente_unica(*, solicitud, politica, datacredito):
     estado_dc = str(getattr(datacredito, 'estado', '') or '')
     if estado_dc in {'ERROR_TRANSITORIO', 'ERROR_PERMANENTE'}:
         return _resultado_formal(
@@ -172,7 +195,6 @@ def evaluar_predecision_formal_prestador(*, solicitud, politica, datacredito):
                 razones=(razon,),
                 bloqueos=tuple(bloqueos),
             )
-
     if bloqueos:
         return _resultado_formal(
             PredecisionPrestadorAudit.Resultado.BLOQUEADO_READ_ONLY,
@@ -204,6 +226,149 @@ def evaluar_predecision_formal_prestador(*, solicitud, politica, datacredito):
         razones=('Datos completos, capacidad dentro de politica y score evaluable.',),
         eligible=True,
         requiere_revision_manual=False,
+    )
+
+
+def _evaluar_predecision_dual(*, solicitud, politica, centrales):
+    if centrales is None:
+        return _resultado_formal(
+            PredecisionPrestadorAudit.Resultado.NO_EVALUABLE,
+            razones=('No existe un resultado consolidado de centrales de riesgo.',),
+        )
+    if centrales.estado_global == ESTADO_NO_EVALUABLE:
+        return _resultado_formal(
+            PredecisionPrestadorAudit.Resultado.NO_EVALUABLE,
+            razones=(
+                'Las fuentes requeridas no permiten completar la evaluacion formal.',
+                *centrales.errores,
+            ),
+            alertas=centrales.alertas,
+        )
+
+    documentos = set(solicitud.documentos.values_list('tipo_documento', flat=True))
+    if not set(DOCUMENTOS_OBLIGATORIOS_PRESTADOR).issubset(documentos):
+        return _resultado_formal(
+            PredecisionPrestadorAudit.Resultado.NO_EVALUABLE,
+            razones=('Los documentos minimos obligatorios no estan completos.',),
+        )
+    if obtener_autorizacion_datacredito_vigente(solicitud) is None:
+        return _resultado_formal(
+            PredecisionPrestadorAudit.Resultado.NO_EVALUABLE,
+            razones=('No existe autorizacion DataCredito vigente para esta evaluacion.',),
+        )
+    if (
+        not politica.activa
+        or not politica.configuracion_financiera_id
+        or not politica.configuracion_financiera.activo
+        or not politica.configuracion_financiera.version
+    ):
+        return _resultado_formal(
+            PredecisionPrestadorAudit.Resultado.NO_EVALUABLE,
+            razones=('La politica no tiene configuracion financiera activa y versionada.',),
+        )
+
+    fuentes_requeridas = (
+        ('MiDecisor', centrales.decisor, politica.requiere_midecisor),
+        ('HDCPlus', centrales.historial, politica.requiere_hdcplus),
+    )
+    faltantes = [
+        nombre
+        for nombre, resultado, requerido in fuentes_requeridas
+        if requerido and not _consulta_exitosa_con_snapshot(resultado)
+    ]
+    if faltantes:
+        resultado = (
+            PredecisionPrestadorAudit.Resultado.REQUIERE_REVISION_MANUAL
+            if centrales.estado_global in {ESTADO_REVISION_MANUAL, ESTADO_PARCIAL}
+            else PredecisionPrestadorAudit.Resultado.NO_EVALUABLE
+        )
+        return _resultado_formal(
+            resultado,
+            razones=(
+                'No estan disponibles todas las fuentes requeridas: '
+                + ', '.join(faltantes)
+                + '.',
+            ),
+            alertas=centrales.alertas,
+        )
+
+    contrato = validar_contrato_prestador(solicitud)
+    if contrato.bloqueos:
+        return _resultado_formal(
+            PredecisionPrestadorAudit.Resultado.BLOQUEADO_READ_ONLY,
+            razones=contrato.razones,
+            alertas=contrato.alertas,
+            bloqueos=contrato.bloqueos,
+        )
+    if contrato.requiere_revision_manual or not contrato.capacidad_automatica:
+        return _resultado_formal(
+            PredecisionPrestadorAudit.Resultado.REQUIERE_REVISION_MANUAL,
+            razones=contrato.razones,
+            alertas=contrato.alertas,
+        )
+
+    score = evaluar_score_prestador(solicitud, politica, centrales)
+    bloqueos = list(score.bloqueos)
+    relacion = score.variables_calculadas.get('relacion_cuota_ingreso')
+    if relacion is not None and Decimal(relacion) > politica.cuota_ingreso_maxima:
+        razon = 'capacidad:relacion_cuota_ingreso_supera_limite'
+        if (
+            politica.accion_exceso_capacidad
+            == ConfiguracionScorePrestador.AccionExcesoCapacidad.BLOQUEAR
+        ):
+            bloqueos.append(razon)
+        else:
+            return _resultado_formal(
+                PredecisionPrestadorAudit.Resultado.REQUIERE_REVISION_MANUAL,
+                score=score,
+                razones=(razon,),
+                alertas=centrales.alertas,
+                bloqueos=tuple(bloqueos),
+            )
+    if bloqueos:
+        return _resultado_formal(
+            PredecisionPrestadorAudit.Resultado.BLOQUEADO_READ_ONLY,
+            score=score,
+            razones=('La solicitud presenta bloqueos verificables de politica o identidad.',),
+            alertas=centrales.alertas,
+            bloqueos=tuple(dict.fromkeys(bloqueos)),
+        )
+    if score.score_final is None:
+        return _resultado_formal(
+            PredecisionPrestadorAudit.Resultado.NO_EVALUABLE,
+            score=score,
+            razones=score.razones or ('No fue posible calcular un score completo.',),
+            alertas=centrales.alertas,
+        )
+    if (
+        centrales.estado_global != ESTADO_COMPLETA
+        or centrales.requiere_revision_manual
+        or score.requiere_revision_manual
+        or score.banda == BandaScorePrestador.Nombre.REVISION
+    ):
+        return _resultado_formal(
+            PredecisionPrestadorAudit.Resultado.REQUIERE_REVISION_MANUAL,
+            score=score,
+            razones=('La politica o la banda de score requiere revision manual.',),
+            alertas=centrales.alertas,
+        )
+    return _resultado_formal(
+        PredecisionPrestadorAudit.Resultado.PREAPROBADO_READ_ONLY,
+        score=score,
+        razones=(
+            'MiDecisor y HDCPlus disponibles, capacidad dentro de politica y score evaluable.',
+        ),
+        alertas=centrales.alertas,
+        eligible=True,
+        requiere_revision_manual=False,
+    )
+
+
+def _consulta_exitosa_con_snapshot(resultado):
+    return bool(
+        resultado is not None
+        and resultado.estado == ConsultaDatacreditoSnapshot.Estado.EXITOSO
+        and resultado.snapshot_id
     )
 
 

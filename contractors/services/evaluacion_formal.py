@@ -10,6 +10,7 @@ from contractors.services.datacredito_evaluacion import (
     REUTILIZAR_SI_VIGENTE,
     obtener_evaluacion_datacredito_prestador,
 )
+from contractors.services.centrales_riesgo import obtener_evaluacion_centrales_prestador
 from contractors.services.evaluacion_timeline import registrar_evento_timeline_prestador
 from contractors.services.evaluacion_versionado import (
     construir_clave_idempotencia,
@@ -82,17 +83,33 @@ def evaluar_solicitud_prestador(
 
     try:
         # Esta llamada puede hacer HTTP. Debe permanecer fuera de transaction.atomic.
-        datacredito = obtener_evaluacion_datacredito_prestador(
-            solicitud,
-            modo=modo_datacredito,
-            solicitado_por=solicitado_por,
-            justificacion=justificacion,
-        )
-        predecision = evaluar_predecision_formal_prestador(
-            solicitud=solicitud,
-            politica=politica,
-            datacredito=datacredito,
-        )
+        if politica.usa_fuentes_duales:
+            centrales = obtener_evaluacion_centrales_prestador(
+                solicitud,
+                politica=politica,
+                modo=modo_datacredito,
+                solicitado_por=solicitado_por,
+                justificacion=justificacion,
+            )
+            datacredito = None
+            predecision = evaluar_predecision_formal_prestador(
+                solicitud=solicitud,
+                politica=politica,
+                centrales=centrales,
+            )
+        else:
+            datacredito = obtener_evaluacion_datacredito_prestador(
+                solicitud,
+                modo=modo_datacredito,
+                solicitado_por=solicitado_por,
+                justificacion=justificacion,
+            )
+            centrales = None
+            predecision = evaluar_predecision_formal_prestador(
+                solicitud=solicitud,
+                politica=politica,
+                datacredito=datacredito,
+            )
     except Exception as exc:  # El detalle tecnico no se persiste ni se expone.
         return _finalizar_sin_decision(
             auditoria,
@@ -107,6 +124,7 @@ def evaluar_solicitud_prestador(
         auditoria=auditoria,
         predecision=predecision,
         datacredito=datacredito,
+        centrales=centrales,
         usuario=solicitado_por,
     )
 
@@ -182,7 +200,9 @@ def _iniciar_evaluacion(
 
 
 @transaction.atomic
-def _finalizar_evaluacion(*, auditoria, predecision, datacredito, usuario):
+def _finalizar_evaluacion(
+    *, auditoria, predecision, datacredito=None, centrales=None, usuario
+):
     auditoria_bloqueada = PredecisionPrestadorAudit.objects.select_for_update().get(pk=auditoria.pk)
     solicitud = ContractorApplication.objects.select_for_update().get(pk=auditoria.solicitud_id)
     version_actual, _ = construir_version_datos(solicitud)
@@ -220,6 +240,7 @@ def _finalizar_evaluacion(*, auditoria, predecision, datacredito, usuario):
         return ResultadoEvaluacionFormalPrestador(auditoria=auditoria_bloqueada)
 
     score = predecision.score_resultado
+    variables_score = score.variables_calculadas if score else {}
     auditoria_bloqueada.estado_ejecucion = (
         PredecisionPrestadorAudit.EstadoEjecucion.ERROR_CONTROLADO
         if predecision.resultado == PredecisionPrestadorAudit.Resultado.ERROR_CONTROLADO
@@ -230,18 +251,65 @@ def _finalizar_evaluacion(*, auditoria, predecision, datacredito, usuario):
     auditoria_bloqueada.razones = list(predecision.razones)
     auditoria_bloqueada.alertas = list(predecision.alertas)
     auditoria_bloqueada.bloqueos = list(predecision.bloqueos)
-    auditoria_bloqueada.snapshot_salida = {
-        **predecision.como_dict(),
-        'datacredito': _snapshot_datacredito_allowlist(datacredito),
-    }
-    auditoria_bloqueada.error_codigo = getattr(datacredito, 'error_codigo', '') or ''
+    auditoria_bloqueada.version_calculo_ingreso = str(
+        variables_score.get('version_calculo_ingreso') or ''
+    )[:80]
+    auditoria_bloqueada.metodo_ingreso_contractual = str(
+        variables_score.get('metodo_ingreso_contractual') or ''
+    )[:40]
+    auditoria_bloqueada.ingreso_contractual_mensual = variables_score.get(
+        'ingreso_contractual_estimado'
+    )
+    auditoria_bloqueada.cuota_mensual_hdc = variables_score.get(
+        'obligaciones_mensuales'
+    )
+    auditoria_bloqueada.cuota_nueva_estimada = variables_score.get(
+        'cuota_solicitada'
+    )
+    auditoria_bloqueada.relacion_carga_ingreso = variables_score.get(
+        'relacion_cuota_ingreso'
+    )
+    auditoria_bloqueada.capacidad_disponible = variables_score.get(
+        'capacidad_disponible'
+    )
+    if centrales is not None:
+        auditoria_bloqueada.snapshot_salida = {
+            **predecision.como_dict(),
+            'centrales': centrales.como_dict_seguro(),
+        }
+        auditoria_bloqueada.snapshot_midecisor_id = (
+            getattr(centrales.decisor, 'snapshot_id', None) or None
+        )
+        auditoria_bloqueada.snapshot_hdcplus_id = (
+            getattr(centrales.historial, 'snapshot_id', None) or None
+        )
+        auditoria_bloqueada.estado_midecisor = str(
+            getattr(centrales.decisor, 'estado', '') or ''
+        )[:24]
+        auditoria_bloqueada.estado_hdcplus = str(
+            getattr(centrales.historial, 'estado', '') or ''
+        )[:24]
+        auditoria_bloqueada.evaluacion_centrales_completa = centrales.completa
+        auditoria_bloqueada.error_codigo = '|'.join(centrales.errores)[:80]
+    else:
+        auditoria_bloqueada.snapshot_salida = {
+            **predecision.como_dict(),
+            'datacredito': _snapshot_datacredito_allowlist(datacredito),
+        }
+        auditoria_bloqueada.error_codigo = getattr(datacredito, 'error_codigo', '') or ''
     auditoria_bloqueada.error_etapa = (
         'datacredito' if auditoria_bloqueada.error_codigo else ''
     )
     auditoria_bloqueada.finalizada_en = timezone.now()
     auditoria_bloqueada.save(update_fields=[
         'estado_ejecucion', 'resultado', 'score', 'razones', 'alertas', 'bloqueos',
-        'snapshot_salida', 'error_codigo', 'error_etapa', 'finalizada_en', 'updated_at',
+        'snapshot_salida', 'snapshot_midecisor', 'snapshot_hdcplus',
+        'estado_midecisor', 'estado_hdcplus', 'evaluacion_centrales_completa',
+        'version_calculo_ingreso', 'metodo_ingreso_contractual',
+        'ingreso_contractual_mensual', 'cuota_mensual_hdc',
+        'cuota_nueva_estimada', 'relacion_carga_ingreso',
+        'capacidad_disponible',
+        'error_codigo', 'error_etapa', 'finalizada_en', 'updated_at',
     ])
 
     if predecision.resultado in {

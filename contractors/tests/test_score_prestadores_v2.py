@@ -307,6 +307,8 @@ class ScorePrestadoresV2Test(TestCase):
             valor_total_contrato=Decimal('50000000'),
             valor_pagado_contrato=Decimal('2000000'),
             valor_pendiente_cobrar=Decimal('48000000'),
+            forma_pago=ContractorApplication.FormaPago.MENSUAL,
+            valor_mensual_contractual=Decimal('6000000'),
             monto_solicitado=Decimal('3000000'),
             plazo_meses=6,
             acepta_terminos=True,

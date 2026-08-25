@@ -13,17 +13,32 @@ class ComponenteScorePrestador:
     score: Decimal | None
     peso_configurado: Decimal
     peso_aplicado: Decimal = Decimal('0')
+    valor_original: Decimal | int | str | None = None
     razones: tuple[str, ...] = field(default_factory=tuple)
     alertas: tuple[str, ...] = field(default_factory=tuple)
     fuente: str = ''
 
     def como_dict(self):
+        valor_original = (
+            self.valor_original
+            if self.valor_original is not None
+            else self.score
+        )
+        aporte_ponderado = (
+            self.score * self.peso_aplicado
+            if self.score is not None
+            else None
+        )
         return {
             'nombre': self.nombre,
+            'nombre_funcional': self.nombre,
             'disponible': self.disponible,
+            'valor_original': _decimal_texto(valor_original),
             'score': _decimal_texto(self.score),
+            'score_normalizado': _decimal_texto(self.score),
             'peso_configurado': _decimal_texto(self.peso_configurado),
             'peso_aplicado': _decimal_texto(self.peso_aplicado),
+            'aporte_ponderado': _decimal_texto(aporte_ponderado),
             'razones': list(self.razones),
             'alertas': list(self.alertas),
             'fuente': self.fuente,

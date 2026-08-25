@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 
 from contractors.models import (
     AprobacionInternaPrestador,
+    AprobacionPagadorPrestador,
     ContractorApplication,
     ContractorApplicationDocument,
     MAPA_CAMPOS_DOCUMENTOS_PRESTADOR,
@@ -191,6 +192,20 @@ class SolicitudPrestadorForm(forms.ModelForm):
             'data-money-contract': 'true',
         }),
     )
+    valor_mensual_contractual = MontoContratoField(
+        label='Valor mensual contractual',
+        max_digits=14,
+        decimal_places=2,
+        min_value=Decimal('0'),
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'campo money-contract-input',
+            'inputmode': 'numeric',
+            'autocomplete': 'off',
+            'placeholder': 'Ej. 8.000.000',
+            'data-money-contract': 'true',
+        }),
+    )
 
     documento_identidad_frontal = forms.FileField(
         label='Cédula frontal',
@@ -256,6 +271,8 @@ class SolicitudPrestadorForm(forms.ModelForm):
             'valor_total_contrato',
             'valor_pagado_contrato',
             'valor_pendiente_cobrar',
+            'forma_pago',
+            'valor_mensual_contractual',
             'observaciones_contrato',
             'acepta_terminos',
             'acepta_politica_privacidad',
@@ -278,6 +295,7 @@ class SolicitudPrestadorForm(forms.ModelForm):
             'duracion_contrato_meses': forms.NumberInput(attrs={
                 'class': 'campo', 'min': 1, 'placeholder': 'Ej. 8',
             }),
+            'forma_pago': forms.Select(attrs={'class': 'campo'}),
             'observaciones_contrato': forms.Textarea(attrs={'class': 'campo', 'rows': 3, 'placeholder': 'Observaciones contractuales opcionales'}),
             'acepta_terminos': forms.CheckboxInput(attrs={'class': 'authorization-checkbox'}),
             'acepta_politica_privacidad': forms.CheckboxInput(attrs={'class': 'authorization-checkbox'}),
@@ -301,6 +319,8 @@ class SolicitudPrestadorForm(forms.ModelForm):
             'valor_total_contrato': 'Valor total contrato',
             'valor_pagado_contrato': 'Valor pagado del contrato',
             'valor_pendiente_cobrar': 'Valor pendiente por cobrar',
+            'forma_pago': 'Forma de pago',
+            'valor_mensual_contractual': 'Valor mensual contractual',
             'observaciones_contrato': 'Observaciones del contrato',
             'acepta_terminos': 'Acepto los términos y condiciones',
             'acepta_politica_privacidad': 'Acepto la política de privacidad',
@@ -339,6 +359,7 @@ class SolicitudPrestadorForm(forms.ModelForm):
         valor_total = cleaned_data.get('valor_total_contrato')
         valor_pagado = cleaned_data.get('valor_pagado_contrato')
         valor_pendiente = cleaned_data.get('valor_pendiente_cobrar')
+        valor_mensual = cleaned_data.get('valor_mensual_contractual')
         archivos = {
             'documento_identidad_frontal': cleaned_data.get('documento_identidad_frontal'),
             'documento_identidad_reverso': cleaned_data.get('documento_identidad_reverso'),
@@ -366,6 +387,11 @@ class SolicitudPrestadorForm(forms.ModelForm):
             self.add_error(
                 'valor_pendiente_cobrar',
                 'La suma del valor pagado y pendiente no puede superar el valor total del contrato.',
+            )
+        if valor_mensual is not None and valor_mensual <= 0:
+            self.add_error(
+                'valor_mensual_contractual',
+                'El valor mensual contractual debe ser mayor a cero.',
             )
 
         for campo in ('certificado_bancario', 'contrato_actual'):
@@ -534,13 +560,41 @@ class AccionAprobacionInternaPrestadorForm(forms.Form):
         return cleaned
 
 
+class DecisionPagadorPrestadorForm(forms.Form):
+    decision = forms.ChoiceField(
+        choices=(
+            (AprobacionPagadorPrestador.Estado.APROBADO, 'Aprobar'),
+            (AprobacionPagadorPrestador.Estado.RECHAZADO, 'Rechazar'),
+            (
+                AprobacionPagadorPrestador.Estado.REQUIERE_AJUSTE,
+                'Requiere ajuste',
+            ),
+        )
+    )
+    motivo = forms.ChoiceField(
+        choices=AprobacionPagadorPrestador.Motivo.choices,
+        required=False,
+    )
+    observacion = forms.CharField(
+        required=False,
+        max_length=2000,
+        widget=forms.Textarea(attrs={'rows': 3}),
+    )
+    confirma_vinculo = forms.BooleanField(required=False)
+    confirma_contrato_vigente = forms.BooleanField(required=False)
+    confirma_forma_pago_mensual = forms.BooleanField(required=False)
+    confirma_valores_contractuales = forms.BooleanField(required=False)
+    confirma_capacidad_operativa = forms.BooleanField(required=False)
+    acepta_gestionar_pago = forms.BooleanField(required=False)
+
+
 class AtenderSubsanacionPrestadorForm(forms.Form):
     CAMPOS_PERSONALES = ('nombres', 'apellidos', 'celular', 'correo', 'direccion')
     CAMPOS_CONTRACTUALES = (
         'cargo', 'tipo_contrato', 'fecha_inicio_contrato', 'fecha_fin_contrato',
         'duracion_contrato_meses', 'estado_contractual_declarado',
         'valor_total_contrato', 'valor_pagado_contrato', 'valor_pendiente_cobrar',
-        'observaciones_contrato',
+        'forma_pago', 'valor_mensual_contractual', 'observaciones_contrato',
     )
 
     def __init__(self, *args, requerimiento, **kwargs):
@@ -556,6 +610,7 @@ class AtenderSubsanacionPrestadorForm(forms.Form):
                 label='Contrato vigente en PDF',
                 widget=forms.FileInput(attrs={'accept': 'application/pdf'}),
             )
+
         elif tipo == RequerimientoSubsanacionPrestador.Tipo.DOCUMENTO_IDENTIDAD:
             self.fields['tipo_documento_carga'] = forms.ChoiceField(
                 label='Cara del documento',

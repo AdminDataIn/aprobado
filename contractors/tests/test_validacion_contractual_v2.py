@@ -97,6 +97,8 @@ class ValidacionContractualPrestadorV2Test(TestCase):
             'valor_total_contrato': Decimal('50000000'),
             'valor_pagado_contrato': Decimal('10000000'),
             'valor_pendiente_cobrar': Decimal('40000000'),
+            'forma_pago': ContractorApplication.FormaPago.MENSUAL,
+            'valor_mensual_contractual': Decimal('5000000'),
             'monto_solicitado': Decimal('3000000'),
             'plazo_meses': 6,
             'estado_analisis_contractual': 'COMPLETADO',

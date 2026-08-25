@@ -20,6 +20,10 @@ class ResultadoAnalisisContrato:
     valor_pagado_estimado: Decimal | None = None
     valor_pendiente_estimado: Decimal | None = None
     valor_mensual_o_honorarios: Decimal | None = None
+    forma_pago: str = 'NO_IDENTIFICADA'
+    frecuencia_pago: str = ''
+    evidencia_forma_pago: str = ''
+    confianza_forma_pago: Decimal = Decimal('0.00')
     duracion_meses_contrato: int | None = None
     confianza_general: Decimal = Decimal('0.00')
     advertencias: tuple[str, ...] = field(default_factory=tuple)
@@ -41,6 +45,12 @@ class ResultadoAnalisisContrato:
             'valor_pagado_estimado': _decimal_texto(self.valor_pagado_estimado),
             'valor_pendiente_estimado': _decimal_texto(self.valor_pendiente_estimado),
             'valor_mensual_o_honorarios': _decimal_texto(self.valor_mensual_o_honorarios),
+            'forma_pago': self.forma_pago,
+            'frecuencia_pago': self.frecuencia_pago,
+            'forma_pago_mensual': self.forma_pago == 'MENSUAL',
+            'evidencia_forma_pago': self.evidencia_forma_pago,
+            'confianza_forma_pago': str(self.confianza_forma_pago),
+            'fuente_forma_pago': self.fuente,
             'duracion_meses_contrato': self.duracion_meses_contrato,
         }
 
@@ -95,6 +105,9 @@ def analizar_contrato_fallback(documento) -> ResultadoAnalisisContrato:
     fecha_fin = _buscar_fecha(texto, ('fecha de terminación', 'fecha de finalización', 'fin del contrato'))
     valor_total = _buscar_valor(texto, ('valor total del contrato', 'valor del contrato'))
     honorarios = _buscar_valor(texto, ('honorarios mensuales', 'valor mensual', 'mensualidad'))
+    forma_pago, frecuencia_pago, evidencia_pago, confianza_pago = _detectar_forma_pago(
+        texto
+    )
     tipo_contrato = 'PRESTACION_SERVICIOS' if re.search(r'prestaci[oó]n\s+de\s+servicios', texto, re.I) else ''
 
     encontrados = sum(bool(valor) for valor in (
@@ -118,6 +131,10 @@ def analizar_contrato_fallback(documento) -> ResultadoAnalisisContrato:
         fecha_fin_contrato=fecha_fin,
         valor_total_contrato=valor_total,
         valor_mensual_o_honorarios=honorarios,
+        forma_pago=forma_pago,
+        frecuencia_pago=frecuencia_pago,
+        evidencia_forma_pago=evidencia_pago,
+        confianza_forma_pago=confianza_pago,
         confianza_general=(Decimal(encontrados) / Decimal('9')).quantize(Decimal('0.01')),
         advertencias=tuple(advertencias),
         diagnostico={
@@ -156,6 +173,23 @@ def _buscar_valor(texto, etiquetas):
             except InvalidOperation:
                 continue
     return None
+
+
+def _detectar_forma_pago(texto):
+    patrones = (
+        ('MENSUAL', r'(?i)(?:pago|honorarios|remuneraci[oó]n)[^\n]{0,80}\bmensual(?:es)?\b'),
+        ('QUINCENAL', r'(?i)(?:pago|honorarios|remuneraci[oó]n)[^\n]{0,80}\bquincenal(?:es)?\b'),
+        ('SEMANAL', r'(?i)(?:pago|honorarios|remuneraci[oó]n)[^\n]{0,80}\bsemanal(?:es)?\b'),
+        ('POR_ENTREGABLE', r'(?i)\bpago\s+por\s+(?:cada\s+)?entregable\b'),
+        ('CONTRA_FACTURA', r'(?i)\b(?:contra|previa)\s+(?:presentaci[oó]n\s+de\s+)?factura\b'),
+        ('VARIABLE', r'(?i)\b(?:pago|remuneraci[oó]n|honorarios)\s+variable(?:s)?\b'),
+    )
+    for forma, patron in patrones:
+        coincidencia = re.search(patron, texto)
+        if coincidencia:
+            evidencia = re.sub(r'\s+', ' ', coincidencia.group(0)).strip()
+            return forma, forma, evidencia[:500], Decimal('0.80')
+    return 'NO_IDENTIFICADA', '', '', Decimal('0.00')
 
 
 def _decimal_texto(valor):

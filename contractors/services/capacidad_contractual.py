@@ -5,6 +5,10 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
+from gestion_creditos.services.condiciones_financieras import (
+    calcular_componentes_financieros,
+)
+
 
 class ConfiguracionSimuladorNoDisponible(ValidationError):
     pass
@@ -160,36 +164,30 @@ def simular_credito_prestador_informativo(*, monto, plazo_meses, configuracion=N
     ):
         raise ValueError('El plazo esta fuera de la configuracion financiera activa.')
 
-    tasa_mensual = _porcentaje_como_tasa(configuracion.tasa_mensual)
-    tasa_originacion = _porcentaje_como_tasa(configuracion.porcentaje_originacion)
-    tasa_iva = _porcentaje_como_tasa(configuracion.porcentaje_iva_originacion)
-    tasa_seguro = _porcentaje_como_tasa(configuracion.porcentaje_seguro_vida_primera_cuota)
-    tasa_garantia = _porcentaje_como_tasa(configuracion.porcentaje_fondo_garantia)
-
-    costo_originacion = _redondear(monto * tasa_originacion)
-    iva_originacion = _redondear(costo_originacion * tasa_iva)
-    seguro_vida = _redondear(monto * tasa_seguro)
-    fondo_garantia = _redondear(monto * tasa_garantia)
-    capital_total = _redondear(
-        monto + costo_originacion + iva_originacion + seguro_vida + fondo_garantia
+    componentes = calcular_componentes_financieros(
+        monto_base=monto,
+        porcentaje_comision=configuracion.porcentaje_originacion,
+        porcentaje_iva=configuracion.porcentaje_iva_originacion,
+        porcentaje_seguro=configuracion.porcentaje_seguro_vida_primera_cuota,
+        porcentaje_fondo=configuracion.porcentaje_fondo_garantia,
+        tasa_mensual=configuracion.tasa_mensual,
+        plazo=plazo_meses,
+        version_configuracion=configuracion.version,
     )
-    cuota = _calcular_cuota_estimada(capital_total, plazo_meses, tasa_mensual)
-    total = _redondear(cuota * Decimal(plazo_meses))
-    intereses = _redondear(max(Decimal('0'), total - capital_total))
 
     return ResultadoSimulacionPrestadorInformativa(
         monto_solicitado=monto,
         plazo_meses=plazo_meses,
-        tasa_mensual=tasa_mensual,
-        tasa_mensual_porcentaje=_redondear(tasa_mensual * Decimal('100')),
-        costo_originacion=costo_originacion,
-        iva_costo_originacion=iva_originacion,
-        seguro_vida=seguro_vida,
-        fondo_garantia=fondo_garantia,
-        capital_total_financiado=capital_total,
-        intereses_estimados=intereses,
-        total_a_pagar=total,
-        cuota_mensual=cuota,
+        tasa_mensual=_porcentaje_como_tasa(componentes.tasa_mensual),
+        tasa_mensual_porcentaje=componentes.tasa_mensual,
+        costo_originacion=componentes.comision,
+        iva_costo_originacion=componentes.iva,
+        seguro_vida=componentes.seguro_vida,
+        fondo_garantia=componentes.fondo_garantia,
+        capital_total_financiado=componentes.capital_total_financiado,
+        intereses_estimados=componentes.total_intereses,
+        total_a_pagar=componentes.total_a_pagar,
+        cuota_mensual=componentes.cuota_aprobada,
     )
 
 

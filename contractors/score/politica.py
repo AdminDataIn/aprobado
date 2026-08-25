@@ -34,8 +34,8 @@ def obtener_politica_score_activa(fecha=None):
     return politicas[0]
 
 
-def validar_politica_score_completa(configuracion):
-    configuracion.full_clean()
+def validar_politica_score_completa(configuracion, *, validar_restricciones_bd=True):
+    configuracion.full_clean(validate_constraints=validar_restricciones_bd)
     bandas = list(configuracion.bandas.order_by('score_min'))
     if len(bandas) != len(BandaScorePrestador.Nombre.values):
         raise PoliticaScoreNoDisponible('La politica debe tener exactamente cinco bandas.')

@@ -32,6 +32,11 @@ ESTADOS_CON_EVALUACION = {
     ContractorApplication.Estado.EN_EVALUACION,
     ContractorApplication.Estado.EVALUACION_COMPLETADA,
     ContractorApplication.Estado.EN_REVISION_MANUAL,
+    ContractorApplication.Estado.PENDIENTE_APROBACION_PAGADOR,
+    ContractorApplication.Estado.APROBADO_POR_PAGADOR,
+    ContractorApplication.Estado.NO_APROBADO,
+    ContractorApplication.Estado.PENDIENTE_FIRMA,
+    ContractorApplication.Estado.FIRMADO,
 }
 
 
@@ -64,6 +69,13 @@ def marcar_evaluacion_pendiente(solicitud, usuario=None, motivo='simulacion_regi
         return ultimo_evento
     solicitud.estado = ContractorApplication.Estado.EVALUACION_PENDIENTE
     solicitud.save(update_fields=['estado', 'updated_at'])
+    solicitud.aprobaciones_pagador.filter(
+        estado__in=['PENDIENTE', 'APROBADO']
+    ).update(
+        estado='INVALIDADA',
+        motivo='DATOS_MODIFICADOS',
+        updated_at=timezone.now(),
+    )
     return registrar_evento_timeline_prestador(
         solicitud=solicitud,
         tipo_evento=TimelinePrestador.TipoEvento.EVALUACION_PENDIENTE,
@@ -85,6 +97,13 @@ def invalidar_evaluacion_si_cambiaron_datos(
         return False
     solicitud.estado = ContractorApplication.Estado.EVALUACION_PENDIENTE
     solicitud.save(update_fields=['estado', 'updated_at'])
+    solicitud.aprobaciones_pagador.filter(
+        estado__in=['PENDIENTE', 'APROBADO']
+    ).update(
+        estado='INVALIDADA',
+        motivo='DATOS_MODIFICADOS',
+        updated_at=timezone.now(),
+    )
     registrar_evento_timeline_prestador(
         solicitud=solicitud,
         tipo_evento=TimelinePrestador.TipoEvento.DATOS_MODIFICADOS,

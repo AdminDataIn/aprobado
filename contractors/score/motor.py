@@ -11,36 +11,56 @@ def evaluar_score_prestador(solicitud, politica, datacredito):
     componentes, variables, bloqueos, geolocalizacion = construir_componentes_score(
         solicitud, politica, datacredito
     )
+    faltantes_previos = [
+        item.nombre for item in componentes if not item.disponible
+    ]
+    nombres_obligatorios = ['capacidad']
+    if politica.usa_fuentes_duales:
+        if politica.requiere_midecisor:
+            nombres_obligatorios.append('datacredito_score')
+        if politica.requiere_hdcplus:
+            nombres_obligatorios.append('hdcplus')
+    else:
+        nombres_obligatorios.append('datacredito')
+    obligatorios_faltantes = [
+        nombre for nombre in nombres_obligatorios if nombre in faltantes_previos
+    ]
+    permite_redistribuir = bool(
+        politica.permite_redistribuir_pesos_faltantes
+        and not obligatorios_faltantes
+    )
     componentes = aplicar_pesos(
         componentes,
-        politica.permite_redistribuir_pesos_faltantes,
+        permite_redistribuir,
     )
     razones = []
     alertas = []
     faltantes = [item.nombre for item in componentes if not item.disponible]
-    obligatorios_faltantes = [
-        nombre for nombre in ('datacredito', 'capacidad') if nombre in faltantes
-    ]
     if politica.requiere_referencias and 'referencias' in faltantes:
         obligatorios_faltantes.append('referencias')
 
     puede_calcular = not obligatorios_faltantes and (
-        politica.permite_redistribuir_pesos_faltantes or not faltantes
+        permite_redistribuir or not faltantes
     )
     if obligatorios_faltantes:
         razones.append(
             'Faltan componentes obligatorios: ' + ', '.join(obligatorios_faltantes) + '.'
         )
-    elif faltantes and not politica.permite_redistribuir_pesos_faltantes:
+    elif faltantes and not permite_redistribuir:
         razones.append(
             'La politica no permite redistribuir componentes faltantes: '
             + ', '.join(faltantes) + '.'
         )
     elif faltantes:
-        alertas.append(
-            'Pesos redistribuidos por componentes no disponibles: '
-            + ', '.join(faltantes) + '.'
-        )
+        if faltantes == ['referencias']:
+            alertas.append(
+                'Peso de referencias redistribuido porque no existen referencias verificadas.'
+            )
+        else:
+            alertas.append(
+                'Pesos redistribuidos por componentes opcionales no disponibles: '
+                + ', '.join(faltantes) + '.'
+            )
 
     score_base = None
     if puede_calcular:
@@ -73,17 +93,6 @@ def evaluar_score_prestador(solicitud, politica, datacredito):
     banda = buscar_banda(politica, score_final)
     incompatibilidades = detectar_incompatibilidades_simulador(solicitud, politica)
     alertas.extend(incompatibilidades)
-    consultas_recientes = getattr(
-        getattr(datacredito, 'resultado_normalizado', None),
-        'consultas_recientes',
-        None,
-    )
-    revision_consultas = bool(
-        consultas_recientes is not None
-        and consultas_recientes >= politica.consultas_recientes_revision
-    )
-    if revision_consultas:
-        alertas.append('La cantidad de consultas recientes requiere revision manual.')
     for componente in componentes:
         alertas.extend(componente.alertas)
 
@@ -117,7 +126,6 @@ def evaluar_score_prestador(solicitud, politica, datacredito):
     requiere_revision = bool(
         score_final is None
         or incompatibilidades
-        or revision_consultas
         or bloqueos
         or not banda
         or banda.resultado == BandaScorePrestador.Resultado.REQUIERE_REVISION_MANUAL
@@ -131,7 +139,15 @@ def evaluar_score_prestador(solicitud, politica, datacredito):
         variables_calculadas={
             **variables,
             'geolocalizacion_disponible': False,
-            'componentes_faltantes': ','.join(faltantes),
+            'componentes_faltantes': list(faltantes),
+            'redistribucion_aplicada': bool(faltantes and permite_redistribuir),
+            'motivo_redistribucion': (
+                'referencias_no_verificadas'
+                if faltantes == ['referencias'] and permite_redistribuir
+                else 'componentes_opcionales_no_disponibles'
+                if faltantes and permite_redistribuir
+                else ''
+            ),
         },
         razones=tuple(dict.fromkeys(razones)),
         alertas=tuple(dict.fromkeys(alertas)),

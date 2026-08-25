@@ -43,6 +43,16 @@ def construir_snapshot_entrada_evaluacion(solicitud):
         'valor_total_contrato': _decimal_seguro(solicitud.valor_total_contrato),
         'valor_pagado_contrato': _decimal_seguro(solicitud.valor_pagado_contrato),
         'valor_pendiente_cobrar': _decimal_seguro(solicitud.valor_pendiente_cobrar),
+        'forma_pago': solicitud.forma_pago,
+        'frecuencia_pago': solicitud.frecuencia_pago,
+        'valor_mensual_contractual': _decimal_seguro(
+            solicitud.valor_mensual_contractual
+        ),
+        'evidencia_forma_pago_hash': _hmac_campos(
+            solicitud.evidencia_forma_pago,
+            solicitud.fuente_forma_pago,
+            solicitud.confianza_forma_pago,
+        ),
         'estado_documental': {
             'completo': set(DOCUMENTOS_OBLIGATORIOS_PRESTADOR).issubset(tipos_documentos),
             'tipos_cargados': tipos_documentos,
