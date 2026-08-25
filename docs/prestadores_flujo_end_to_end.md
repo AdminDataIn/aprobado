@@ -766,3 +766,237 @@ La URL del proxy no se registra ni se persiste en snapshots; los logs solo indic
 si existe configuracion. La verificacion TLS de `requests` permanece activa. Esta
 opcion esta destinada a ejecuciones locales/DEMO; produccion normalmente debe usar
 conexion directa dejando `DATACREDITO_PROXY_URL` vacia.
+
+## 29. Evaluacion dual MiDecisor + HDCPlus DEMO V2
+
+La politica DEMO incorpora dos fuentes con responsabilidades distintas. MiDecisor
+aporta score externo y señales normalizadas. HDCPlus aporta principalmente la cuota
+mensual existente y conserva obligaciones, saldos, mora e historial como insumos
+analiticos. Tarjetas, obligaciones, mora, reportes, embargos, saldo total o consultas
+recientes no son reglas duras ni deciden por si solos.
+
+Cada fuente conserva un `ConsultaDatacreditoSnapshot` independiente. El fingerprint
+incluye ambiente, servicio, hash del documento, autorizacion y, para HDCPlus,
+producto, tipo de cuenta y parametros. La evaluacion formal reutiliza cada snapshot
+vigente por separado y audita ambos identificadores; nunca persiste raw, token,
+credenciales, documento completo ni datos de terceros.
+
+La capacidad usa una unica formula de dominio:
+
+```text
+relacion_cuota_ingreso = (cuota_existente_hdc + cuota_nueva) / ingreso_contractual
+```
+
+El saldo total HDC no se usa como cuota. Este checkpoint no implementa recogida ni
+consolidacion de cartera.
+
+### Politica de fuentes y fallos parciales
+
+| MiDecisor | HDCPlus | Disponibilidad tecnica |
+|---|---|---|
+| exitoso | exitoso | evaluacion completa |
+| exitoso | sin informacion | revision o parcial segun politica |
+| exitoso | error transitorio | revision manual; no preaprueba |
+| exitoso | error permanente | no evaluable segun politica |
+| error | exitoso | no preaprueba sin permiso explicito de politica |
+| sin informacion | sin informacion | no evaluable |
+| error | error | error controlado/no evaluable |
+
+El cuadro describe disponibilidad de fuentes, no una decision crediticia. Las señales
+normalizadas solo alimentan componentes configurables del score propio. Una
+contradiccion tecnica se registra como alerta y solo exige revision cuando afecta un
+dato critico efectivamente utilizado. La politica DEMO no es productiva y no se activa
+automaticamente.
+
+Bootstrap idempotente:
+
+```text
+python manage.py configurar_politica_prestadores_demo_v2
+```
+
+El comando siempre deja la politica inactiva; la activacion requiere control
+administrativo separado. Si V2 existe, esta inactiva y no tiene auditorias, corrige su
+parametrizacion de forma idempotente. Si V2 ya fue auditada, conserva su semantica y
+crea V3. Los pesos documentados son MiDecisor 45%, HDCPlus 0%, capacidad 30%,
+comportamiento digital 8%, consistencia/riesgo 12% y referencias 5%.
+
+HDCPlus sigue siendo obligatorio aunque su peso sea cero: su cuota mensual alimenta
+capacidad. No produce un score 0-1000 sintetico por mora, obligaciones, ausencia de
+mora o consultas. Referencias no son obligatorias y su peso solo se redistribuye
+porque la politica lo declara. La auditoria conserva peso configurado, peso aplicado,
+aporte ponderado, componentes faltantes y motivo de redistribucion.
+
+### Prueba HDCPlus UAT controlada
+
+El comando no consume sin confirmacion y solo permite ambiente UAT:
+
+```text
+python manage.py probar_hdc_prestador --solicitud-id 7
+python manage.py probar_hdc_prestador --solicitud-id 7 --solo-cache
+python manage.py probar_hdc_prestador --solicitud-id 7 --confirmar-consumo-real
+```
+
+Para local puede usarse `DATACREDITO_PROXY_URL=socks5h://127.0.0.1:1080`. En el VPS
+se deja vacio para salida directa por IP fija. La salida contiene solo estado, HTTP,
+codigo funcional, snapshot y campos normalizados allowlist. La prueba manual debe
+habilitar temporalmente consumo real, verificar OAuth/configuracion, ejecutar el
+comando una vez, repetirlo para confirmar reutilizacion y volver a apagar el consumo.
+
+El backoffice muestra el resumen dual solo a staff con permiso de detalle de score.
+El portal cliente no expone score, obligaciones, centrales ni razones internas.
+
+## 30. Regla mensual, decision propia y aprobacion de empresa
+
+### Contrato e ingreso mensual
+
+La IA propone `forma_pago`, `frecuencia_pago`, evidencia, confianza y fuente. La regla
+de elegibilidad se aplica en backend:
+
+- `MENSUAL`: puede continuar si las demas validaciones contractuales son concluyentes.
+- `NO_IDENTIFICADA`: requiere revision contractual.
+- otra frecuencia explicita: bloqueo contractual objetivo para este producto.
+
+El ingreso contractual tiene una sola fuente de verdad en
+`contractors.services.ingreso_contractual`:
+
+1. usa el valor mensual explicito cuando existe evidencia suficiente;
+2. en su ausencia, usa `saldo_pendiente / meses_completos_restantes`;
+3. nunca asume que el saldo pendiente equivale al valor total sin evidencia de pagos;
+4. si ambos metodos difieren mas que la tolerancia versionada, exige revision;
+5. no suma el ingreso explicito y el derivado.
+
+La auditoria conserva metodo, version, ingreso mensual resultante, meses restantes,
+valor total y saldo disponible. Menos de un mes completo no produce capacidad.
+
+### Capacidad y score
+
+La capacidad financiera se calcula una sola vez:
+
+```text
+carga_total_mensual = cuota_mensual_hdc + cuota_nueva_estimada
+relacion_carga_ingreso = carga_total_mensual / ingreso_contractual_mensual
+capacidad_disponible =
+    ingreso_contractual_mensual * cuota_ingreso_maxima
+    - cuota_mensual_hdc
+    - otros_compromisos_conocidos
+```
+
+El saldo total y el saldo en mora de HDCPlus no se usan como cuota. La cuota HDC no se
+descuenta dos veces. MiDecisor aporta el score crediticio externo con peso 45%;
+capacidad aporta 30%, comportamiento digital 8%, consistencia/riesgo 12% y referencias
+5%. HDCPlus no agrega un termino ponderado independiente, pero sigue siendo obligatorio
+para calcular capacidad. El score propio de Aprobado determina si el resultado es
+`PREAPROBADO_READ_ONLY`, `REQUIERE_REVISION_MANUAL`, `NO_APROBADO_READ_ONLY` o
+`NO_EVALUABLE`.
+
+### Aprobaciones y formalizacion
+
+Una preaprobacion financiera no origina ni habilita firma. El orden obligatorio es:
+
+```text
+evaluacion financiera favorable
+-> aprobacion interna Aprobado
+-> PENDIENTE_APROBACION_PAGADOR
+-> confirmacion contractual y operativa de la empresa
+-> APROBADO_POR_PAGADOR
+-> originacion idempotente EN_REVISION
+-> formalizacion
+-> validacion de identidad
+-> PENDIENTE_FIRMA
+```
+
+`AprobacionPagadorPrestador` es independiente de la doble aprobacion de Libranza. El
+pagador solo ve contrato, forma de pago, valores, monto y plazo autorizados. No recibe
+score, HDC, MiDecisor ni reglas internas. Confirma vinculo, vigencia, pago mensual,
+valores contractuales, capacidad operativa y gestion del pago. Una decision rechazada,
+pendiente, ajustada, invalidada o correspondiente a otra version impide originacion y
+formalizacion.
+
+La novedad operativa posterior a firma sigue siendo un evento distinto: informa una
+formalizacion ya realizada y no reemplaza la aprobacion previa.
+
+### Identidad obligatoria
+
+Prestadores fuerza validacion facial/selfie y documental en el payload de ZapSign,
+independientemente de flags generales de Libranza. Se conservan solo estados y hashes
+de evidencia. El callback no marca `FIRMADO` si falta selfie valida, documento validado,
+coincidencia del firmante o firma completada. No se persisten biometria, token, URL de
+firma ni payload externo.
+
+### Politica DEMO y prueba manual
+
+La politica nueva permanece inactiva hasta una accion administrativa explicita. Si la
+semantica DEMO V2 ya fue auditada, el comando idempotente prepara V3; no reescribe V1
+ni V2, no desactiva una politica activa y tampoco activa la nueva version:
+
+```text
+python manage.py configurar_politica_prestadores_demo_v2
+```
+
+Secuencia manual controlada:
+
+1. inspeccionar configuracion financiera, pesos, bandas y version preparada;
+2. activar DEMO de forma explicita;
+3. crear una solicitud nueva con pago mensual y valor mensual verificable;
+4. completar documentos y confirmar la informacion contractual;
+5. consultar o reutilizar MiDecisor y HDCPlus bajo autorizacion vigente;
+6. verificar que HDC aporte la cuota mensual existente y no una regla dura;
+7. ejecutar evaluacion formal y revisar la auditoria sanitizada;
+8. aprobar internamente como staff autorizado;
+9. confirmar como pagador activo de la misma empresa;
+10. comprobar que solo entonces se habilita originacion/formalizacion;
+11. validar localmente hasta la frontera de envio, sin consumir ZapSign;
+12. probar identidad y firma posteriormente en sandbox HTTPS.
+
+Este ajuste no activa credito, desembolso, pagos, recaudo, cartera, cobranza ni
+WhatsApp. Tampoco ejecuta ZapSign real.
+
+## 31. Activacion administrativa de politicas de score
+
+El bootstrap y la activacion son operaciones distintas. Los comandos
+`configurar_politica_prestadores_demo` y
+`configurar_politica_prestadores_demo_v2` crean o verifican parametrizacion;
+la V2 permanece inactiva y el bootstrap V2 no puede activarla.
+
+La unica operacion soportada para cambiar la politica activa es
+`contractors.services.politica_score.activar_politica_score_prestador`. El
+servicio:
+
+- exige un actor autenticado, activo y con el permiso
+  `contractors.can_activate_contractor_score_policy`;
+- exige un motivo administrativo;
+- bloquea las politicas y la configuracion financiera con
+  `select_for_update`;
+- valida vigencia, pesos, fuentes, configuracion financiera y las cinco
+  bandas antes de modificar el estado;
+- desactiva la politica anterior y activa la objetivo dentro de una unica
+  transaccion;
+- conserva exactamente una politica activa al finalizar;
+- registra `CambioPoliticaScorePrestadorAudit` con snapshots sanitizados;
+- no modifica `PredecisionPrestadorAudit` ni la semantica de politicas usadas.
+
+El campo `activa` es de solo lectura en el formulario normal de Django Admin.
+La accion **Activar politica seleccionada** requiere seleccionar exactamente
+una politica y confirmar un motivo. La auditoria resultante es inmutable y su
+Admin es de solo lectura.
+
+La misma operacion puede ejecutarse por consola con un actor real:
+
+```text
+python manage.py activar_politica_prestadores \
+  --version prestadores-score-demo-v2 \
+  --motivo "Prueba E2E local de politica dual" \
+  --actor-username admin_riesgo
+```
+
+Antes de activar V2 se exige la configuracion financiera activa de
+`$10.000.000`, plazo maximo de `8` meses y tasa mensual de `2,20%`; los pesos
+MiDecisor/HDCPlus/capacidad/comportamiento/riesgo/referencias deben ser
+`0.45/0/0.30/0.08/0.12/0.05`, ambas fuentes deben ser obligatorias y no se
+permite evaluacion parcial sin HDCPlus. Las cinco bandas deben cubrir
+continuamente `0-1000`.
+
+Si una validacion o la escritura de auditoria falla, la transaccion revierte y
+la politica anterior conserva su estado activo. El retorno a V1 no es
+automatico: se ejecuta de forma explicita con el mismo Admin o comando,
+indicando V1, actor y motivo. Ese cambio se registra como `REACTIVACION`.

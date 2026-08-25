@@ -292,6 +292,18 @@
               {{ form.valor_pendiente_cobrar }}
               {{ form.valor_pendiente_cobrar.errors }}
             </div>
+            <div class="form-field">
+              {{ form.forma_pago.label_tag }}
+              {{ form.forma_pago }}
+              {{ form.forma_pago.errors }}
+              <small class="form-helper-text">Este producto requiere una forma de pago mensual verificable.</small>
+            </div>
+            <div class="form-field">
+              {{ form.valor_mensual_contractual.label_tag }}
+              {{ form.valor_mensual_contractual }}
+              {{ form.valor_mensual_contractual.errors }}
+              <small class="form-helper-text">Confirma este valor solo si está expresamente indicado en el contrato.</small>
+            </div>
             <div class="form-field form-field-full">
               {{ form.observaciones_contrato.label_tag }}
               {{ form.observaciones_contrato }}
@@ -890,6 +902,8 @@
       agregarDatoDetectado(listaDatos, 'Fecha de finalización', datosSugeridosContrato.fecha_fin_contrato);
       agregarDatoDetectado(listaDatos, 'Valor total', datosSugeridosContrato.valor_total_contrato);
       agregarDatoDetectado(listaDatos, 'Valor pendiente', datosSugeridosContrato.valor_pendiente_estimado);
+      agregarDatoDetectado(listaDatos, 'Forma de pago', datosSugeridosContrato.forma_pago);
+      agregarDatoDetectado(listaDatos, 'Valor mensual', datosSugeridosContrato.valor_mensual_o_honorarios);
       if (listaDatos.children.length) {
         const bloqueDatos = document.createElement('div');
         bloqueDatos.className = 'contract-analysis-section contract-analysis-data';
@@ -915,6 +929,8 @@
         valor_total_contrato: 'id_valor_total_contrato',
         valor_pagado_estimado: 'id_valor_pagado_contrato',
         valor_pendiente_estimado: 'id_valor_pendiente_cobrar',
+        forma_pago: 'id_forma_pago',
+        valor_mensual_o_honorarios: 'id_valor_mensual_contractual',
       };
       Object.entries(mapa).forEach(([origen, destino]) => {
         const campo = document.getElementById(destino);

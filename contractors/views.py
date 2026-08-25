@@ -263,6 +263,19 @@ def _aplicar_evidencia_analisis(solicitud, evidencia):
     solicitud.estado_analisis_contractual = evidencia['estado']
     solicitud.metadata_analisis_contractual = metadata
     solicitud.fecha_analisis_contractual = timezone.now()
+    forma_pago = metadata.get('forma_pago_contractual') or {}
+    solicitud.frecuencia_pago = str(forma_pago.get('frecuencia_pago') or '')[:120]
+    solicitud.evidencia_forma_pago = str(forma_pago.get('evidencia') or '')[:500]
+    try:
+        solicitud.confianza_forma_pago = forma_pago.get('confianza') or None
+    except (TypeError, ValueError):
+        solicitud.confianza_forma_pago = None
+    sugerida = str(forma_pago.get('forma_pago') or 'NO_IDENTIFICADA')
+    solicitud.fuente_forma_pago = (
+        str(forma_pago.get('fuente') or '')[:40]
+        if solicitud.forma_pago == sugerida
+        else 'CONFIRMACION_USUARIO'
+    )
 
 
 def _validar_origenes_cedula(request, form):

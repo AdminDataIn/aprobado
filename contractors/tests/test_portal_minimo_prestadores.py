@@ -231,7 +231,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertContains(response, 'value="80.000.000"')
         self.assertContains(response, 'value="5.000.000"')
         self.assertContains(response, 'value="75.000.000"')
-        self.assertContains(response, 'data-money-contract="true"', count=3)
+        self.assertContains(response, 'data-money-contract="true"', count=4)
 
     def test_formulario_expone_enlaces_legales_de_prestadores(self):
         self.client.force_login(self.usuario)
@@ -1592,7 +1592,7 @@ class PortalMinimoPrestadoresTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Datos basicos sanitizados')
-        self.assertContains(response, 'Capacidad contractual preliminar')
+        self.assertContains(response, 'Capacidad contractual y financiera')
         self.assertContains(response, 'Ultima predecision auditada')
         self.assertContains(response, 'Revisiones manuales')
         self.assertNotContains(response, solicitud.numero_documento)
@@ -1787,6 +1787,8 @@ class PortalMinimoPrestadoresTest(TestCase):
             'valor_total_contrato': '12000000',
             'valor_pagado_contrato': '4000000',
             'valor_pendiente_cobrar': '8000000',
+            'forma_pago': ContractorApplication.FormaPago.MENSUAL,
+            'valor_mensual_contractual': '1000000',
             'observaciones_contrato': 'Contrato confirmado por el prestador.',
             'acepta_terminos': 'on',
             'acepta_politica_privacidad': 'on',
@@ -1850,6 +1852,9 @@ class PortalMinimoPrestadoresTest(TestCase):
             fecha_fin_contrato=fecha_fin or (timezone.localdate() + timedelta(days=180)),
             valor_total_contrato=valor_total,
             valor_pendiente_cobrar=valor_pendiente,
+            forma_pago=ContractorApplication.FormaPago.MENSUAL,
+            frecuencia_pago='Mensual',
+            valor_mensual_contractual=Decimal('1000000'),
             monto_solicitado=monto,
             plazo_meses=plazo,
         )
