@@ -3,8 +3,16 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 
-from contractors.models import AprobacionInternaPrestador
+from contractors.models import (
+    AprobacionInternaPrestador,
+    ConfiguracionSimuladorPrestador,
+)
+from contractors.services.aprobacion_pagador import validar_aprobacion_pagador_vigente
 from contractors.services.evaluacion_versionado import construir_version_datos
+from gestion_creditos.services.condiciones_financieras import (
+    ComponentesFinancierosCredito,
+    calcular_componentes_financieros,
+)
 
 
 @dataclass(frozen=True)
@@ -41,6 +49,7 @@ class ExpedienteOriginacionPrestadorDTO:
     cedula_trasera_nombre: str
     contrato_nombre: str
     certificado_bancario_nombre: str
+    componentes_financieros: ComponentesFinancierosCredito
 
     def como_dict(self):
         return asdict(self)
@@ -48,7 +57,7 @@ class ExpedienteOriginacionPrestadorDTO:
 
 def construir_expediente_originacion_prestador(gate):
     gate = AprobacionInternaPrestador.objects.select_related(
-        'solicitud', 'auditoria_predecision'
+        'solicitud', 'auditoria_predecision', 'aprobacion_pagador'
     ).get(pk=gate.pk)
     if gate.estado != AprobacionInternaPrestador.Estado.APROBADA_PARA_ORIGINAR:
         raise ValidationError('La solicitud no esta aprobada internamente para originar.')
@@ -58,6 +67,38 @@ def construir_expediente_originacion_prestador(gate):
         raise ValidationError('Los datos cambiaron despues de la aprobacion interna.')
     if gate.auditoria_predecision.version_datos != gate.version_datos:
         raise ValidationError('La aprobacion no coincide con su auditoria de predecision.')
+    validar_aprobacion_pagador_vigente(gate)
+    configuracion = ConfiguracionSimuladorPrestador.objects.filter(
+        version=gate.version_configuracion_financiera,
+    ).first()
+    if configuracion is None:
+        raise ValidationError(
+            'No existe la version financiera exacta usada por la aprobacion.'
+        )
+    if configuracion.tasa_mensual != gate.tasa_mensual_snapshot:
+        raise ValidationError('La tasa aprobada no coincide con la configuracion versionada.')
+    if not (
+        configuracion.monto_minimo <= gate.monto_autorizado <= configuracion.monto_maximo
+    ):
+        raise ValidationError('El monto autorizado no pertenece a la configuracion versionada.')
+    if not (
+        configuracion.plazo_minimo_meses
+        <= gate.plazo_autorizado
+        <= configuracion.plazo_maximo_meses
+    ):
+        raise ValidationError('El plazo autorizado no pertenece a la configuracion versionada.')
+    componentes_financieros = calcular_componentes_financieros(
+        monto_base=gate.monto_autorizado,
+        porcentaje_comision=configuracion.porcentaje_originacion,
+        porcentaje_iva=configuracion.porcentaje_iva_originacion,
+        porcentaje_seguro=configuracion.porcentaje_seguro_vida_primera_cuota,
+        porcentaje_fondo=configuracion.porcentaje_fondo_garantia,
+        tasa_mensual=configuracion.tasa_mensual,
+        plazo=gate.plazo_autorizado,
+        version_configuracion=configuracion.version,
+        version_score=gate.auditoria_predecision.version_score,
+        version_politica=gate.version_politica,
+    )
     documentos = {
         documento.tipo_documento: documento
         for documento in solicitud.documentos.all()
@@ -101,4 +142,5 @@ def construir_expediente_originacion_prestador(gate):
         cedula_trasera_nombre=documentos['CEDULA_TRASERA'].archivo.name,
         contrato_nombre=documentos['CONTRATO'].archivo.name,
         certificado_bancario_nombre=documentos['CERTIFICADO_BANCARIO'].archivo.name,
+        componentes_financieros=componentes_financieros,
     )

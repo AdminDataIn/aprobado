@@ -4,6 +4,7 @@ from typing import Protocol
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 
 from gestion_creditos.models import (
     Credito,
@@ -41,6 +42,7 @@ class ExpedienteOriginacionLibranza(Protocol):
     cedula_trasera_nombre: str
     contrato_nombre: str
     certificado_bancario_nombre: str
+    componentes_financieros: object
 
 
 @dataclass(frozen=True)
@@ -78,6 +80,11 @@ def originar_libranza_desde_expediente(
     if origen.estado == OrigenCreditoPrestador.Estado.COMPLETADO:
         if not origen.credito_id or not origen.credito_libranza_id:
             raise ValidationError('El origen completado no tiene enlaces financieros validos.')
+        if origen.snapshot_hash != dto.componentes_financieros.calcular_hash():
+            raise ValidationError(
+                'La originacion completada no coincide con el snapshot financiero solicitado.'
+            )
+        origen.componentes_financieros(validar_hash=True)
         return ResultadoOriginacionLibranza(
             origen=origen,
             credito=origen.credito,
@@ -89,6 +96,7 @@ def originar_libranza_desde_expediente(
     if origen.estado != OrigenCreditoPrestador.Estado.EN_PROCESO:
         raise ValidationError('El origen no esta disponible para ser procesado.')
 
+    componentes = dto.componentes_financieros
     credito = Credito.objects.create(
         usuario_id=dto.usuario_id,
         linea=Credito.LineaCredito.LIBRANZA,
@@ -98,6 +106,10 @@ def originar_libranza_desde_expediente(
         monto_aprobado=dto.monto_autorizado,
         plazo=dto.plazo_autorizado,
         tasa_interes=dto.tasa_mensual,
+        comision=componentes.comision,
+        iva_comision=componentes.iva,
+        total_a_pagar=componentes.total_a_pagar,
+        valor_cuota=componentes.cuota_aprobada,
     )
     detalle = CreditoLibranza.objects.create(
         credito=credito,
@@ -126,9 +138,36 @@ def originar_libranza_desde_expediente(
     )
     origen.credito = credito
     origen.credito_libranza = detalle
+    origen.monto_base = componentes.monto_base
+    origen.porcentaje_comision = componentes.porcentaje_comision
+    origen.comision = componentes.comision
+    origen.porcentaje_iva = componentes.porcentaje_iva
+    origen.iva = componentes.iva
+    origen.porcentaje_seguro = componentes.porcentaje_seguro
+    origen.seguro_vida = componentes.seguro_vida
+    origen.porcentaje_fondo = componentes.porcentaje_fondo
+    origen.fondo_garantia = componentes.fondo_garantia
+    origen.otros_componentes = {
+        clave: str(valor) for clave, valor in componentes.otros_componentes.items()
+    }
+    origen.otros_costos_total = componentes.otros_costos_total
+    origen.capital_total_financiado = componentes.capital_total_financiado
+    origen.tasa_mensual = componentes.tasa_mensual
+    origen.plazo = componentes.plazo
+    origen.cuota_aprobada = componentes.cuota_aprobada
+    origen.total_intereses = componentes.total_intereses
+    origen.total_a_pagar = componentes.total_a_pagar
+    origen.version_formula = componentes.version_formula
+    origen.version_configuracion = componentes.version_configuracion
+    origen.version_score = componentes.version_score
+    origen.version_politica = componentes.version_politica
+    origen.calculado_en = timezone.now()
+    origen.snapshot_hash = componentes.calcular_hash()
     origen.estado = OrigenCreditoPrestador.Estado.COMPLETADO
     origen.save(update_fields=[
-        'credito', 'credito_libranza', 'estado', 'updated_at',
+        'credito', 'credito_libranza', 'estado',
+        *OrigenCreditoPrestador.CAMPOS_SNAPSHOT_FINANCIERO,
+        'updated_at',
     ])
     return ResultadoOriginacionLibranza(
         origen=origen,
@@ -204,6 +243,15 @@ def _validar_expediente(dto, clave_idempotencia):
         raise ValidationError('El plazo autorizado no puede superar el solicitado.')
     if dto.tasa_mensual <= 0:
         raise ValidationError('La tasa mensual del expediente debe ser positiva.')
+    componentes = getattr(dto, 'componentes_financieros', None)
+    if componentes is None:
+        raise ValidationError('El expediente no contiene componentes financieros.')
+    if componentes.monto_base != dto.monto_autorizado:
+        raise ValidationError('El snapshot no coincide con el monto autorizado.')
+    if componentes.plazo != dto.plazo_autorizado:
+        raise ValidationError('El snapshot no coincide con el plazo autorizado.')
+    if componentes.tasa_mensual != dto.tasa_mensual:
+        raise ValidationError('El snapshot no coincide con la tasa autorizada.')
     requeridos = (
         dto.cedula_frontal_nombre,
         dto.cedula_trasera_nombre,

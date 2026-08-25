@@ -13,6 +13,8 @@ from contractors.models import (
     TimelinePrestador,
 )
 from contractors.services.evaluacion_timeline import registrar_evento_timeline_prestador
+from contractors.services.aprobacion_pagador import validar_aprobacion_pagador_vigente
+from contractors.services.validacion_contractual import validar_contrato_prestador
 from gestion_creditos.models import (
     Credito,
     HistorialEstado,
@@ -161,6 +163,13 @@ def registrar_resultado_validacion_identidad_prestador(
         formalizacion.identidad_referencia_hash = referencia_hash
         formalizacion.identidad_validada_en = timezone.now()
         formalizacion.identidad_expira_en = expira_en
+        formalizacion.identidad_selfie_validada = True
+        formalizacion.identidad_documento_validada = True
+        formalizacion.identidad_firmante_coincide = True
+        formalizacion.identidad_evidencia_hash = _hash_secreto(
+            'evidencia-identidad',
+            f'{formalizacion.id}:{usuario.id}:{referencia_proveedor}',
+        )
         formalizacion.estado_identidad = (
             FormalizacionCreditoPrestador.EstadoIdentidad.VALIDADA
         )
@@ -170,6 +179,8 @@ def registrar_resultado_validacion_identidad_prestador(
         formalizacion.save(update_fields=[
             'identidad_usuario', 'identidad_referencia_hash',
             'identidad_validada_en', 'identidad_expira_en', 'estado_identidad',
+            'identidad_selfie_validada', 'identidad_documento_validada',
+            'identidad_firmante_coincide', 'identidad_evidencia_hash',
             'estado', 'error_codigo', 'error_etapa', 'updated_at',
         ])
     _registrar_evento(
@@ -247,6 +258,7 @@ def enviar_formalizacion_prestador_a_firma(formalizacion, *, actor, cliente=None
             brand_name='Aprobado',
             external_id=formalizacion.clave_idempotencia,
             require_identity_validation=True,
+            require_document_validation=True,
         )
         documento_id = str(respuesta.get('token') or '').strip()
         if not documento_id:
@@ -309,11 +321,20 @@ def procesar_callback_formalizacion_prestador(
         )
         if formalizacion is None:
             return None
+        credito = Credito.objects.select_for_update().get(
+            pk=formalizacion.credito_id
+        )
+        if credito.estado == Credito.EstadoCredito.ANULADO:
+            return {
+                'estado': 'credit_cancelled_ignored',
+                'formalizacion': formalizacion,
+            }
         if accion == 'signed':
             if formalizacion.estado == FormalizacionCreditoPrestador.Estado.FIRMADO:
                 return {'estado': 'already_processed', 'formalizacion': formalizacion}
             if formalizacion.estado != FormalizacionCreditoPrestador.Estado.PENDIENTE_FIRMA:
                 raise ValidationError('La formalizacion no esta pendiente de firma.')
+            _validar_evidencia_identidad_completa(formalizacion)
             ahora = timezone.now()
             formalizacion.estado = FormalizacionCreditoPrestador.Estado.FIRMADO
             formalizacion.firmada_en = ahora
@@ -381,6 +402,15 @@ def _validar_origen_formalizable(origen):
         raise ValidationError('La aprobacion interna no habilita la formalizacion.')
     if gate.version_datos != origen.gate_version:
         raise ValidationError('La version aprobada no coincide con la originacion.')
+    validar_aprobacion_pagador_vigente(gate)
+    contrato = validar_contrato_prestador(gate.solicitud)
+    if (
+        contrato.bloqueos
+        or contrato.requiere_revision_manual
+        or not contrato.forma_pago_mensual
+        or not contrato.capacidad_automatica
+    ):
+        raise ValidationError('El contrato ya no habilita la formalizacion.')
 
 
 def _validar_coincidencia_formalizacion(formalizacion, origen, clave):
@@ -399,6 +429,19 @@ def _validar_identidad_vigente(formalizacion):
         raise ValidationError('La identidad validada no pertenece al titular del credito.')
     if not formalizacion.identidad_expira_en or formalizacion.identidad_expira_en <= timezone.now():
         raise IdentidadFirmaExpirada('La validacion de identidad esta expirada.')
+    _validar_evidencia_identidad_completa(formalizacion)
+
+
+def _validar_evidencia_identidad_completa(formalizacion):
+    if not all((
+        formalizacion.identidad_selfie_validada,
+        formalizacion.identidad_documento_validada,
+        formalizacion.identidad_firmante_coincide,
+        formalizacion.identidad_evidencia_hash,
+    )):
+        raise ValidationError(
+            'La firma no tiene evidencia completa de selfie, documento y firmante.'
+        )
 
 
 def _cambiar_estado_credito_sin_efectos_financieros(

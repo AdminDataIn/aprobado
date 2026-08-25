@@ -79,9 +79,8 @@ class OrigenCreditoPrestadorAdmin(admin.ModelAdmin):
     )
     list_filter = ('estado', 'created_at')
     search_fields = ('gate_id', 'clave_idempotencia', 'credito__numero_credito')
-    readonly_fields = (
-        'gate_id', 'gate_version', 'clave_idempotencia', 'credito',
-        'credito_libranza', 'estado', 'created_by', 'created_at', 'updated_at',
+    readonly_fields = tuple(
+        campo.name for campo in OrigenCreditoPrestador._meta.fields
     )
 
     def has_add_permission(self, request):

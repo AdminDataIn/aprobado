@@ -5,6 +5,7 @@ from django.db import transaction
 
 from contractors.models import AprobacionInternaPrestador, TimelinePrestador
 from contractors.services.evaluacion_timeline import registrar_evento_timeline_prestador
+from contractors.services.aprobacion_pagador import validar_aprobacion_pagador_vigente
 from contractors.services.expediente_originacion import (
     construir_expediente_originacion_prestador,
 )
@@ -23,9 +24,14 @@ def originar_credito_prestador_desde_gate(gate, *, actor):
         with transaction.atomic():
             gate_bloqueado = (
                 AprobacionInternaPrestador.objects.select_for_update()
-                .select_related('solicitud', 'auditoria_predecision')
+                .select_related(
+                    'solicitud',
+                    'auditoria_predecision',
+                    'aprobacion_pagador',
+                )
                 .get(pk=gate.pk)
             )
+            validar_aprobacion_pagador_vigente(gate_bloqueado)
             expediente = construir_expediente_originacion_prestador(gate_bloqueado)
             clave = construir_clave_idempotencia_prestador(expediente)
             _registrar_evento(
