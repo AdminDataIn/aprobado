@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import connection
+from django.db import IntegrityError, connection
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -850,6 +850,10 @@ class AprobacionInternaPrestadorTest(TestCase):
         self.assertEqual(Pagare.objects.count(), 1)
         pagare = primera.formalizacion.pagare
         self.assertEqual(pagare.version_plantilla, 'prestadores-1.0')
+        self.assertGreaterEqual(
+            Pagare._meta.get_field('version_plantilla').max_length,
+            len(pagare.version_plantilla),
+        )
         self.assertEqual(
             pagare.evidencias['version_origen'], origen.gate_version
         )
@@ -858,6 +862,42 @@ class AprobacionInternaPrestadorTest(TestCase):
         self.assertEqual(origen.credito.tasa_interes, Decimal('2.2000'))
         self.assertFalse(origen.credito_libranza.certificado_laboral.name)
         self.assertTrue(origen.credito_libranza.contrato_prestacion_servicios.name)
+
+    def test_error_db_en_generacion_registra_error_despues_del_rollback(self):
+        origen = self._originar_aprobado()
+
+        def generar_con_error(*args, **kwargs):
+            Pagare.objects.create(
+                credito=origen.credito,
+                numero_pagare='PAG-ERROR-1',
+                archivo_pdf='pagares/error-1.pdf',
+            )
+            Pagare.objects.create(
+                credito=origen.credito,
+                numero_pagare='PAG-ERROR-2',
+                archivo_pdf='pagares/error-2.pdf',
+            )
+
+        with patch(
+            'gestion_creditos.services.pagare_service.generar_pagare_prestador_pdf',
+            side_effect=generar_con_error,
+        ):
+            with self.assertRaises(IntegrityError):
+                preparar_formalizacion_credito_prestador(
+                    origen,
+                    actor=self.analista,
+                )
+
+        formalizacion = FormalizacionCreditoPrestador.objects.get(
+            origen_credito_prestador=origen
+        )
+        self.assertEqual(
+            formalizacion.estado,
+            FormalizacionCreditoPrestador.Estado.ERROR_CONTROLADO,
+        )
+        self.assertEqual(formalizacion.error_codigo, 'IntegrityError')
+        self.assertEqual(formalizacion.error_etapa, 'PREPARACION_DOCUMENTO')
+        self.assertFalse(Pagare.objects.filter(credito=origen.credito).exists())
 
     def test_sin_origen_o_gate_aprobado_no_formaliza(self):
         gate = self._crear_gate()

@@ -2334,9 +2334,9 @@ class Pagare(models.Model):
         default=EstadoPagare.CREATED
     )
     version_plantilla = models.CharField(
-        max_length=10,
+        max_length=32,
         default='1.0',
-        help_text="Versión de la plantilla legal usada"
+        help_text="Identificador versionado de la plantilla legal usada"
     )
 
     # Archivos PDF

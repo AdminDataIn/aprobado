@@ -95,8 +95,11 @@ def preparar_formalizacion_credito_prestador(origen, *, actor):
         )
         from gestion_creditos.services.pagare_service import generar_pagare_prestador_pdf
 
-        pagare = generar_pagare_prestador_pdf(formalizacion, usuario_creador=actor)
         with transaction.atomic():
+            pagare = generar_pagare_prestador_pdf(
+                formalizacion,
+                usuario_creador=actor,
+            )
             formalizacion = FormalizacionCreditoPrestador.objects.select_for_update().get(
                 pk=formalizacion.pk
             )
