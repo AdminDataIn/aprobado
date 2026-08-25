@@ -250,7 +250,7 @@ class AdminViewsSmokeTest(TestCase):
     def test_historial_pago_legacy_sin_comprobante_muestra_estado_claro(self):
         credito = Credito.objects.create(
             usuario=self.staff,
-            numero_credito='CR-ADMIN-LEGACY-SIN-SOPORTE',
+            numero_credito='CR-LEG-SIN-SOP',
             linea=Credito.LineaCredito.LIBRANZA,
             estado=Credito.EstadoCredito.ACTIVO,
             monto_solicitado=Decimal('730000.00'),
@@ -278,7 +278,7 @@ class AdminViewsSmokeTest(TestCase):
     def test_staff_adjunta_comprobante_a_pago_existente_sin_crear_otro_pago(self):
         credito = Credito.objects.create(
             usuario=self.staff,
-            numero_credito='CR-ADMIN-LEGACY-SOPORTE',
+            numero_credito='CR-LEG-SOPORTE',
             linea=Credito.LineaCredito.LIBRANZA,
             estado=Credito.EstadoCredito.ACTIVO,
             monto_solicitado=Decimal('730000.00'),
@@ -328,7 +328,7 @@ class AdminViewsSmokeTest(TestCase):
         )
         credito = Credito.objects.create(
             usuario=usuario,
-            numero_credito='CR-ADMIN-SOPORTE-PROTEGIDO',
+            numero_credito='CR-SOP-PROTEGIDO',
             linea=Credito.LineaCredito.LIBRANZA,
             estado=Credito.EstadoCredito.ACTIVO,
             monto_solicitado=Decimal('100000.00'),

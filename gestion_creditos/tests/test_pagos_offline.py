@@ -182,7 +182,7 @@ class PagosOfflineServiceTest(TestCase):
 
     def test_pago_manual_con_diferencia_dentro_tolerancia_cierra_cuota(self):
         credito = self._crear_credito_libranza(
-            numero='CR-TEST-TOLERANCIA-001',
+            numero='CR-TOL-001',
             saldo='1460132.42',
             cuota='730066.21',
             cuotas_pagadas=0,
@@ -219,7 +219,7 @@ class PagosOfflineServiceTest(TestCase):
 
     def test_pago_manual_con_diferencia_mayor_a_tolerancia_sigue_parcial(self):
         credito = self._crear_credito_libranza(
-            numero='CR-TEST-TOLERANCIA-002',
+            numero='CR-TOL-002',
             saldo='1460132.42',
             cuota='730066.21',
             cuotas_pagadas=0,
@@ -247,7 +247,7 @@ class PagosOfflineServiceTest(TestCase):
 
     def test_pago_wompi_no_aplica_tolerancia_manual(self):
         credito = self._crear_credito_libranza(
-            numero='CR-TEST-TOLERANCIA-WOMPI',
+            numero='CR-TOL-WOMPI',
             saldo='730066.21',
             cuota='730066.21',
             cuotas_pagadas=0,
@@ -270,7 +270,7 @@ class PagosOfflineServiceTest(TestCase):
 
     def test_reconciliar_pago_legacy_cierra_cuota_y_corrige_proxima_fecha(self):
         credito = self._crear_credito_libranza(
-            numero='CR-TEST-LEGACY-REDONDEO',
+            numero='CR-LEG-REDONDEO',
             saldo='1460132.42',
             cuota='730066.21',
             cuotas_pagadas=0,
