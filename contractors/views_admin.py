@@ -58,8 +58,12 @@ from contractors.services.novedad_operativa import (
     crear_o_reutilizar_novedad_operativa_prestador,
     enviar_novedad_operativa_prestador,
 )
+from contractors.services.postfirma import (
+    confirmar_desembolso_credito_prestador,
+    preparar_transferencia_credito_prestador,
+)
 from contractors.views import calcular_progreso_documental
-from gestion_creditos.models import OrigenCreditoPrestador
+from gestion_creditos.models import Credito, OrigenCreditoPrestador
 
 
 logger = logging.getLogger(__name__)
@@ -440,6 +444,22 @@ def detalle_prestador_view(request, solicitud_id):
                     )
                 )
             ),
+            'puede_preparar_transferencia': bool(
+                formalizacion
+                and origen_credito
+                and origen_credito.credito.estado == Credito.EstadoCredito.FIRMADO
+                and request.user.has_perm(
+                    'contractors.can_prepare_contractor_transfer'
+                )
+            ),
+            'puede_confirmar_desembolso': bool(
+                origen_credito
+                and origen_credito.credito.estado
+                == Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA
+                and request.user.has_perm(
+                    'contractors.can_confirm_contractor_disbursement'
+                )
+            ),
             'puede_crear_aprobacion': bool(
                 auditoria
                 and auditoria.resultado
@@ -451,6 +471,48 @@ def detalle_prestador_view(request, solicitud_id):
             ),
         },
     )
+
+
+@require_POST
+@permiso_interno_requerido('contractors.can_prepare_contractor_transfer')
+def preparar_transferencia_prestador_view(request, credito_id):
+    credito = get_object_or_404(Credito, pk=credito_id)
+    try:
+        resultado = preparar_transferencia_credito_prestador(
+            credito, actor=request.user,
+        )
+    except (ValidationError, PermissionDenied) as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.info(request, 'La preparacion para transferencia ya estaba registrada.') \
+            if resultado.reutilizado else messages.success(
+                request, 'El credito quedo pendiente de transferencia.'
+            )
+    origen = get_object_or_404(OrigenCreditoPrestador, credito_id=credito_id)
+    gate = get_object_or_404(AprobacionInternaPrestador, pk=origen.gate_id)
+    return redirect('contractors:admin_detalle', solicitud_id=gate.solicitud_id)
+
+
+@require_POST
+@permiso_interno_requerido('contractors.can_confirm_contractor_disbursement')
+def confirmar_desembolso_prestador_view(request, credito_id):
+    credito = get_object_or_404(Credito, pk=credito_id)
+    try:
+        resultado = confirmar_desembolso_credito_prestador(
+            credito,
+            comprobante=request.FILES.get('comprobante'),
+            actor=request.user,
+        )
+    except (ValidationError, PermissionDenied) as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.info(request, 'El desembolso ya estaba confirmado.') \
+            if resultado.reutilizado else messages.success(
+                request, 'El desembolso fue confirmado y el credito quedo activo.'
+            )
+    origen = get_object_or_404(OrigenCreditoPrestador, credito_id=credito_id)
+    gate = get_object_or_404(AprobacionInternaPrestador, pk=origen.gate_id)
+    return redirect('contractors:admin_detalle', solicitud_id=gate.solicitud_id)
 
 
 @require_POST

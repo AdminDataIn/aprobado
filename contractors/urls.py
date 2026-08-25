@@ -88,6 +88,16 @@ urlpatterns = [
         name='admin_enviar_novedad_operativa',
     ),
     path(
+        'gestion/prestadores/creditos/<int:credito_id>/preparar-transferencia/',
+        views_admin.preparar_transferencia_prestador_view,
+        name='admin_preparar_transferencia',
+    ),
+    path(
+        'gestion/prestadores/creditos/<int:credito_id>/confirmar-desembolso/',
+        views_admin.confirmar_desembolso_prestador_view,
+        name='admin_confirmar_desembolso',
+    ),
+    path(
         'gestion/prestadores/revisiones/<int:revision_id>/accion/',
         views_admin.accion_revision_prestador_view,
         name='admin_accion_revision',
