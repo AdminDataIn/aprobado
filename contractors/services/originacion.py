@@ -23,7 +23,7 @@ def originar_credito_prestador_desde_gate(gate, *, actor):
     try:
         with transaction.atomic():
             gate_bloqueado = (
-                AprobacionInternaPrestador.objects.select_for_update()
+                AprobacionInternaPrestador.objects.select_for_update(of=('self',))
                 .select_related(
                     'solicitud',
                     'auditoria_predecision',
