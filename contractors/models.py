@@ -18,6 +18,14 @@ class ContractorApplication(models.Model):
         EVALUACION_PENDIENTE = 'EVALUACION_PENDIENTE', 'Evaluación pendiente'
         EN_EVALUACION = 'EN_EVALUACION', 'En evaluación'
         EVALUACION_COMPLETADA = 'EVALUACION_COMPLETADA', 'Evaluación completada'
+        PENDIENTE_APROBACION_PAGADOR = (
+            'PENDIENTE_APROBACION_PAGADOR',
+            'Pendiente aprobación de la empresa',
+        )
+        APROBADO_POR_PAGADOR = 'APROBADO_POR_PAGADOR', 'Aprobado por la empresa'
+        NO_APROBADO = 'NO_APROBADO', 'No aprobado'
+        PENDIENTE_FIRMA = 'PENDIENTE_FIRMA', 'Pendiente de firma'
+        FIRMADO = 'FIRMADO', 'Firmado'
         # Conserva el valor persistido previamente y precisa su semántica operativa.
         EN_REVISION_MANUAL = 'EN_REVISION', 'En revisión manual'
 
@@ -49,6 +57,16 @@ class ContractorApplication(models.Model):
         TERMINADO = 'TERMINADO', 'Terminado'
         LIQUIDADO = 'LIQUIDADO', 'Liquidado'
         NO_DETERMINABLE = 'NO_DETERMINABLE', 'No determinable'
+
+    class FormaPago(models.TextChoices):
+        MENSUAL = 'MENSUAL', 'Mensual'
+        QUINCENAL = 'QUINCENAL', 'Quincenal'
+        SEMANAL = 'SEMANAL', 'Semanal'
+        POR_ENTREGABLE = 'POR_ENTREGABLE', 'Por entregable'
+        CONTRA_FACTURA = 'CONTRA_FACTURA', 'Contra factura'
+        VARIABLE = 'VARIABLE', 'Variable'
+        NO_IDENTIFICADA = 'NO_IDENTIFICADA', 'No identificada'
+        OTRO = 'OTRO', 'Otro'
 
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -112,6 +130,28 @@ class ContractorApplication(models.Model):
         blank=True,
         validators=[MinValueValidator(Decimal('0.00'))],
     )
+    forma_pago = models.CharField(
+        max_length=24,
+        choices=FormaPago.choices,
+        default=FormaPago.NO_IDENTIFICADA,
+    )
+    frecuencia_pago = models.CharField(max_length=120, blank=True)
+    valor_mensual_contractual = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    evidencia_forma_pago = models.CharField(max_length=500, blank=True)
+    confianza_forma_pago = models.DecimalField(
+        max_digits=5,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('1'))],
+    )
+    fuente_forma_pago = models.CharField(max_length=40, blank=True)
     observaciones_contrato = models.TextField(blank=True)
     monto_solicitado = models.DecimalField(
         max_digits=14,
@@ -236,6 +276,40 @@ class PredecisionPrestadorAudit(models.Model):
         blank=True,
     )
     plazo_maximo_configuracion = models.PositiveSmallIntegerField(null=True, blank=True)
+    snapshot_midecisor = models.ForeignKey(
+        'integrations.ConsultaDatacreditoSnapshot',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='auditorias_prestador_midecisor',
+    )
+    snapshot_hdcplus = models.ForeignKey(
+        'integrations.ConsultaDatacreditoSnapshot',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='auditorias_prestador_hdcplus',
+    )
+    estado_midecisor = models.CharField(max_length=24, blank=True)
+    estado_hdcplus = models.CharField(max_length=24, blank=True)
+    evaluacion_centrales_completa = models.BooleanField(default=False)
+    version_calculo_ingreso = models.CharField(max_length=80, blank=True)
+    metodo_ingreso_contractual = models.CharField(max_length=40, blank=True)
+    ingreso_contractual_mensual = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    cuota_mensual_hdc = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    cuota_nueva_estimada = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    relacion_carga_ingreso = models.DecimalField(
+        max_digits=8, decimal_places=5, null=True, blank=True
+    )
+    capacidad_disponible = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
     razones = models.JSONField(default=list, blank=True)
     alertas = models.JSONField(default=list, blank=True)
     bloqueos = models.JSONField(default=list, blank=True)
@@ -378,6 +452,14 @@ class TimelinePrestador(models.Model):
         NOVEDAD_OPERATIVA_REENVIO = (
             'NOVEDAD_OPERATIVA_REENVIO',
             'Reenvio de novedad operativa',
+        )
+        APROBACION_PAGADOR_PENDIENTE = (
+            'APROBACION_PAGADOR_PENDIENTE',
+            'Aprobacion de empresa pendiente',
+        )
+        APROBACION_PAGADOR_REGISTRADA = (
+            'APROBACION_PAGADOR_REGISTRADA',
+            'Decision de empresa registrada',
         )
 
     solicitud = models.ForeignKey(
@@ -590,6 +672,91 @@ class AprobacionInternaPrestador(models.Model):
         return f'Aprobacion interna {self.id} - solicitud {self.solicitud_id}'
 
 
+class AprobacionPagadorPrestador(models.Model):
+    class Estado(models.TextChoices):
+        PENDIENTE = 'PENDIENTE', 'Pendiente'
+        APROBADO = 'APROBADO', 'Aprobado'
+        RECHAZADO = 'RECHAZADO', 'Rechazado'
+        REQUIERE_AJUSTE = 'REQUIERE_AJUSTE', 'Requiere ajuste'
+        INVALIDADA = 'INVALIDADA', 'Invalidada'
+
+    class Motivo(models.TextChoices):
+        CONFIRMACION_COMPLETA = 'CONFIRMACION_COMPLETA', 'Confirmación completa'
+        CONTRATO_NO_VIGENTE = 'CONTRATO_NO_VIGENTE', 'Contrato no vigente'
+        VINCULO_NO_CONFIRMADO = 'VINCULO_NO_CONFIRMADO', 'Vínculo no confirmado'
+        FORMA_PAGO_NO_MENSUAL = (
+            'FORMA_PAGO_NO_MENSUAL',
+            'Forma de pago no mensual',
+        )
+        VALORES_INCONSISTENTES = 'VALORES_INCONSISTENTES', 'Valores inconsistentes'
+        SIN_CAPACIDAD_OPERATIVA = (
+            'SIN_CAPACIDAD_OPERATIVA',
+            'Sin capacidad operativa de pago',
+        )
+        DATOS_MODIFICADOS = 'DATOS_MODIFICADOS', 'Datos modificados'
+        OTRO = 'OTRO', 'Otro'
+
+    solicitud = models.ForeignKey(
+        ContractorApplication,
+        on_delete=models.PROTECT,
+        related_name='aprobaciones_pagador',
+    )
+    aprobacion_interna = models.OneToOneField(
+        AprobacionInternaPrestador,
+        on_delete=models.PROTECT,
+        related_name='aprobacion_pagador',
+    )
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.PROTECT,
+        related_name='aprobaciones_prestadores',
+    )
+    estado = models.CharField(
+        max_length=24,
+        choices=Estado.choices,
+        default=Estado.PENDIENTE,
+    )
+    motivo = models.CharField(max_length=40, choices=Motivo.choices, blank=True)
+    observacion = models.TextField(blank=True)
+    version_datos = models.CharField(max_length=64)
+    version_solicitud = models.PositiveIntegerField(default=1)
+    confirma_vinculo = models.BooleanField(default=False)
+    confirma_contrato_vigente = models.BooleanField(default=False)
+    confirma_forma_pago_mensual = models.BooleanField(default=False)
+    confirma_valores_contractuales = models.BooleanField(default=False)
+    confirma_capacidad_operativa = models.BooleanField(default=False)
+    acepta_gestionar_pago = models.BooleanField(default=False)
+    snapshot_condiciones = models.JSONField(default=dict, blank=True)
+    decidida_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='aprobaciones_pagador_prestadores',
+    )
+    decidida_en = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        verbose_name = 'Aprobación de pagador para prestador'
+        verbose_name_plural = 'Aprobaciones de pagador para prestadores'
+        indexes = [
+            models.Index(fields=['empresa', 'estado'], name='prest_pagador_emp_estado_idx'),
+            models.Index(fields=['solicitud', '-created_at'], name='prest_pagador_solic_idx'),
+        ]
+        permissions = [
+            (
+                'can_decide_contractor_payer_approval',
+                'Puede decidir aprobaciones de prestadores como pagador',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Aprobacion pagador {self.id} - solicitud {self.solicitud_id}'
+
+
 class FormalizacionCreditoPrestador(models.Model):
     class Estado(models.TextChoices):
         PENDIENTE = 'PENDIENTE', 'Pendiente'
@@ -668,6 +835,10 @@ class FormalizacionCreditoPrestador(models.Model):
     )
     identidad_validada_en = models.DateTimeField(null=True, blank=True)
     identidad_expira_en = models.DateTimeField(null=True, blank=True)
+    identidad_selfie_validada = models.BooleanField(default=False)
+    identidad_documento_validada = models.BooleanField(default=False)
+    identidad_firmante_coincide = models.BooleanField(default=False)
+    identidad_evidencia_hash = models.CharField(max_length=64, blank=True)
     intentos_firma = models.PositiveSmallIntegerField(default=0)
     enviada_firma_en = models.DateTimeField(null=True, blank=True)
     firmada_en = models.DateTimeField(null=True, blank=True)
@@ -703,6 +874,14 @@ class FormalizacionCreditoPrestador(models.Model):
             (
                 'can_view_contractor_formalization',
                 'Puede ver formalizaciones de prestadores',
+            ),
+            (
+                'can_prepare_contractor_transfer',
+                'Puede preparar transferencia de creditos de prestadores',
+            ),
+            (
+                'can_confirm_contractor_disbursement',
+                'Puede confirmar desembolso de creditos de prestadores',
             ),
         ]
 
@@ -1213,6 +1392,11 @@ class ConfiguracionScorePrestador(models.Model):
         BLOQUEAR = 'BLOQUEAR', 'Bloquear en modo read-only'
         REVISION = 'REVISION', 'Enviar a revision manual'
 
+    class AccionDisponibilidadCentrales(models.TextChoices):
+        PERMITIR_PARCIAL = 'PERMITIR_PARCIAL', 'Permitir evaluacion parcial'
+        REVISION_MANUAL = 'REVISION_MANUAL', 'Enviar a revision manual'
+        NO_EVALUABLE = 'NO_EVALUABLE', 'Marcar como no evaluable'
+
     nombre = models.CharField(max_length=120)
     version = models.CharField(max_length=80, unique=True)
     activa = models.BooleanField(default=False)
@@ -1228,6 +1412,20 @@ class ConfiguracionScorePrestador(models.Model):
     )
 
     peso_datacredito = models.DecimalField(max_digits=6, decimal_places=5)
+    peso_midecisor = models.DecimalField(
+        max_digits=6,
+        decimal_places=5,
+        null=True,
+        blank=True,
+        help_text='Peso MiDecisor para politicas duales. Nulo conserva la politica historica.',
+    )
+    peso_hdcplus = models.DecimalField(
+        max_digits=6,
+        decimal_places=5,
+        null=True,
+        blank=True,
+        help_text='Peso HDCPlus/comportamiento para politicas duales.',
+    )
     peso_capacidad = models.DecimalField(max_digits=6, decimal_places=5)
     peso_comportamiento = models.DecimalField(max_digits=6, decimal_places=5)
     peso_riesgo = models.DecimalField(max_digits=6, decimal_places=5)
@@ -1241,6 +1439,13 @@ class ConfiguracionScorePrestador(models.Model):
         max_digits=6,
         decimal_places=5,
         validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('1'))],
+    )
+    tolerancia_ingreso_contractual = models.DecimalField(
+        max_digits=6,
+        decimal_places=5,
+        default=Decimal('0.15000'),
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('1'))],
+        help_text='Diferencia relativa tolerada entre ingreso explícito y derivado.',
     )
     monto_maximo_politica = models.DecimalField(
         max_digits=14,
@@ -1262,6 +1467,27 @@ class ConfiguracionScorePrestador(models.Model):
     consultas_recientes_revision = models.PositiveSmallIntegerField(default=6)
     requiere_referencias = models.BooleanField(default=False)
     permite_redistribuir_pesos_faltantes = models.BooleanField(default=False)
+    requiere_midecisor = models.BooleanField(default=True)
+    requiere_hdcplus = models.BooleanField(default=False)
+    permite_evaluar_sin_hdc = models.BooleanField(default=True)
+    permite_evaluar_sin_midecisor = models.BooleanField(default=False)
+    accion_sin_informacion_centrales = models.CharField(
+        max_length=24,
+        choices=AccionDisponibilidadCentrales.choices,
+        default=AccionDisponibilidadCentrales.REVISION_MANUAL,
+    )
+    accion_error_transitorio_centrales = models.CharField(
+        max_length=24,
+        choices=AccionDisponibilidadCentrales.choices,
+        default=AccionDisponibilidadCentrales.REVISION_MANUAL,
+    )
+    accion_error_permanente_centrales = models.CharField(
+        max_length=24,
+        choices=AccionDisponibilidadCentrales.choices,
+        default=AccionDisponibilidadCentrales.NO_EVALUABLE,
+    )
+    vigencia_midecisor_dias = models.PositiveSmallIntegerField(default=30)
+    vigencia_hdcplus_dias = models.PositiveSmallIntegerField(default=30)
     accion_exceso_capacidad = models.CharField(
         max_length=16,
         choices=AccionExcesoCapacidad.choices,
@@ -1276,6 +1502,12 @@ class ConfiguracionScorePrestador(models.Model):
         ordering = ['-fecha_vigencia_desde', '-id']
         verbose_name = 'Configuracion de score de prestadores'
         verbose_name_plural = 'Configuraciones de score de prestadores'
+        permissions = [
+            (
+                'can_activate_contractor_score_policy',
+                'Puede activar politicas de score de prestadores',
+            ),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=['activa'],
@@ -1286,13 +1518,27 @@ class ConfiguracionScorePrestador(models.Model):
 
     def clean(self):
         super().clean()
-        pesos = (
-            self.peso_datacredito,
-            self.peso_capacidad,
-            self.peso_comportamiento,
-            self.peso_riesgo,
-            self.peso_referencias,
-        )
+        if self.usa_fuentes_duales:
+            if self.peso_midecisor is None or self.peso_hdcplus is None:
+                raise ValidationError(
+                    'Una politica dual requiere pesos explicitos para MiDecisor y HDCPlus.'
+                )
+            pesos = (
+                self.peso_midecisor,
+                self.peso_hdcplus,
+                self.peso_capacidad,
+                self.peso_comportamiento,
+                self.peso_riesgo,
+                self.peso_referencias,
+            )
+        else:
+            pesos = (
+                self.peso_datacredito,
+                self.peso_capacidad,
+                self.peso_comportamiento,
+                self.peso_riesgo,
+                self.peso_referencias,
+            )
         if any(peso is None or peso < 0 or peso > 1 for peso in pesos):
             raise ValidationError('Cada peso debe estar entre 0 y 1.')
         if abs(sum(pesos, Decimal('0')) - Decimal('1')) > Decimal('0.00001'):
@@ -1306,6 +1552,14 @@ class ConfiguracionScorePrestador(models.Model):
             raise ValidationError({'umbral_geolocalizacion': 'El umbral no puede superar 1000.'})
         if self.fecha_vigencia_hasta and self.fecha_vigencia_hasta < self.fecha_vigencia_desde:
             raise ValidationError('La fecha final de vigencia no puede ser anterior a la inicial.')
+        if self.requiere_hdcplus and self.permite_evaluar_sin_hdc:
+            raise ValidationError(
+                'HDCPlus no puede ser obligatorio y opcional al mismo tiempo.'
+            )
+        if self.requiere_midecisor and self.permite_evaluar_sin_midecisor:
+            raise ValidationError(
+                'MiDecisor no puede ser obligatorio y opcional al mismo tiempo.'
+            )
         if self.activa:
             if not self.configuracion_financiera_id:
                 raise ValidationError({
@@ -1349,12 +1603,20 @@ class ConfiguracionScorePrestador(models.Model):
             'version', 'peso_datacredito', 'peso_capacidad', 'peso_comportamiento',
             'peso_riesgo', 'peso_referencias', 'score_premium_min', 'score_alta_min',
             'score_media_min', 'score_entrada_min', 'cuota_ingreso_maxima',
+            'tolerancia_ingreso_contractual',
             'monto_maximo_politica', 'plazo_maximo_politica',
             'tasa_mensual_referencia', 'penalizacion_geolocalizacion',
             'umbral_geolocalizacion', 'mora_bloqueo_dias',
             'consultas_recientes_revision', 'requiere_referencias',
             'permite_redistribuir_pesos_faltantes', 'accion_exceso_capacidad',
             'version_score', 'version_politica', 'configuracion_financiera_id',
+            'peso_midecisor', 'peso_hdcplus', 'requiere_midecisor',
+            'requiere_hdcplus', 'permite_evaluar_sin_hdc',
+            'permite_evaluar_sin_midecisor',
+            'accion_sin_informacion_centrales',
+            'accion_error_transitorio_centrales',
+            'accion_error_permanente_centrales', 'vigencia_midecisor_dias',
+            'vigencia_hdcplus_dias',
         )
         if any(getattr(anterior, campo) != getattr(self, campo) for campo in campos_semanticos):
             raise ValidationError(
@@ -1363,6 +1625,61 @@ class ConfiguracionScorePrestador(models.Model):
 
     def __str__(self):
         return f'{self.nombre} ({self.version})'
+
+    @property
+    def usa_fuentes_duales(self):
+        return bool(
+            self.requiere_hdcplus
+            or self.peso_midecisor is not None
+            or self.peso_hdcplus is not None
+        )
+
+
+class CambioPoliticaScorePrestadorAudit(models.Model):
+    class Accion(models.TextChoices):
+        ACTIVACION = 'ACTIVACION', 'Activacion'
+        REACTIVACION = 'REACTIVACION', 'Reactivacion'
+        SIN_CAMBIO = 'SIN_CAMBIO', 'Sin cambio'
+
+    politica_anterior = models.ForeignKey(
+        ConfiguracionScorePrestador,
+        on_delete=models.PROTECT,
+        related_name='cambios_como_politica_anterior',
+        null=True,
+        blank=True,
+    )
+    politica_nueva = models.ForeignKey(
+        ConfiguracionScorePrestador,
+        on_delete=models.PROTECT,
+        related_name='cambios_como_politica_nueva',
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='cambios_politica_score_prestador',
+    )
+    motivo = models.TextField()
+    fecha = models.DateTimeField(auto_now_add=True)
+    accion = models.CharField(max_length=16, choices=Accion.choices)
+    snapshot_anterior = models.JSONField(default=dict, blank=True)
+    snapshot_nuevo = models.JSONField(default=dict)
+    clave_idempotencia = models.CharField(max_length=64, unique=True)
+
+    class Meta:
+        ordering = ['-fecha', '-id']
+        verbose_name = 'Auditoria de cambio de politica de score de prestadores'
+        verbose_name_plural = 'Auditorias de cambios de politica de score de prestadores'
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValidationError('La auditoria de cambio de politica es inmutable.')
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('La auditoria de cambio de politica es inmutable.')
+
+    def __str__(self):
+        return f'{self.accion}: {self.politica_nueva.version}'
 
 
 class BandaScorePrestador(models.Model):

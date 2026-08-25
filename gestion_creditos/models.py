@@ -1121,6 +1121,29 @@ class OrigenCreditoPrestador(models.Model):
         choices=Estado.choices,
         default=Estado.EN_PROCESO,
     )
+    monto_base = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    porcentaje_comision = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    comision = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    porcentaje_iva = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    iva = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    porcentaje_seguro = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    seguro_vida = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    porcentaje_fondo = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    fondo_garantia = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    otros_componentes = models.JSONField(default=dict, blank=True)
+    otros_costos_total = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    capital_total_financiado = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    tasa_mensual = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    plazo = models.PositiveSmallIntegerField(null=True, blank=True)
+    cuota_aprobada = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    total_intereses = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    total_a_pagar = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    version_formula = models.CharField(max_length=80, blank=True)
+    version_configuracion = models.CharField(max_length=80, blank=True)
+    version_score = models.CharField(max_length=80, blank=True)
+    version_politica = models.CharField(max_length=80, blank=True)
+    calculado_en = models.DateTimeField(null=True, blank=True)
+    snapshot_hash = models.CharField(max_length=64, blank=True, db_index=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -1138,6 +1161,105 @@ class OrigenCreditoPrestador(models.Model):
         indexes = [
             models.Index(fields=['estado', '-created_at'], name='orig_prest_estado_idx'),
         ]
+    CAMPOS_SNAPSHOT_FINANCIERO = (
+        'monto_base', 'porcentaje_comision', 'comision', 'porcentaje_iva', 'iva',
+        'porcentaje_seguro', 'seguro_vida', 'porcentaje_fondo', 'fondo_garantia',
+        'otros_componentes', 'otros_costos_total', 'capital_total_financiado',
+        'tasa_mensual', 'plazo', 'cuota_aprobada', 'total_intereses',
+        'total_a_pagar', 'version_formula', 'version_configuracion',
+        'version_score', 'version_politica', 'calculado_en', 'snapshot_hash',
+    )
+    CAMPOS_SNAPSHOT_OBLIGATORIOS = tuple(
+        campo for campo in CAMPOS_SNAPSHOT_FINANCIERO
+        if campo != 'otros_componentes'
+    )
+
+    def save(self, *args, **kwargs):
+        """Protege el snapshot en guardados de instancia.
+
+        QuerySet.update(), bulk_update() y SQL directo omiten esta proteccion y
+        quedan reservados para migraciones o remediaciones controladas.
+        """
+        if self.pk:
+            anterior = type(self).objects.filter(pk=self.pk).first()
+            if anterior and anterior.estado == self.Estado.COMPLETADO:
+                if self.estado != self.Estado.COMPLETADO:
+                    raise ValidationError(
+                        'Un origen completado no puede volver a un estado anterior.'
+                    )
+                modificados = [
+                    campo for campo in self.CAMPOS_SNAPSHOT_FINANCIERO
+                    if getattr(anterior, campo) != getattr(self, campo)
+                ]
+                if modificados:
+                    raise ValidationError(
+                        'El snapshot financiero completado es inmutable: '
+                        + ', '.join(modificados)
+                    )
+                if self.snapshot_financiero_completo:
+                    self.componentes_financieros(validar_hash=True)
+                return super().save(*args, **kwargs)
+        if self.estado == self.Estado.COMPLETADO:
+            faltantes = self.campos_snapshot_faltantes
+            if faltantes:
+                raise ValidationError(
+                    'El origen no puede completarse sin snapshot financiero: '
+                    + ', '.join(faltantes)
+                )
+            self.componentes_financieros(validar_hash=True)
+        return super().save(*args, **kwargs)
+
+    @property
+    def campos_snapshot_faltantes(self):
+        return [
+            campo for campo in self.CAMPOS_SNAPSHOT_OBLIGATORIOS
+            if getattr(self, campo) in (None, '')
+        ]
+
+    @property
+    def snapshot_financiero_completo(self):
+        return not self.campos_snapshot_faltantes
+
+    def componentes_financieros(self, *, validar_hash=True):
+        from gestion_creditos.services.condiciones_financieras import (
+            ComponentesFinancierosCredito,
+            validar_consistencia_componentes,
+        )
+
+        if self.estado != self.Estado.COMPLETADO:
+            raise ValidationError('El origen no tiene un snapshot financiero completado.')
+        if not self.snapshot_financiero_completo:
+            raise ValidationError(
+                'El origen historico no tiene un snapshot financiero completo y '
+                'no puede continuar al desembolso.'
+            )
+        componentes = ComponentesFinancierosCredito(
+            monto_base=self.monto_base,
+            porcentaje_comision=self.porcentaje_comision,
+            comision=self.comision,
+            porcentaje_iva=self.porcentaje_iva,
+            iva=self.iva,
+            porcentaje_seguro=self.porcentaje_seguro,
+            seguro_vida=self.seguro_vida,
+            porcentaje_fondo=self.porcentaje_fondo,
+            fondo_garantia=self.fondo_garantia,
+            otros_componentes=self.otros_componentes or {},
+            otros_costos_total=self.otros_costos_total,
+            capital_total_financiado=self.capital_total_financiado,
+            tasa_mensual=self.tasa_mensual,
+            plazo=self.plazo,
+            cuota_aprobada=self.cuota_aprobada,
+            total_intereses=self.total_intereses,
+            total_a_pagar=self.total_a_pagar,
+            version_formula=self.version_formula,
+            version_configuracion=self.version_configuracion,
+            version_score=self.version_score,
+            version_politica=self.version_politica,
+        )
+        if validar_hash and componentes.calcular_hash() != self.snapshot_hash:
+            raise ValidationError('El hash del snapshot financiero no es valido.')
+        validar_consistencia_componentes(componentes)
+        return componentes
 
     def __str__(self):
         return f'Gate {self.gate_id} - {self.estado}'
@@ -1533,6 +1655,13 @@ class HistorialEstado(models.Model):
         upload_to='comprobantes_pago/', 
         blank=True, 
         null=True
+    )
+    clave_idempotencia = models.CharField(
+        max_length=180,
+        null=True,
+        blank=True,
+        unique=True,
+        help_text='Clave persistente para operaciones de estado idempotentes.',
     )
 
     class Meta:
@@ -2376,56 +2505,6 @@ class ZapSignWebhookLog(models.Model):
         return f"{status} {self.event} - {self.doc_token} ({self.received_at})"
 
 
-class WhatsAppInternalApplication(models.Model):
-    class ProductType(models.TextChoices):
-        PAYROLL_LOAN = 'payroll_loan', 'Libranza'
-        WHATSAPP_CREDIT = 'whatsapp_credit', 'Credito WhatsApp'
-
-    class Status(models.TextChoices):
-        RECEIVED = 'received', 'Recibida'
-        PENDING_PAYROLL_VALIDATION = 'pending_payroll_validation', 'Pendiente validacion convenio'
-        PENDING_FORM_COMPLETION = 'pending_form_completion', 'Pendiente completar formulario'
-        REJECTED = 'rejected', 'Rechazada'
-
-    product_type = models.CharField(max_length=32, choices=ProductType.choices)
-    source = models.CharField(max_length=32, default='whatsapp')
-    status = models.CharField(max_length=40, choices=Status.choices, default=Status.RECEIVED)
-
-    tipo_documento = models.CharField(max_length=10)
-    numero_documento = models.CharField(max_length=30, db_index=True)
-    nombres = models.CharField(max_length=120)
-    apellidos = models.CharField(max_length=120)
-    celular = models.CharField(max_length=30)
-    correo = models.EmailField(blank=True)
-    ciudad = models.CharField(max_length=120, blank=True)
-    ocupacion = models.CharField(max_length=120, blank=True)
-    ingresos_mensuales = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    monto_solicitado = models.DecimalField(max_digits=12, decimal_places=2)
-    plazo_meses = models.PositiveSmallIntegerField()
-
-    empresa = models.ForeignKey(Empresa, on_delete=models.SET_NULL, null=True, blank=True)
-    convenio_validado = models.BooleanField(default=False)
-    vinculo_laboral_validado = models.BooleanField(default=False)
-
-    autorizacion_tratamiento_datos = models.BooleanField(default=False)
-    autorizacion_validacion_informacion = models.BooleanField(default=False)
-    metadata = models.JSONField(default=dict, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['product_type', 'numero_documento', '-created_at'], name='wa_app_product_doc_idx'),
-            models.Index(fields=['status', '-created_at'], name='wa_app_status_created_idx'),
-        ]
-        verbose_name = 'Solicitud interna WhatsApp'
-        verbose_name_plural = 'Solicitudes internas WhatsApp'
-
-    def __str__(self):
-        return f"{self.product_type} {self.numero_documento} ({self.status})"
-
-
 class CreditoReglaEspecialAudit(models.Model):
     credito = models.ForeignKey(
         Credito,
@@ -2468,62 +2547,4 @@ class CreditoReglaEspecialAudit(models.Model):
     def __str__(self):
         credito_ref = self.credito.numero_credito if self.credito_id else 'sin credito'
         return f"Regla especial {credito_ref} - ${self.amount} / {self.term_months} meses"
-
-
-class WhatsAppInternalConsent(models.Model):
-    class ProductType(models.TextChoices):
-        PAYROLL_LOAN = 'payroll_loan', 'Libranza'
-        WHATSAPP_CREDIT = 'whatsapp_credit', 'Credito WhatsApp'
-
-    product_type = models.CharField(max_length=32, choices=ProductType.choices)
-    source = models.CharField(max_length=32, default='whatsapp')
-    document_number = models.CharField(max_length=30, db_index=True)
-    phone = models.CharField(max_length=30, blank=True)
-    consent_type = models.CharField(max_length=80)
-    accepted = models.BooleanField(default=False)
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.CharField(max_length=255, blank=True)
-    evidence = models.JSONField(default=dict, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['product_type', 'document_number', 'consent_type'], name='wa_consent_product_doc_idx'),
-            models.Index(fields=['-created_at'], name='wa_consent_created_idx'),
-        ]
-        verbose_name = 'Consentimiento interno WhatsApp'
-        verbose_name_plural = 'Consentimientos internos WhatsApp'
-
-    def __str__(self):
-        return f"{self.product_type} {self.consent_type} ({self.accepted})"
-
-
-class WhatsAppInternalAPIAuditLog(models.Model):
-    action = models.CharField(max_length=80)
-    product_type = models.CharField(max_length=32, blank=True)
-    request_id = models.CharField(max_length=80, blank=True)
-    correlation_id = models.CharField(max_length=80, blank=True)
-    document_number_hash = models.CharField(max_length=64, blank=True, db_index=True)
-    document_number_masked = models.CharField(max_length=20, blank=True)
-    phone_masked = models.CharField(max_length=20, blank=True)
-    method = models.CharField(max_length=8)
-    path = models.CharField(max_length=255)
-    status_code = models.PositiveSmallIntegerField()
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.CharField(max_length=255, blank=True)
-    metadata = models.JSONField(default=dict, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['action', '-created_at'], name='wa_audit_action_created_idx'),
-            models.Index(fields=['document_number_hash'], name='wa_audit_doc_hash_idx'),
-        ]
-        verbose_name = 'Auditoria API interna WhatsApp'
-        verbose_name_plural = 'Auditoria API interna WhatsApp'
-
-    def __str__(self):
-        return f"{self.action} {self.status_code} ({self.created_at})"
 
