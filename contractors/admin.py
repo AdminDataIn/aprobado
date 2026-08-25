@@ -1,13 +1,16 @@
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.core.exceptions import PermissionDenied, ValidationError
+from django import forms
 from django.forms.models import BaseInlineFormSet
 from django.template.response import TemplateResponse
 
 from contractors.models import (
     AprobacionInternaPrestador,
+    AprobacionPagadorPrestador,
     AutorizacionConsultaDatacreditoPrestador,
     BandaScorePrestador,
+    CambioPoliticaScorePrestadorAudit,
     ConfiguracionSimuladorPrestador,
     ConfiguracionScorePrestador,
     ContractorApplication,
@@ -18,6 +21,10 @@ from contractors.models import (
     RequerimientoSubsanacionPrestador,
     RevisionManualPrestador,
     TimelinePrestador,
+)
+from contractors.services.politica_score import (
+    PERMISO_ACTIVAR_POLITICA,
+    activar_politica_score_prestador,
 )
 
 
@@ -170,6 +177,15 @@ class BandaScorePrestadorInline(admin.TabularInline):
     extra = 0
 
 
+class ActivarPoliticaScorePrestadorForm(forms.Form):
+    motivo = forms.CharField(
+        label='Motivo',
+        min_length=5,
+        widget=forms.Textarea(attrs={'rows': 4, 'cols': 80}),
+        help_text='Describe el objetivo operativo y el alcance de esta activacion.',
+    )
+
+
 @admin.register(ConfiguracionScorePrestador)
 class ConfiguracionScorePrestadorAdmin(admin.ModelAdmin):
     list_display = [
@@ -179,8 +195,9 @@ class ConfiguracionScorePrestadorAdmin(admin.ModelAdmin):
     ]
     list_filter = ['activa', 'fecha_vigencia_desde', 'fecha_vigencia_hasta']
     search_fields = ['nombre', 'version', 'version_score', 'version_politica']
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['activa', 'created_at', 'updated_at']
     inlines = [BandaScorePrestadorInline]
+    actions = ['activar_politica_seleccionada']
     fieldsets = [
         ('Version y vigencia', {'fields': (
             'nombre', 'version', 'activa', 'fecha_vigencia_desde',
@@ -188,12 +205,14 @@ class ConfiguracionScorePrestadorAdmin(admin.ModelAdmin):
             'version_score', 'version_politica',
         )}),
         ('Pesos (deben sumar 1)', {'fields': (
-            'peso_datacredito', 'peso_capacidad', 'peso_comportamiento',
-            'peso_riesgo', 'peso_referencias',
+            'peso_datacredito', 'peso_midecisor', 'peso_hdcplus',
+            'peso_capacidad', 'peso_comportamiento', 'peso_riesgo',
+            'peso_referencias',
         )}),
         ('Politica', {'fields': (
             'score_premium_min', 'score_alta_min', 'score_media_min',
             'score_entrada_min', 'cuota_ingreso_maxima',
+            'tolerancia_ingreso_contractual',
             'monto_maximo_politica', 'plazo_maximo_politica',
             'tasa_mensual_referencia', 'mora_bloqueo_dias',
             'consultas_recientes_revision', 'accion_exceso_capacidad',
@@ -202,8 +221,79 @@ class ConfiguracionScorePrestadorAdmin(admin.ModelAdmin):
             'requiere_referencias', 'permite_redistribuir_pesos_faltantes',
             'penalizacion_geolocalizacion', 'umbral_geolocalizacion',
         )}),
+        ('Fuentes de centrales', {'fields': (
+            'requiere_midecisor', 'requiere_hdcplus',
+            'permite_evaluar_sin_midecisor', 'permite_evaluar_sin_hdc',
+            'accion_sin_informacion_centrales',
+            'accion_error_transitorio_centrales',
+            'accion_error_permanente_centrales',
+            'vigencia_midecisor_dias', 'vigencia_hdcplus_dias',
+        )}),
         ('Auditoria', {'fields': ('created_at', 'updated_at')}),
     ]
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if not request.user.has_perm(PERMISO_ACTIVAR_POLITICA):
+            actions.pop('activar_politica_seleccionada', None)
+        return actions
+
+    @admin.action(description='Activar politica seleccionada')
+    def activar_politica_seleccionada(self, request, queryset):
+        if not request.user.has_perm(PERMISO_ACTIVAR_POLITICA):
+            raise PermissionDenied('No tienes permiso para activar politicas de score.')
+        if queryset.count() != 1:
+            self.message_user(
+                request,
+                'Selecciona exactamente una politica para activar.',
+                messages.ERROR,
+            )
+            return None
+
+        objetivo = queryset.select_related('configuracion_financiera').first()
+        form = ActivarPoliticaScorePrestadorForm(
+            request.POST if request.POST.get('confirmar_activacion') == '1' else None,
+        )
+        if request.POST.get('confirmar_activacion') == '1' and form.is_valid():
+            try:
+                resultado = activar_politica_score_prestador(
+                    politica_id=objetivo.pk,
+                    actor=request.user,
+                    motivo=form.cleaned_data['motivo'],
+                )
+            except (ValidationError, PermissionDenied) as exc:
+                form.add_error(None, exc)
+            else:
+                anterior = (
+                    resultado.politica_anterior.version
+                    if resultado.politica_anterior else 'ninguna'
+                )
+                estado = 'activada' if resultado.cambio_realizado else 'ya estaba activa'
+                self.message_user(
+                    request,
+                    f'Politica {resultado.politica_nueva.version} {estado}. '
+                    f'Politica anterior: {anterior}. Auditoria: {resultado.auditoria.pk}.',
+                    messages.SUCCESS,
+                )
+                return None
+
+        activa_actual = ConfiguracionScorePrestador.objects.filter(
+            activa=True,
+        ).select_related('configuracion_financiera').first()
+        contexto = {
+            **self.admin_site.each_context(request),
+            'title': 'Confirmar activacion de politica de score',
+            'opts': self.model._meta,
+            'objetivo': objetivo,
+            'activa_actual': activa_actual,
+            'form': form,
+            'action_checkbox_name': ACTION_CHECKBOX_NAME,
+        }
+        return TemplateResponse(
+            request,
+            'admin/contractors/configuracionscoreprestador/confirmar_activacion.html',
+            contexto,
+        )
 
 
 class AdminAuditoriaSoloLectura(admin.ModelAdmin):
@@ -215,6 +305,23 @@ class AdminAuditoriaSoloLectura(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(CambioPoliticaScorePrestadorAudit)
+class CambioPoliticaScorePrestadorAuditAdmin(AdminAuditoriaSoloLectura):
+    list_display = [
+        'id', 'accion', 'politica_anterior', 'politica_nueva',
+        'actor', 'motivo', 'fecha',
+    ]
+    list_filter = ['accion', 'fecha']
+    search_fields = [
+        'politica_anterior__version', 'politica_nueva__version',
+        'actor__username', 'motivo', 'clave_idempotencia',
+    ]
+    readonly_fields = [
+        campo.name for campo in CambioPoliticaScorePrestadorAudit._meta.fields
+    ]
+    ordering = ['-fecha', '-id']
 
 
 @admin.register(PredecisionPrestadorAudit)
@@ -256,6 +363,21 @@ class TimelinePrestadorAdmin(AdminAuditoriaSoloLectura):
     list_filter = ['tipo_evento', 'visible_cliente', 'created_at']
     search_fields = ['solicitud__id', 'titulo']
     readonly_fields = [campo.name for campo in TimelinePrestador._meta.fields]
+    ordering = ['-created_at', '-id']
+
+
+@admin.register(AprobacionPagadorPrestador)
+class AprobacionPagadorPrestadorAdmin(AdminAuditoriaSoloLectura):
+    list_display = [
+        'id', 'solicitud', 'empresa', 'estado', 'motivo',
+        'decidida_por', 'decidida_en', 'created_at',
+    ]
+    list_filter = ['estado', 'motivo', 'empresa', 'created_at']
+    search_fields = [
+        'solicitud__id', 'solicitud__nombres', 'solicitud__apellidos',
+        'empresa__nombre',
+    ]
+    readonly_fields = [campo.name for campo in AprobacionPagadorPrestador._meta.fields]
     ordering = ['-created_at', '-id']
 
 

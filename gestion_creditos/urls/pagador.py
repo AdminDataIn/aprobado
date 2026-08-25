@@ -35,6 +35,21 @@ urlpatterns = [
     path('obligaciones/pagar/', views.pagador_pagar_obligaciones_seleccionadas_view, name='pagar_obligaciones'),
     path('credito/<int:credito_id>/decision/', views.pagador_decidir_solicitud_view, name='decidir_solicitud'),
     path(
+        'prestadores/aprobaciones/',
+        contractors_views_pagador.aprobaciones_prestadores_view,
+        name='prestadores_aprobaciones',
+    ),
+    path(
+        'prestadores/aprobaciones/<int:aprobacion_id>/',
+        contractors_views_pagador.detalle_aprobacion_prestador_view,
+        name='prestadores_aprobacion_detalle',
+    ),
+    path(
+        'prestadores/aprobaciones/<int:aprobacion_id>/decidir/',
+        contractors_views_pagador.decidir_aprobacion_prestador_view,
+        name='prestadores_aprobacion_decidir',
+    ),
+    path(
         'prestadores/novedades/',
         contractors_views_pagador.novedades_operativas_prestadores_view,
         name='prestadores_novedades',

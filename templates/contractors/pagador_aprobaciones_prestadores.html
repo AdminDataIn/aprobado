@@ -1,0 +1,46 @@
+{% load static humanize %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aprobaciones de Prestadores</title>
+  <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+  {% include 'base/favicon.html' %}
+  <style>
+    body{background:#f4f7fb;color:#10233f;font-family:Arial,sans-serif}.contenedor{max-width:1180px;margin:auto;padding:32px 20px 60px}
+    header{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:24px}
+    .tabla{overflow:auto;background:#fff;border:1px solid #dce5ef;border-radius:8px}table{width:100%;border-collapse:collapse}
+    th,td{padding:14px;text-align:left;border-bottom:1px solid #e8eef5;white-space:nowrap}th{font-size:12px;color:#52657c;text-transform:uppercase}
+    a{color:#087aa2;font-weight:700;text-decoration:none}.estado{font-weight:700}.vacio{text-align:center;color:#64748b;padding:30px}
+  </style>
+</head>
+<body>
+<main class="contenedor">
+  <header>
+    <div><h1>Aprobaciones de Prestadores</h1><p>{{ empresa.nombre }}</p></div>
+    <a href="{% url 'pagador:dashboard' %}">Volver al panel</a>
+  </header>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Solicitud</th><th>Prestador</th><th>Contrato</th><th>Forma de pago</th><th>Monto</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+      {% for aprobacion in pagina.object_list %}
+        <tr>
+          <td>#{{ aprobacion.solicitud_id }}</td>
+          <td>{{ aprobacion.solicitud.nombre_completo }}</td>
+          <td>{{ aprobacion.solicitud.fecha_fin_contrato|date:"Y-m-d"|default:"Por validar" }}</td>
+          <td>{{ aprobacion.solicitud.get_forma_pago_display }}</td>
+          <td>${{ aprobacion.aprobacion_interna.monto_autorizado|floatformat:0|intcomma }}</td>
+          <td class="estado">{{ aprobacion.get_estado_display }}</td>
+          <td><a href="{% url 'pagador:prestadores_aprobacion_detalle' aprobacion.id %}">Revisar</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="vacio">No hay aprobaciones de Prestadores disponibles.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</main>
+</body>
+</html>

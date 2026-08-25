@@ -16,6 +16,7 @@ from contractors.forms import (
 )
 from contractors.models import (
     AprobacionInternaPrestador,
+    AprobacionPagadorPrestador,
     ContractorApplication,
     ContractorApplicationDocument,
     DOCUMENTOS_OBLIGATORIOS_PRESTADOR,
@@ -294,6 +295,12 @@ def detalle_prestador_view(request, solicitud_id):
     aprobacion_interna = solicitud.aprobaciones_internas.select_related(
         'auditoria_predecision', 'revision_manual', 'creada_por', 'decidida_por'
     ).first()
+    aprobacion_pagador = (
+        AprobacionPagadorPrestador.objects.select_related('decidida_por', 'empresa')
+        .filter(solicitud=solicitud)
+        .order_by('-created_at', '-id')
+        .first()
+    )
     origen_credito = None
     if aprobacion_interna:
         origen_credito = OrigenCreditoPrestador.objects.select_related(
@@ -352,6 +359,7 @@ def detalle_prestador_view(request, solicitud_id):
             'puede_solicitar': request.user.has_perm('contractors.can_request_contractor_correction'),
             'puede_ver_score': puede_ver_score,
             'aprobacion_interna': aprobacion_interna,
+            'aprobacion_pagador': aprobacion_pagador,
             'origen_credito': origen_credito,
             'formalizacion': formalizacion,
             'novedad_operativa': novedad_operativa,
@@ -369,6 +377,9 @@ def detalle_prestador_view(request, solicitud_id):
                 aprobacion_interna
                 and aprobacion_interna.estado
                 == AprobacionInternaPrestador.Estado.APROBADA_PARA_ORIGINAR
+                and aprobacion_pagador
+                and aprobacion_pagador.estado
+                == AprobacionPagadorPrestador.Estado.APROBADO
                 and request.user.has_perm(
                     'contractors.can_originate_contractor_credit'
                 )
@@ -380,6 +391,9 @@ def detalle_prestador_view(request, solicitud_id):
                 origen_credito
                 and origen_credito.estado == OrigenCreditoPrestador.Estado.COMPLETADO
                 and origen_credito.credito.estado == 'EN_REVISION'
+                and aprobacion_pagador
+                and aprobacion_pagador.estado
+                == AprobacionPagadorPrestador.Estado.APROBADO
                 and formalizacion is None
                 and request.user.has_perm(
                     'contractors.can_prepare_contractor_formalization'
@@ -834,6 +848,8 @@ def _construir_detalle_auditoria(auditoria, puede_ver_score):
         'alertas': [],
         'bloqueos': [],
         'score': None,
+        'version_politica': auditoria.version_politica,
+        'centrales': None,
     }
     if puede_ver_score:
         detalle.update({
@@ -841,8 +857,39 @@ def _construir_detalle_auditoria(auditoria, puede_ver_score):
             'alertas': _lista_auditoria_controlada(auditoria.alertas),
             'bloqueos': _lista_auditoria_controlada(auditoria.bloqueos),
             'score': auditoria.score,
+            'centrales': _construir_resumen_centrales_auditoria(auditoria),
         })
     return detalle
+
+
+def _construir_resumen_centrales_auditoria(auditoria):
+    centrales = (auditoria.snapshot_salida or {}).get('centrales')
+    if not isinstance(centrales, dict):
+        return None
+    return {
+        'estado_global': str(centrales.get('estado_global') or '')[:32],
+        'completa': bool(centrales.get('completa')),
+        'decisor': _fuente_central_allowlist(centrales.get('decisor')),
+        'historial': _fuente_central_allowlist(centrales.get('historial')),
+    }
+
+
+def _fuente_central_allowlist(datos):
+    if not isinstance(datos, dict):
+        return None
+    return {
+        'estado': str(datos.get('estado') or '')[:24],
+        'consultado_en': str(datos.get('consultado_en') or '')[:40],
+        'reutilizado': bool(datos.get('reutilizado')),
+        'score_externo': datos.get('score_externo'),
+        'obligaciones_vigentes': datos.get('obligaciones_vigentes'),
+        'obligaciones_en_mora': datos.get('obligaciones_en_mora'),
+        'cuota_mensual_total': datos.get('cuota_mensual_total'),
+        'saldo_total': datos.get('saldo_total'),
+        'saldo_mora': datos.get('saldo_mora'),
+        'mora_actual': datos.get('mora_actual'),
+        'mora_severa': datos.get('mora_severa'),
+    }
 
 
 def _construir_estado_evaluacion(solicitud, auditoria):

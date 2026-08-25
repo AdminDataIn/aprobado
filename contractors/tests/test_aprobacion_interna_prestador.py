@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from contractors.models import (
     AprobacionInternaPrestador,
+    AprobacionPagadorPrestador,
     ContractorApplication,
     ContractorApplicationDocument,
     FormalizacionCreditoPrestador,
@@ -22,6 +23,9 @@ from contractors.models import (
     RequerimientoSubsanacionPrestador,
     RevisionManualPrestador,
     TimelinePrestador,
+)
+from contractors.services.aprobacion_pagador import (
+    decidir_aprobacion_pagador_prestador,
 )
 from contractors.services.aprobacion_interna import (
     aprobar_para_originar,
@@ -88,6 +92,9 @@ class ClienteFirmaPrueba:
             'external_id': kwargs.get('external_id'),
             'requiere_validacion_identidad': kwargs.get(
                 'require_identity_validation'
+            ),
+            'requiere_validacion_documento': kwargs.get(
+                'require_document_validation'
             ),
         })
         if self.error:
@@ -166,6 +173,12 @@ class AprobacionInternaPrestadorTest(TestCase):
             'can_view_contractor_review_queue',
             'can_view_contractor_internal_approval',
             'can_view_contractor_formalization',
+        )
+        self.pagador = self._crear_pagador(
+            'pagador-aprobacion-prestador',
+            self.empresa,
+            email='',
+            permisos=('can_decide_contractor_payer_approval',),
         )
 
     def test_solo_preaprobado_crea_gate_y_es_idempotente(self):
@@ -388,11 +401,147 @@ class AprobacionInternaPrestadorTest(TestCase):
         iniciar_desembolso.assert_not_called()
         activar_credito.assert_not_called()
 
+    def test_aprobacion_interna_crea_confirmacion_pagador_sin_originar(self):
+        gate = self._crear_gate()
+
+        aprobar_para_originar(gate, actor=self.analista)
+
+        aprobacion = AprobacionPagadorPrestador.objects.get(
+            aprobacion_interna=gate
+        )
+        self.solicitud.refresh_from_db()
+        self.assertEqual(
+            aprobacion.estado,
+            AprobacionPagadorPrestador.Estado.PENDIENTE,
+        )
+        self.assertEqual(
+            self.solicitud.estado,
+            ContractorApplication.Estado.PENDIENTE_APROBACION_PAGADOR,
+        )
+        self.assertEqual(Credito.objects.count(), 0)
+        self.assertEqual(CreditoLibranza.objects.count(), 0)
+        self.assertEqual(Pagare.objects.count(), 0)
+
+    def test_pagador_ajeno_no_puede_decidir_y_el_propio_es_idempotente(self):
+        gate = self._crear_gate()
+        aprobar_para_originar(gate, actor=self.analista)
+        aprobacion = AprobacionPagadorPrestador.objects.get(
+            aprobacion_interna=gate
+        )
+        empresa_ajena = Empresa.objects.create(
+            nombre='Empresa ajena gate',
+            convenio_activo=True,
+        )
+        pagador_ajeno = self._crear_pagador(
+            'pagador-ajeno-aprobacion',
+            empresa_ajena,
+            email='',
+            permisos=('can_decide_contractor_payer_approval',),
+        )
+        confirmaciones = {
+            'confirma_vinculo': True,
+            'confirma_contrato_vigente': True,
+            'confirma_forma_pago_mensual': True,
+            'confirma_valores_contractuales': True,
+            'confirma_capacidad_operativa': True,
+            'acepta_gestionar_pago': True,
+        }
+
+        with self.assertRaises(PermissionDenied):
+            decidir_aprobacion_pagador_prestador(
+                aprobacion,
+                actor=pagador_ajeno,
+                decision=AprobacionPagadorPrestador.Estado.APROBADO,
+                confirmaciones=confirmaciones,
+            )
+
+        primera = decidir_aprobacion_pagador_prestador(
+            aprobacion,
+            actor=self.pagador,
+            decision=AprobacionPagadorPrestador.Estado.APROBADO,
+            confirmaciones=confirmaciones,
+        )
+        segunda = decidir_aprobacion_pagador_prestador(
+            aprobacion,
+            actor=self.pagador,
+            decision=AprobacionPagadorPrestador.Estado.APROBADO,
+            confirmaciones=confirmaciones,
+        )
+        self.assertFalse(primera.reutilizada)
+        self.assertTrue(segunda.reutilizada)
+        self.assertEqual(AprobacionPagadorPrestador.objects.count(), 1)
+
+    def test_rechazo_pagador_bloquea_originacion(self):
+        gate = self._crear_gate()
+        aprobar_para_originar(gate, actor=self.analista)
+        aprobacion = AprobacionPagadorPrestador.objects.get(
+            aprobacion_interna=gate
+        )
+
+        decidir_aprobacion_pagador_prestador(
+            aprobacion,
+            actor=self.pagador,
+            decision=AprobacionPagadorPrestador.Estado.RECHAZADO,
+            motivo=AprobacionPagadorPrestador.Motivo.CONTRATO_NO_VIGENTE,
+            observacion='El contrato no continúa vigente.',
+        )
+
+        with self.assertRaises(ValidationError):
+            originar_credito_prestador_desde_gate(gate, actor=self.analista)
+        self.assertEqual(Credito.objects.count(), 0)
+        self.assertEqual(Pagare.objects.count(), 0)
+
+    def test_cambio_critico_invalida_aprobacion_pagador(self):
+        gate = self._crear_gate()
+        aprobar_para_originar(gate, actor=self.analista)
+        aprobacion = AprobacionPagadorPrestador.objects.get(
+            aprobacion_interna=gate
+        )
+        self.solicitud.direccion = 'Dirección modificada después del gate'
+        self.solicitud.save(update_fields=['direccion', 'updated_at'])
+
+        with self.assertRaises(ValidationError):
+            self._aprobar_pagador(gate)
+
+        aprobacion.refresh_from_db()
+        self.solicitud.refresh_from_db()
+        self.assertEqual(
+            aprobacion.estado,
+            AprobacionPagadorPrestador.Estado.INVALIDADA,
+        )
+        self.assertEqual(
+            self.solicitud.estado,
+            ContractorApplication.Estado.EVALUACION_PENDIENTE,
+        )
+
+    def test_portal_pagador_no_expone_score_ni_fuentes_crudas(self):
+        gate = self._crear_gate()
+        aprobar_para_originar(gate, actor=self.analista)
+        aprobacion = AprobacionPagadorPrestador.objects.get(
+            aprobacion_interna=gate
+        )
+        self.client.force_login(self.pagador)
+
+        listado = self.client.get('/pagador/prestadores/aprobaciones/')
+        detalle = self.client.get(
+            f'/pagador/prestadores/aprobaciones/{aprobacion.id}/'
+        )
+
+        self.assertEqual(listado.status_code, 200)
+        self.assertEqual(detalle.status_code, 200)
+        for contenido in (listado.content, detalle.content):
+            self.assertNotIn(b'score', contenido.lower())
+            self.assertNotIn(b'hdc', contenido.lower())
+            self.assertNotIn(b'midecisor', contenido.lower())
+
     def test_expediente_solo_aprobado_es_determinista_y_no_persiste(self):
         gate = self._crear_gate()
         with self.assertRaises(ValidationError):
             construir_expediente_originacion_prestador(gate)
         aprobar_para_originar(gate, actor=self.analista)
+        with self.assertRaises(ValidationError):
+            construir_expediente_originacion_prestador(gate)
+        self._aprobar_pagador(gate)
         primero = construir_expediente_originacion_prestador(gate)
         segundo = construir_expediente_originacion_prestador(gate)
         self.assertEqual(primero, segundo)
@@ -411,6 +560,7 @@ class AprobacionInternaPrestadorTest(TestCase):
     def test_originacion_es_idempotente_y_crea_un_solo_par(self):
         gate = self._crear_gate()
         aprobar_para_originar(gate, actor=self.analista)
+        self._aprobar_pagador(gate)
 
         primero = originar_credito_prestador_desde_gate(gate, actor=self.analista)
         segundo = originar_credito_prestador_desde_gate(gate, actor=self.analista)
@@ -423,6 +573,24 @@ class AprobacionInternaPrestadorTest(TestCase):
         self.assertEqual(CreditoLibranza.objects.count(), 1)
         self.assertEqual(OrigenCreditoPrestador.objects.count(), 1)
         self.assertEqual(primero.credito.estado, Credito.EstadoCredito.EN_REVISION)
+        self.assertEqual(primero.origen.monto_base, gate.monto_autorizado)
+        self.assertEqual(
+            primero.origen.version_configuracion,
+            gate.version_configuracion_financiera,
+        )
+        self.assertEqual(
+            primero.origen.snapshot_hash,
+            primero.origen.componentes_financieros().calcular_hash(),
+        )
+        snapshot_antes = primero.origen.componentes_financieros()
+        type(self.configuracion).objects.filter(pk=self.configuracion.pk).update(
+            activo=False,
+        )
+        primero.origen.refresh_from_db()
+        self.assertEqual(
+            primero.origen.componentes_financieros(),
+            snapshot_antes,
+        )
         self.assertTrue(self.solicitud.timeline_operativo.filter(
             tipo_evento=TimelinePrestador.TipoEvento.ORIGINACION_COMPLETADA
         ).exists())
@@ -433,6 +601,7 @@ class AprobacionInternaPrestadorTest(TestCase):
     def test_clave_diferente_no_duplica_el_mismo_gate(self):
         gate = self._crear_gate()
         aprobar_para_originar(gate, actor=self.analista)
+        self._aprobar_pagador(gate)
         dto = construir_expediente_originacion_prestador(gate)
         clave = construir_clave_idempotencia_prestador(dto)
         originar_libranza_desde_expediente(dto, clave, self.analista)
@@ -449,6 +618,7 @@ class AprobacionInternaPrestadorTest(TestCase):
     def test_originacion_mapea_contrato_sin_inventar_certificado_laboral(self):
         gate = self._crear_gate()
         aprobar_para_originar(gate, actor=self.analista)
+        self._aprobar_pagador(gate)
         resultado = originar_credito_prestador_desde_gate(gate, actor=self.analista)
         detalle = resultado.credito_libranza
 
@@ -470,6 +640,7 @@ class AprobacionInternaPrestadorTest(TestCase):
     ):
         gate = self._crear_gate()
         aprobar_para_originar(gate, actor=self.analista)
+        self._aprobar_pagador(gate)
         resultado = originar_credito_prestador_desde_gate(gate, actor=self.analista)
 
         self.assertEqual(resultado.credito.estado, Credito.EstadoCredito.EN_REVISION)
@@ -496,6 +667,7 @@ class AprobacionInternaPrestadorTest(TestCase):
 
         self.solicitud.direccion = 'Direccion gate'
         self.solicitud.save(update_fields=['direccion', 'updated_at'])
+        self._aprobar_pagador(gate)
         sin_permiso = get_user_model().objects.create_user(
             'staff-sin-originar', password='test', is_staff=True
         )
@@ -523,6 +695,7 @@ class AprobacionInternaPrestadorTest(TestCase):
         crear_detalle.side_effect = RuntimeError('fallo controlado de prueba')
         gate = self._crear_gate()
         aprobar_para_originar(gate, actor=self.analista)
+        self._aprobar_pagador(gate)
         with self.assertRaises(RuntimeError):
             originar_credito_prestador_desde_gate(gate, actor=self.analista)
 
@@ -547,6 +720,7 @@ class AprobacionInternaPrestadorTest(TestCase):
         )
         self.assertEqual(bloqueado.status_code, 403)
 
+        self._aprobar_pagador(gate)
         self.client.force_login(self.analista)
         detalle = self.client.get(
             f'/gestion/prestadores/{self.solicitud.id}/', HTTP_HOST=self.host
@@ -567,6 +741,7 @@ class AprobacionInternaPrestadorTest(TestCase):
     def test_mi_credito_no_confunde_originacion_con_desembolso(self):
         gate = self._crear_gate()
         aprobar_para_originar(gate, actor=self.analista)
+        self._aprobar_pagador(gate)
         originar_credito_prestador_desde_gate(gate, actor=self.analista)
         self.client.force_login(self.solicitante)
         response = self.client.get('/mi-credito/', HTTP_HOST=self.host)
@@ -636,7 +811,7 @@ class AprobacionInternaPrestadorTest(TestCase):
 
         aprobar_para_originar(gate, actor=self.analista)
         response = self.client.get('/mi-credito/', HTTP_HOST=self.host)
-        self.assertContains(response, 'etapa de formalizaci\u00f3n')
+        self.assertContains(response, 'confirmaci\u00f3n contractual')
         self.assertNotContains(response, 'desembolsado')
 
     def test_bandeja_filtra_aprobacion_sin_exponer_documento_completo(self):
@@ -766,6 +941,7 @@ class AprobacionInternaPrestadorTest(TestCase):
             formalizacion.clave_idempotencia,
         )
         self.assertTrue(cliente.llamadas[0]['requiere_validacion_identidad'])
+        self.assertTrue(cliente.llamadas[0]['requiere_validacion_documento'])
         resultado.formalizacion.refresh_from_db()
         resultado.formalizacion.pagare.refresh_from_db()
         resultado.formalizacion.credito.refresh_from_db()
@@ -873,6 +1049,92 @@ class AprobacionInternaPrestadorTest(TestCase):
         )
         self.assertEqual(eventos.count(), 1)
         self.assertNotIn('documento-callback', str(eventos.first().metadata))
+
+    def test_callback_firmado_sin_evidencia_completa_no_marca_firmado(self):
+        formalizacion = self._formalizacion_con_identidad()
+        enviar_formalizacion_prestador_a_firma(
+            formalizacion,
+            actor=self.analista,
+            cliente=ClienteFirmaPrueba(token='documento-sin-identidad-completa'),
+        )
+        FormalizacionCreditoPrestador.objects.filter(pk=formalizacion.pk).update(
+            identidad_documento_validada=False
+        )
+
+        with self.assertRaises(ValidationError):
+            procesar_callback_formalizacion_prestador(
+                documento_id='documento-sin-identidad-completa',
+                accion='signed',
+                estado_proveedor='signed',
+            )
+
+        formalizacion.refresh_from_db()
+        formalizacion.credito.refresh_from_db()
+        self.assertEqual(
+            formalizacion.estado,
+            FormalizacionCreditoPrestador.Estado.PENDIENTE_FIRMA,
+        )
+        self.assertEqual(
+            formalizacion.credito.estado,
+            Credito.EstadoCredito.PENDIENTE_FIRMA,
+        )
+
+    @override_settings(ZAPSIGN_WEBHOOK_SECRET='secreto-webhook')
+    @patch('gestion_creditos.credit_services.iniciar_proceso_desembolso')
+    @patch('gestion_creditos.credit_services.activar_credito')
+    def test_webhook_prestador_ignora_credito_anulado_sin_efectos_financieros(
+        self, activar_credito, iniciar_desembolso
+    ):
+        formalizacion = self._formalizacion_con_identidad()
+        formalizacion = enviar_formalizacion_prestador_a_firma(
+            formalizacion,
+            actor=self.analista,
+            cliente=ClienteFirmaPrueba(token='documento-prestador-anulado'),
+        ).formalizacion
+        Credito.objects.filter(pk=formalizacion.credito_id).update(
+            estado=Credito.EstadoCredito.ANULADO
+        )
+        Pagare.objects.filter(pk=formalizacion.pagare_id).update(
+            estado=Pagare.EstadoPagare.CANCELLED
+        )
+
+        respuesta = self.client.post(
+            '/api/webhooks/zapsign/',
+            data=json.dumps({
+                'token': 'documento-prestador-anulado',
+                'event': 'doc_signed',
+                'status': 'signed',
+                'signers': [{'signed_at': timezone.now().isoformat()}],
+            }),
+            content_type='application/json',
+            HTTP_X_ZAPSIGN_SECRET='secreto-webhook',
+            HTTP_HOST=self.host,
+        )
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(
+            respuesta.json()['status'], 'credit_cancelled_ignored'
+        )
+        formalizacion.refresh_from_db()
+        formalizacion.credito.refresh_from_db()
+        formalizacion.pagare.refresh_from_db()
+        self.assertEqual(
+            formalizacion.estado,
+            FormalizacionCreditoPrestador.Estado.PENDIENTE_FIRMA,
+        )
+        self.assertEqual(
+            formalizacion.credito.estado, Credito.EstadoCredito.ANULADO
+        )
+        self.assertEqual(
+            formalizacion.pagare.estado, Pagare.EstadoPagare.CANCELLED
+        )
+        log = ZapSignWebhookLog.objects.get()
+        self.assertTrue(log.processed)
+        self.assertIn('ANULADO', log.error_message)
+        self.assertEqual(HistorialPago.objects.count(), 0)
+        self.assertEqual(CuotaAmortizacion.objects.count(), 0)
+        activar_credito.assert_not_called()
+        iniciar_desembolso.assert_not_called()
 
     @override_settings(ZAPSIGN_WEBHOOK_SECRET='secreto-webhook')
     def test_webhook_prestador_guarda_resumen_sanitizado_y_no_token(self):
@@ -1330,9 +1592,28 @@ class AprobacionInternaPrestadorTest(TestCase):
     def _originar_aprobado(self):
         gate = self._crear_gate()
         aprobar_para_originar(gate, actor=self.analista)
+        self._aprobar_pagador(gate)
         return originar_credito_prestador_desde_gate(
             gate, actor=self.analista
         ).origen
+
+    def _aprobar_pagador(self, gate):
+        aprobacion = AprobacionPagadorPrestador.objects.get(
+            aprobacion_interna=gate
+        )
+        return decidir_aprobacion_pagador_prestador(
+            aprobacion,
+            actor=self.pagador,
+            decision=AprobacionPagadorPrestador.Estado.APROBADO,
+            confirmaciones={
+                'confirma_vinculo': True,
+                'confirma_contrato_vigente': True,
+                'confirma_forma_pago_mensual': True,
+                'confirma_valores_contractuales': True,
+                'confirma_capacidad_operativa': True,
+                'acepta_gestionar_pago': True,
+            },
+        ).aprobacion
 
     def _preparar_formalizacion(self):
         origen = self._originar_aprobado()
@@ -1380,6 +1661,8 @@ class AprobacionInternaPrestadorTest(TestCase):
             valor_total_contrato=Decimal('50000000'),
             valor_pagado_contrato=Decimal('2000000'),
             valor_pendiente_cobrar=Decimal('48000000'),
+            forma_pago=ContractorApplication.FormaPago.MENSUAL,
+            valor_mensual_contractual=Decimal('6000000'),
             monto_solicitado=Decimal('3000000'),
             plazo_meses=6,
             version_configuracion_financiera_simulacion=self.configuracion.version,

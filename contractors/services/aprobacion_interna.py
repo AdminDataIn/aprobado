@@ -40,7 +40,7 @@ class ValidacionGatePrestador:
     configuracion_financiera: object
     contrato: object
     autorizacion: object
-    snapshot_datacredito: object
+    snapshots_datacredito: tuple
     limites: dict
 
 
@@ -185,6 +185,11 @@ def aprobar_para_originar(
         actor,
         estado_anterior=anterior,
     )
+    from contractors.services.aprobacion_pagador import (
+        crear_o_reutilizar_aprobacion_pagador,
+    )
+
+    crear_o_reutilizar_aprobacion_pagador(gate, actor=actor)
     return gate
 
 
@@ -333,9 +338,9 @@ def _validar_gate(solicitud, auditoria):
     autorizacion = obtener_autorizacion_datacredito_vigente(solicitud)
     if autorizacion is None:
         errores.append('La autorizacion DataCredito ya no esta vigente.')
-    snapshot = _obtener_snapshot_datacredito(auditoria, autorizacion)
-    if snapshot is None:
-        errores.append('El snapshot DataCredito ya no esta vigente.')
+    snapshots = _obtener_snapshots_datacredito(auditoria, autorizacion, politica)
+    if snapshots is None:
+        errores.append('Los snapshots DataCredito requeridos ya no estan vigentes.')
 
     if errores:
         raise ValidationError(errores)
@@ -345,7 +350,7 @@ def _validar_gate(solicitud, auditoria):
         configuracion_financiera=configuracion,
         contrato=contrato,
         autorizacion=autorizacion,
-        snapshot_datacredito=snapshot,
+        snapshots_datacredito=snapshots,
         limites=limites,
     )
 
@@ -465,23 +470,61 @@ def _devolver_gate_a_revision(gate, *, actor, motivo, comentario):
     return gate
 
 
-def _obtener_snapshot_datacredito(auditoria, autorizacion):
+def _obtener_snapshots_datacredito(auditoria, autorizacion, politica):
+    if autorizacion is None:
+        return None
+
+    snapshots = []
+    referencias = []
+    if auditoria.snapshot_midecisor_id:
+        referencias.append((
+            auditoria.snapshot_midecisor,
+            ConsultaDatacreditoSnapshot.Servicio.DECISOR,
+        ))
+    if auditoria.snapshot_hdcplus_id:
+        referencias.append((
+            auditoria.snapshot_hdcplus,
+            ConsultaDatacreditoSnapshot.Servicio.HISTORIAL,
+        ))
+
+    if referencias:
+        requeridos = set()
+        if politica and politica.requiere_midecisor:
+            requeridos.add(ConsultaDatacreditoSnapshot.Servicio.DECISOR)
+        if politica and politica.requiere_hdcplus:
+            requeridos.add(ConsultaDatacreditoSnapshot.Servicio.HISTORIAL)
+        servicios_presentes = {servicio for _snapshot, servicio in referencias}
+        if not requeridos.issubset(servicios_presentes):
+            return None
+        for snapshot, servicio in referencias:
+            if not _snapshot_vigente(snapshot, autorizacion, servicio=servicio):
+                return None
+            snapshots.append(snapshot)
+        return tuple(snapshots)
+
+    # Compatibilidad con auditorias V1 que guardaban una sola referencia
+    # sanitizada dentro de snapshot_salida.
     datos = (auditoria.snapshot_salida or {}).get('datacredito') or {}
     snapshot_id = datos.get('snapshot_id')
-    if not snapshot_id or autorizacion is None:
+    if not snapshot_id:
         return None
     try:
         snapshot = ConsultaDatacreditoSnapshot.objects.filter(pk=snapshot_id).first()
     except (ValidationError, ValueError):
         return None
-    if (
-        snapshot is None
-        or snapshot.estado != ConsultaDatacreditoSnapshot.Estado.EXITOSO
-        or snapshot.vigente_hasta <= timezone.now()
-        or snapshot.autorizacion_referencia != str(autorizacion.pk)
-    ):
+    if not _snapshot_vigente(snapshot, autorizacion):
         return None
-    return snapshot
+    return (snapshot,)
+
+
+def _snapshot_vigente(snapshot, autorizacion, *, servicio=None):
+    return bool(
+        snapshot is not None
+        and snapshot.estado == ConsultaDatacreditoSnapshot.Estado.EXITOSO
+        and snapshot.vigente_hasta > timezone.now()
+        and snapshot.autorizacion_referencia == str(autorizacion.pk)
+        and (servicio is None or snapshot.servicio == servicio)
+    )
 
 
 def _bloquear_gate(gate_id):

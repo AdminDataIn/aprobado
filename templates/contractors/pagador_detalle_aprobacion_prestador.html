@@ -1,0 +1,59 @@
+{% load static humanize %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Confirmación contractual de Prestador</title>
+  <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+  {% include 'base/favicon.html' %}
+  <style>
+    body{background:#f4f7fb;color:#10233f;font-family:Arial,sans-serif}.contenedor{max-width:900px;margin:auto;padding:32px 20px 60px}
+    .panel{background:#fff;border:1px solid #dce5ef;border-radius:8px;padding:22px;margin-bottom:18px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+    dt{font-size:12px;text-transform:uppercase;color:#64748b}dd{margin:4px 0 0;font-weight:700}.checks{display:grid;gap:10px;margin:18px 0}
+    textarea,select{width:100%;padding:10px;margin:5px 0 12px}.boton{background:#08a9ca;color:white;border:0;border-radius:6px;padding:12px 18px;font-weight:700}
+    a{color:#087aa2;font-weight:700;text-decoration:none}@media(max-width:640px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<main class="contenedor">
+  <p><a href="{% url 'pagador:prestadores_aprobaciones' %}">Volver a aprobaciones</a></p>
+  <h1>Confirmación contractual y operativa</h1>
+  <p>Esta decisión confirma únicamente hechos contractuales y operativos.</p>
+  <section class="panel grid">
+    <dl><dt>Prestador</dt><dd>{{ solicitud.nombre_completo }}</dd></dl>
+    <dl><dt>Empresa</dt><dd>{{ empresa.nombre }}</dd></dl>
+    <dl><dt>Contrato vigente hasta</dt><dd>{{ solicitud.fecha_fin_contrato|date:"Y-m-d"|default:"Por validar" }}</dd></dl>
+    <dl><dt>Forma de pago</dt><dd>{{ solicitud.get_forma_pago_display }}</dd></dl>
+    <dl><dt>Valor mensual contractual</dt><dd>${{ solicitud.valor_mensual_contractual|floatformat:0|intcomma|default:"Por validar" }}</dd></dl>
+    <dl><dt>Saldo contractual</dt><dd>${{ solicitud.valor_pendiente_cobrar|floatformat:0|intcomma }}</dd></dl>
+    <dl><dt>Monto autorizado</dt><dd>${{ aprobacion.aprobacion_interna.monto_autorizado|floatformat:0|intcomma }}</dd></dl>
+    <dl><dt>Plazo</dt><dd>{{ aprobacion.aprobacion_interna.plazo_autorizado }} meses</dd></dl>
+  </section>
+  <section class="panel">
+    <h2>Decisión de la empresa</h2>
+    {% if aprobacion.estado == 'PENDIENTE' %}
+      <form method="post" action="{% url 'pagador:prestadores_aprobacion_decidir' aprobacion.id %}">
+        {% csrf_token %}
+        {{ form.decision.label_tag }}{{ form.decision }}
+        {{ form.motivo.label_tag }}{{ form.motivo }}
+        <div class="checks">
+          <label>{{ form.confirma_vinculo }} Confirmo que el prestador mantiene vínculo contractual.</label>
+          <label>{{ form.confirma_contrato_vigente }} Confirmo que el contrato continúa vigente.</label>
+          <label>{{ form.confirma_forma_pago_mensual }} Confirmo que la forma de pago es mensual.</label>
+          <label>{{ form.confirma_valores_contractuales }} Confirmo que los valores contractuales son consistentes.</label>
+          <label>{{ form.confirma_capacidad_operativa }} Confirmo capacidad operativa para realizar el pago o descuento.</label>
+          <label>{{ form.acepta_gestionar_pago }} La empresa acepta gestionar el pago correspondiente.</label>
+        </div>
+        {{ form.observacion.label_tag }}{{ form.observacion }}
+        <button class="boton" type="submit">Registrar decisión</button>
+      </form>
+    {% else %}
+      <p><strong>{{ aprobacion.get_estado_display }}</strong></p>
+      <p>{{ aprobacion.get_motivo_display }}</p>
+      {% if aprobacion.observacion %}<p>{{ aprobacion.observacion }}</p>{% endif %}
+    {% endif %}
+  </section>
+</main>
+</body>
+</html>

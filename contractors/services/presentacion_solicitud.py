@@ -19,6 +19,10 @@ ETIQUETAS_ESTADO_PUBLICO = {
     'APROBADA_PARA_ORIGINAR': 'Validaciones superadas',
     'DEVUELTA_A_REVISION': 'Validación adicional',
     'PENDIENTE_APROBACION_INTERNA': 'Validaciones finales',
+    'PENDIENTE_CONFIRMACION_EMPRESA': 'Pendiente confirmación de la empresa',
+    'EVALUACION_APROBADA': 'Evaluación aprobada',
+    'REQUIERE_INFORMACION': 'Requiere información',
+    'NO_APROBADO': 'No aprobado',
     'EVALUACION_PENDIENTE': 'Evaluación pendiente',
     'EN_EVALUACION': 'En evaluación',
     'SUBSANACION_PENDIENTE': 'Información por corregir',
@@ -84,9 +88,43 @@ def construir_estado_publico_solicitud(solicitud):
     validacion_empresa = solicitud.revisiones_manuales.filter(
         estado=RevisionManualPrestador.Estado.PENDIENTE_VALIDACION_EMPRESA
     ).exists()
+    aprobacion_pagador = (
+        solicitud.aprobaciones_pagador.order_by('-created_at', '-id').first()
+    )
 
     if aprobacion:
         if aprobacion.estado == AprobacionInternaPrestador.Estado.APROBADA_PARA_ORIGINAR:
+            if (
+                aprobacion_pagador
+                and aprobacion_pagador.estado == aprobacion_pagador.Estado.PENDIENTE
+            ):
+                return _estado(
+                    'PENDIENTE_CONFIRMACION_EMPRESA',
+                    'Tu evaluación financiera fue favorable.',
+                    'Estamos esperando la confirmación contractual y operativa de la empresa.',
+                    tono='favorable',
+                )
+            if (
+                aprobacion_pagador
+                and aprobacion_pagador.estado
+                == aprobacion_pagador.Estado.REQUIERE_AJUSTE
+            ):
+                return _estado(
+                    'REQUIERE_INFORMACION',
+                    'Necesitamos validar información adicional con la empresa.',
+                    'Te informaremos si debes actualizar algún dato de la solicitud.',
+                    tono='advertencia',
+                )
+            if (
+                aprobacion_pagador
+                and aprobacion_pagador.estado == aprobacion_pagador.Estado.RECHAZADO
+            ):
+                return _estado(
+                    'NO_APROBADO',
+                    'La solicitud no puede continuar en este momento.',
+                    'Puedes comunicarte con nuestro equipo para conocer los canales de atención.',
+                    tono='advertencia',
+                )
             originada = OrigenCreditoPrestador.objects.filter(
                 gate_id=aprobacion.id,
                 estado=OrigenCreditoPrestador.Estado.COMPLETADO,
@@ -143,10 +181,20 @@ def construir_estado_publico_solicitud(solicitud):
                     'La obligación permanece en revisión y todavía no ha sido desembolsada.',
                     tono='favorable',
                 )
+            if (
+                aprobacion_pagador
+                and aprobacion_pagador.estado == aprobacion_pagador.Estado.APROBADO
+            ):
+                return _estado(
+                    'EVALUACION_APROBADA',
+                    'Tu evaluación y la confirmación de la empresa fueron aprobadas.',
+                    'La solicitud está lista para avanzar a formalización.',
+                    tono='favorable',
+                )
             return _estado(
-                'APROBADA_PARA_ORIGINAR',
-                'Tu solicitud super\u00f3 las validaciones internas.',
-                'Est\u00e1 avanzando a la etapa de formalizaci\u00f3n.',
+                'PENDIENTE_CONFIRMACION_EMPRESA',
+                'Tu evaluación financiera fue favorable.',
+                'Estamos preparando la confirmación contractual con la empresa.',
                 tono='favorable',
             )
         if aprobacion.estado == AprobacionInternaPrestador.Estado.DEVUELTA_A_REVISION:
