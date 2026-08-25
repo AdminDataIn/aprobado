@@ -1,12 +1,18 @@
 import tempfile
 from decimal import Decimal
+from pathlib import Path
+from queue import Queue
+from threading import Barrier, Thread
+from unittest import skipIf
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.db import close_old_connections, connection
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
 from contractors.models import FormalizacionCreditoPrestador
@@ -261,6 +267,19 @@ class CierreFinancieroPrestadorTest(TestCase):
         self.assertEqual(
             HistorialEstado.objects.filter(credito=self.credito).count(), 2,
         )
+        cuotas = CuotaAmortizacion.objects.filter(credito=self.credito)
+        self.assertEqual(
+            sum((cuota.capital_a_pagar for cuota in cuotas), Decimal('0.00')),
+            self.componentes.capital_total_financiado,
+        )
+        self.assertEqual(
+            sum((cuota.interes_a_pagar for cuota in cuotas), Decimal('0.00')),
+            self.componentes.total_intereses,
+        )
+        self.assertEqual(
+            sum((cuota.valor_cuota for cuota in cuotas), Decimal('0.00')),
+            self.componentes.total_a_pagar,
+        )
 
         reutilizado = confirmar_desembolso_credito_prestador(
             activado.credito,
@@ -388,3 +407,191 @@ class CierreFinancieroPrestadorTest(TestCase):
     @staticmethod
     def _otorgar(usuario, *codenames):
         usuario.user_permissions.add(*Permission.objects.filter(codename__in=codenames))
+
+
+@skipIf(connection.vendor != 'postgresql', 'Requiere PostgreSQL real.')
+@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+class CierreFinancieroPrestadorConcurrenciaPostgresTest(TransactionTestCase):
+    reset_sequences = True
+
+    def setUp(self):
+        self.media = tempfile.TemporaryDirectory()
+        self.addCleanup(self.media.cleanup)
+        self.override_media = override_settings(MEDIA_ROOT=self.media.name)
+        self.override_media.enable()
+        self.addCleanup(self.override_media.disable)
+
+        User = get_user_model()
+        self.titular = User.objects.create_user('titular-concurrencia', password='x')
+        self.staff = User.objects.create_user(
+            'finanzas-concurrencia', password='x', is_staff=True,
+        )
+        self.staff.user_permissions.add(*Permission.objects.filter(codename__in=(
+            'can_prepare_contractor_transfer',
+            'can_confirm_contractor_disbursement',
+        )))
+        empresa = Empresa.objects.create(
+            nombre='Empresa concurrencia PostgreSQL', convenio_activo=True,
+        )
+        self.componentes = calcular_componentes_financieros(
+            monto_base='10000000',
+            porcentaje_comision='10',
+            porcentaje_iva='19',
+            porcentaje_seguro='0.3711',
+            porcentaje_fondo='2',
+            tasa_mensual='2.2',
+            plazo=8,
+            version_configuracion='financiera-postgres-v1',
+            version_score='score-postgres-v1',
+            version_politica='politica-postgres-v1',
+        )
+        self.credito = Credito.objects.create(
+            usuario=self.titular,
+            linea=Credito.LineaCredito.LIBRANZA,
+            estado=Credito.EstadoCredito.FIRMADO,
+            monto_solicitado=self.componentes.monto_base,
+            plazo_solicitado=self.componentes.plazo,
+            monto_aprobado=self.componentes.monto_base,
+            plazo=self.componentes.plazo,
+            tasa_interes=self.componentes.tasa_mensual,
+            comision=self.componentes.comision,
+            iva_comision=self.componentes.iva,
+            valor_cuota=self.componentes.cuota_aprobada,
+            total_a_pagar=self.componentes.total_a_pagar,
+        )
+        detalle = CreditoLibranza.objects.create(
+            credito=self.credito,
+            nombres='Persona',
+            apellidos='Concurrente',
+            cedula='1000000001',
+            direccion='Direccion prueba',
+            telefono='3000000001',
+            correo_electronico='concurrencia@example.test',
+            empresa=empresa,
+            es_prestador_servicios=True,
+            cedula_frontal='credito_libranza/cedulas/frontal.jpg',
+            cedula_trasera='credito_libranza/cedulas/trasera.jpg',
+            certificado_bancario='credito_libranza/certificados_bancarios/cert.pdf',
+        )
+        self.origen = OrigenCreditoPrestador.objects.create(
+            gate_id=9101,
+            gate_version='datos-postgres-v1',
+            clave_idempotencia='prestador:9101:datos-postgres-v1',
+            credito=self.credito,
+            credito_libranza=detalle,
+            estado=OrigenCreditoPrestador.Estado.EN_PROCESO,
+            created_by=self.staff,
+        )
+        for campo in (
+            'monto_base', 'porcentaje_comision', 'comision', 'porcentaje_iva',
+            'iva', 'porcentaje_seguro', 'seguro_vida', 'porcentaje_fondo',
+            'fondo_garantia', 'otros_costos_total', 'capital_total_financiado',
+            'tasa_mensual', 'plazo', 'cuota_aprobada', 'total_intereses',
+            'total_a_pagar', 'version_formula', 'version_configuracion',
+            'version_score', 'version_politica',
+        ):
+            setattr(self.origen, campo, getattr(self.componentes, campo))
+        self.origen.otros_componentes = {}
+        self.origen.calculado_en = timezone.now()
+        self.origen.snapshot_hash = self.componentes.calcular_hash()
+        self.origen.estado = OrigenCreditoPrestador.Estado.COMPLETADO
+        self.origen.save()
+
+        pagare = Pagare.objects.create(
+            credito=self.credito,
+            numero_pagare='PAG-CONCURRENCIA-1',
+            estado=Pagare.EstadoPagare.SIGNED,
+            archivo_pdf=SimpleUploadedFile('pagare.pdf', b'pdf'),
+        )
+        FormalizacionCreditoPrestador.objects.create(
+            origen_credito_prestador=self.origen,
+            credito=self.credito,
+            credito_libranza=detalle,
+            pagare=pagare,
+            estado=FormalizacionCreditoPrestador.Estado.FIRMADO,
+            clave_idempotencia='formalizacion-concurrencia-v1',
+            version_origen='datos-postgres-v1',
+            estado_identidad=FormalizacionCreditoPrestador.EstadoIdentidad.VALIDADA,
+            identidad_usuario=self.titular,
+            identidad_selfie_validada=True,
+            identidad_documento_validada=True,
+            identidad_firmante_coincide=True,
+            identidad_evidencia_hash='b' * 64,
+            firmada_en=timezone.now(),
+        )
+
+    def test_transiciones_postfirma_son_idempotentes_bajo_concurrencia(self):
+        resultados_preparacion, errores_preparacion = self._ejecutar_concurrente(
+            lambda credito, actor, indice: preparar_transferencia_credito_prestador(
+                credito, actor=actor,
+            )
+        )
+        self.assertEqual(errores_preparacion, [])
+        self.assertCountEqual(
+            [resultado.reutilizado for resultado in resultados_preparacion],
+            [False, True],
+        )
+        clave_preparacion = f'prestador:{self.credito.pk}:pendiente-transferencia:v1'
+        self.assertEqual(
+            HistorialEstado.objects.filter(clave_idempotencia=clave_preparacion).count(),
+            1,
+        )
+        self.credito.refresh_from_db()
+        self.assertEqual(
+            self.credito.estado, Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA,
+        )
+
+        resultados_desembolso, errores_desembolso = self._ejecutar_concurrente(
+            lambda credito, actor, indice: confirmar_desembolso_credito_prestador(
+                credito,
+                comprobante=SimpleUploadedFile(
+                    f'comprobante-concurrente-{indice}.pdf', b'comprobante',
+                ),
+                actor=actor,
+            )
+        )
+        self.assertEqual(errores_desembolso, [])
+        self.assertCountEqual(
+            [resultado.reutilizado for resultado in resultados_desembolso],
+            [False, True],
+        )
+        clave_desembolso = f'prestador:{self.credito.pk}:desembolso-confirmado:v1'
+        historial = HistorialEstado.objects.get(clave_idempotencia=clave_desembolso)
+        self.assertTrue(historial.comprobante_pago.name)
+        self.credito.refresh_from_db()
+        self.assertEqual(self.credito.estado, Credito.EstadoCredito.ACTIVO)
+        self.assertEqual(CuotaAmortizacion.objects.filter(credito=self.credito).count(), 8)
+        self.assertEqual(
+            HistorialEstado.objects.filter(clave_idempotencia=clave_desembolso).count(),
+            1,
+        )
+        comprobantes = [
+            ruta for ruta in Path(settings.MEDIA_ROOT).rglob('*')
+            if ruta.is_file() and 'comprobante-concurrente-' in ruta.name
+        ]
+        self.assertEqual(len(comprobantes), 1)
+
+    def _ejecutar_concurrente(self, operacion):
+        barrera = Barrier(2)
+        resultados = Queue()
+        errores = Queue()
+
+        def ejecutar(indice):
+            close_old_connections()
+            try:
+                credito = Credito.objects.get(pk=self.credito.pk)
+                actor = get_user_model().objects.get(pk=self.staff.pk)
+                barrera.wait(timeout=10)
+                resultados.put(operacion(credito, actor, indice))
+            except Exception as exc:
+                errores.put(exc)
+            finally:
+                close_old_connections()
+
+        hilos = [Thread(target=ejecutar, args=(indice,)) for indice in (1, 2)]
+        for hilo in hilos:
+            hilo.start()
+        for hilo in hilos:
+            hilo.join(timeout=30)
+        self.assertTrue(all(not hilo.is_alive() for hilo in hilos))
+        return list(resultados.queue), list(errores.queue)
