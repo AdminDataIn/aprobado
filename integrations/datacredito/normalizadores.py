@@ -196,10 +196,29 @@ def normalizar_historial_credito(raw):
     vector = _buscar_valor(datos, ('vector', 'comportamientoPago', 'paymentBehavior', 'comportamiento_pago'))
     mora_severa = detectar_mora_severa_desde_vector(vector)
     saldo_mora = _decimal(_buscar_valor(datos, ('saldoMora', 'saldo_mora', 'saldoEnMora')))
-    if mora_severa is None and saldo_mora is not None and saldo_mora > 0:
+    saldo_total_hdc = _decimal(hdc_resumen.get('saldo_total_hdc'))
+    saldo_mora_hdc = _decimal(hdc_resumen.get('saldo_mora_hdc'))
+    cuota_total_hdc = _decimal(hdc_resumen.get('cuota_total_hdc'))
+    max_mora_dias = _entero(hdc_resumen.get('max_mora_dias'))
+    obligaciones_en_mora = _entero(hdc_resumen.get('liabilities_en_mora'))
+    obligaciones_castigadas = _entero(hdc_resumen.get('liabilities_castigadas'))
+    obligaciones_vigentes = _entero(hdc_resumen.get('liabilities_vigentes'))
+    total_obligaciones = _entero(hdc_resumen.get('total_liabilities'))
+    if saldo_mora is None:
+        saldo_mora = saldo_mora_hdc
+    if mora_severa is not True and (
+        (max_mora_dias is not None and max_mora_dias >= 90)
+        or (obligaciones_castigadas or 0) > 0
+    ):
+        mora_severa = True
+    elif mora_severa is None and total_obligaciones is not None:
+        mora_severa = False
+    if saldo_mora is not None and saldo_mora > 0:
         mora_actual = True
     elif mora_severa is True:
         mora_actual = True
+    elif obligaciones_en_mora is not None:
+        mora_actual = obligaciones_en_mora > 0
     else:
         mora_actual = None
 
@@ -219,7 +238,14 @@ def normalizar_historial_credito(raw):
         fuente_score=FUENTE_SCORE_HISTORIA_CREDITO if scores_hdc else None,
         score_normalizado_0_1000=None,
         nivel_riesgo=NIVEL_RIESGO_ALTO if mora_severa else NIVEL_RIESGO_NO_DISPONIBLE,
+        saldo_actual=saldo_total_hdc,
         saldo_mora=saldo_mora,
+        valor_cuota_total=cuota_total_hdc,
+        creditos_vigentes=obligaciones_vigentes,
+        creditos_cerrados=(
+            max(total_obligaciones - (obligaciones_vigentes or 0), 0)
+            if total_obligaciones is not None else None
+        ),
         mora_severa=mora_severa,
         mora_actual=mora_actual,
         response_code=response_code,

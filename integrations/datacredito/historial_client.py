@@ -52,13 +52,27 @@ def consultar_historial_credito(entrada: EntradaHistorialCredito, session=None):
             timeout=configuracion.timeout_seconds,
         )
     except requests.exceptions.Timeout as exc:
-        raise DatacreditoTimeoutError('Timeout consultando Historia de Credito DataCredito.') from exc
+        raise DatacreditoTimeoutError(
+            'Timeout consultando Historia de Credito DataCredito.',
+            servicio='historial',
+            etapa='consulta_hdcplus',
+            error_tipo='TIMEOUT',
+        ) from exc
     except requests.exceptions.RequestException as exc:
-        raise DatacreditoProviderError('Error de red consultando Historia de Credito DataCredito.') from exc
+        raise DatacreditoProviderError(
+            'Error de red consultando Historia de Credito DataCredito.',
+            servicio='historial',
+            etapa='consulta_hdcplus',
+            error_tipo='RED',
+        ) from exc
 
     if respuesta.status_code >= 400:
         raise DatacreditoProviderError(
-            f'Error Historia de Credito DataCredito status={respuesta.status_code}.'
+            f'Error Historia de Credito DataCredito status={respuesta.status_code}.',
+            servicio='historial',
+            etapa='consulta_hdcplus',
+            http_status=respuesta.status_code,
+            error_tipo='HTTP_PROVEEDOR',
         )
 
     cuerpo = respuesta.json()
@@ -172,6 +186,11 @@ def _buscar_response_code(cuerpo):
     for clave in ('responseCode', 'response_code', 'codigoRespuesta'):
         if clave in cuerpo:
             return str(cuerpo[clave])
+    product_result = (cuerpo.get('ReportHDCplus') or {}).get('productResult')
+    if isinstance(product_result, dict):
+        for clave in ('responseCode', 'response_code', 'codigoRespuesta'):
+            if clave in product_result:
+                return str(product_result[clave])
     return None
 
 

@@ -44,6 +44,7 @@ def obtener_evaluacion_datacredito_prestador(
     solicitado_por=None,
     justificacion=None,
     servicio=None,
+    vigencia_dias=None,
 ):
     _validar_actor(solicitud, solicitado_por)
     _validar_modo(modo, solicitado_por, justificacion)
@@ -173,7 +174,11 @@ def obtener_evaluacion_datacredito_prestador(
     snapshot_en_proceso.codigo_http = proveedor.codigo_http
     snapshot_en_proceso.codigo_funcional = proveedor.codigo_funcional
     snapshot_en_proceso.consultado_en = ahora
-    snapshot_en_proceso.vigente_hasta = ahora + timedelta(days=configuracion.reuse_days)
+    dias_reutilizacion = max(
+        int(vigencia_dias if vigencia_dias is not None else configuracion.reuse_days),
+        1,
+    )
+    snapshot_en_proceso.vigente_hasta = ahora + timedelta(days=dias_reutilizacion)
     snapshot_en_proceso.save(update_fields=[
         'estado',
         'resultado_normalizado',

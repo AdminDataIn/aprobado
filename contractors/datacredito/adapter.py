@@ -64,8 +64,20 @@ def consultar_proveedor_datacredito_prestador(solicitud, *, servicio):
 
 
 def _proyectar_resultado_allowlist(normalizado, *, servicio):
+    resumen_hdc = (
+        (normalizado.metadata_segura or {}).get('hdc_resumen') or {}
+        if servicio == ConsultaDatacreditoSnapshot.Servicio.HISTORIAL
+        else {}
+    )
     vigentes = _entero_o_none(normalizado.creditos_vigentes)
     cerradas = _entero_o_none(normalizado.creditos_cerrados)
+    if resumen_hdc:
+        vigentes = _entero_o_none(resumen_hdc.get('liabilities_vigentes'))
+        total_hdc = _entero_o_none(resumen_hdc.get('total_liabilities'))
+        cerradas = (
+            max(total_hdc - (vigentes or 0), 0)
+            if total_hdc is not None else None
+        )
     total = None if vigentes is None and cerradas is None else (vigentes or 0) + (cerradas or 0)
     score = normalizado.score_midecisor
     if score is None:
@@ -77,9 +89,25 @@ def _proyectar_resultado_allowlist(normalizado, *, servicio):
         saldo_total=_texto_decimal(normalizado.saldo_actual),
         cuota_mensual_total=_texto_decimal(normalizado.valor_cuota_total),
         obligaciones_vigentes=vigentes,
+        obligaciones_cerradas=cerradas,
+        obligaciones_en_mora=_entero_o_none(
+            resumen_hdc.get('liabilities_en_mora')
+        ),
+        mora_maxima_dias=_entero_o_none(resumen_hdc.get('max_mora_dias')),
+        consultas_recientes=_entero_o_none(
+            resumen_hdc.get('huellas_ultimos_6_meses')
+        ),
         saldo_mora=_texto_decimal(normalizado.saldo_mora),
         mora_actual=normalizado.mora_actual,
         mora_severa=normalizado.mora_severa,
+        productos_activos=vigentes,
+        creditos_activos=vigentes,
+        comportamiento_pago=(
+            'MORA_SEVERA' if normalizado.mora_severa
+            else 'MORA_ACTUAL' if normalizado.mora_actual
+            else 'SIN_MORA_REPORTADA' if normalizado.mora_actual is False
+            else 'NO_DETERMINABLE'
+        ),
         alertas=tuple(str(alerta)[:120] for alerta in normalizado.alertas_resumen),
         servicio_fuente=servicio,
         fecha_consulta=timezone.now().isoformat(),

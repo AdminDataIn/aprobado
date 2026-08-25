@@ -199,6 +199,25 @@ class DatacreditoSnapshotV2Test(TestCase):
         self.assertFalse(CreditoLibranza.objects.exists())
 
     @patch('contractors.services.datacredito_evaluacion.consultar_proveedor_datacredito_prestador')
+    def test_hdc_4xx_es_error_permanente_y_5xx_es_transitorio(self, consultar):
+        for http_status, estado_esperado in (
+            (400, ConsultaDatacreditoSnapshot.Estado.ERROR_PERMANENTE),
+            (503, ConsultaDatacreditoSnapshot.Estado.ERROR_TRANSITORIO),
+        ):
+            with self.subTest(http_status=http_status):
+                consultar.side_effect = DatacreditoProviderError(
+                    'error proveedor controlado',
+                    http_status=http_status,
+                    error_tipo='HTTP_PROVEEDOR',
+                )
+                resultado = obtener_evaluacion_datacredito_prestador(
+                    self.solicitud,
+                    solicitado_por=self.usuario,
+                    servicio='historial',
+                )
+                self.assertEqual(resultado.estado, estado_esperado)
+
+    @patch('contractors.services.datacredito_evaluacion.consultar_proveedor_datacredito_prestador')
     def test_forzar_consulta_exige_staff_permiso_y_justificacion(self, consultar):
         with self.assertRaises(PermissionDenied):
             obtener_evaluacion_datacredito_prestador(
