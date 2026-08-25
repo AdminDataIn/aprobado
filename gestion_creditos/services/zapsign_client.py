@@ -7,9 +7,10 @@ import requests
 import logging
 from typing import Dict, Optional
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
-from gestion_creditos.models import Pagare
+from gestion_creditos.models import Credito, Pagare
 
 logger = logging.getLogger('zapsign')
 
@@ -69,6 +70,7 @@ class ZapSignClient:
         brand_name: str = "Aprobado",
         external_id: Optional[str] = None,
         require_identity_validation: Optional[bool] = None,
+        require_document_validation: bool = False,
     ) -> Dict:
         """
         Crea un documento en ZapSign para firma.
@@ -130,6 +132,9 @@ class ZapSignClient:
         }
         if enable_selfie_validation:
             signer_payload["require_selfie_photo"] = True
+        if require_document_validation:
+            signer_payload["require_document_photo"] = True
+            signer_payload["require_document_validation"] = True
         if enable_selfie_validation and selfie_validation_type:
             signer_payload["selfie_validation_type"] = selfie_validation_type
 
@@ -309,6 +314,7 @@ def _obtener_datos_firmante(credito, detalle, usuario):
     return nombre_firmante, email_firmante, sorted(correos_copia)
 
 
+@transaction.atomic
 def enviar_pagare_a_zapsign(pagare: Pagare, url_pdf_publica: str) -> Pagare:
     """
     Envía un pagaré a ZapSign para firma electrónica.
@@ -325,11 +331,24 @@ def enviar_pagare_a_zapsign(pagare: Pagare, url_pdf_publica: str) -> Pagare:
         ValueError: Si el pagaré no está en estado válido
     """
 
+    if not getattr(pagare, 'pk', None):
+        raise ValueError("El pagaré debe existir antes de enviarlo a ZapSign")
+
+    referencia_pagare = Pagare.objects.only('pk', 'credito_id').get(pk=pagare.pk)
+    credito = (
+        Credito.objects
+        .select_for_update(of=('self',))
+        .get(pk=referencia_pagare.credito_id)
+    )
+    pagare = Pagare.objects.select_for_update().get(pk=referencia_pagare.pk)
+
+    if credito.estado == Credito.EstadoCredito.ANULADO:
+        raise ValueError("No se puede enviar un pagaré de un crédito ANULADO")
+
     # Validaciones
     if pagare.estado != Pagare.EstadoPagare.CREATED:
         raise ValueError(f"El pagaré debe estar en estado CREATED, actual: {pagare.estado}")
 
-    credito = pagare.credito
     detalle = credito.detalle
     usuario = credito.usuario
 

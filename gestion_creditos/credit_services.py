@@ -1,4 +1,4 @@
-from decimal import Decimal, ConversionSyntax, InvalidOperation
+from decimal import Decimal, ConversionSyntax, InvalidOperation, ROUND_HALF_UP
 import logging
 import uuid
 import hashlib
@@ -45,6 +45,17 @@ from django.urls import NoReverseMatch, reverse
 logger = logging.getLogger(__name__)
 
 MANUAL_PAYMENT_ROUNDING_TOLERANCE_DEFAULT = Decimal('100.00')
+TIPO_ABONO_CAPITAL_REDUCIR_CUOTA = 'CAPITAL'
+TIPO_ABONO_CAPITAL_REDUCIR_PLAZO = 'CAPITAL_REDUCIR_PLAZO'
+TIPOS_ABONO_CAPITAL = {
+    TIPO_ABONO_CAPITAL_REDUCIR_CUOTA,
+    TIPO_ABONO_CAPITAL_REDUCIR_PLAZO,
+}
+CENTAVO = Decimal('0.01')
+
+
+def _redondear_valor_monetario(valor):
+    return Decimal(str(valor)).quantize(CENTAVO, rounding=ROUND_HALF_UP)
 
 
 def obtener_tolerancia_redondeo_pago_manual():
@@ -1883,6 +1894,81 @@ def generar_plan_pagos_actual(credito):
     return plan
 
 
+def _calcular_plan_capital_reducir_plazo(
+    credito,
+    monto_abono,
+    cuotas_pendientes,
+    tasa_mensual,
+):
+    """Mantiene la cuota objetivo y reduce el número de vencimientos pendientes."""
+    capital_pendiente = _redondear_valor_monetario(credito.capital_pendiente or 0)
+    monto_abono = _redondear_valor_monetario(monto_abono)
+    nuevo_capital = _redondear_valor_monetario(capital_pendiente - monto_abono)
+    cuota_objetivo = _redondear_valor_monetario(credito.valor_cuota or 0)
+
+    plan = {
+        'cuotas': [],
+        'total_capital': Decimal('0.00'),
+        'total_intereses': Decimal('0.00'),
+        'total_pagar': Decimal('0.00'),
+        'num_cuotas': 0,
+        'cuota_objetivo': float(cuota_objetivo),
+    }
+    if nuevo_capital <= Decimal('0.00'):
+        return plan
+    if cuota_objetivo <= Decimal('0.00'):
+        raise ValidationError('El crédito no tiene una cuota vigente válida para reducir plazo.')
+
+    primer_interes = _redondear_valor_monetario(nuevo_capital * tasa_mensual)
+    if cuota_objetivo <= primer_interes:
+        raise ValidationError(
+            'La cuota vigente no alcanza a amortizar capital con la tasa actual.'
+        )
+
+    saldo = nuevo_capital
+    primera_cuota = cuotas_pendientes[0]
+    indice = 0
+    maximo_cuotas_seguridad = 1200
+
+    while saldo > Decimal('0.00'):
+        if indice >= maximo_cuotas_seguridad:
+            raise ValidationError('No fue posible extinguir el capital con la cuota vigente.')
+
+        interes = _redondear_valor_monetario(saldo * tasa_mensual)
+        total_para_extinguir = _redondear_valor_monetario(saldo + interes)
+        if cuota_objetivo >= total_para_extinguir:
+            valor_cuota = total_para_extinguir
+            capital = saldo
+            saldo_nuevo = Decimal('0.00')
+        else:
+            valor_cuota = cuota_objetivo
+            capital = _redondear_valor_monetario(valor_cuota - interes)
+            if capital <= Decimal('0.00'):
+                raise ValidationError(
+                    'La cuota vigente no alcanza a amortizar capital con la tasa actual.'
+                )
+            saldo_nuevo = _redondear_valor_monetario(saldo - capital)
+
+        plan['cuotas'].append({
+            'numero': primera_cuota.numero_cuota + indice,
+            'fecha_vencimiento': (
+                primera_cuota.fecha_vencimiento + relativedelta(months=indice)
+            ).isoformat(),
+            'capital': float(capital),
+            'interes': float(interes),
+            'cuota': float(valor_cuota),
+            'saldo_pendiente': float(saldo_nuevo),
+        })
+        plan['total_capital'] += capital
+        plan['total_intereses'] += interes
+        plan['total_pagar'] += valor_cuota
+        saldo = saldo_nuevo
+        indice += 1
+
+    plan['num_cuotas'] = len(plan['cuotas'])
+    return plan
+
+
 def calcular_plan_con_abono(credito, monto_abono, tipo_abono='NORMAL'):
     """
     Calcula el nuevo plan de pagos después de aplicar un abono.
@@ -1909,10 +1995,18 @@ def calcular_plan_con_abono(credito, monto_abono, tipo_abono='NORMAL'):
             'num_cuotas': 0
         }
 
-    tasa_mensual = credito.tasa_interes / Decimal('100')  # Convertir porcentaje a decimal
+    monto_abono = _redondear_valor_monetario(monto_abono)
+    tasa_mensual = Decimal(str(credito.tasa_interes or 0)) / Decimal('100')
     monto_restante = monto_abono
 
-    if tipo_abono == 'CAPITAL':
+    if tipo_abono == TIPO_ABONO_CAPITAL_REDUCIR_PLAZO:
+        plan = _calcular_plan_capital_reducir_plazo(
+            credito,
+            monto_abono,
+            cuotas_pendientes,
+            tasa_mensual,
+        )
+    elif tipo_abono == TIPO_ABONO_CAPITAL_REDUCIR_CUOTA:
         # Abono directo a capital - reduce el saldo pero mantiene el mismo plazo
         nuevo_capital_pendiente = max(Decimal('0.00'), credito.capital_pendiente - monto_abono)
 
@@ -2056,7 +2150,7 @@ def analizar_abono_credito(credito, monto_abono, tipo_abono='NORMAL'):
 
     # Determinar si requiere reestructuración
     requiere_reestructuracion = (
-        tipo_abono == 'CAPITAL' or
+        tipo_abono in TIPOS_ABONO_CAPITAL or
         monto_abono > (cuota_normal * 2)
     )
 
@@ -2073,8 +2167,11 @@ def analizar_abono_credito(credito, monto_abono, tipo_abono='NORMAL'):
 
     # Calcular nueva cuota mensual (si cambió)
     nueva_cuota = None
-    if tipo_abono == 'CAPITAL' and plan_nuevo['num_cuotas'] > 0:
-        nueva_cuota = Decimal(str(plan_nuevo['cuotas'][0]['cuota']))
+    if tipo_abono in TIPOS_ABONO_CAPITAL and plan_nuevo['num_cuotas'] > 0:
+        if tipo_abono == TIPO_ABONO_CAPITAL_REDUCIR_PLAZO:
+            nueva_cuota = _redondear_valor_monetario(credito.valor_cuota or 0)
+        else:
+            nueva_cuota = Decimal(str(plan_nuevo['cuotas'][0]['cuota']))
 
     resultado = {
         'requiere_reestructuracion': requiere_reestructuracion,
@@ -2090,10 +2187,16 @@ def analizar_abono_credito(credito, monto_abono, tipo_abono='NORMAL'):
     }
 
     if requiere_reestructuracion:
-        if tipo_abono == 'CAPITAL':
+        if tipo_abono == TIPO_ABONO_CAPITAL_REDUCIR_CUOTA:
             resultado['advertencia'] = (
                 'Este abono a capital reducirá significativamente sus intereses, '
                 'pero su cuota mensual cambiará. El plan de pagos será reestructurado.'
+            )
+        elif tipo_abono == TIPO_ABONO_CAPITAL_REDUCIR_PLAZO:
+            resultado['advertencia'] = (
+                'Este abono se aplicará directamente a capital. La cuota vigente se '
+                'mantendrá como objetivo y se reducirá el plazo restante; la última '
+                'cuota puede ser menor.'
             )
         else:
             resultado['advertencia'] = (
@@ -2123,7 +2226,16 @@ def aplicar_abono_credito(credito, monto_abono, tipo_abono, usuario, referencia_
     """
     from .models import ReestructuracionCredito
 
-    # Analizar el abono
+    credito = Credito.objects.select_for_update().get(pk=credito.pk)
+    monto_abono = _redondear_valor_monetario(monto_abono)
+    if monto_abono <= Decimal('0.00'):
+        raise ValidationError('El monto del abono debe ser mayor a cero.')
+    if tipo_abono in TIPOS_ABONO_CAPITAL:
+        capital_pendiente = _redondear_valor_monetario(credito.capital_pendiente or 0)
+        if monto_abono > capital_pendiente:
+            raise ValidationError('El abono no puede superar el capital pendiente.')
+
+    # Analizar el abono sobre la fila bloqueada dentro de la transacción.
     analisis = analizar_abono_credito(credito, monto_abono, tipo_abono)
 
     # Crear el registro del pago
@@ -2156,14 +2268,18 @@ def aplicar_abono_credito(credito, monto_abono, tipo_abono, usuario, referencia_
             capital_pendiente_nuevo=Decimal(str(analisis['plan_nuevo']['total_capital'])),
             plazo_restante_nuevo=analisis['nuevo_plazo'],
             ahorro_intereses=Decimal(str(analisis['ahorro_intereses'])),
-            cuota_mensual_nueva=Decimal(str(analisis['nueva_cuota'])) if tipo_abono == 'CAPITAL' else None,
+            cuota_mensual_nueva=(
+                Decimal(str(analisis['nueva_cuota']))
+                if tipo_abono in TIPOS_ABONO_CAPITAL
+                else None
+            ),
             aprobado_por=usuario,
             pago_relacionado=pago,
             observaciones=analisis['advertencia'] or ''
         )
 
     # Actualizar tabla de amortización
-    if tipo_abono == 'CAPITAL':
+    if tipo_abono in TIPOS_ABONO_CAPITAL:
         # Abono a capital: recalcular todas las cuotas pendientes
         registrar_detalle_contable_abono_capital(
             pago=pago,
@@ -2179,8 +2295,16 @@ def aplicar_abono_credito(credito, monto_abono, tipo_abono, usuario, referencia_
     credito.saldo_pendiente = Decimal(str(analisis['plan_nuevo']['total_pagar']))
     credito.capital_pendiente = Decimal(str(analisis['plan_nuevo']['total_capital']))
 
-    if tipo_abono == 'CAPITAL' and analisis['nueva_cuota']:
+    if tipo_abono in TIPOS_ABONO_CAPITAL and analisis['nueva_cuota']:
         credito.valor_cuota = Decimal(str(analisis['nueva_cuota']))
+
+    if tipo_abono in TIPOS_ABONO_CAPITAL:
+        cuotas_nuevas = analisis['plan_nuevo'].get('cuotas') or []
+        credito.fecha_proximo_pago = (
+            datetime.fromisoformat(cuotas_nuevas[0]['fecha_vencimiento']).date()
+            if cuotas_nuevas
+            else None
+        )
 
     # Si se pagó todo el crédito, cambiar estado
     if credito.saldo_pendiente <= Decimal('0.01'):
@@ -2188,7 +2312,13 @@ def aplicar_abono_credito(credito, monto_abono, tipo_abono, usuario, referencia_
         credito.saldo_pendiente = Decimal('0.00')
         credito.capital_pendiente = Decimal('0.00')
 
-    credito.save()
+    credito.save(update_fields=[
+        'saldo_pendiente',
+        'capital_pendiente',
+        'valor_cuota',
+        'fecha_proximo_pago',
+        'estado',
+    ])
 
     logger.info(
         f"Abono aplicado al crédito {credito.numero_credito}. "

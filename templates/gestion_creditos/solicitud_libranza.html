@@ -1087,18 +1087,39 @@ MODIFICAR:
             }
 
             setCompanyState('', 'Selecciona una empresa valida de la lista.');
-            empresaResultados.innerHTML = resultados.map((empresa) => `
-                <button type="button" class="company-search-option" data-id="${empresa.id}" data-nombre="${(empresa.razon_social || empresa.nombre).replace(/"/g, '&quot;')}">
-                    <strong>${empresa.razon_social || empresa.nombre}</strong>
-                    <small>${empresa.nombre}${empresa.nit ? ` · NIT ${empresa.nit}` : ''}</small>
-                </button>
-            `).join('');
-            empresaResultados.classList.add('visible');
+            const fragment = document.createDocumentFragment();
+            resultados.forEach((empresa) => {
+                const nombreVisible = empresa.razon_social || empresa.nombre;
+                const button = document.createElement('button');
+                const nombre = document.createElement('strong');
+                const detalle = document.createElement('small');
 
-            empresaResultados.querySelectorAll('.company-search-option').forEach((button, index) => {
-                const empresa = resultados[index];
-                button.addEventListener('click', () => seleccionarEmpresa(empresa));
+                button.type = 'button';
+                button.className = 'company-search-option';
+                button.dataset.id = empresa.id;
+                button.dataset.nombre = nombreVisible;
+                nombre.textContent = nombreVisible;
+                detalle.textContent = `${empresa.nombre}${empresa.nit ? ` · NIT ${empresa.nit}` : ''}`;
+                button.append(nombre, detalle);
+                fragment.appendChild(button);
             });
+            empresaResultados.replaceChildren(fragment);
+            empresaResultados.classList.add('visible');
+        }
+
+        function seleccionarEmpresaDesdeEvento(event) {
+            const option = event.target.closest('.company-search-option');
+            if (!option || !empresaResultados.contains(option)) {
+                return false;
+            }
+
+            event.preventDefault();
+            seleccionarEmpresa({
+                id: option.dataset.id,
+                nombre: option.dataset.nombre,
+                razon_social: option.dataset.nombre
+            });
+            return true;
         }
 
         function buscarEmpresasConvenio(query) {
@@ -1435,7 +1456,21 @@ MODIFICAR:
                 if (!empresaHiddenInput.value && empresaBusquedaInput.value.trim()) {
                     setCompanyState('is-invalid', 'Debes elegir una empresa de la lista de resultados.');
                 }
-                window.setTimeout(limpiarResultadosEmpresa, 180);
+                window.setTimeout(() => {
+                    if (!empresaResultados.contains(document.activeElement)) {
+                        limpiarResultadosEmpresa();
+                    }
+                }, 0);
+            });
+        }
+
+        if (empresaResultados) {
+            const selectionEvent = window.PointerEvent ? 'pointerdown' : 'mousedown';
+            empresaResultados.addEventListener(selectionEvent, seleccionarEmpresaDesdeEvento);
+            empresaResultados.addEventListener('click', function(event) {
+                if (event.detail === 0) {
+                    seleccionarEmpresaDesdeEvento(event);
+                }
             });
         }
 

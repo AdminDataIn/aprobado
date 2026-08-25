@@ -19,6 +19,7 @@ from gestion_creditos.models import (
 from gestion_creditos.services import filtrar_creditos, get_billetera_context, procesar_pagos_masivos_csv
 import io
 from datetime import date
+from unittest.mock import patch
 
 
 def pdf_upload(name):
@@ -281,7 +282,11 @@ class ZapSignWebhookViewTest(TestCase):
         self.assertFalse(log.processed)
         self.assertIn('Secret', log.error_message)
 
-    def test_webhook_doc_signed_actualiza_estado(self):
+    @patch(
+        'gestion_creditos.services.zapsign_client.descargar_pdf_firmado_pagare',
+        return_value=None,
+    )
+    def test_webhook_doc_signed_actualiza_estado(self, _descargar_pdf):
         payload = {
             'event': 'doc_signed',
             'token': 'token-123',
@@ -302,7 +307,11 @@ class ZapSignWebhookViewTest(TestCase):
         self.assertTrue(log.signature_valid)
         self.assertTrue(log.processed)
 
-    def test_webhook_doc_signed_idempotente(self):
+    @patch(
+        'gestion_creditos.services.zapsign_client.descargar_pdf_firmado_pagare',
+        return_value=None,
+    )
+    def test_webhook_doc_signed_idempotente(self, _descargar_pdf):
         payload = {
             'event': 'doc_signed',
             'token': 'token-123',
@@ -315,6 +324,95 @@ class ZapSignWebhookViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json().get('status'), 'already_processed')
         self.assertEqual(ZapSignWebhookLog.objects.count(), 2)
+
+    def test_webhook_firmado_tardio_ignora_credito_anulado_idempotentemente(self):
+        self.credito.estado = Credito.EstadoCredito.ANULADO
+        self.credito.save(update_fields=['estado'])
+        self.pagare.estado = Pagare.EstadoPagare.CANCELLED
+        self.pagare.zapsign_status = 'pending'
+        self.pagare.evidencias = {'anulacion_administrativa_credito': {'motivo': 'dato errado'}}
+        self.pagare.save(update_fields=['estado', 'zapsign_status', 'evidencias'])
+        payload = {
+            'event': 'doc_signed',
+            'token': 'token-123',
+            'status': 'signed',
+            'signed_file_url': 'https://firma.test/documento-firmado.pdf',
+            'signers': [{'ip': '1.2.3.4', 'status': 'signed'}],
+        }
+
+        with patch(
+            'gestion_creditos.views.integrations.credit_services.gestionar_cambio_estado_credito'
+        ) as cambiar_estado, patch(
+            'gestion_creditos.views.integrations.credit_services.iniciar_proceso_desembolso'
+        ) as iniciar_desembolso, patch(
+            'gestion_creditos.services.zapsign_client.descargar_pdf_firmado_pagare'
+        ) as descargar_pdf:
+            primera_respuesta = self._post(payload, secret=self.secret)
+            segunda_respuesta = self._post(payload, secret=self.secret)
+
+        self.assertEqual(primera_respuesta.status_code, 200)
+        self.assertEqual(segunda_respuesta.status_code, 200)
+        self.assertEqual(
+            primera_respuesta.json().get('status'),
+            'cancelled_credit_ignored',
+        )
+        self.assertEqual(
+            segunda_respuesta.json().get('status'),
+            'cancelled_credit_ignored',
+        )
+        self.credito.refresh_from_db()
+        self.pagare.refresh_from_db()
+        self.assertEqual(self.credito.estado, Credito.EstadoCredito.ANULADO)
+        self.assertIsNone(self.credito.fecha_desembolso)
+        self.assertEqual(self.pagare.estado, Pagare.EstadoPagare.CANCELLED)
+        self.assertEqual(self.pagare.zapsign_status, 'pending')
+        self.assertIsNone(self.pagare.fecha_firma)
+        self.assertFalse(self.pagare.archivo_pdf_firmado)
+        self.assertEqual(
+            self.pagare.evidencias,
+            {'anulacion_administrativa_credito': {'motivo': 'dato errado'}},
+        )
+        self.assertEqual(ZapSignWebhookLog.objects.count(), 2)
+        for webhook_log in ZapSignWebhookLog.objects.all():
+            self.assertTrue(webhook_log.signature_valid)
+            self.assertTrue(webhook_log.processed)
+            self.assertIn('ANULADO', webhook_log.error_message)
+        cambiar_estado.assert_not_called()
+        iniciar_desembolso.assert_not_called()
+        descargar_pdf.assert_not_called()
+
+    def test_webhook_rechazo_tardio_no_reabre_pagare_cancelado(self):
+        self.credito.estado = Credito.EstadoCredito.ANULADO
+        self.credito.save(update_fields=['estado'])
+        evidencias_anulacion = {
+            'anulacion_administrativa_credito': {'motivo': 'dato errado'}
+        }
+        self.pagare.estado = Pagare.EstadoPagare.CANCELLED
+        self.pagare.zapsign_status = 'pending'
+        self.pagare.evidencias = evidencias_anulacion
+        self.pagare.save(update_fields=['estado', 'zapsign_status', 'evidencias'])
+
+        response = self._post(
+            {
+                'event': 'doc_refused',
+                'token': 'token-123',
+                'status': 'refused',
+            },
+            secret=self.secret,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json().get('status'), 'cancelled_credit_ignored')
+        self.credito.refresh_from_db()
+        self.pagare.refresh_from_db()
+        self.assertEqual(self.credito.estado, Credito.EstadoCredito.ANULADO)
+        self.assertEqual(self.pagare.estado, Pagare.EstadoPagare.CANCELLED)
+        self.assertEqual(self.pagare.zapsign_status, 'pending')
+        self.assertIsNone(self.pagare.fecha_rechazo)
+        self.assertEqual(self.pagare.evidencias, evidencias_anulacion)
+        webhook_log = ZapSignWebhookLog.objects.get()
+        self.assertTrue(webhook_log.processed)
+        self.assertIn('ANULADO', webhook_log.error_message)
 
     def test_webhook_doc_refused(self):
         credito_refused = Credito.objects.create(

@@ -1117,7 +1117,7 @@ def analizar_abono_credito_view(request, credito_id):
                 'error': 'El crédito debe estar activo para realizar abonos.'
             }, status=400)
 
-        tipo_abono_ui = data.get('tipo_abono')  # 'CUOTAS' o 'CAPITAL'
+        tipo_abono_ui = data.get('tipo_abono')
 
         if tipo_abono_ui == 'CUOTAS':
             num_cuotas = int(data.get('num_cuotas') or 1)
@@ -1145,13 +1145,13 @@ def analizar_abono_credito_view(request, credito_id):
             else:
                 tipo_abono_servicio = 'MAYOR'
 
-        elif tipo_abono_ui == 'CAPITAL':
+        elif tipo_abono_ui in credit_services.TIPOS_ABONO_CAPITAL:
             # REGLA DE ORO: Solo 1 abono a capital por crédito
             from ..models import ReestructuracionCredito
 
             ya_tiene_abono_capital = ReestructuracionCredito.objects.filter(
                 credito=credito,
-                tipo_abono='CAPITAL'
+                tipo_abono__in=credit_services.TIPOS_ABONO_CAPITAL
             ).exists()
 
             if ya_tiene_abono_capital:
@@ -1174,7 +1174,7 @@ def analizar_abono_credito_view(request, credito_id):
                     'error': f'El monto no puede ser mayor al capital pendiente (${credito.capital_pendiente:,.0f}).'
                 }, status=400)
 
-            tipo_abono_servicio = 'CAPITAL'
+            tipo_abono_servicio = tipo_abono_ui
 
         else:
             return JsonResponse({
@@ -1191,7 +1191,7 @@ def analizar_abono_credito_view(request, credito_id):
         capital_actual = float(credito.capital_pendiente or plan_actual.get('total_capital', 0))
 
         capital_nuevo = plan_nuevo.get('total_capital', 0)
-        if tipo_abono_servicio == 'CAPITAL':
+        if tipo_abono_servicio in credit_services.TIPOS_ABONO_CAPITAL:
             capital_nuevo = float(max(Decimal('0.00'), (credito.capital_pendiente or Decimal('0.00')) - monto_abono))
 
         valor_cuota_nuevo = valor_cuota_actual
@@ -1291,13 +1291,13 @@ def confirmar_abono_credito_view(request, credito_id):
             monto_abono = credito.valor_cuota * num_cuotas
             tipo_abono_servicio = 'NORMAL' if num_cuotas <= 2 else 'MAYOR'
             descripcion = f'{num_cuotas} cuota(s)'
-        elif tipo_abono_ui == 'CAPITAL':
+        elif tipo_abono_ui in credit_services.TIPOS_ABONO_CAPITAL:
             # REGLA DE ORO: Validar que no haya un abono a capital previo
             from ..models import ReestructuracionCredito
 
             ya_tiene_abono_capital = ReestructuracionCredito.objects.filter(
                 credito=credito,
-                tipo_abono='CAPITAL'
+                tipo_abono__in=credit_services.TIPOS_ABONO_CAPITAL
             ).exists()
 
             if ya_tiene_abono_capital:
@@ -1305,7 +1305,7 @@ def confirmar_abono_credito_view(request, credito_id):
                 return redirect('usuariocreditos:dashboard_emprendimiento')
 
             monto_abono = Decimal(str(data.get('monto_capital') or '0'))
-            tipo_abono_servicio = 'CAPITAL'
+            tipo_abono_servicio = tipo_abono_ui
             descripcion = f'abono a capital'
         else:
             if is_json:

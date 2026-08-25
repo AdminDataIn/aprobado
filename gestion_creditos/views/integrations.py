@@ -1,6 +1,34 @@
 from .common import *
 
 
+def _bloquear_credito_y_pagare_zapsign(doc_token):
+    referencia_pagare = Pagare.objects.only('pk', 'credito_id').get(
+        zapsign_doc_token=doc_token
+    )
+    credito = (
+        Credito.objects
+        .select_for_update(of=('self',))
+        .get(pk=referencia_pagare.credito_id)
+    )
+    pagare = Pagare.objects.select_for_update().get(pk=referencia_pagare.pk)
+    return credito, pagare
+
+
+def _ignorar_webhook_zapsign_si_credito_anulado(webhook_log, credito, pagare):
+    if credito.estado != Credito.EstadoCredito.ANULADO:
+        return None
+
+    mensaje = (
+        'Evento ignorado porque el credito esta ANULADO. '
+        f'credito_id={credito.pk}; pagare_id={pagare.pk}; estado_pagare={pagare.estado}'
+    )
+    webhook_log.processed = True
+    webhook_log.error_message = mensaje
+    webhook_log.save(update_fields=['processed', 'error_message'])
+    logger.info(mensaje)
+    return JsonResponse({'status': 'cancelled_credit_ignored'}, status=200)
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def wompi_webhook_view(request):
@@ -221,8 +249,12 @@ def zapsign_webhook_view(request):
                 accion=_zapsign_action_from_payload(event, payload),
                 estado_proveedor=payload.get('status') or '',
             )
+            if resultado['estado'] == 'credit_cancelled_ignored':
+                webhook_log.error_message = (
+                    'Evento ignorado porque el credito de prestador esta ANULADO.'
+                )
             webhook_log.processed = True
-            webhook_log.save(update_fields=['processed'])
+            webhook_log.save(update_fields=['processed', 'error_message'])
             return JsonResponse({'status': resultado['estado']}, status=200)
         except Exception as exc:
             webhook_log.error_message = type(exc).__name__
@@ -273,14 +305,20 @@ def zapsign_webhook_view(request):
                     webhook_log.save(update_fields=['error_message'])
                     return JsonResponse({'error': 'Missing document token'}, status=400)
 
-                pagare = Pagare.objects.select_for_update().get(zapsign_doc_token=doc_token)
+                credito, pagare = _bloquear_credito_y_pagare_zapsign(doc_token)
+                respuesta_ignorada = _ignorar_webhook_zapsign_si_credito_anulado(
+                    webhook_log,
+                    credito,
+                    pagare,
+                )
+                if respuesta_ignorada:
+                    return respuesta_ignorada
 
                 if pagare.estado == Pagare.EstadoPagare.SIGNED:
                     webhook_log.processed = True
                     webhook_log.save(update_fields=['processed'])
                     return JsonResponse({'status': 'already_processed'}, status=200)
 
-                credito = pagare.credito
                 if credito.estado != Credito.EstadoCredito.PENDIENTE_FIRMA:
                     webhook_log.error_message = f"Estado inválido del crédito: {credito.estado}"
                     webhook_log.save(update_fields=['error_message'])
@@ -330,7 +368,15 @@ def zapsign_webhook_view(request):
                     webhook_log.save(update_fields=['error_message'])
                     return JsonResponse({'error': 'Missing document token'}, status=400)
 
-                pagare = Pagare.objects.select_for_update().get(zapsign_doc_token=doc_token)
+                credito, pagare = _bloquear_credito_y_pagare_zapsign(doc_token)
+                respuesta_ignorada = _ignorar_webhook_zapsign_si_credito_anulado(
+                    webhook_log,
+                    credito,
+                    pagare,
+                )
+                if respuesta_ignorada:
+                    return respuesta_ignorada
+
                 pagare.estado = Pagare.EstadoPagare.REFUSED
                 pagare.fecha_rechazo = timezone.now()
                 pagare.zapsign_status = payload.get('status')
