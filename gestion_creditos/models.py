@@ -1,13 +1,51 @@
-from django.db import models
+from django.db import models, transaction
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator, FileExtensionValidator
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.text import slugify
 from decimal import Decimal
+from pathlib import Path
 import uuid
 
 from gestion_creditos.services.name_normalization import build_full_name_upper, normalize_name_upper
+from gestion_creditos.storage import private_document_storage
+
+
+DOCUMENTO_EMPRESA_EXTENSIONS = ('pdf', 'jpg', 'jpeg', 'png', 'webp')
+DOCUMENTO_EMPRESA_MAX_BYTES = 8 * 1024 * 1024
+
+
+def ruta_documento_empresa(instance, filename):
+    extension = Path(filename or '').suffix.lower()
+    empresa_id = instance.empresa_id or 'sin-empresa'
+    tipo = slugify(instance.tipo_documento or 'documento')
+    return f'empresas/{empresa_id}/{tipo}/{uuid.uuid4().hex}{extension}'
+
+
+def validar_archivo_documento_empresa(archivo):
+    if archivo.size > DOCUMENTO_EMPRESA_MAX_BYTES:
+        raise ValidationError('El documento no debe superar 8 MB.')
+
+    extension = Path(archivo.name or '').suffix.lower()
+    posicion_inicial = archivo.tell() if hasattr(archivo, 'tell') else 0
+    try:
+        archivo.seek(0)
+        if extension == '.pdf':
+            if archivo.read(5) != b'%PDF-':
+                raise ValidationError('El archivo PDF no tiene un contenido válido.')
+            return
+
+        try:
+            from PIL import Image
+
+            imagen = Image.open(archivo)
+            imagen.verify()
+        except Exception as exc:
+            raise ValidationError('La imagen no tiene un contenido válido.') from exc
+    finally:
+        if hasattr(archivo, 'seek'):
+            archivo.seek(posicion_inicial)
 
 class AsesorComercial(models.Model):
     usuario = models.OneToOneField(
@@ -113,6 +151,13 @@ class Empresa(models.Model):
     representante_legal = models.CharField(max_length=160, blank=True)
     correo_contacto = models.EmailField(blank=True)
     telefono_contacto = models.CharField(max_length=20, blank=True)
+    pais = models.CharField(max_length=80, blank=True, default='Colombia')
+    departamento = models.CharField(max_length=120, blank=True)
+    municipio = models.CharField(max_length=120, blank=True)
+    ciudad = models.CharField(max_length=120, blank=True)
+    direccion_principal = models.CharField(max_length=255, blank=True)
+    latitud = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitud = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     asesor_comercial = models.ForeignKey(
         AsesorComercial,
         on_delete=models.SET_NULL,
@@ -191,6 +236,129 @@ class Empresa(models.Model):
     @property
     def permite_marketplace(self):
         return self.tipo_empresa in {self.TipoEmpresa.MARKETPLACE_EXTERNA, self.TipoEmpresa.MIXTA}
+
+
+class DocumentoEmpresa(models.Model):
+    class TipoDocumento(models.TextChoices):
+        RUT = 'RUT', 'RUT'
+        CAMARA_COMERCIO = 'CAMARA_COMERCIO', 'Cámara de Comercio'
+        CEDULA_REPRESENTANTE_LEGAL = (
+            'CEDULA_REPRESENTANTE_LEGAL',
+            'Cédula del representante legal',
+        )
+
+    class EstadoDocumento(models.TextChoices):
+        VIGENTE = 'VIGENTE', 'Vigente'
+        VENCIDO = 'VENCIDO', 'Vencido'
+        REEMPLAZADO = 'REEMPLAZADO', 'Reemplazado'
+        ANULADO = 'ANULADO', 'Anulado'
+
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.PROTECT,
+        related_name='documentos_institucionales',
+    )
+    tipo_documento = models.CharField(max_length=40, choices=TipoDocumento.choices)
+    archivo = models.FileField(
+        upload_to=ruta_documento_empresa,
+        storage=private_document_storage,
+        validators=[
+            FileExtensionValidator(DOCUMENTO_EMPRESA_EXTENSIONS),
+            validar_archivo_documento_empresa,
+        ],
+    )
+    fecha_expedicion = models.DateField(null=True, blank=True)
+    fecha_vencimiento = models.DateField(null=True, blank=True)
+    estado = models.CharField(
+        max_length=20,
+        choices=EstadoDocumento.choices,
+        default=EstadoDocumento.VIGENTE,
+    )
+    observaciones = models.TextField(blank=True)
+    cargado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='documentos_empresa_cargados',
+    )
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['empresa', 'tipo_documento', '-creado_en']
+        verbose_name = 'Documento de empresa'
+        verbose_name_plural = 'Documentos de empresa'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['empresa', 'tipo_documento'],
+                condition=models.Q(activo=True),
+                name='uniq_doc_empresa_tipo_activo',
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=['empresa', 'tipo_documento', 'estado'],
+                name='doc_empresa_tipo_estado_idx',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.empresa} - {self.get_tipo_documento_display()} ({self.estado})'
+
+    def clean(self):
+        super().clean()
+        if (
+            self.fecha_expedicion
+            and self.fecha_vencimiento
+            and self.fecha_vencimiento < self.fecha_expedicion
+        ):
+            raise ValidationError({
+                'fecha_vencimiento': 'La fecha de vencimiento no puede ser anterior a la expedición.',
+            })
+        if self.activo and self.estado != self.EstadoDocumento.VIGENTE:
+            raise ValidationError({'activo': 'Solo un documento vigente puede permanecer activo.'})
+        if not self.activo and self.estado == self.EstadoDocumento.VIGENTE:
+            raise ValidationError({'estado': 'Un documento vigente debe permanecer activo.'})
+
+        if not self.pk:
+            return
+        anterior = type(self).objects.filter(pk=self.pk).only(
+            'empresa_id', 'tipo_documento', 'archivo', 'activo',
+        ).first()
+        if not anterior:
+            return
+        if anterior.empresa_id != self.empresa_id or anterior.tipo_documento != self.tipo_documento:
+            raise ValidationError('La empresa y el tipo no pueden cambiar en una versión existente.')
+        if anterior.archivo.name != self.archivo.name:
+            raise ValidationError({'archivo': 'Para reemplazar el archivo debes crear una nueva versión.'})
+        if not anterior.activo and self.activo:
+            raise ValidationError({'activo': 'Una versión histórica no puede reactivarse.'})
+
+    def save(self, *args, **kwargs):
+        es_nuevo_activo = self._state.adding and self.activo
+        self.full_clean(validate_constraints=False)
+        if not es_nuevo_activo:
+            return super().save(*args, **kwargs)
+
+        with transaction.atomic():
+            Empresa.objects.select_for_update().get(pk=self.empresa_id)
+            type(self).objects.filter(
+                empresa_id=self.empresa_id,
+                tipo_documento=self.tipo_documento,
+                activo=True,
+            ).update(
+                activo=False,
+                estado=self.EstadoDocumento.REEMPLAZADO,
+                actualizado_en=timezone.now(),
+            )
+            return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError(
+            'Los documentos institucionales no se eliminan; deben reemplazarse o anularse.'
+        )
 
 
 class MarketplaceItem(models.Model):

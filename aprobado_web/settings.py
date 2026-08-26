@@ -371,6 +371,10 @@ if WHITENOISE_AVAILABLE:
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.environ.get('MEDIA_ROOT', os.path.join(BASE_DIR, 'media'))
+PRIVATE_DOCUMENTS_ROOT = os.environ.get(
+    'PRIVATE_DOCUMENTS_ROOT',
+    os.path.join(BASE_DIR, 'private_documents'),
+)
 
 # ========================
 # Seguridad

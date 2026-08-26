@@ -18,6 +18,7 @@ from django.utils import timezone
 from django.db import transaction
 
 from gestion_creditos.models import AsesorComercial, Credito, Empresa
+from gestion_creditos.services.empresa_geografia import obtener_presencia_empresas
 from gestion_creditos.services.libranza_rules import LIBRANZA_MONTO_MAXIMO, LIBRANZA_MONTO_MINIMO_PUBLICO
 from gestion_creditos.services.tasa_service import obtener_tasa_credito
 from .forms import (
@@ -520,33 +521,6 @@ class MarketplaceAdminLoginView(MarketingLoginView):
 
 
 # Vista para la Landing Page de Crédito de Libranza
-_CENTROIDES_COLOMBIA = {
-    ('bogota dc', 'bogota'): (4.7110, -74.0721),
-    ('cundinamarca', 'bogota'): (4.7110, -74.0721),
-    ('meta', 'villavicencio'): (4.1420, -73.6266),
-    ('antioquia', 'medellin'): (6.2442, -75.5812),
-    ('casanare', 'yopal'): (5.3378, -72.3959),
-    ('valle del cauca', 'cali'): (3.4516, -76.5320),
-    ('atlantico', 'barranquilla'): (10.9685, -74.7813),
-    ('santander', 'bucaramanga'): (7.1193, -73.1227),
-    ('bolivar', 'cartagena'): (10.3910, -75.4794),
-    ('caldas', 'manizales'): (5.0703, -75.5138),
-    ('quindio', 'armenia'): (4.5339, -75.6811),
-}
-
-
-def _normalizar_texto_ubicacion(valor):
-    import unicodedata
-
-    texto = str(valor or '').strip().lower()
-    texto = ''.join(
-        caracter
-        for caracter in unicodedata.normalize('NFKD', texto)
-        if not unicodedata.combining(caracter)
-    )
-    return ' '.join(texto.replace('.', ' ').replace(',', ' ').split())
-
-
 def _iniciales_empresa(nombre):
     partes = [parte for parte in str(nombre or '').split() if parte]
     if not partes:
@@ -554,43 +528,8 @@ def _iniciales_empresa(nombre):
     return ''.join(parte[0].upper() for parte in partes[:2])
 
 
-def _extraer_ubicacion_empresa(empresa):
-    ciudad = (
-        getattr(empresa, 'ciudad', '')
-        or getattr(empresa, 'ciudad_empresa', '')
-        or getattr(empresa, 'municipio', '')
-    )
-    departamento = (
-        getattr(empresa, 'departamento', '')
-        or getattr(empresa, 'departamento_empresa', '')
-    )
-    latitud = getattr(empresa, 'latitud', None)
-    longitud = getattr(empresa, 'longitud', None)
-
-    if latitud is None or longitud is None:
-        llave = (_normalizar_texto_ubicacion(departamento), _normalizar_texto_ubicacion(ciudad))
-        coordenadas = _CENTROIDES_COLOMBIA.get(llave)
-        if coordenadas:
-            latitud, longitud = coordenadas
-
-    if not ciudad and not departamento:
-        return None
-
-    return {
-        'ciudad': ciudad or departamento,
-        'municipio': ciudad or departamento,
-        'departamento': departamento or 'Colombia',
-        'latitud': float(latitud) if latitud is not None else None,
-        'longitud': float(longitud) if longitud is not None else None,
-    }
-
-
-def _build_landing_trusted_companies():
-    companies = (
-        Empresa.objects
-        .filter(convenio_activo=True)
-        .order_by('nombre')
-    )
+def _build_landing_trusted_companies(companies=None):
+    companies = companies if companies is not None else Empresa.objects.filter(convenio_activo=True)
     trusted_companies = []
     for company in companies:
         logo_url = None
@@ -598,60 +537,18 @@ def _build_landing_trusted_companies():
             logo_url = company.logo.url
         except Exception:
             logo_url = None
-        ubicacion = _extraer_ubicacion_empresa(company)
         trusted_companies.append({
             'nombre': company.nombre,
             'logo_url': logo_url,
             'iniciales': _iniciales_empresa(company.nombre),
-            'ubicacion': ubicacion,
             'slug': company.slug,
         })
     return trusted_companies
 
 
-def _build_landing_presencia(companies):
-    ubicaciones = {}
-    sin_ubicacion = 0
-
-    for company in companies:
-        ubicacion = company.get('ubicacion') or {}
-        ciudad = ubicacion.get('ciudad') or ubicacion.get('municipio')
-        departamento = ubicacion.get('departamento')
-        latitud = ubicacion.get('latitud')
-        longitud = ubicacion.get('longitud')
-        if not ciudad or not departamento or latitud is None or longitud is None:
-            sin_ubicacion += 1
-            continue
-
-        llave = (
-            _normalizar_texto_ubicacion(departamento),
-            _normalizar_texto_ubicacion(ciudad),
-        )
-        if llave not in ubicaciones:
-            ubicaciones[llave] = {
-                'ciudad': ciudad,
-                'municipio': ciudad,
-                'departamento': departamento,
-                'latitud': latitud,
-                'longitud': longitud,
-                'empresas': 0,
-            }
-        ubicaciones[llave]['empresas'] += 1
-
-    mapa_ubicaciones = sorted(
-        ubicaciones.values(),
-        key=lambda item: (-item['empresas'], item['departamento'], item['ciudad']),
-    )
-    departamentos = sorted({item['departamento'] for item in mapa_ubicaciones})
-    ciudades = sorted({item['ciudad'] for item in mapa_ubicaciones})
-    return {
-        'con_ubicacion_registrada': sum(item['empresas'] for item in mapa_ubicaciones),
-        'sin_ubicacion_registrada': sin_ubicacion,
-        'departamentos_con_presencia': departamentos,
-        'ciudades_con_presencia': ciudades,
-        'top_zonas': mapa_ubicaciones[:8],
-        'mapa_ubicaciones': mapa_ubicaciones,
-    }
+def _build_landing_presencia(companies=None):
+    companies = companies if companies is not None else Empresa.objects.filter(convenio_activo=True)
+    return obtener_presencia_empresas(companies)
 
 
 def _build_landing_backers():
@@ -698,7 +595,8 @@ def libranza_landing(request):
     """
     tasa_libranza = obtener_tasa_credito(Credito.LineaCredito.LIBRANZA)
     tasa_libranza_decimal = tasa_libranza / Decimal('100')
-    landing_trusted_companies = _build_landing_trusted_companies()
+    landing_companies = Empresa.objects.filter(convenio_activo=True).order_by('nombre')
+    landing_trusted_companies = _build_landing_trusted_companies(landing_companies)
     context = {
         'libranza_tasa_mensual': tasa_libranza,
         'libranza_tasa_decimal': tasa_libranza_decimal,
@@ -720,7 +618,7 @@ def libranza_landing(request):
             },
         ],
         'landing_trusted_companies': landing_trusted_companies,
-        'landing_presencia': _build_landing_presencia(landing_trusted_companies),
+        'landing_presencia': _build_landing_presencia(landing_companies),
         'landing_backers': _build_landing_backers(),
         'landing_testimonials_enabled': False,
     }

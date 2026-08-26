@@ -329,8 +329,8 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                             <span>departamentos</span>
                         </div>
                         <div class="libranza-presence-metric">
-                            <strong>{{ landing_presencia.ciudades_con_presencia|length }}</strong>
-                            <span>ciudades y municipios</span>
+                            <strong>{{ landing_presencia.municipios_con_presencia|length }}</strong>
+                            <span>municipios</span>
                         </div>
                         <div class="libranza-presence-metric is-muted">
                             <strong>{{ landing_presencia.sin_ubicacion_registrada|default:0 }}</strong>
@@ -339,10 +339,10 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                     </div>
                     {% if landing_presencia.top_zonas %}
                     <div class="libranza-active-cities">
-                        <p>Ciudades activas</p>
+                        <p>Municipios activos</p>
                         <div>
                             {% for zona in landing_presencia.top_zonas|slice:":8" %}
-                            <span>{{ zona.ciudad|default:zona.municipio|default:zona.departamento }}</span>
+                            <span>{{ zona.municipio|default:zona.departamento }}</span>
                             {% endfor %}
                         </div>
                     </div>
@@ -350,6 +350,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                 </div>
                 <div class="libranza-map-card" aria-label="Mapa zonal de presencia en Colombia">
                     {{ landing_presencia.mapa_ubicaciones|json_script:"libranza-presence-map-data" }}
+                    {{ landing_presencia.departamentos_con_presencia|json_script:"libranza-presence-departments-data" }}
                     <div
                         class="libranza-map-frame"
                         id="libranza-colombia-map"
@@ -818,12 +819,6 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         filter: drop-shadow(0 8px 16px rgba(6, 119, 163, 0.26));
     }
 
-    .libranza-map-point-glow {
-        fill: #13b8d0;
-        opacity: 0.18;
-        animation: libranzaMapPulse 2s ease-in-out infinite;
-    }
-
     .libranza-map-point-group:hover .libranza-map-point,
     .libranza-map-point-group:focus .libranza-map-point {
         fill: #0a192f;
@@ -838,11 +833,6 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         stroke-width: 3px;
         stroke-linejoin: round;
         pointer-events: none;
-    }
-
-    @keyframes libranzaMapPulse {
-        0%, 100% { opacity: 0.18; transform: scale(1); }
-        50% { opacity: 0.34; transform: scale(1.22); }
     }
 
     .libranza-map-tooltip {
@@ -1661,16 +1651,23 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
     function renderizarMapaPresenciaNacional() {
         const mapFrame = document.getElementById('libranza-colombia-map');
         const dataScript = document.getElementById('libranza-presence-map-data');
+        const departmentsScript = document.getElementById('libranza-presence-departments-data');
         if (!mapFrame || !dataScript) return;
 
         const loading = document.getElementById('libranza-map-loading');
         const tooltip = document.getElementById('libranza-map-tooltip');
         const geojsonUrl = mapFrame.dataset.geojsonLocalUrl;
         let ubicaciones = [];
+        let departamentosConPresencia = [];
         try {
             ubicaciones = JSON.parse(dataScript.textContent || '[]');
         } catch (error) {
             ubicaciones = [];
+        }
+        try {
+            departamentosConPresencia = JSON.parse(departmentsScript?.textContent || '[]');
+        } catch (error) {
+            departamentosConPresencia = [];
         }
 
         const crearSvg = (nombre, atributos = {}) => {
@@ -1746,7 +1743,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                     y: offsetY + (bounds.maxLat - lat) * scale,
                 });
 
-                const departamentosActivos = new Set(ubicaciones.map((item) => normalizar(item.departamento)));
+                const departamentosActivos = new Set(departamentosConPresencia.map(normalizar));
                 const svg = crearSvg('svg', {
                     class: 'libranza-colombia-map-svg',
                     viewBox: `0 0 ${width} ${height}`,
@@ -1771,22 +1768,21 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                     if (ubicacion.latitud == null || ubicacion.longitud == null) return;
                     const punto = proyectar(Number(ubicacion.longitud), Number(ubicacion.latitud));
                     const total = Number(ubicacion.empresas || 1);
-                    const radio = Math.min(17, 7 + total * 2.2);
+                    const radio = 9;
                     const grupo = crearSvg('g', {
                         class: 'libranza-map-point-group',
                         tabindex: '0',
                         role: 'button',
-                        'aria-label': `${ubicacion.ciudad}, ${ubicacion.departamento}: ${total} empresa${total === 1 ? '' : 's'}`,
+                        'aria-label': `${ubicacion.municipio || ubicacion.departamento}, ${ubicacion.departamento || 'Colombia'}: ${total} empresa${total === 1 ? '' : 's'}`,
                     });
-                    grupo.appendChild(crearSvg('circle', { class: 'libranza-map-point-glow', cx: punto.x, cy: punto.y, r: radio + 11 }));
                     grupo.appendChild(crearSvg('circle', { class: 'libranza-map-point', cx: punto.x, cy: punto.y, r: radio }));
                     const texto = crearSvg('text', { class: 'libranza-map-label', x: punto.x + radio + 5, y: punto.y + 4 });
-                    texto.textContent = ubicacion.ciudad || ubicacion.departamento;
+                    texto.textContent = ubicacion.municipio || ubicacion.departamento;
                     grupo.appendChild(texto);
 
                     const mostrarTooltip = () => {
                         if (!tooltip) return;
-                        tooltip.innerHTML = `<strong>${ubicacion.ciudad || ubicacion.departamento}</strong>${ubicacion.departamento || 'Colombia'} · ${total} empresa${total === 1 ? '' : 's'}`;
+                        tooltip.innerHTML = `<strong>${ubicacion.municipio || ubicacion.departamento}</strong>${ubicacion.departamento || 'Colombia'} · ${total} empresa${total === 1 ? '' : 's'}`;
                         tooltip.style.left = `${(punto.x / width) * 100}%`;
                         tooltip.style.top = `${(punto.y / height) * 100}%`;
                         tooltip.style.opacity = '1';
