@@ -2716,3 +2716,93 @@ class CreditoReglaEspecialAudit(models.Model):
         credito_ref = self.credito.numero_credito if self.credito_id else 'sin credito'
         return f"Regla especial {credito_ref} - ${self.amount} / {self.term_months} meses"
 
+
+class CondicionOriginacionLibranza(models.Model):
+    class Origen(models.TextChoices):
+        NORMAL = 'NORMAL', 'Normal'
+        ESPECIAL = 'ESPECIAL', 'Especial'
+
+    credito = models.OneToOneField(
+        Credito,
+        on_delete=models.PROTECT,
+        related_name='condicion_originacion_libranza',
+    )
+    fecha_referencia = models.DateTimeField()
+    codigo_politica = models.CharField(max_length=64)
+    version_politica = models.CharField(max_length=40)
+    origen = models.CharField(max_length=10, choices=Origen.choices)
+    monto_base = models.DecimalField(max_digits=14, decimal_places=2)
+    plazo = models.PositiveSmallIntegerField()
+    porcentaje_originacion = models.DecimalField(
+        max_digits=7,
+        decimal_places=4,
+        null=True,
+        blank=True,
+    )
+    valor_originacion = models.DecimalField(max_digits=14, decimal_places=2)
+    porcentaje_iva = models.DecimalField(max_digits=7, decimal_places=4)
+    valor_iva = models.DecimalField(max_digits=14, decimal_places=2)
+    regla_especial = models.OneToOneField(
+        CreditoReglaEspecialAudit,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='condicion_originacion',
+    )
+    calculado_en = models.DateTimeField(auto_now_add=True)
+    snapshot_hash = models.CharField(max_length=64, unique=True, editable=False)
+
+    _CAMPOS_INMUTABLES = (
+        'credito_id',
+        'fecha_referencia',
+        'codigo_politica',
+        'version_politica',
+        'origen',
+        'monto_base',
+        'plazo',
+        'porcentaje_originacion',
+        'valor_originacion',
+        'porcentaje_iva',
+        'valor_iva',
+        'regla_especial_id',
+        'snapshot_hash',
+    )
+
+    class Meta:
+        ordering = ['-calculado_en']
+        verbose_name = 'Condicion de originacion Libranza'
+        verbose_name_plural = 'Condiciones de originacion Libranza'
+        indexes = [
+            models.Index(fields=['codigo_politica', 'fecha_referencia'], name='cond_orig_lib_pol_fecha_idx'),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.credito_id and self.credito.linea != Credito.LineaCredito.LIBRANZA:
+            raise ValidationError('El snapshot solo puede asociarse a un credito de Libranza.')
+        if self.origen == self.Origen.ESPECIAL and not self.regla_especial_id:
+            raise ValidationError('Una condicion especial requiere su auditoria vinculada.')
+        if self.origen == self.Origen.NORMAL and self.regla_especial_id:
+            raise ValidationError('Una condicion normal no puede vincular una regla especial.')
+
+    def save(self, *args, **kwargs):
+        from gestion_creditos.services.costo_originacion_libranza import calcular_hash_snapshot
+
+        if self.pk:
+            anterior = type(self).objects.get(pk=self.pk)
+            if any(
+                getattr(anterior, campo) != getattr(self, campo)
+                for campo in self._CAMPOS_INMUTABLES
+            ):
+                raise ValidationError('El snapshot de originacion Libranza es inmutable.')
+        else:
+            self.full_clean(exclude=['snapshot_hash'])
+            self.snapshot_hash = calcular_hash_snapshot(self)
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('El snapshot de originacion Libranza no se puede eliminar.')
+
+    def __str__(self):
+        return f'{self.credito.numero_credito} - {self.codigo_politica} v{self.version_politica}'
+

@@ -16,7 +16,7 @@ from .models import (
     MarketplacePedido, MarketplacePedidoItem, MarketplacePago, MarketplaceDireccionEntrega,
     MarketplaceLiquidacionEmpresa, InvestorAccount, InvestmentPosition, InvestmentCashflow,
     InvestmentReturnSnapshot, InvestmentEvent, VinculoLaboralEmpresa, CreditoAdelantoNomina,
-    PagoComisionEjecutivo, AprobacionPagadorLibranza, DocumentoEmpresa,
+    PagoComisionEjecutivo, AprobacionPagadorLibranza, CondicionOriginacionLibranza, DocumentoEmpresa,
     OrigenCreditoPrestador, SecuenciaNumeroCredito,
 )
 from django.utils import timezone
@@ -1102,6 +1102,33 @@ class NotificacionAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('usuario')
+
+
+@admin.register(CondicionOriginacionLibranza)
+class CondicionOriginacionLibranzaAdmin(admin.ModelAdmin):
+    list_display = (
+        'credito',
+        'codigo_politica',
+        'version_politica',
+        'origen',
+        'monto_base',
+        'plazo',
+        'calculado_en',
+    )
+    list_filter = ('origen', 'codigo_politica', 'version_politica')
+    search_fields = ('credito__numero_credito',)
+    readonly_fields = tuple(
+        field.name for field in CondicionOriginacionLibranza._meta.fields
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 #? ----- ADMINISTRACIÃ“N DE PAGARÃ‰S (ZapSign) -----

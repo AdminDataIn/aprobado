@@ -685,7 +685,7 @@ MODIFICAR:
                                 <span id="resumen-monto">-</span>
                             </div>
                             <div class="credito-resumen-row">
-                                <span>Costo de originación (10%):</span>
+                                <span id="resumen-comision-label">Costo de originación:</span>
                                 <span id="resumen-comision">-</span>
                             </div>
                             <div class="credito-resumen-row">
@@ -704,6 +704,7 @@ MODIFICAR:
                                 <span>Cuota mensual:</span>
                                 <span id="resumen-cuota">-</span>
                             </div>
+                            <p id="resumen-simulacion-error" role="status" aria-live="polite"></p>
                         </div>
                     </aside>
                 </div>
@@ -903,11 +904,13 @@ MODIFICAR:
         const ingresosMensualesInput = document.getElementById('ingresos_mensuales');
         const plazoSelect = document.getElementById('plazo');
         const resumenMonto = document.getElementById('resumen-monto');
+        const resumenComisionLabel = document.getElementById('resumen-comision-label');
         const resumenComision = document.getElementById('resumen-comision');
         const resumenIva = document.getElementById('resumen-iva');
         const resumenIntereses = document.getElementById('resumen-intereses');
         const resumenTotal = document.getElementById('resumen-total');
         const resumenCuota = document.getElementById('resumen-cuota');
+        const resumenSimulacionError = document.getElementById('resumen-simulacion-error');
         // Referencias del flujo de camara: un modal reutilizable alimenta los tres inputs de documentos.
         const cameraModal = document.getElementById('cameraCaptureModal');
         const cameraPreview = document.getElementById('cameraPreview');
@@ -923,7 +926,9 @@ MODIFICAR:
         let lockedMonto = null;
         let lockedPlazo = null;
         const simuladorBaseUrl = "{% url 'libranza:simulador' %}";
+        const simulacionApiUrl = "{% url 'libranza:simular_originacion' %}";
         const volverSimuladorLink = document.getElementById('volver-simulador-link');
+        let simulacionAbortController = null;
         let activeCameraInput = null;
         let activeCameraLabel = '';
         let currentCameraStream = null;
@@ -1270,14 +1275,6 @@ MODIFICAR:
             }
         }
 
-        function calcularCuotaAnualidad(monto, tasaMensual, meses) {
-            if (tasaMensual === 0) {
-                return monto / meses;
-            }
-            const factor = Math.pow(1 + tasaMensual, meses);
-            return monto * (tasaMensual * factor) / (factor - 1);
-        }
-
         function limpiarResumen() {
             if (!resumenMonto) {
                 return;
@@ -1288,6 +1285,9 @@ MODIFICAR:
             resumenIntereses.textContent = '-';
             resumenTotal.textContent = '-';
             resumenCuota.textContent = '-';
+            if (resumenSimulacionError) {
+                resumenSimulacionError.textContent = '';
+            }
         }
 
         function obtenerMontoActual() {
@@ -1327,7 +1327,7 @@ MODIFICAR:
             volverSimuladorLink.href = `${simuladorBaseUrl}?monto=${montoSolicitado}&plazo=${meses}`;
         }
 
-        function actualizarResumenCredito() {
+        async function actualizarResumenCredito() {
             if (!resumenMonto) {
                 return;
             }
@@ -1340,22 +1340,48 @@ MODIFICAR:
                 return;
             }
 
-            const comision = montoSolicitado * 0.10;
-            const ivaComision = comision * 0.19;
-
-            const capitalFinanciado = montoSolicitado + comision + ivaComision;
-            const tasaMensual = parseFloat('{{ libranza_tasa_decimal_js|default:"0.019" }}');
-            const cuotaMensual = calcularCuotaAnualidad(capitalFinanciado, tasaMensual, meses);
-            const totalAPagar = cuotaMensual * meses;
-            const totalIntereses = totalAPagar - capitalFinanciado;
-
             resumenMonto.textContent = formatCurrency(montoSolicitado);
-            resumenComision.textContent = formatCurrency(comision);
-            resumenIva.textContent = formatCurrency(ivaComision);
-            resumenIntereses.textContent = formatCurrency(totalIntereses);
-            resumenTotal.textContent = formatCurrency(totalAPagar);
-            resumenCuota.textContent = formatCurrency(cuotaMensual);
             actualizarVolverSimuladorLink();
+
+            if (simulacionAbortController) {
+                simulacionAbortController.abort();
+            }
+            simulacionAbortController = new AbortController();
+            if (resumenSimulacionError) {
+                resumenSimulacionError.textContent = 'Calculando condiciones...';
+            }
+            try {
+                const params = new URLSearchParams({monto: String(montoSolicitado), plazo: String(meses)});
+                const response = await fetch(`${simulacionApiUrl}?${params.toString()}`, {
+                    headers: {'Accept': 'application/json'},
+                    signal: simulacionAbortController.signal,
+                });
+                const data = await response.json();
+                if (!response.ok || !data.ok) {
+                    throw new Error(data.error || 'No fue posible calcular las condiciones.');
+                }
+                resumenComisionLabel.textContent = `Costo de originación (${parseFloat(data.porcentaje_originacion)}%):`;
+                resumenComision.textContent = formatCurrency(parseFloat(data.valor_originacion));
+                resumenIva.textContent = formatCurrency(parseFloat(data.valor_iva));
+                resumenIntereses.textContent = formatCurrency(parseFloat(data.total_intereses));
+                resumenTotal.textContent = formatCurrency(parseFloat(data.total_a_pagar));
+                resumenCuota.textContent = formatCurrency(parseFloat(data.cuota_mensual));
+                if (resumenSimulacionError) {
+                    resumenSimulacionError.textContent = '';
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    return;
+                }
+                resumenComision.textContent = '-';
+                resumenIva.textContent = '-';
+                resumenIntereses.textContent = '-';
+                resumenTotal.textContent = '-';
+                resumenCuota.textContent = '-';
+                if (resumenSimulacionError) {
+                    resumenSimulacionError.textContent = error.message;
+                }
+            }
         }
 
         function aplicarDatosSimulador() {

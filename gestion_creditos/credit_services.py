@@ -847,8 +847,36 @@ def activar_credito(credito, componentes_financieros=None):
     tasa_interes = obtener_tasa_credito_aplicada(credito, tasa_interes)
 
     # ✅ Calcular componentes financieros
-    comision = credito.comision or (credito.monto_aprobado * Decimal('0.10'))
-    iva_comision = credito.iva_comision or (comision * Decimal('0.19'))
+    if credito.linea == Credito.LineaCredito.LIBRANZA:
+        from gestion_creditos.models import CondicionOriginacionLibranza
+        from gestion_creditos.services.costo_originacion_libranza import (
+            requiere_snapshot_originacion_libranza,
+            validar_snapshot_originacion_libranza,
+        )
+
+        try:
+            condicion_originacion = credito.condicion_originacion_libranza
+        except CondicionOriginacionLibranza.DoesNotExist:
+            condicion_originacion = None
+
+        if condicion_originacion is not None:
+            validar_snapshot_originacion_libranza(credito, condicion_originacion)
+            comision = condicion_originacion.valor_originacion
+            iva_comision = condicion_originacion.valor_iva
+        elif requiere_snapshot_originacion_libranza(credito):
+            raise ValidationError(
+                'Una Libranza nueva requiere condiciones de originacion congeladas antes de activarse.'
+            )
+        else:
+            comision = credito.comision if credito.comision is not None else (
+                credito.monto_aprobado * Decimal('0.10')
+            )
+            iva_comision = credito.iva_comision if credito.iva_comision is not None else (
+                comision * Decimal('0.19')
+            )
+    else:
+        comision = credito.comision or (credito.monto_aprobado * Decimal('0.10'))
+        iva_comision = credito.iva_comision or (comision * Decimal('0.19'))
 
     # El capital financiado incluye monto + comisión + IVA (esto se paga en cuotas)
     capital_financiado = credito.monto_aprobado + comision + iva_comision
