@@ -32,14 +32,14 @@
             box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
         }
         .dashboard-toolbar .toolbar-form {
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(6, minmax(145px, 1fr));
             align-items: end;
             gap: 0.75rem;
-            flex-wrap: wrap;
-            margin-left: auto;
+            width: 100%;
         }
         .dashboard-toolbar .toolbar-field {
-            min-width: 190px;
+            min-width: 0;
         }
         .dashboard-toolbar .toolbar-label {
             display: block;
@@ -132,7 +132,71 @@
         .chart-card-compact .chart-container {
             min-height: 290px;
         }
+        .filter-actions,
+        .filter-shortcuts,
+        .obligation-shortcuts {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .filter-actions,
+        .filter-shortcuts {
+            grid-column: 1 / -1;
+        }
+        .filter-shortcuts .btn,
+        .obligation-shortcuts .btn {
+            border-radius: 999px;
+        }
+        .metric-note {
+            margin-top: 0.4rem;
+            font-size: 0.74rem;
+            color: var(--text-secondary);
+        }
+        .obligations-card {
+            margin-bottom: 1rem;
+        }
+        .obligations-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .obligation-status {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0.25rem 0.55rem;
+            font-size: 0.72rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .obligation-status.VENCIDA { background: #fee2e2; color: #b91c1c; }
+        .obligation-status.VENCE_HOY { background: #ffedd5; color: #c2410c; }
+        .obligation-status.VENCE_PRONTO { background: #fef3c7; color: #92400e; }
+        .obligation-status.AL_DIA { background: #dcfce7; color: #166534; }
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .analytics-grid .chart-card-compact {
+            min-width: 0;
+        }
+        .analytics-grid .chart-container {
+            height: 310px;
+        }
+        .chart-description {
+            margin: 0.25rem 0 0;
+            color: var(--text-secondary);
+            font-size: 0.78rem;
+        }
         @media (max-width: 991px) {
+            .dashboard-toolbar .toolbar-form {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
             .accounting-cards-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
@@ -141,6 +205,10 @@
             }
         }
         @media (max-width: 767px) {
+            .dashboard-toolbar .toolbar-form,
+            .analytics-grid {
+                grid-template-columns: 1fr;
+            }
             .accounting-cards-grid {
                 grid-template-columns: 1fr;
             }
@@ -188,13 +256,39 @@
                     </ol>
                 </nav>
             </div>
-            <form method="get" class="toolbar-form">
+            <form method="get" class="toolbar-form" aria-label="Filtros administrativos">
+                <div class="toolbar-field">
+                    <label for="fechaDesdeFilter" class="toolbar-label">Fecha desde</label>
+                    <input id="fechaDesdeFilter" name="fecha_desde" type="date" class="form-control form-control-sm" value="{{ fecha_desde_filter }}">
+                </div>
+                <div class="toolbar-field">
+                    <label for="fechaHastaFilter" class="toolbar-label">Fecha hasta</label>
+                    <input id="fechaHastaFilter" name="fecha_hasta" type="date" class="form-control form-control-sm" value="{{ fecha_hasta_filter }}">
+                </div>
                 <div class="toolbar-field">
                     <label for="empresaFilter" class="toolbar-label">Empresa</label>
                     <select id="empresaFilter" name="empresa" class="form-select form-select-sm">
                         <option value="">Todas las empresas</option>
                         {% for empresa in empresas_choices %}
                         <option value="{{ empresa }}" {% if empresa_filter == empresa %}selected{% endif %}>{{ empresa }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="toolbar-field">
+                    <label for="estadoFilter" class="toolbar-label">Estado</label>
+                    <select id="estadoFilter" name="estado" class="form-select form-select-sm">
+                        <option value="">Todos los estados</option>
+                        {% for value, label in estados_choices %}
+                        <option value="{{ value }}" {% if estado_filter == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="toolbar-field">
+                    <label for="lineaFilter" class="toolbar-label">Línea / producto</label>
+                    <select id="lineaFilter" name="linea" class="form-select form-select-sm">
+                        <option value="">Todas las líneas</option>
+                        {% for value, label in lineas_choices %}
+                        <option value="{{ value }}" {% if linea_filter == value %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -207,11 +301,19 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="d-flex gap-2 flex-wrap">
+                <div class="filter-shortcuts" aria-label="Periodos rápidos">
+                    <span class="toolbar-label mb-0 me-1">Período:</span>
+                    {% for shortcut in periodo_links %}
+                    <a href="?{{ shortcut.query }}" class="btn btn-sm {% if periodo_filter == shortcut.value %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        {{ shortcut.label }}
+                    </a>
+                    {% endfor %}
+                </div>
+                <div class="filter-actions">
                     <button type="submit" class="btn btn-sm btn-outline-primary">
                         <i class="bi bi-funnel me-1"></i>Aplicar
                     </button>
-                    {% if empresa_filter or asesor_filter %}
+                    {% if fecha_desde_filter or fecha_hasta_filter or empresa_filter or asesor_filter or estado_filter or linea_filter %}
                     <a href="{% url 'gestion:dashboard' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
                     {% endif %}
                     <a href="{% url 'gestion:dashboard_export' %}{% if empresa_filter or asesor_filter %}?{% endif %}{% if empresa_filter %}empresa={{ empresa_filter|urlencode }}{% endif %}{% if empresa_filter and asesor_filter %}&{% endif %}{% if asesor_filter %}asesor={{ asesor_filter|urlencode }}{% endif %}" class="btn btn-sm btn-primary" data-download="true">
@@ -220,6 +322,15 @@
                 </div>
             </form>
         </div>
+
+        {% if filtros_errores %}
+        <div class="alert alert-warning" role="alert">
+            <strong>Revisa los filtros:</strong>
+            <ul class="mb-0 mt-1">
+                {% for error in filtros_errores %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+        </div>
+        {% endif %}
 
         <div class="quick-actions compact-actions">
             <a href="{% url 'gestion:solicitudes' %}" class="action-card">
@@ -267,16 +378,32 @@
         </div>
 
         <div class="row g-3 dashboard-top-grid">
-            <div class="col-12 col-md-6 col-xl-3">
+            <div class="col-12 col-md-6 col-xl">
                 <div class="card metric-card compact-metric">
                     <div class="metric-icon" style="background-color: var(--accent-blue);">
                         <i class="bi bi-wallet2"></i>
                     </div>
                     <div class="metric-value">${{ saldo_cartera_total|floatformat:2|intcomma }}</div>
                     <div class="metric-label">Saldo Total de Cartera</div>
+                    <div class="metric-note">Corte actual: capital financiado, intereses y cargos pendientes.</div>
                 </div>
             </div>
-            <div class="col-12 col-md-6 col-xl-3">
+            <div class="col-12 col-md-6 col-xl">
+                <div class="card metric-card compact-metric">
+                    <div class="metric-icon" style="background-color: #0f766e;">
+                        <i class="bi bi-bank"></i>
+                    </div>
+                    <div class="metric-value">${{ saldo_capital_pendiente|floatformat:2|intcomma }}</div>
+                    <div class="metric-label">Saldo Capital Pendiente</div>
+                    <div class="metric-note">Corte actual: solo capital principal por amortizar.</div>
+                    {% if capital_pendiente_incompleto %}
+                    <div class="metric-note text-warning">
+                        {{ capital_pendiente_incompleto }} crédito{{ capital_pendiente_incompleto|pluralize }} sin dato de capital.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-12 col-md-6 col-xl">
                 <div class="card metric-card compact-metric">
                     <div class="metric-icon" style="background-color: var(--danger);">
                         <i class="bi bi-exclamation-triangle"></i>
@@ -285,7 +412,7 @@
                     <div class="metric-label">Total en Mora</div>
                 </div>
             </div>
-            <div class="col-12 col-md-6 col-xl-3">
+            <div class="col-12 col-md-6 col-xl">
                 <div class="card metric-card compact-metric">
                     <div class="metric-icon" style="background-color: var(--success);">
                         <i class="bi bi-credit-card-2-front"></i>
@@ -294,7 +421,7 @@
                     <div class="metric-label">Total de Créditos</div>
                 </div>
             </div>
-            <div class="col-12 col-md-6 col-xl-3">
+            <div class="col-12 col-md-6 col-xl">
                 <div class="card metric-card compact-metric">
                     <div class="metric-icon" style="background-color: var(--warning);">
                         <i class="bi bi-clock-history"></i>
@@ -304,6 +431,69 @@
                 </div>
             </div>
         </div>
+
+        <section class="table-container obligations-card" aria-labelledby="obligacionesTitle">
+            <div class="table-header obligations-head">
+                <div>
+                    <h2 id="obligacionesTitle" class="table-title">Obligaciones pendientes</h2>
+                    <p class="chart-description">
+                        Primera cuota no pagada de cada crédito activo o en mora, ordenada por vencimiento.
+                        {% if obligaciones_total > obligaciones_mostradas %}Se muestran {{ obligaciones_mostradas }} de {{ obligaciones_total }}.{% endif %}
+                    </p>
+                </div>
+                <div class="obligation-shortcuts" aria-label="Filtros de obligaciones">
+                    {% for shortcut in obligacion_links %}
+                    <a href="?{{ shortcut.query }}" class="btn btn-sm {% if obligacion_filter == shortcut.value %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                        {{ shortcut.label }}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-dashboard table-stack-mobile mb-0">
+                    <thead>
+                        <tr>
+                            <th>Crédito / cliente</th>
+                            <th>Empresa</th>
+                            <th>Próxima cuota</th>
+                            <th>Vencimiento</th>
+                            <th class="text-end">Valor cuota</th>
+                            <th class="text-end">Pagado</th>
+                            <th class="text-end">Pendiente</th>
+                            <th>Estado operativo</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for obligacion in obligaciones_pendientes %}
+                        <tr>
+                            <td data-label="Crédito / cliente">
+                                <strong>{{ obligacion.numero_credito }}</strong><br>
+                                <small>{{ obligacion.cliente }}</small>
+                            </td>
+                            <td data-label="Empresa">{{ obligacion.empresa }}</td>
+                            <td data-label="Próxima cuota">Cuota {{ obligacion.numero_cuota }}</td>
+                            <td data-label="Vencimiento">{{ obligacion.fecha_vencimiento|date:"d/m/Y" }}</td>
+                            <td class="text-end" data-label="Valor cuota">${{ obligacion.valor_cuota|floatformat:2|intcomma }}</td>
+                            <td class="text-end" data-label="Pagado">${{ obligacion.monto_pagado|floatformat:2|intcomma }}</td>
+                            <td class="text-end" data-label="Pendiente"><strong>${{ obligacion.valor_pendiente|floatformat:2|intcomma }}</strong></td>
+                            <td data-label="Estado operativo">
+                                <span class="obligation-status {{ obligacion.estado_codigo }}">{{ obligacion.estado_label }}</span><br>
+                                <small>{{ obligacion.dias_label }}</small>
+                            </td>
+                            <td class="text-end">
+                                <a href="{% url 'gestion:credito_detalle' obligacion.credito_id %}" class="btn btn-sm btn-outline-primary" aria-label="Ver {{ obligacion.numero_credito }}">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="9" class="text-center text-muted py-4">No hay obligaciones para los filtros seleccionados.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
 
         <div class="accounting-section-head">
             <div>
@@ -367,32 +557,60 @@
             </div>
         </div>
 
-        <div class="row g-3 mb-3">
-            <div class="col-12 col-lg-8">
+        <section aria-labelledby="analiticaTitle">
+            <div class="accounting-section-head">
+                <div>
+                    <h2 id="analiticaTitle" class="section-title mb-1">Analítica operativa</h2>
+                    <p>Series basadas en fechas y movimientos persistidos. Los saldos se muestran únicamente como corte actual.</p>
+                </div>
+            </div>
+            <div class="analytics-grid">
                 <div class="card chart-card-compact">
                     <div class="table-header">
-                        <h3 class="section-title">Evolución de Cartera (Saldo Mensual)</h3>
-                    </div>
-                    <div class="card-body">
-                        <div class="chart-container">
-                            <canvas id="portfolioChart"></canvas>
+                        <div>
+                            <h3 class="section-title">Recaudo mensual</h3>
+                            <p class="chart-description">Detalle contable por fecha de aplicación.</p>
                         </div>
                     </div>
+                    <div class="card-body"><div class="chart-container"><canvas id="recaudoChart"></canvas></div></div>
                 </div>
-            </div>
-            <div class="col-12 col-lg-4">
-                <div class="card h-100 chart-card-compact">
+                <div class="card chart-card-compact">
                     <div class="table-header">
-                        <h3 class="section-title">Distribución por Empresas</h3>
-                    </div>
-                    <div class="card-body">
-                        <div class="chart-container">
-                            <canvas id="distributionChart"></canvas>
+                        <div>
+                            <h3 class="section-title">Desembolsos por mes</h3>
+                            <p class="chart-description">Cantidad y monto aprobado según fecha de desembolso.</p>
                         </div>
                     </div>
+                    <div class="card-body"><div class="chart-container"><canvas id="desembolsosChart"></canvas></div></div>
+                </div>
+                <div class="card chart-card-compact">
+                    <div class="table-header">
+                        <div>
+                            <h3 class="section-title">Solicitudes recibidas</h3>
+                            <p class="chart-description">Conteo demostrable por fecha de solicitud; no infiere estados históricos.</p>
+                        </div>
+                    </div>
+                    <div class="card-body"><div class="chart-container"><canvas id="solicitudesChart"></canvas></div></div>
+                </div>
+                <div class="card chart-card-compact">
+                    <div class="table-header">
+                        <div>
+                            <h3 class="section-title">Cartera actual por empresa</h3>
+                            <p class="chart-description">Saldo pendiente actual por empresa, con agrupación de las restantes en Otros.</p>
+                        </div>
+                    </div>
+                    <div class="card-body"><div class="chart-container"><canvas id="carteraEmpresaChart"></canvas></div></div>
+                </div>
+                <div class="card chart-card-compact">
+                    <div class="table-header"><h3 class="section-title">Créditos por estado actual</h3></div>
+                    <div class="card-body"><div class="chart-container"><canvas id="estadoCreditosChart"></canvas></div></div>
+                </div>
+                <div class="card chart-card-compact">
+                    <div class="table-header"><h3 class="section-title">Estado operativo de obligaciones</h3></div>
+                    <div class="card-body"><div class="chart-container"><canvas id="obligacionesChart"></canvas></div></div>
                 </div>
             </div>
-        </div>
+        </section>
 
         <div class="row g-3">
             <div class="col-12 col-lg-6">
@@ -466,75 +684,67 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const portfolioCtx = document.getElementById('portfolioChart').getContext('2d');
-        new Chart(portfolioCtx, {
-            type: 'line',
+        const moneyTick = value => '$' + Number(value).toLocaleString('es-CO', { maximumFractionDigits: 0 });
+        const baseOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false }
+        };
+        const palette = ['#0ea5e9', '#0f766e', '#f59e0b', '#dc2626', '#7c3aed', '#64748b', '#14b8a6', '#f97316'];
+
+        new Chart(document.getElementById('recaudoChart'), {
+            type: 'bar',
             data: {
-                labels: {{ portfolio_labels|safe }},
-                datasets: [{
-                    label: 'Saldo Cartera Emprendimiento',
-                    data: {{ emprendimiento_data|safe }},
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    fill: true,
-                    tension: 0.3
-                }, {
-                    label: 'Saldo Cartera Libranza',
-                    data: {{ libranza_data|safe }},
-                    borderColor: '#f59e0b',
-                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                    fill: true,
-                    tension: 0.3
-                }, {
-                    label: 'Saldo Cartera Adelanto de Nómina',
-                    data: {{ adelanto_data|safe }},
-                    borderColor: '#8b5cf6',
-                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                    fill: true,
-                    tension: 0.3
-                }, {
-                    label: 'Saldo Total',
-                    data: {{ total_data|safe }},
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    fill: true,
-                    tension: 0.3
-                }]
+                labels: {{ recaudo_labels|safe }},
+                datasets: [
+                    { label: 'Capital', data: {{ recaudo_capital|safe }}, backgroundColor: '#0ea5e9' },
+                    { label: 'Interés', data: {{ recaudo_interes|safe }}, backgroundColor: '#7c3aed' },
+                    { label: 'Comisión', data: {{ recaudo_comision|safe }}, backgroundColor: '#f59e0b' },
+                    { label: 'IVA', data: {{ recaudo_iva|safe }}, backgroundColor: '#dc2626' }
+                ]
+            },
+            options: { ...baseOptions, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { callback: moneyTick } } } }
+        });
+
+        new Chart(document.getElementById('desembolsosChart'), {
+            data: {
+                labels: {{ desembolso_labels|safe }},
+                datasets: [
+                    { type: 'bar', label: 'Monto desembolsado', data: {{ desembolso_monto|safe }}, backgroundColor: '#0ea5e9', yAxisID: 'y' },
+                    { type: 'line', label: 'Cantidad', data: {{ desembolso_cantidad|safe }}, borderColor: '#0f766e', backgroundColor: '#0f766e', tension: 0.25, yAxisID: 'yCount' }
+                ]
             },
             options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false
-                },
+                ...baseOptions,
                 scales: {
-                    y: {
-                        beginAtZero: true
-                    }
+                    y: { beginAtZero: true, position: 'left', ticks: { callback: moneyTick } },
+                    yCount: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { precision: 0 } }
                 }
             }
         });
 
-        const distributionCtx = document.getElementById('distributionChart').getContext('2d');
-        new Chart(distributionCtx, {
+        new Chart(document.getElementById('solicitudesChart'), {
+            type: 'bar',
+            data: { labels: {{ solicitud_labels|safe }}, datasets: [{ label: 'Solicitudes recibidas', data: {{ solicitud_cantidad|safe }}, backgroundColor: '#0f766e' }] },
+            options: { ...baseOptions, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+        });
+
+        new Chart(document.getElementById('carteraEmpresaChart'), {
+            type: 'bar',
+            data: { labels: {{ cartera_empresa_labels|safe }}, datasets: [{ label: 'Saldo actual', data: {{ cartera_empresa_data|safe }}, backgroundColor: '#0ea5e9' }] },
+            options: { ...baseOptions, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { callback: moneyTick } } } }
+        });
+
+        new Chart(document.getElementById('estadoCreditosChart'), {
             type: 'doughnut',
-            data: {
-                labels: {{ distribution_labels|safe }},
-                datasets: [{
-                    data: {{ distribution_data|safe }},
-                    backgroundColor: ['#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6', '#06b6d4', '#14b8a6', '#f97316', '#6366f1', '#ec4899']
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
-                    }
-                }
-            }
+            data: { labels: {{ estado_chart_labels|safe }}, datasets: [{ data: {{ estado_chart_data|safe }}, backgroundColor: palette }] },
+            options: { ...baseOptions, plugins: { legend: { position: 'bottom' } } }
+        });
+
+        new Chart(document.getElementById('obligacionesChart'), {
+            type: 'doughnut',
+            data: { labels: {{ obligaciones_chart_labels|safe }}, datasets: [{ data: {{ obligaciones_chart_data|safe }}, backgroundColor: ['#dc2626', '#f97316', '#f59e0b', '#16a34a'] }] },
+            options: { ...baseOptions, plugins: { legend: { position: 'bottom' } } }
         });
     </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
