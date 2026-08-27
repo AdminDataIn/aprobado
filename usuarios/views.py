@@ -634,7 +634,7 @@ def simulador_libranza(request):
     Permite calcular:
     - Monto solicitado: $500.000 - $3.000.000
     - Plazo: 1 - 6 meses
-    - Comisión: 10% + IVA (19%)
+    - Costo de originación: política backend vigente + IVA (19%)
     - Afianzadora: 4% + IVA (próximamente)
     - Cuota mensual
     - Total a pagar
