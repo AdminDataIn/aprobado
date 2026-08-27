@@ -10,6 +10,53 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
     {% include 'base/favicon.html' %}
+    <style>
+        .credit-filter-shell {
+            background: #fff;
+            border: 1px solid rgba(15, 23, 42, .08);
+            border-radius: .9rem;
+            padding: 1rem 1.15rem;
+        }
+        .credit-filter-primary {
+            display: flex;
+            align-items: flex-end;
+            gap: .75rem;
+            flex-wrap: wrap;
+        }
+        .credit-search { flex: 1 1 320px; }
+        .credit-filter-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+        .credit-advanced-filters {
+            display: none;
+            grid-template-columns: repeat(3, minmax(180px, 1fr));
+            gap: .75rem;
+            margin-top: .9rem;
+            padding-top: .9rem;
+            border-top: 1px solid rgba(15, 23, 42, .08);
+        }
+        .credit-advanced-filters.is-open { display: grid; }
+        .active-filter-dot {
+            display: inline-block;
+            width: .45rem;
+            height: .45rem;
+            border-radius: 50%;
+            margin-left: .35rem;
+            background: #0ea5e9;
+        }
+        .filter-help {
+            grid-column: 1 / -1;
+            color: var(--text-secondary);
+            font-size: .76rem;
+            margin: 0;
+        }
+        @media (max-width: 991px) {
+            .credit-advanced-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 575px) {
+            .credit-filter-primary { align-items: stretch; }
+            .credit-filter-actions .btn { flex: 1 1 auto; }
+            .credit-advanced-filters { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
 <body class="theme-gestion theme-applications">
 {% include 'base/loader_global.html' %}
@@ -83,17 +130,50 @@
             </a>
         </div>
 
-        <div class="filter-section">
-            <h3 class="section-title">Filtros y Búsqueda</h3>
+        <div class="credit-filter-shell">
             <form method="get" id="filterForm">
-                <div class="filter-grid">
-                    <div class="form-group">
+                <div class="credit-filter-primary">
+                    <div class="credit-search">
                         <label for="search" class="form-label">
                             <i class="bi bi-search me-1"></i>Buscar Cliente
                         </label>
                         <input type="text" name="search" id="search" value="{{ search }}" class="form-control" placeholder="Nombre, usuario o documento...">
                     </div>
-                    <div class="form-group">
+                    <div class="credit-filter-actions">
+                        <button id="creditAdvancedFiltersToggle" type="button" class="btn btn-outline-secondary" aria-expanded="{% if filtros_avanzados_activos %}true{% else %}false{% endif %}" aria-controls="creditAdvancedFilters">
+                            <i class="bi bi-sliders me-1"></i>Filtros avanzados{% if filtros_avanzados_activos %}<span class="active-filter-dot" aria-label="Filtros activos"></span>{% endif %}
+                        </button>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-funnel me-1"></i>Aplicar</button>
+                        <a href="{% url 'gestion:creditos_activos' %}" class="btn btn-outline-secondary"><i class="bi bi-x-lg me-1"></i>Limpiar filtros</a>
+                    </div>
+                </div>
+                <div id="creditAdvancedFilters" class="credit-advanced-filters {% if filtros_avanzados_activos %}is-open{% endif %}">
+                    <div>
+                        <label for="fechaDesde" class="form-label">Fecha desembolso desde</label>
+                        <input type="date" name="fecha_desde" id="fechaDesde" value="{{ fecha_desde_filter }}" class="form-control">
+                    </div>
+                    <div>
+                        <label for="fechaHasta" class="form-label">Fecha desembolso hasta</label>
+                        <input type="date" name="fecha_hasta" id="fechaHasta" value="{{ fecha_hasta_filter }}" class="form-control">
+                    </div>
+                    <div>
+                        <label for="empresa" class="form-label"><i class="bi bi-buildings me-1"></i>Empresa</label>
+                        <select name="empresa" id="empresa" class="form-select">
+                            <option value="">Todas las empresas</option>
+                            {% for empresa in empresas_choices %}
+                            <option value="{{ empresa }}" {% if empresa_filter == empresa %}selected{% endif %}>{{ empresa }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="estado" class="form-label"><i class="bi bi-activity me-1"></i>Estado</label>
+                        <select name="estado" id="estado" class="form-select">
+                            {% for choice in estados_choices %}
+                            <option value="{{ choice.0 }}" {% if estado_filter == choice.0 %}selected{% endif %}>{{ choice.1 }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
                         <label for="linea" class="form-label">
                             <i class="bi bi-tag me-1"></i>Línea de Crédito
                         </label>
@@ -104,30 +184,25 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label for="empresa" class="form-label">
-                            <i class="bi bi-buildings me-1"></i>Empresa
-                        </label>
-                        <select name="empresa" id="empresa" class="form-select">
-                            <option value="">Todas las empresas</option>
-                            {% for empresa in empresas_choices %}
-                            <option value="{{ empresa }}" {% if empresa_filter == empresa %}selected{% endif %}>{{ empresa }}</option>
+                    <div>
+                        <label for="asesor" class="form-label"><i class="bi bi-person-badge me-1"></i>Ejecutivo / asesor</label>
+                        <select name="asesor" id="asesor" class="form-select">
+                            <option value="">Todos los ejecutivos</option>
+                            {% for asesor in asesores_choices %}
+                            <option value="{{ asesor.pk }}" {% if asesor_filter == asesor.pk|stringformat:'s' %}selected{% endif %}>{{ asesor.nombre }}</option>
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="form-group">
-                        <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-primary filter-btn">
-                                <i class="bi bi-funnel me-1"></i>Filtrar
-                            </button>
-                            <a href="{% url 'gestion:creditos_activos' %}" class="btn btn-outline-secondary">
-                                <i class="bi bi-x-lg"></i>
-                            </a>
-                        </div>
-                    </div>
+                    <p class="filter-help"><i class="bi bi-info-circle me-1"></i>El rango corresponde a la fecha de desembolso. Los créditos sin desembolso no se incluyen cuando se aplica un rango.</p>
                 </div>
             </form>
         </div>
+
+        {% if filtros_errores %}
+        <div class="alert alert-warning mt-3" role="alert">
+            <ul class="mb-0">{% for error in filtros_errores %}<li>{{ error }}</li>{% endfor %}</ul>
+        </div>
+        {% endif %}
 
         <div class="table-container mt-4">
             <div class="table-header">
@@ -150,7 +225,7 @@
                             <th>Monto Aprobado</th>
                             <th>Saldo Pendiente</th>
                             <th>Estado</th>
-                            <th>Fecha Solicitud</th>
+                            <th>Fecha desembolso</th>
                             <th style="text-align: center;">Acciones</th>
                         </tr>
                     </thead>
@@ -199,7 +274,7 @@
                                     {{ credito.get_estado_display }}
                                 </span>
                             </td>
-                            <td data-label="Fecha solicitud">{{ credito.fecha_solicitud|date:"d/m/Y" }}</td>
+                            <td data-label="Fecha desembolso">{{ credito.fecha_desembolso|date:"d/m/Y"|default:"Sin desembolso" }}</td>
                             <td data-label="Acciones" style="text-align: center;">
                                 <a href="{% url 'gestion:credito_detalle' credito.id %}?from=activos" class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-eye me-1"></i>Ver
@@ -251,11 +326,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        document.getElementById('linea').addEventListener('change', function() {
-            this.form.submit();
-        });
-        document.getElementById('empresa').addEventListener('change', function() {
-            this.form.submit();
+        const advancedToggle = document.getElementById('creditAdvancedFiltersToggle');
+        const advancedFilters = document.getElementById('creditAdvancedFilters');
+        advancedToggle?.addEventListener('click', function() {
+            const isOpen = advancedFilters.classList.toggle('is-open');
+            advancedToggle.setAttribute('aria-expanded', String(isOpen));
         });
         document.getElementById('search').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {

@@ -21,7 +21,10 @@ from gestion_creditos.models import (
 from gestion_creditos.services.admin_dashboard_filters import (
     parse_admin_dashboard_filters,
 )
-from gestion_creditos.services.dashboard_metrics import get_admin_dashboard_context
+from gestion_creditos.services.dashboard_metrics import (
+    get_admin_dashboard_context,
+    get_admin_obligaciones_context,
+)
 
 
 User = get_user_model()
@@ -271,10 +274,10 @@ class AdminDashboardAnalyticsTests(TestCase):
         pagado = self._crear_credito(estado=Credito.EstadoCredito.PAGADO)
         self._crear_cuota(pagado, numero=1, vencimiento=hoy - timedelta(days=2))
 
-        context = get_admin_dashboard_context(self.staff)
+        context = get_admin_obligaciones_context(self.factory.get('/gestion/obligaciones-pendientes/'))
 
         por_credito = {
-            item['credito_id']: item for item in context['obligaciones_pendientes']
+            item['credito_id']: item for item in context['obligaciones']
         }
         self.assertEqual(set(por_credito), {vencida.pk, vence_hoy.pk, vence_pronto.pk, al_dia.pk})
         self.assertEqual(por_credito[vencida.pk]['numero_cuota'], 2)
@@ -300,10 +303,10 @@ class AdminDashboardAnalyticsTests(TestCase):
             'fecha_hasta': (hoy + timedelta(days=7)).isoformat(),
         })
 
-        context = get_admin_dashboard_context(self.staff, request)
+        context = get_admin_obligaciones_context(request)
 
-        self.assertEqual(context['obligaciones_total'], 1)
-        self.assertEqual(context['obligaciones_pendientes'][0]['credito_id'], credito.pk)
+        self.assertEqual(context['pagina_obligaciones'].paginator.count, 1)
+        self.assertEqual(context['obligaciones'][0]['credito_id'], credito.pk)
 
     @override_settings(ADMIN_DASHBOARD_EMPRESA_TOP_N=2)
     def test_graficas_usan_eventos_persistidos_y_cartera_top_n_mas_otros(self):
@@ -386,6 +389,146 @@ class AdminDashboardAnalyticsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Saldo Capital Pendiente')
-        self.assertContains(response, 'Obligaciones pendientes')
+        self.assertContains(response, 'Obligaciones Pendientes')
         self.assertContains(response, 'Recaudo mensual')
+        self.assertContains(response, 'id="advancedFiltersToggle"', html=False)
+        self.assertContains(response, 'id="analyticsChart"', html=False)
+        self.assertContains(response, 'No hay información para el período seleccionado.')
+        self.assertNotContains(response, 'id="recaudoChart"', html=False)
+        self.assertNotContains(response, 'Análisis Financiero')
         self.assertNotContains(response, 'Evolución de Cartera (Saldo Mensual)')
+
+    def test_dashboard_solo_renderiza_card_de_acceso_a_obligaciones(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse('gestion:dashboard'))
+
+        self.assertNotIn('obligaciones_pendientes', response.context)
+        self.assertContains(response, reverse('gestion:obligaciones_pendientes'), count=1)
+        self.assertContains(response, 'Obligaciones Pendientes')
+        self.assertContains(response, 'Consultar cuotas por vencer y vencidas')
+        self.assertNotContains(response, 'id="obligacionesTitle"', html=False)
+        self.assertNotContains(response, 'Ver obligaciones pendientes')
+        self.assertNotContains(response, '<th>Próxima cuota</th>', html=False)
+
+    def test_filtros_avanzados_conservan_valores_y_muestran_estado_activo(self):
+        self._crear_credito(empresa=self.empresa_a)
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse('gestion:dashboard'), {
+            'fecha_desde': '2026-08-01',
+            'fecha_hasta': '2026-08-31',
+            'empresa': self.empresa_a.nombre,
+            'estado': Credito.EstadoCredito.ACTIVO,
+            'linea': Credito.LineaCredito.LIBRANZA,
+        })
+
+        self.assertContains(response, 'aria-expanded="true"', html=False)
+        self.assertContains(response, 'value="2026-08-01"', html=False)
+        self.assertContains(response, f'value="{self.empresa_a.nombre}" selected', html=False)
+        self.assertContains(response, 'class="advanced-filters is-open"', html=False)
+
+    def test_filtros_operativos_de_obligaciones_clasifican_cada_estado(self):
+        hoy = timezone.localdate()
+        casos = (
+            ('VENCIDA', hoy - timedelta(days=1)),
+            ('VENCE_HOY', hoy),
+            ('VENCE_PRONTO', hoy + timedelta(days=5)),
+            ('AL_DIA', hoy + timedelta(days=20)),
+        )
+        creditos = {}
+        for estado, vencimiento in casos:
+            credito = self._crear_credito()
+            self._crear_cuota(credito, numero=1, vencimiento=vencimiento)
+            creditos[estado] = credito.pk
+
+        for estado, credito_id in creditos.items():
+            with self.subTest(estado=estado):
+                context = get_admin_obligaciones_context(
+                    self.factory.get(
+                        '/gestion/obligaciones-pendientes/',
+                        {'obligacion': estado},
+                    )
+                )
+                self.assertEqual(
+                    [item['credito_id'] for item in context['obligaciones']],
+                    [credito_id],
+                )
+
+        todas = get_admin_obligaciones_context(
+            self.factory.get(
+                '/gestion/obligaciones-pendientes/',
+                {'obligacion': 'TODAS'},
+            )
+        )
+        self.assertEqual(todas['pagina_obligaciones'].paginator.count, 4)
+
+    def test_vista_obligaciones_requiere_staff(self):
+        url = reverse('gestion:obligaciones_pendientes')
+        response_anonimo = self.client.get(url)
+        usuario = User.objects.create_user(username='dashboard-normal', password='123456')
+        self.client.force_login(usuario)
+
+        response_usuario = self.client.get(url)
+
+        self.assertEqual(response_anonimo.status_code, 302)
+        self.assertEqual(response_usuario.status_code, 302)
+
+    def test_vista_obligaciones_filtra_al_dia_y_busca_numero_credito(self):
+        hoy = timezone.localdate()
+        credito_al_dia = self._crear_credito()
+        self._crear_cuota(credito_al_dia, numero=1, vencimiento=hoy + timedelta(days=20))
+        credito_vencido = self._crear_credito()
+        self._crear_cuota(credito_vencido, numero=1, vencimiento=hoy - timedelta(days=1))
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse('gestion:obligaciones_pendientes'), {
+            'obligacion': 'AL_DIA',
+            'credito': credito_al_dia.numero_credito,
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['pagina_obligaciones'].paginator.count, 1)
+        self.assertContains(response, credito_al_dia.numero_credito)
+        self.assertNotContains(response, credito_vencido.numero_credito)
+        self.assertContains(response, 'Al día')
+
+    def test_vista_obligaciones_pagina_sin_cargar_toda_la_cartera(self):
+        hoy = timezone.localdate()
+        for indice in range(21):
+            credito = self._crear_credito()
+            self._crear_cuota(
+                credito,
+                numero=1,
+                vencimiento=hoy + timedelta(days=indice + 1),
+            )
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse('gestion:obligaciones_pendientes'), {
+            'empresa': self.empresa_a.nombre,
+            'page': 2,
+        })
+
+        pagina = response.context['pagina_obligaciones']
+        self.assertEqual(pagina.number, 2)
+        self.assertEqual(pagina.paginator.count, 21)
+        self.assertEqual(len(response.context['obligaciones']), 1)
+        self.assertIn('empresa=Empresa+Analitica+A', response.context['obligaciones_querystring'])
+        self.assertNotIn('page=', response.context['obligaciones_querystring'])
+        self.assertContains(response, 'empresa=Empresa+Analitica+A&amp;page=1', html=False)
+
+    def test_consultas_vista_obligaciones_no_crecen_por_registro(self):
+        hoy = timezone.localdate()
+        credito = self._crear_credito()
+        self._crear_cuota(credito, numero=1, vencimiento=hoy + timedelta(days=20))
+        request = self.factory.get('/gestion/obligaciones-pendientes/')
+        with CaptureQueriesContext(connection) as consultas_base:
+            get_admin_obligaciones_context(request)
+
+        for indice in range(8):
+            credito = self._crear_credito()
+            self._crear_cuota(credito, numero=1, vencimiento=hoy + timedelta(days=indice + 1))
+        with CaptureQueriesContext(connection) as consultas_ampliadas:
+            get_admin_obligaciones_context(request)
+
+        self.assertLessEqual(len(consultas_ampliadas), len(consultas_base) + 1)

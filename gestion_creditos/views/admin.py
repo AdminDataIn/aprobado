@@ -3,6 +3,7 @@ from .common import _build_capacidad_descuento_context
 from gestion_creditos.models import DetalleContablePago, ReestructuracionCredito
 from gestion_creditos.forms import ComprobantePagoExistenteForm
 from gestion_creditos.services.advisors import filter_creditos_by_asesor
+from gestion_creditos.services.admin_dashboard_filters import parse_admin_dashboard_filters
 from libranza.services.special_case_audit import create_special_case_audit
 from libranza.services.special_case_originator import SpecialCaseOriginationError, originate_special_case_libranza
 from libranza.services.special_cases import SpecialCaseSimulationInput, SpecialCaseSimulationError, simulate_special_case_libranza
@@ -151,6 +152,12 @@ def admin_dashboard_view(request):
     """
     context = credit_services.dashboard_metrics.get_admin_dashboard_context(request.user, request=request)
     return render(request, 'gestion_creditos/admin_dashboard.html', context)
+
+
+@staff_member_required
+def admin_obligaciones_pendientes_view(request):
+    context = credit_services.dashboard_metrics.get_admin_obligaciones_context(request)
+    return render(request, 'gestion_creditos/admin_obligaciones_pendientes.html', context)
 
 
 @staff_member_required
@@ -363,8 +370,21 @@ def admin_adelantos_nomina_view(request):
 def admin_creditos_activos_view(request):
     """Vista para gestionar créditos activos"""
 
-    creditos_base = Credito.objects.filter(estado='ACTIVO')
-    creditos_filtrados = credit_services.filtrar_creditos(request, creditos_base)
+    filtros = parse_admin_dashboard_filters(request)
+    estado_filter = filtros.estado or Credito.EstadoCredito.ACTIVO
+    creditos_base = Credito.objects.all()
+    if not filtros.estado:
+        creditos_base = creditos_base.filter(estado=Credito.EstadoCredito.ACTIVO)
+    creditos_filtrados = filtros.aplicar_dimensiones_credito(creditos_base)
+    creditos_filtrados = filtros.aplicar_fecha_credito(
+        creditos_filtrados,
+        'fecha_desembolso',
+    )
+    creditos_filtrados = credit_services.filtrar_creditos(
+        request,
+        creditos_filtrados,
+        aplicar_dimensiones=False,
+    )
 
     stats_activos = creditos_filtrados.aggregate(
         total_creditos=Count('id'),
@@ -396,11 +416,22 @@ def admin_creditos_activos_view(request):
         'valor_total_cartera_activa': stats_activos.get('valor_total') or 0,
         'valor_promedio_credito_activo': stats_activos.get('valor_promedio') or 0,
         'desembolsos_hoy': desembolsos_hoy,
-        'linea_filter': request.GET.get('linea', ''),
-        'empresa_filter': request.GET.get('empresa', ''),
+        'linea_filter': filtros.linea,
+        'empresa_filter': filtros.empresa.nombre if filtros.empresa else filtros.empresa_raw,
+        'estado_filter': estado_filter,
+        'asesor_filter': str(filtros.asesor.pk) if filtros.asesor else filtros.asesor_raw,
+        'fecha_desde_filter': filtros.fecha_desde.isoformat() if filtros.fecha_desde else '',
+        'fecha_hasta_filter': filtros.fecha_hasta.isoformat() if filtros.fecha_hasta else '',
         'search': request.GET.get('search', ''),
+        'estados_choices': Credito.EstadoCredito.choices,
         'lineas_choices': Credito.LineaCredito.choices,
         'empresas_choices': _admin_empresas_choices(),
+        'asesores_choices': AsesorComercial.objects.filter(activo=True).order_by('nombre'),
+        'filtros_errores': filtros.errores,
+        'filtros_avanzados_activos': any(
+            request.GET.get(key)
+            for key in ('fecha_desde', 'fecha_hasta', 'empresa', 'estado', 'linea', 'asesor')
+        ),
         'querystring_without_page': query_params.urlencode(),
     }
 

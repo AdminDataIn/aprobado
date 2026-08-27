@@ -3,6 +3,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.paginator import Paginator
 from django.http import QueryDict
 from django.db.models import (
     Case,
@@ -144,57 +145,64 @@ def _clasificar_obligacion(fecha_vencimiento, hoy):
     return 'AL_DIA', 'Al dia', diferencia, f'{diferencia} dias para vencer'
 
 
-def _build_obligaciones(creditos_cartera, filtros):
+def _obligaciones_distribucion(base):
     hoy = timezone.localdate()
-    base = _obligaciones_queryset(creditos_cartera, filtros)
-    distribucion = {
-        'VENCIDA': 0,
-        'VENCE_HOY': 0,
-        'VENCE_PRONTO': 0,
-        'AL_DIA': 0,
-    }
-    for fecha in base.values_list('cuota_fecha_vencimiento', flat=True):
-        codigo, _label, _dias, _texto = _clasificar_obligacion(fecha, hoy)
-        distribucion[codigo] += 1
+    return base.aggregate(
+        VENCIDA=Count('pk', filter=Q(cuota_fecha_vencimiento__lt=hoy)),
+        VENCE_HOY=Count('pk', filter=Q(cuota_fecha_vencimiento=hoy)),
+        VENCE_PRONTO=Count(
+            'pk',
+            filter=Q(
+                cuota_fecha_vencimiento__gt=hoy,
+                cuota_fecha_vencimiento__lte=hoy + timedelta(days=15),
+            ),
+        ),
+        AL_DIA=Count(
+            'pk',
+            filter=Q(cuota_fecha_vencimiento__gt=hoy + timedelta(days=15)),
+        ),
+    )
 
-    filtradas = base
-    if filtros.obligacion_estado == 'VENCIDA':
-        filtradas = filtradas.filter(cuota_fecha_vencimiento__lt=hoy)
-    elif filtros.obligacion_estado == 'VENCE_HOY':
-        filtradas = filtradas.filter(cuota_fecha_vencimiento=hoy)
-    elif filtros.obligacion_estado == 'VENCE_PRONTO':
-        filtradas = filtradas.filter(
+
+def _filtrar_estado_obligacion(queryset, estado):
+    hoy = timezone.localdate()
+    if estado == 'VENCIDA':
+        return queryset.filter(cuota_fecha_vencimiento__lt=hoy)
+    if estado == 'VENCE_HOY':
+        return queryset.filter(cuota_fecha_vencimiento=hoy)
+    if estado == 'VENCE_PRONTO':
+        return queryset.filter(
             cuota_fecha_vencimiento__gt=hoy,
             cuota_fecha_vencimiento__lte=hoy + timedelta(days=15),
         )
+    if estado == 'AL_DIA':
+        return queryset.filter(cuota_fecha_vencimiento__gt=hoy + timedelta(days=15))
+    return queryset
 
-    total_filtrado = filtradas.count()
-    obligaciones = []
-    for credito in filtradas.order_by(
-        'cuota_fecha_vencimiento', 'cuota_numero', 'numero_credito'
-    )[:50]:
-        monto_pagado = credito.cuota_monto_pagado or Decimal('0.00')
-        valor_cuota = credito.cuota_valor or Decimal('0.00')
-        codigo, label, dias, texto_dias = _clasificar_obligacion(
-            credito.cuota_fecha_vencimiento,
-            hoy,
-        )
-        obligaciones.append({
-            'credito_id': credito.pk,
-            'numero_credito': credito.numero_credito,
-            'cliente': credito.nombre_cliente,
-            'empresa': credito.empresa_nombre,
-            'numero_cuota': credito.cuota_numero,
-            'fecha_vencimiento': credito.cuota_fecha_vencimiento,
-            'valor_cuota': valor_cuota,
-            'monto_pagado': monto_pagado,
-            'valor_pendiente': max(valor_cuota - monto_pagado, Decimal('0.00')),
-            'estado_codigo': codigo,
-            'estado_label': label,
-            'dias': dias,
-            'dias_label': texto_dias,
-        })
-    return obligaciones, total_filtrado, distribucion
+
+def _serializar_obligacion(credito):
+    hoy = timezone.localdate()
+    monto_pagado = credito.cuota_monto_pagado or Decimal('0.00')
+    valor_cuota = credito.cuota_valor or Decimal('0.00')
+    codigo, label, dias, texto_dias = _clasificar_obligacion(
+        credito.cuota_fecha_vencimiento,
+        hoy,
+    )
+    return {
+        'credito_id': credito.pk,
+        'numero_credito': credito.numero_credito,
+        'cliente': credito.nombre_cliente,
+        'empresa': credito.empresa_nombre,
+        'numero_cuota': credito.cuota_numero,
+        'fecha_vencimiento': credito.cuota_fecha_vencimiento,
+        'valor_cuota': valor_cuota,
+        'monto_pagado': monto_pagado,
+        'valor_pendiente': max(valor_cuota - monto_pagado, Decimal('0.00')),
+        'estado_codigo': codigo,
+        'estado_label': label,
+        'dias': dias,
+        'dias_label': texto_dias,
+    }
 
 
 def _monthly_rows(queryset, date_field, annotations):
@@ -268,6 +276,7 @@ def _build_query_links(request, key, values, *, clear_dates=False):
         if clear_dates:
             params.pop('fecha_desde', None)
             params.pop('fecha_hasta', None)
+        params.pop('page', None)
         if value:
             params[key] = value
         else:
@@ -288,10 +297,9 @@ def get_admin_dashboard_context(user, request=None):
     )
     monto_total_en_mora = calcular_total_en_mora(creditos_cartera, filtros=filtros)
     total_creditos = creditos_cartera.count()
-    obligaciones, obligaciones_total, obligaciones_distribucion = _build_obligaciones(
-        creditos_cartera,
-        filtros,
-    )
+    obligaciones_base = _obligaciones_queryset(creditos_cartera, filtros)
+    obligaciones_distribucion = _obligaciones_distribucion(obligaciones_base)
+    obligaciones_total = sum(obligaciones_distribucion.values())
     proximos_vencer = (
         obligaciones_distribucion['VENCE_HOY']
         + obligaciones_distribucion['VENCE_PRONTO']
@@ -339,15 +347,18 @@ def get_admin_dashboard_context(user, request=None):
     )
     top_n = max(1, min(int(getattr(settings, 'ADMIN_DASHBOARD_EMPRESA_TOP_N', 8)), 12))
     empresas_top = creditos_por_empresa[:top_n]
+    empresas_otros = creditos_por_empresa[top_n:]
     otros_saldo = kpis['saldo_cartera_total'] - sum(
         (item['saldo_total'] for item in empresas_top),
         Decimal('0.00'),
     )
     cartera_empresa_labels = [item['empresa_nombre'] for item in empresas_top]
     cartera_empresa_data = [float(item['saldo_total']) for item in empresas_top]
-    if otros_saldo > Decimal('0.00'):
+    cartera_empresa_cantidad = [item['count'] for item in empresas_top]
+    if empresas_otros:
         cartera_empresa_labels.append('OTROS')
         cartera_empresa_data.append(float(otros_saldo))
+        cartera_empresa_cantidad.append(sum(item['count'] for item in empresas_otros))
 
     accounting_metrics = _build_accounting_metrics(base_creditos, filtros)
     chart_series = _build_chart_series(
@@ -402,6 +413,7 @@ def get_admin_dashboard_context(user, request=None):
         'creditos_por_empresa': creditos_por_empresa,
         'cartera_empresa_labels': json.dumps(cartera_empresa_labels),
         'cartera_empresa_data': json.dumps(cartera_empresa_data),
+        'cartera_empresa_cantidad': json.dumps(cartera_empresa_cantidad),
         'estado_chart_labels': json.dumps([item['estado'] for item in creditos_por_estado]),
         'estado_chart_data': json.dumps([item['count'] for item in creditos_por_estado]),
         'obligaciones_chart_labels': json.dumps([
@@ -413,9 +425,7 @@ def get_admin_dashboard_context(user, request=None):
             obligaciones_distribucion['VENCE_PRONTO'],
             obligaciones_distribucion['AL_DIA'],
         ]),
-        'obligaciones_pendientes': obligaciones,
         'obligaciones_total': obligaciones_total,
-        'obligaciones_mostradas': len(obligaciones),
         'obligaciones_distribucion': obligaciones_distribucion,
         'filtros': filtros,
         'filtros_errores': filtros.errores,
@@ -437,4 +447,65 @@ def get_admin_dashboard_context(user, request=None):
         'obligacion_links': obligacion_links,
         'dashboard_querystring': request.GET.urlencode() if request is not None else '',
         'cartera_es_corte_actual': True,
+        'filtros_avanzados_activos': bool(
+            request is not None
+            and any(
+                request.GET.get(key)
+                for key in ('fecha_desde', 'fecha_hasta', 'empresa', 'estado', 'linea', 'asesor')
+            )
+        ),
+    }
+
+
+def get_admin_obligaciones_context(request):
+    filtros = parse_admin_dashboard_filters(request)
+    creditos_cartera = filtros.aplicar_dimensiones_credito(
+        _base_admin_queryset().filter(estado__in=ESTADOS_CARTERA)
+    )
+    base = _obligaciones_queryset(creditos_cartera, filtros)
+    distribucion = _obligaciones_distribucion(base)
+    busqueda = (request.GET.get('credito') or '').strip()[:40]
+    if busqueda:
+        base = base.filter(numero_credito__icontains=busqueda)
+    filtradas = _filtrar_estado_obligacion(base, filtros.obligacion_estado).order_by(
+        'cuota_fecha_vencimiento', 'cuota_numero', 'numero_credito'
+    )
+
+    pagina = Paginator(filtradas, 20).get_page(request.GET.get('page'))
+    pagina.object_list = [_serializar_obligacion(credito) for credito in pagina.object_list]
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
+
+    empresas_choices = sorted(
+        set(
+            filter_creditos_by_asesor(_base_admin_queryset(), filtros.asesor)
+            .exclude(empresa_nombre='SIN EMPRESA')
+            .values_list('empresa_nombre', flat=True)
+        )
+    )
+    return {
+        'pagina_obligaciones': pagina,
+        'obligaciones': pagina.object_list,
+        'obligaciones_distribucion': distribucion,
+        'obligaciones_total': sum(distribucion.values()),
+        'filtros': filtros,
+        'filtros_errores': filtros.errores,
+        'fecha_desde_filter': filtros.fecha_desde.isoformat() if filtros.fecha_desde else '',
+        'fecha_hasta_filter': filtros.fecha_hasta.isoformat() if filtros.fecha_hasta else '',
+        'empresa_filter': filtros.empresa.nombre if filtros.empresa else '',
+        'obligacion_filter': filtros.obligacion_estado,
+        'credito_filter': busqueda,
+        'empresas_choices': empresas_choices,
+        'obligacion_links': _build_query_links(
+            request,
+            'obligacion',
+            (
+                ('TODAS', 'Todas'),
+                ('VENCIDA', 'Vencidas'),
+                ('VENCE_HOY', 'Vence hoy'),
+                ('VENCE_PRONTO', 'Próximas'),
+                ('AL_DIA', 'Al día'),
+            ),
+        ),
+        'obligaciones_querystring': query_params.urlencode(),
     }

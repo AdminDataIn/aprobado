@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Obligaciones pendientes - Aprobado</title>
+    {% load static %}
+    {% load humanize %}
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+    {% include 'base/favicon.html' %}
+    <style>
+        .obligations-shell { max-width: 1440px; }
+        .obligations-summary {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: .75rem;
+            margin-bottom: 1rem;
+        }
+        .summary-item {
+            background: #fff;
+            border: 1px solid rgba(15, 23, 42, .08);
+            border-radius: .75rem;
+            padding: .9rem 1rem;
+        }
+        .summary-item strong { display: block; font-size: 1.35rem; color: var(--text-primary); }
+        .summary-item span { color: var(--text-secondary); font-size: .78rem; }
+        .filter-panel {
+            background: #fff;
+            border: 1px solid rgba(15, 23, 42, .08);
+            border-radius: .85rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .filter-grid {
+            display: grid;
+            grid-template-columns: minmax(180px, 1.2fr) repeat(3, minmax(150px, 1fr)) auto;
+            gap: .75rem;
+            align-items: end;
+        }
+        .filter-shortcuts { display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: .85rem; }
+        .filter-shortcuts .btn { border-radius: 999px; }
+        .obligation-status {
+            display: inline-flex;
+            border-radius: 999px;
+            padding: .25rem .55rem;
+            font-size: .72rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .obligation-status.VENCIDA { background: #fee2e2; color: #b91c1c; }
+        .obligation-status.VENCE_HOY { background: #ffedd5; color: #c2410c; }
+        .obligation-status.VENCE_PRONTO { background: #fef3c7; color: #92400e; }
+        .obligation-status.AL_DIA { background: #dcfce7; color: #166534; }
+        .table-dashboard td { vertical-align: middle; }
+        @media (max-width: 991px) {
+            .filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .obligations-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 575px) {
+            .filter-grid, .obligations-summary { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body class="theme-gestion theme-applications">
+{% include 'base/loader_global.html' %}
+<header class="page-header">
+    <div class="container-fluid" style="max-width: 1440px;">
+        <div class="d-flex align-items-center justify-content-between">
+            <a href="{% url 'gestion:dashboard' %}" class="logo">
+                <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado" style="height: 40px;">
+            </a>
+            <div class="user-info">
+                <div class="user-avatar">AU</div>
+                <div class="user-details d-none d-md-block"><h6>Admin User</h6><small>Administrador</small></div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main class="container-fluid obligations-shell py-4">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+        <div>
+            <h1 class="page-title">Obligaciones pendientes</h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="{% url 'gestion:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Obligaciones pendientes</li>
+                </ol>
+            </nav>
+        </div>
+        <a href="{% url 'gestion:dashboard' %}" class="btn btn-outline-primary">
+            <i class="bi bi-arrow-left me-1"></i>Volver al dashboard
+        </a>
+    </div>
+
+    <section class="obligations-summary" aria-label="Resumen de obligaciones">
+        <div class="summary-item"><strong>{{ obligaciones_distribucion.VENCIDA }}</strong><span>Vencidas</span></div>
+        <div class="summary-item"><strong>{{ obligaciones_distribucion.VENCE_HOY }}</strong><span>Vencen hoy</span></div>
+        <div class="summary-item"><strong>{{ obligaciones_distribucion.VENCE_PRONTO }}</strong><span>Próximas 15 días</span></div>
+        <div class="summary-item"><strong>{{ obligaciones_distribucion.AL_DIA }}</strong><span>Posteriores / al día</span></div>
+    </section>
+
+    <section class="filter-panel" aria-labelledby="filtersTitle">
+        <h2 id="filtersTitle" class="section-title mb-3">Filtros</h2>
+        <div class="filter-shortcuts" aria-label="Estado operativo">
+            {% for shortcut in obligacion_links %}
+            <a href="?{{ shortcut.query }}" class="btn btn-sm {% if obligacion_filter == shortcut.value %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ shortcut.label }}</a>
+            {% endfor %}
+        </div>
+        <form method="get" class="filter-grid">
+            <input type="hidden" name="obligacion" value="{{ obligacion_filter }}">
+            <div>
+                <label for="creditoFilter" class="form-label small fw-semibold">Número de crédito</label>
+                <input id="creditoFilter" name="credito" class="form-control form-control-sm" value="{{ credito_filter }}" placeholder="Ej. CR-2026-00042">
+            </div>
+            <div>
+                <label for="empresaFilter" class="form-label small fw-semibold">Empresa</label>
+                <select id="empresaFilter" name="empresa" class="form-select form-select-sm">
+                    <option value="">Todas</option>
+                    {% for empresa in empresas_choices %}<option value="{{ empresa }}" {% if empresa_filter == empresa %}selected{% endif %}>{{ empresa }}</option>{% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="fechaDesdeFilter" class="form-label small fw-semibold">Vence desde</label>
+                <input id="fechaDesdeFilter" name="fecha_desde" type="date" class="form-control form-control-sm" value="{{ fecha_desde_filter }}">
+            </div>
+            <div>
+                <label for="fechaHastaFilter" class="form-label small fw-semibold">Vence hasta</label>
+                <input id="fechaHastaFilter" name="fecha_hasta" type="date" class="form-control form-control-sm" value="{{ fecha_hasta_filter }}">
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-search me-1"></i>Aplicar</button>
+                <a class="btn btn-sm btn-outline-secondary" href="{% url 'gestion:obligaciones_pendientes' %}">Limpiar</a>
+            </div>
+        </form>
+    </section>
+
+    {% if filtros_errores %}
+    <div class="alert alert-warning" role="alert"><ul class="mb-0">{% for error in filtros_errores %}<li>{{ error }}</li>{% endfor %}</ul></div>
+    {% endif %}
+
+    <section class="table-container" aria-labelledby="tableTitle">
+        <div class="table-header d-flex justify-content-between align-items-center gap-3 flex-wrap">
+            <div>
+                <h2 id="tableTitle" class="table-title">Detalle operativo</h2>
+                <p class="chart-description mb-0">{{ pagina_obligaciones.paginator.count }} resultado{{ pagina_obligaciones.paginator.count|pluralize }} para los filtros seleccionados.</p>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-dashboard mb-0">
+                <thead><tr>
+                    <th>Crédito / cliente</th><th>Empresa</th><th>Cuota</th><th>Vencimiento</th>
+                    <th class="text-end">Valor</th><th class="text-end">Pagado</th><th class="text-end">Pendiente</th>
+                    <th>Estado</th><th></th>
+                </tr></thead>
+                <tbody>
+                {% for obligacion in obligaciones %}
+                    <tr>
+                        <td><strong>{{ obligacion.numero_credito }}</strong><br><small>{{ obligacion.cliente }}</small></td>
+                        <td>{{ obligacion.empresa }}</td>
+                        <td>{{ obligacion.numero_cuota }}</td>
+                        <td>{{ obligacion.fecha_vencimiento|date:"d/m/Y" }}</td>
+                        <td class="text-end">${{ obligacion.valor_cuota|floatformat:2|intcomma }}</td>
+                        <td class="text-end">${{ obligacion.monto_pagado|floatformat:2|intcomma }}</td>
+                        <td class="text-end"><strong>${{ obligacion.valor_pendiente|floatformat:2|intcomma }}</strong></td>
+                        <td><span class="obligation-status {{ obligacion.estado_codigo }}">{{ obligacion.estado_label }}</span><br><small>{{ obligacion.dias_label }}</small></td>
+                        <td class="text-end"><a href="{% url 'gestion:credito_detalle' obligacion.credito_id %}" class="btn btn-sm btn-outline-primary">Ver crédito</a></td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="9" class="text-center text-muted py-5">No hay obligaciones para los filtros seleccionados.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if pagina_obligaciones.paginator.num_pages > 1 %}
+        <nav class="p-3" aria-label="Paginación de obligaciones">
+            <ul class="pagination pagination-sm justify-content-center mb-0">
+                {% if pagina_obligaciones.has_previous %}<li class="page-item"><a class="page-link" href="?{% if obligaciones_querystring %}{{ obligaciones_querystring }}&amp;{% endif %}page={{ pagina_obligaciones.previous_page_number }}">Anterior</a></li>{% endif %}
+                <li class="page-item disabled"><span class="page-link">Página {{ pagina_obligaciones.number }} de {{ pagina_obligaciones.paginator.num_pages }}</span></li>
+                {% if pagina_obligaciones.has_next %}<li class="page-item"><a class="page-link" href="?{% if obligaciones_querystring %}{{ obligaciones_querystring }}&amp;{% endif %}page={{ pagina_obligaciones.next_page_number }}">Siguiente</a></li>{% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{% static 'js/global_loader.js' %}"></script>
+</body>
+</html>

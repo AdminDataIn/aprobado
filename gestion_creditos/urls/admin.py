@@ -15,6 +15,11 @@ urlpatterns = [
     # DASHBOARDS ADMINISTRATIVOS
     # ========================================
     path('', views.admin_dashboard_view, name='dashboard'),
+    path(
+        'obligaciones-pendientes/',
+        views.admin_obligaciones_pendientes_view,
+        name='obligaciones_pendientes',
+    ),
     path('exportar-reporte/', views.admin_dashboard_export_view, name='dashboard_export'),
     path('ejecutivos/', views.admin_asesores_dashboard_view, name='ejecutivos'),
     path('asesores/', RedirectView.as_view(pattern_name='gestion:ejecutivos', permanent=False), name='asesores'),

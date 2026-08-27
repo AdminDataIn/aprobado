@@ -19,7 +19,13 @@ PERIODOS_VALIDOS = {
     'este_anio',
     'todo',
 }
-ESTADOS_OBLIGACION_VALIDOS = {'TODAS', 'VENCIDA', 'VENCE_HOY', 'VENCE_PRONTO'}
+ESTADOS_OBLIGACION_VALIDOS = {
+    'TODAS',
+    'VENCIDA',
+    'VENCE_HOY',
+    'VENCE_PRONTO',
+    'AL_DIA',
+}
 
 
 @dataclass(frozen=True)

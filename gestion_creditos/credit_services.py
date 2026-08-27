@@ -734,7 +734,7 @@ def obtener_puntaje_interno(parametros: dict) -> int:
     return suma_estimaciones
 
 
-def filtrar_creditos(request, creditos_base):
+def filtrar_creditos(request, creditos_base, *, aplicar_dimensiones=True):
     """
     ✅ CORRECTO: Esta función ya está bien porque busca en campos que aún existen en los detalles
     """
@@ -755,6 +755,9 @@ def filtrar_creditos(request, creditos_base):
             Q(detalle_adelanto_nomina__vinculo_laboral__nombre_empleado__icontains=search_text) |
             Q(detalle_adelanto_nomina__vinculo_laboral__documento_empleado__icontains=search_text)
         )
+
+    if not aplicar_dimensiones:
+        return queryset.distinct()
 
     empresa_filter = request.GET.get('empresa', '').strip()
     if empresa_filter:
