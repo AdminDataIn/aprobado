@@ -1,9 +1,13 @@
 from .common import *
 from .common import _build_capacidad_descuento_context
-from gestion_creditos.models import DetalleContablePago, ReestructuracionCredito
+from gestion_creditos.models import ReestructuracionCredito
 from gestion_creditos.forms import ComprobantePagoExistenteForm
-from gestion_creditos.services.advisors import filter_creditos_by_asesor
 from gestion_creditos.services.admin_dashboard_filters import parse_admin_dashboard_filters
+from gestion_creditos.services.admin_excel_report import (
+    AdminExcelReportError,
+    EXCEL_CONTENT_TYPE,
+    build_admin_excel_report,
+)
 from libranza.services.special_case_audit import create_special_case_audit
 from libranza.services.special_case_originator import SpecialCaseOriginationError, originate_special_case_libranza
 from libranza.services.special_cases import SpecialCaseSimulationInput, SpecialCaseSimulationError, simulate_special_case_libranza
@@ -162,153 +166,15 @@ def admin_obligaciones_pendientes_view(request):
 
 @staff_member_required
 def admin_dashboard_export_view(request):
-    context = credit_services.dashboard_metrics.get_admin_dashboard_context(request.user, request=request)
-    empresa_filter = context.get('empresa_filter') or ''
-    selected_asesor = context.get('selected_asesor')
-    creditos_operativos = (
-        credit_services.dashboard_metrics
-        ._base_admin_queryset()
-        .filter(estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA])
-    )
-    creditos_operativos = filter_creditos_by_asesor(creditos_operativos, selected_asesor)
-    if empresa_filter:
-        creditos_operativos = creditos_operativos.filter(empresa_nombre=empresa_filter)
-    creditos_contables = credit_services.dashboard_metrics.get_platform_disbursed_creditos_queryset(
-        credit_services.dashboard_metrics._base_admin_queryset()
-    )
-    creditos_contables = filter_creditos_by_asesor(creditos_contables, selected_asesor)
-    if empresa_filter:
-        creditos_contables = creditos_contables.filter(empresa_nombre=empresa_filter)
-    detalle_contable_qs = (
-        DetalleContablePago.objects.filter(credito__in=creditos_contables)
-        .select_related('credito', 'cuota', 'pago')
-        .order_by('credito__numero_credito', 'fecha_aplicacion', 'secuencia_aplicacion')
-    )
+    try:
+        workbook, filename = build_admin_excel_report(request)
+    except AdminExcelReportError as exc:
+        return HttpResponse(str(exc), status=400, content_type='text/plain; charset=utf-8')
 
-    from openpyxl import Workbook
-    from openpyxl.styles import Font
-
-    workbook = Workbook()
-    resumen = workbook.active
-    resumen.title = 'Resumen ejecutivo'
-    resumen.append(['Concepto', 'Valor'])
-    resumen.append(['Empresa filtrada', empresa_filter or 'Todas'])
-    resumen.append(['Asesor filtrado', selected_asesor.nombre if selected_asesor else 'Todos'])
-    resumen.append(['Saldo total de cartera', context['saldo_cartera_total']])
-    resumen.append(['Total en mora', context['monto_total_en_mora']])
-    resumen.append(['Total de créditos operativos', context['total_creditos']])
-    resumen.append(['Próximos a vencer (15 días)', context['proximos_vencer']])
-    resumen.append(['Total recaudado', context['total_recaudado']])
-    resumen.append(['Capital recuperado', context['capital_recuperado']])
-    resumen.append(['Interes recuperado', context['interes_recuperado']])
-    resumen.append(['Comision recuperada', context['comision_recuperada']])
-    resumen.append(['IVA recuperado', context['iva_recuperado']])
-    resumen.append(['Creditos con trazabilidad contable', context['creditos_con_trazabilidad_contable']])
-    resumen.append(['Pagos con trazabilidad contable', context['pagos_con_trazabilidad_contable']])
-    resumen.append(['Fecha de corte', timezone.now().strftime('%d/%m/%Y %H:%M')])
-
-    cartera_linea = workbook.create_sheet('Cartera por linea')
-    cartera_linea.append(['Linea', 'Creditos activos', 'Saldo total'])
-    for item in context['creditos_por_linea']:
-        cartera_linea.append([item['linea_label'], item['count'], item['saldo_total']])
-
-    estados = workbook.create_sheet('Creditos por estado')
-    estados.append(['Estado', 'Cantidad', 'Porcentaje'])
-    for item in context['creditos_por_estado']:
-        estados.append([item['estado'], item['count'], round(item['porcentaje'], 2)])
-
-    empresas = workbook.create_sheet('Distribucion empresas')
-    empresas.append(['Empresa', 'Creditos'])
-    for item in context['creditos_por_empresa']:
-        empresas.append([item['empresa_nombre'], item['count']])
-
-    recaudo = workbook.create_sheet('Recaudo contable')
-    recaudo.append([
-        'Numero credito', 'Empresa', 'Linea', 'Total recaudado',
-        'Capital recuperado', 'Interes recuperado', 'Comision recuperada', 'IVA recuperado',
-    ])
-    empresa_por_credito = {credito.id: credito.empresa_nombre for credito in creditos_contables}
-    creditos_contables_agregados = (
-        detalle_contable_qs.values(
-            'credito_id',
-            'credito__numero_credito',
-            'credito__linea',
-        )
-        .annotate(
-            total_recaudado=Coalesce(Sum('monto_total_aplicado'), Decimal('0.00')),
-            capital_recuperado=Coalesce(Sum('capital_principal_aplicado'), Decimal('0.00')),
-            interes_recuperado=Coalesce(Sum('interes_aplicado'), Decimal('0.00')),
-            comision_recuperada=Coalesce(Sum('comision_aplicada'), Decimal('0.00')),
-            iva_recuperado=Coalesce(Sum('iva_aplicado'), Decimal('0.00')),
-        )
-        .order_by('credito__numero_credito')
-    )
-    for item in creditos_contables_agregados:
-        recaudo.append([
-            item['credito__numero_credito'],
-            empresa_por_credito.get(item['credito_id'], 'SIN EMPRESA'),
-            item['credito__linea'],
-            item['total_recaudado'],
-            item['capital_recuperado'],
-            item['interes_recuperado'],
-            item['comision_recuperada'],
-            item['iva_recuperado'],
-        ])
-
-    detalle_contable = workbook.create_sheet('Detalle contable')
-    detalle_contable.append([
-        'Numero credito', 'Referencia pago', 'Fecha aplicacion', 'Cuota', 'Secuencia',
-        'Monto total', 'Capital recuperado', 'Interes recuperado', 'Comision recuperada', 'IVA recuperado',
-    ])
-    for detalle_pago in detalle_contable_qs:
-        detalle_contable.append([
-            detalle_pago.credito.numero_credito,
-            detalle_pago.pago.referencia_pago,
-            timezone.localtime(detalle_pago.fecha_aplicacion).strftime('%d/%m/%Y %H:%M'),
-            detalle_pago.cuota.numero_cuota if detalle_pago.cuota_id else '',
-            detalle_pago.secuencia_aplicacion,
-            detalle_pago.monto_total_aplicado,
-            detalle_pago.capital_principal_aplicado,
-            detalle_pago.interes_aplicado,
-            detalle_pago.comision_aplicada,
-            detalle_pago.iva_aplicado,
-        ])
-
-    detalle = workbook.create_sheet('Detalle operativo')
-    detalle.append([
-        'Numero credito', 'Empresa', 'Linea', 'Estado', 'Cliente',
-        'Fecha desembolso', 'Proximo pago', 'Saldo pendiente', 'Valor cuota',
-    ])
-    for credito in creditos_operativos.order_by('empresa_nombre', 'fecha_proximo_pago', 'numero_credito'):
-        detalle.append([
-            credito.numero_credito,
-            credito.empresa_nombre,
-            credito.get_linea_display(),
-            credito.get_estado_display(),
-            credito.nombre_cliente,
-            credito.fecha_desembolso.strftime('%d/%m/%Y') if credito.fecha_desembolso else '',
-            credito.fecha_proximo_pago.strftime('%d/%m/%Y') if credito.fecha_proximo_pago else '',
-            credito.saldo_pendiente or Decimal('0.00'),
-            credito.valor_cuota or Decimal('0.00'),
-        ])
-
-    for sheet in workbook.worksheets:
-        for cell in sheet[1]:
-            cell.font = Font(bold=True)
-        for column_cells in sheet.columns:
-            length = max(len(str(cell.value or '')) for cell in column_cells[:50])
-            sheet.column_dimensions[column_cells[0].column_letter].width = min(max(length + 2, 12), 32)
-
-    filename_suffix = empresa_filter.replace(' ', '_') if empresa_filter else 'todas'
-    response = HttpResponse(
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
-    response['Content-Disposition'] = (
-        f'attachment; filename="reporte_dashboard_admin_{filename_suffix}_{timezone.now().strftime("%Y%m%d")}.xlsx"'
-    )
+    response = HttpResponse(content_type=EXCEL_CONTENT_TYPE)
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
     workbook.save(response)
     return response
-
 
 @staff_member_required
 def admin_solicitudes_view(request):

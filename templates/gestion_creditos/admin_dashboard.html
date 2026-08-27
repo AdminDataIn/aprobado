@@ -204,6 +204,62 @@
             color: var(--text-secondary);
             font-size: 0.78rem;
         }
+        .export-report-modal .modal-content {
+            border: 0;
+            border-radius: 1rem;
+            box-shadow: 0 24px 70px rgba(15, 23, 42, 0.2);
+        }
+        .export-report-modal .modal-header,
+        .export-report-modal .modal-footer {
+            border-color: rgba(15, 23, 42, 0.08);
+        }
+        .export-mode-options {
+            display: grid;
+            gap: 0.65rem;
+        }
+        .export-mode-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.7rem;
+            padding: 0.8rem 0.9rem;
+            border: 1px solid rgba(15, 23, 42, 0.12);
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: border-color 0.15s ease, background-color 0.15s ease;
+        }
+        .export-mode-option:hover {
+            border-color: rgba(14, 165, 233, 0.5);
+            background: rgba(14, 165, 233, 0.035);
+        }
+        .export-mode-option .form-check-input {
+            flex: 0 0 auto;
+            margin-top: 0.2rem;
+        }
+        .export-mode-copy {
+            display: grid;
+            gap: 0.15rem;
+        }
+        .export-mode-copy small {
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+        .export-date-fields {
+            display: none;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(15, 23, 42, 0.08);
+        }
+        .export-date-fields.is-visible { display: grid; }
+        .export-form-error {
+            display: none;
+            grid-column: 1 / -1;
+            margin: 0;
+            color: #b91c1c;
+            font-size: 0.82rem;
+        }
+        .export-form-error.is-visible { display: block; }
         @media (max-width: 991px) {
             .dashboard-toolbar .toolbar-form {
                 width: 100%;
@@ -234,6 +290,7 @@
                 min-height: 240px;
             }
             .analytics-card .chart-container { height: 300px; }
+            .export-date-fields { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -288,7 +345,9 @@
                     {% if fecha_desde_filter or fecha_hasta_filter or empresa_filter or asesor_filter or estado_filter or linea_filter %}
                         <a href="{% url 'gestion:dashboard' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
                     {% endif %}
-                        <a href="{% url 'gestion:dashboard_export' %}{% if empresa_filter or asesor_filter %}?{% endif %}{% if empresa_filter %}empresa={{ empresa_filter|urlencode }}{% endif %}{% if empresa_filter and asesor_filter %}&{% endif %}{% if asesor_filter %}asesor={{ asesor_filter|urlencode }}{% endif %}" class="btn btn-sm btn-primary" data-download="true"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Exportar reporte Excel</a>
+                        <button type="button" id="openExportReportModal" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#exportReportModal" aria-controls="exportReportModal">
+                            <i class="bi bi-file-earmark-spreadsheet me-1"></i>Exportar reporte Excel
+                        </button>
                     </div>
                 </div>
                 <div id="advancedFilters" class="advanced-filters {% if filtros_avanzados_activos %}is-open{% endif %}">
@@ -572,6 +631,60 @@
         </div>
     </div>
 
+    <div class="modal fade export-report-modal" id="exportReportModal" tabindex="-1" aria-labelledby="exportReportModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form id="exportReportForm" method="get" action="{% url 'gestion:dashboard_export' %}" data-loader="off">
+                    <div class="modal-header">
+                        <div>
+                            <h2 class="modal-title fs-5" id="exportReportModalTitle">Exportar reporte</h2>
+                            <p class="mb-0 mt-1 text-secondary small">Configura la descarga sin modificar los filtros del dashboard.</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <fieldset class="border-0 p-0 m-0">
+                            <legend class="visually-hidden">Tipo de reporte</legend>
+                            <div class="export-mode-options">
+                                <label class="export-mode-option" for="exportModeGeneral">
+                                    <input class="form-check-input" type="radio" name="report_type" id="exportModeGeneral" value="general" checked>
+                                    <span class="export-mode-copy">
+                                        <strong>Reporte general</strong>
+                                        <small>Incluye toda la información permitida, sin depender de los filtros aplicados en pantalla.</small>
+                                    </span>
+                                </label>
+                                <label class="export-mode-option" for="exportModeRange">
+                                    <input class="form-check-input" type="radio" name="report_type" id="exportModeRange" value="range">
+                                    <span class="export-mode-copy">
+                                        <strong>Reporte por rango de fechas</strong>
+                                        <small>Aplica el rango según la fecha correspondiente a cada hoja del reporte.</small>
+                                    </span>
+                                </label>
+                            </div>
+                        </fieldset>
+                        <div id="exportDateFields" class="export-date-fields" aria-hidden="true">
+                            <div>
+                                <label for="exportFechaDesde" class="form-label small fw-semibold">Fecha desde</label>
+                                <input id="exportFechaDesde" name="fecha_desde" type="date" class="form-control" disabled>
+                            </div>
+                            <div>
+                                <label for="exportFechaHasta" class="form-label small fw-semibold">Fecha hasta</label>
+                                <input id="exportFechaHasta" name="fecha_hasta" type="date" class="form-control" disabled>
+                            </div>
+                            <p id="exportRangeError" class="export-form-error" role="alert" aria-live="polite"></p>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-download me-1"></i>Descargar Excel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const advancedToggle = document.getElementById('advancedFiltersToggle');
@@ -580,6 +693,48 @@
             const isOpen = advancedFilters.classList.toggle('is-open');
             advancedToggle.setAttribute('aria-expanded', String(isOpen));
         });
+
+        const exportReportForm = document.getElementById('exportReportForm');
+        const exportModeInputs = document.querySelectorAll('input[name="report_type"]');
+        const exportDateFields = document.getElementById('exportDateFields');
+        const exportFechaDesde = document.getElementById('exportFechaDesde');
+        const exportFechaHasta = document.getElementById('exportFechaHasta');
+        const exportRangeError = document.getElementById('exportRangeError');
+
+        function clearExportRangeError() {
+            exportFechaDesde.setCustomValidity('');
+            exportFechaHasta.setCustomValidity('');
+            exportRangeError.textContent = '';
+            exportRangeError.classList.remove('is-visible');
+        }
+
+        function updateExportMode() {
+            const isRange = document.querySelector('input[name="report_type"]:checked')?.value === 'range';
+            exportDateFields.classList.toggle('is-visible', isRange);
+            exportDateFields.setAttribute('aria-hidden', String(!isRange));
+            exportFechaDesde.disabled = !isRange;
+            exportFechaHasta.disabled = !isRange;
+            exportFechaDesde.required = isRange;
+            exportFechaHasta.required = isRange;
+            clearExportRangeError();
+        }
+
+        exportModeInputs.forEach(input => input.addEventListener('change', updateExportMode));
+        exportFechaDesde.addEventListener('change', clearExportRangeError);
+        exportFechaHasta.addEventListener('change', clearExportRangeError);
+        exportReportForm.addEventListener('submit', event => {
+            const isRange = document.querySelector('input[name="report_type"]:checked')?.value === 'range';
+            clearExportRangeError();
+            if (isRange && exportFechaDesde.value && exportFechaHasta.value && exportFechaDesde.value > exportFechaHasta.value) {
+                event.preventDefault();
+                const message = 'La fecha desde no puede ser posterior a la fecha hasta.';
+                exportFechaHasta.setCustomValidity(message);
+                exportRangeError.textContent = message;
+                exportRangeError.classList.add('is-visible');
+                exportFechaHasta.reportValidity();
+            }
+        });
+        updateExportMode();
 
         Chart.defaults.font.family = "Inter, system-ui, -apple-system, 'Segoe UI', sans-serif";
         Chart.defaults.color = '#64748b';

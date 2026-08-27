@@ -126,10 +126,13 @@ class AdminViewsSmokeTest(TestCase):
         )
 
         workbook = load_workbook(io.BytesIO(response.content))
-        self.assertIn('Resumen ejecutivo', workbook.sheetnames)
+        self.assertIn('Resumen', workbook.sheetnames)
+        self.assertIn('Solicitudes', workbook.sheetnames)
+        self.assertIn('Creditos', workbook.sheetnames)
+        self.assertIn('Cuotas', workbook.sheetnames)
+        self.assertIn('Pagos', workbook.sheetnames)
         self.assertIn('Recaudo contable', workbook.sheetnames)
         self.assertIn('Detalle contable', workbook.sheetnames)
-        self.assertIn('Detalle operativo', workbook.sheetnames)
 
     def test_dashboard_renderiza_indicadores_contables(self):
         response = self.client.get(reverse('gestion:dashboard'))
