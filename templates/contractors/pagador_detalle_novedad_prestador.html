@@ -1,0 +1,50 @@
+{% load static humanize %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Detalle de novedad operativa</title>
+  <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+  {% include 'base/favicon.html' %}
+  <style>
+    body { background:#f4f7fb; color:#10233f; font-family:Arial,sans-serif; }
+    .contenedor { max-width:920px; margin:0 auto; padding:32px 20px 60px; }
+    .panel { background:#fff; border:1px solid #dce5ef; border-radius:8px; padding:24px; margin-bottom:18px; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+    .dato span { display:block; color:#64748b; font-size:13px; margin-bottom:5px; }
+    .boton { border:0; border-radius:6px; padding:12px 18px; background:#08acd0; color:#fff; font-weight:700; cursor:pointer; }
+    .acciones { display:flex; gap:12px; flex-wrap:wrap; margin-top:20px; }
+    .enlace { color:#087aa2; font-weight:700; text-decoration:none; }
+    .nota { border-left:4px solid #08acd0; padding:12px 14px; background:#edfaff; }
+    @media (max-width:650px) { .grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <main class="contenedor">
+    <p><a class="enlace" href="{% url 'pagador:prestadores_novedades' %}">Volver a novedades</a></p>
+    <section class="panel">
+      <h1>Novedad operativa</h1>
+      <p class="nota">Esta comunicación confirma una gestión operativa. No modifica las condiciones financieras del crédito.</p>
+      <div class="grid">
+        <div class="dato"><span>Crédito</span><strong>{{ dto.numero_credito }}</strong></div>
+        <div class="dato"><span>Estado</span><strong>{{ novedad.get_estado_display }}</strong></div>
+        <div class="dato"><span>Titular</span><strong>{{ dto.titular_nombre }}</strong></div>
+        <div class="dato"><span>Documento</span><strong>{{ dto.documento_enmascarado }}</strong></div>
+        <div class="dato"><span>Monto formalizado</span><strong>${{ dto.monto_formalizado|floatformat:0|intcomma }}</strong></div>
+        <div class="dato"><span>Plazo</span><strong>{{ dto.plazo_meses }} meses</strong></div>
+        <div class="dato"><span>Fecha de firma</span><strong>{{ dto.fecha_firma|date:"Y-m-d H:i" }}</strong></div>
+        <div class="dato"><span>Contrato</span><strong>{{ dto.fecha_inicio_contrato|default:"No registrada" }} a {{ dto.fecha_fin_contrato|default:"No registrada" }}</strong></div>
+      </div>
+      <div class="acciones">
+        {% if puede_confirmar_recepcion %}
+          <form method="post" action="{% url 'pagador:prestadores_novedad_confirmar_recepcion' novedad.id %}">{% csrf_token %}<button class="boton" type="submit">Confirmar recepción</button></form>
+        {% endif %}
+        {% if puede_marcar_gestionada %}
+          <form method="post" action="{% url 'pagador:prestadores_novedad_marcar_gestionada' novedad.id %}">{% csrf_token %}<button class="boton" type="submit">Marcar gestionada</button></form>
+        {% endif %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>

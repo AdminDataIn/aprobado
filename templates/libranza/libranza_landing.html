@@ -106,11 +106,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                     <p>Financia tus proyectos personales con descuento automático de nómina. Proceso 100% digital, aprobación rápida y sin complicaciones.</p>
                     <div class="libranza-hero-buttons">
                         <a href="{% url 'libranza:simulador' %}" class="libranza-btn-primary">Simula tu crédito</a>
-                        {% if request.user.is_authenticated %}
-                        <a href="{% url 'libranza:adelanto_nomina' %}" class="libranza-btn-secondary">Solicitar adelanto de nómina</a>
-                        {% else %}
-                        <a href="#adelanto-nomina" class="libranza-btn-secondary">Simula tu adelanto de nómina</a>
-                        {% endif %}
+                        <a href="#prestadores-servicios" class="libranza-btn-secondary">Soy Prestador de Servicios</a>
                     </div>
                 </div>
                 <!-- MODIFICAR: Imagen o gráfico hero -->
@@ -190,85 +186,38 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         </div>
     </section>
 
-    <section class="libranza-adelanto-section" id="adelanto-nomina">
+    <section class="libranza-contractors-section" id="prestadores-servicios">
         <div class="libranza-container">
-            <div class="libranza-adelanto-grid">
-                <div class="libranza-adelanto-copy">
-                    <span class="libranza-eyebrow">Producto adicional de libranza</span>
-                    <h2 class="libranza-section-title" style="text-align:left;margin-bottom:1rem;">Haz la simulación de tu <span class="highlight-cyan">adelanto de nómina</span></h2>
-                    <p class="libranza-section-description" style="text-align:left;max-width:none;">
-                        Este producto está pensado para cubrir necesidades puntuales de caja. Calcula tu monto estimado usando salario,
-                        auxilio de transporte y descuentos fijos, y conoce de inmediato tu neto a recibir.
+            <div class="libranza-contractors-card">
+                <div class="libranza-contractors-copy">
+                    <span class="libranza-eyebrow">Canal especializado</span>
+                    <h2 class="libranza-section-title">¿Eres <span class="highlight-cyan">Prestador de Servicios</span>?</h2>
+                    <p>
+                        Si trabajas con contrato de prestación de servicios, puedes iniciar tu solicitud en un flujo
+                        especializado. Te pediremos tus datos, documentos y empresa contratante antes de habilitar la
+                        simulación.
                     </p>
-                    <div class="libranza-adelanto-benefits">
-                        <div class="libranza-adelanto-benefit">
-                            <strong>Simulación clara</strong>
-                            <span>Mostramos bruto, costo de originación, IVA, interés NM {{ adelanto_tasa_mensual }} y neto final.</span>
-                        </div>
-                        <div class="libranza-adelanto-benefit">
-                            <strong>Decisión controlada</strong>
-                            <span>La solicitud real solo se habilita si tu pagador te cargó con convenio activo y antigüedad mínima.</span>
-                        </div>
-                        <div class="libranza-adelanto-benefit">
-                            <strong>Flujo propio</strong>
-                            <span>No se mezcla con el crédito tradicional: tiene su propia revisión, firma y desembolso.</span>
-                        </div>
-                    </div>
                     <div class="libranza-hero-buttons">
-                        {% if request.user.is_authenticated %}
-                        <a href="{% url 'libranza:adelanto_nomina' %}" class="libranza-btn-primary">Solicitar adelanto</a>
-                        {% else %}
-                        <a href="{% url 'libranza:login' %}?next={% url 'libranza:adelanto_nomina' %}" class="libranza-btn-primary">Iniciar sesión para solicitar</a>
-                        {% endif %}
+                        <a href="https://contratistas.aprobado.com.co/solicitar/" class="libranza-btn-primary">Solicitar como Prestador</a>
                     </div>
+                    <small>Este flujo está diseñado para prestadores con empresa registrada en Aprobado.</small>
                 </div>
-
-                <div class="libranza-adelanto-simulator" id="adelanto-simulador">
-                    <div class="libranza-adelanto-card">
-                        <div class="libranza-adelanto-card-head">
-                            <span class="libranza-eyebrow">Simulador inmediato</span>
-                            <h3>Calcula tu adelanto estimado</h3>
-                        </div>
-                        <form id="adelantoSimulatorForm" class="libranza-adelanto-form" data-loader="ajax" novalidate>
-                            {% csrf_token %}
-                            <div class="libranza-adelanto-fields">
-                                <div class="libranza-adelanto-field">
-                                    <label for="adelanto-salario">Salario mensual</label>
-                                    <input type="text" id="adelanto-salario" inputmode="numeric" autocomplete="off" data-money-input placeholder="Ej. 2.400.000">
-                                </div>
-                                <div class="libranza-adelanto-field">
-                                    <label for="adelanto-auxilio">Auxilio de transporte</label>
-                                    <input type="text" id="adelanto-auxilio" inputmode="numeric" autocomplete="off" data-money-input placeholder="Ej. 162.000">
-                                </div>
-                                <div class="libranza-adelanto-field libranza-adelanto-field-wide">
-                                    <label for="adelanto-descuentos">Descuentos fijos</label>
-                                    <input type="text" id="adelanto-descuentos" inputmode="numeric" autocomplete="off" data-money-input placeholder="Ej. 300.000">
-                                </div>
-                            </div>
-                            <div class="libranza-adelanto-inline-note">Usa valores mensuales en pesos colombianos. Formateamos automáticamente los montos al escribir.</div>
-                            <button type="submit" class="libranza-btn-primary libranza-adelanto-submit" id="adelanto-submit-btn" style="width:100%;">
-                                <span>Simular adelanto</span>
-                            </button>
-                        </form>
-
-                        <div class="libranza-adelanto-results" id="adelantoSimulatorResults">
-                            <div class="libranza-adelanto-result-main">
-                                <span>Monto neto estimado a recibir</span>
-                                <strong id="adelanto-neto">$0</strong>
-                                <small id="adelanto-estado">Ingresa tus datos para calcular el resultado.</small>
-                            </div>
-                            <div class="libranza-adelanto-result-grid">
-                                <div><span>Monto bruto</span><strong id="adelanto-bruto">$0</strong></div>
-                                <div><span>Valor diario</span><strong id="adelanto-diario">$0</strong></div>
-                                <div><span>Costo de originación {{ adelanto_comision_percent }}%</span><strong id="adelanto-comision">$0</strong></div>
-                                <div><span>IVA sobre costo de originación</span><strong id="adelanto-iva">$0</strong></div>
-                                <div><span>Interés NM {{ adelanto_tasa_mensual }}</span><strong id="adelanto-interes">$0</strong></div>
-                                <div><span>Descuento estimado nómina</span><strong id="adelanto-descuento">$0</strong></div>
-                            </div>
-                            <div class="libranza-adelanto-note">
-                                La simulación es informativa. Para solicitar, validamos convenio activo, antigüedad mínima y el vínculo laboral cargado por tu pagador.
-                            </div>
-                        </div>
+                <div class="libranza-contractors-steps" aria-label="Pasos para Prestadores de Servicios">
+                    <div class="libranza-contractors-step">
+                        <span>1</span>
+                        <strong>Regístrate</strong>
+                    </div>
+                    <div class="libranza-contractors-step">
+                        <span>2</span>
+                        <strong>Carga tus documentos</strong>
+                    </div>
+                    <div class="libranza-contractors-step">
+                        <span>3</span>
+                        <strong>Validamos tu contrato</strong>
+                    </div>
+                    <div class="libranza-contractors-step">
+                        <span>4</span>
+                        <strong>Simula con tus datos</strong>
                     </div>
                 </div>
             </div>
@@ -336,7 +285,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                         <!-- MODIFICAR: Tipo de cuota -->
                         <li><strong>Cuota:</strong> Fija mensual descontada de nómina</li>
                         <!-- MODIFICAR: Costo de originación -->
-                        <li><strong>Costo de originación:</strong> 10% + IVA (19%) sobre el monto</li>
+                        <li><strong>Costo de originación:</strong> según monto y plazo, más IVA (19%). Consulta el simulador.</li>
                         <!-- MODIFICAR: Tasa de interés si aplica -->
                         <li><strong>Tasa de interés:</strong> {{ libranza_tasa_mensual|default:"1.9" }}% efectiva mensual (EM)</li>
                     </ul>
@@ -360,46 +309,135 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         </div>
     </section>
 
+    <section class="libranza-presence-section" id="presencia-nacional">
+        <div class="libranza-container">
+            <div class="libranza-presence-shell">
+                <div class="libranza-presence-copy">
+                    <span class="libranza-eyebrow">Presencia nacional</span>
+                    <h2 class="libranza-section-title">Empresas que ya <span class="highlight-cyan">confían en nosotros</span></h2>
+                    <p>
+                        Trabajamos con aliados en todo el país. Conoce dónde estamos presentes y cómo
+                        crecemos junto a empresas de diferentes regiones de Colombia.
+                    </p>
+                    <div class="libranza-presence-metrics" aria-label="Métricas de presencia nacional">
+                        <div class="libranza-presence-metric">
+                            <strong>{{ landing_presencia.con_ubicacion_registrada|default:0 }}</strong>
+                            <span>empresas con ubicación</span>
+                        </div>
+                        <div class="libranza-presence-metric">
+                            <strong>{{ landing_presencia.departamentos_con_presencia|length }}</strong>
+                            <span>departamentos</span>
+                        </div>
+                        <div class="libranza-presence-metric">
+                            <strong>{{ landing_presencia.municipios_con_presencia|length }}</strong>
+                            <span>municipios</span>
+                        </div>
+                        <div class="libranza-presence-metric is-muted">
+                            <strong>{{ landing_presencia.sin_ubicacion_registrada|default:0 }}</strong>
+                            <span>empresas sin ubicación</span>
+                        </div>
+                    </div>
+                    {% if landing_presencia.top_zonas %}
+                    <div class="libranza-active-cities">
+                        <p>Municipios activos</p>
+                        <div>
+                            {% for zona in landing_presencia.top_zonas|slice:":8" %}
+                            <span>{{ zona.municipio|default:zona.departamento }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="libranza-map-card" aria-label="Mapa zonal de presencia en Colombia">
+                    {{ landing_presencia.mapa_ubicaciones|json_script:"libranza-presence-map-data" }}
+                    {{ landing_presencia.departamentos_con_presencia|json_script:"libranza-presence-departments-data" }}
+                    <div
+                        class="libranza-map-frame"
+                        id="libranza-colombia-map"
+                        data-geojson-local-url="{% static 'maps/colombia.geo.json' %}"
+                        aria-label="Mapa real de Colombia con presencia de empresas"
+                    >
+                        <div class="libranza-map-loading" id="libranza-map-loading">Cargando mapa de Colombia...</div>
+                        <div class="libranza-map-tooltip" id="libranza-map-tooltip" role="status" aria-live="polite"></div>
+                    </div>
+                    <p class="libranza-map-source">Fuente cartográfica local: DANE / datos.gov.co</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
     {% if landing_trusted_companies %}
     <section class="libranza-trusted-section" id="empresas-confian">
         <div class="libranza-container">
             <div class="libranza-trusted-head">
-                <span class="libranza-eyebrow">Empresas que confían en nosotros</span>
-                <h2 class="libranza-section-title">Convenios y aliados que ya operan con <span class="highlight-cyan">Aprobado</span></h2>
-                <p class="libranza-section-description" style="margin-bottom:0;max-width:760px;">Una franja limpia para mostrar organizaciones que ya confían en nuestro flujo digital, sin convertir la landing en una vitrina cargada.</p>
+                <span class="libranza-eyebrow">Ellos confiaron en nosotros</span>
+                <h2 class="libranza-section-title">Empresas que confían en <span class="highlight-cyan">Aprobado</span></h2>
+                <p class="libranza-section-description" style="margin-bottom:0;max-width:760px;">Organizaciones con convenio activo que hacen parte de nuestra operación de libranza.</p>
             </div>
-            <div class="libranza-trusted-marquee-shell" aria-label="Empresas que confían en Aprobado">
-                <div class="libranza-trusted-marquee-track">
+            <div class="libranza-logo-rail{% if landing_trusted_companies|length <= 4 %} is-static{% endif %}" aria-label="Empresas activas que confían en Aprobado">
+                {% if landing_trusted_companies|length <= 4 %}
+                <div class="libranza-logo-static-grid">
                     {% for company in landing_trusted_companies %}
-                    <div class="libranza-trusted-logo-card">
-                        <img src="{{ company.logo_url }}" alt="{{ company.nombre }}" class="libranza-trusted-logo{% if company.nombre == 'DataIn' %} is-datain{% endif %}" loading="lazy">
-                    </div>
-                    {% endfor %}
-                    {% for company in landing_trusted_companies %}
-                    <div class="libranza-trusted-logo-card" aria-hidden="true">
-                        <img src="{{ company.logo_url }}" alt="" class="libranza-trusted-logo{% if company.nombre == 'DataIn' %} is-datain{% endif %}" loading="lazy">
-                    </div>
+                        {% include "libranza/partials/company_logo_item.html" with company=company %}
                     {% endfor %}
                 </div>
+                {% else %}
+                <div class="libranza-logo-rail-row">
+                    <div class="libranza-logo-rail-track">
+                        {% for company in landing_trusted_companies %}
+                            {% if forloop.counter|divisibleby:2 %}
+                            {% include "libranza/partials/company_logo_item.html" with company=company %}
+                            {% endif %}
+                        {% endfor %}
+                        <span class="libranza-logo-rail-repeat" aria-hidden="true">
+                            {% for company in landing_trusted_companies %}
+                                {% if forloop.counter|divisibleby:2 %}
+                                {% include "libranza/partials/company_logo_item.html" with company=company ocultar_nombre=True %}
+                                {% endif %}
+                            {% endfor %}
+                        </span>
+                    </div>
+                </div>
+                <div class="libranza-logo-rail-row is-reverse">
+                    <div class="libranza-logo-rail-track">
+                        {% for company in landing_trusted_companies %}
+                            {% if not forloop.counter|divisibleby:2 %}
+                            {% include "libranza/partials/company_logo_item.html" with company=company %}
+                            {% endif %}
+                        {% endfor %}
+                        <span class="libranza-logo-rail-repeat" aria-hidden="true">
+                            {% for company in landing_trusted_companies %}
+                                {% if not forloop.counter|divisibleby:2 %}
+                                {% include "libranza/partials/company_logo_item.html" with company=company ocultar_nombre=True %}
+                                {% endif %}
+                            {% endfor %}
+                        </span>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
     </section>
     {% endif %}
 
-    <section class="libranza-testimonials-section" id="testimonios">
+    <section class="libranza-backers-section" id="quienes-nos-respaldan">
         <div class="libranza-container">
-            <div class="libranza-testimonials-shell">
-                <div>
-                    <span class="libranza-eyebrow">Testimonios</span>
-                    <h2 class="libranza-section-title" style="text-align:left;margin-bottom:0.75rem;">Historias reales, sección lista para activarse</h2>
-                    <p class="libranza-section-description" style="text-align:left;max-width:none;">Dejamos preparada la estructura para publicar testimonios validados de clientes y empresas, sin inventar contenido ni forzar prueba social antes de tiempo.</p>
-                </div>
-                <div class="libranza-testimonials-placeholder">
-                    <i class="bi bi-chat-quote"></i>
-                    <strong>Espacio reservado para testimonios</strong>
-                    <span>Cuando tengamos casos validados, aquí se mostrarán relatos breves con nombre, empresa y resultado.</span>
-                </div>
+            <div class="libranza-backers-head">
+                <span class="libranza-eyebrow">Quiénes nos respaldan</span>
+                <h2 class="libranza-section-title">Respaldo institucional para operar con confianza</h2>
+                <p class="libranza-section-description" style="margin-bottom:0;max-width:760px;">Tecnología, información y garantías que fortalecen nuestro proceso.</p>
             </div>
+            {% if landing_backers %}
+            <div class="libranza-backers-grid" aria-label="Entidades que respaldan a Aprobado">
+                {% for backer in landing_backers %}
+                <div class="libranza-backer-card">
+                    <img src="{% static backer.logo_path %}" alt="{{ backer.nombre }}" class="libranza-backer-logo" loading="lazy">
+                    <strong>{{ backer.nombre }}</strong>
+                    <small>{{ backer.descripcion }}</small>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
         </div>
     </section>
 
@@ -478,7 +516,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                     <div class="libranza-faq-answer">
                         <p><strong>Costos totales del crédito de libranza:</strong></p>
                         <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
-                            <li><strong>Costo de originación:</strong> 10% del monto solicitado (única vez)</li>
+                            <li><strong>Costo de originación:</strong> se informa en el simulador según el plazo seleccionado.</li>
                             <li><strong>IVA sobre costo de originación:</strong> 19% del costo de originación</li>
                             <li><strong>Intereses:</strong> {{ libranza_tasa_mensual|default:"1.9" }}% efectivo mensual sobre el capital financiado</li>
                         </ul>
@@ -516,11 +554,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                         <!-- MODIFICAR: Botones de acción -->
                         {# ✅ NUEVAS URLs - Libranza #}
                         <a href="{% url 'libranza:simulador' %}" class="libranza-btn-primary-large">Simular crédito</a>
-                        {% if request.user.is_authenticated %}
-                        <a href="{% url 'libranza:adelanto_nomina' %}" class="libranza-btn-secondary-large">Solicitar adelanto</a>
-                        {% else %}
-                        <a href="{% url 'libranza:login' %}?next={{ request.get_full_path|urlencode }}" class="libranza-btn-secondary-large">Iniciar sesión</a>
-                        {% endif %}
+                        <a href="https://contratistas.aprobado.com.co/solicitar/" class="libranza-btn-secondary-large">Solicitar como Prestador</a>
                     </div>
                     <!-- MODIFICAR: Información de contacto -->
                     <p class="libranza-contact-info">
@@ -624,110 +658,429 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         line-height: 1.6;
     }
 
+    .libranza-presence-section,
     .libranza-trusted-section,
-    .libranza-testimonials-section {
+    .libranza-backers-section {
         padding: 4.5rem 0;
         background: #f8fafc;
     }
 
-    .libranza-trusted-head {
-        margin-bottom: 2rem;
-    }
-
-    .libranza-testimonials-placeholder {
+    .libranza-presence-section,
+    .libranza-backers-section {
         background: #ffffff;
-        border: 1px solid rgba(15, 23, 42, 0.08);
-        border-radius: 1.25rem;
-        padding: 1.4rem;
-        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.05);
     }
 
-    .libranza-trusted-marquee-shell {
-        position: relative;
-        overflow: hidden;
-        margin-top: 2rem;
-        padding: 1rem 0;
-        border-radius: 1.25rem;
-        border: 1px solid rgba(15, 23, 42, 0.08);
-        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.05);
-    }
-
-    .libranza-trusted-marquee-shell::before,
-    .libranza-trusted-marquee-shell::after {
-        content: "";
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        width: 5rem;
-        z-index: 1;
-        pointer-events: none;
-    }
-
-    .libranza-trusted-marquee-shell::before {
-        left: 0;
-        background: linear-gradient(90deg, #ffffff 0%, rgba(255,255,255,0) 100%);
-    }
-
-    .libranza-trusted-marquee-shell::after {
-        right: 0;
-        background: linear-gradient(270deg, #ffffff 0%, rgba(255,255,255,0) 100%);
-    }
-
-    .libranza-trusted-marquee-track {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        width: max-content;
-        animation: trustedLogosMarquee 26s linear infinite;
-    }
-
-    .libranza-trusted-logo-card {
-        width: 230px;
-        height: 96px;
-        flex: 0 0 auto;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 1rem 1.2rem;
-        border-radius: 1rem;
-        background: rgba(255, 255, 255, 0.92);
-        border: 1px solid rgba(148, 163, 184, 0.18);
-        overflow: hidden;
-    }
-
-    .libranza-trusted-logo {
-        max-width: 170px;
-        max-height: 44px;
-        width: auto;
-        height: auto;
-        object-fit: contain;
-        filter: saturate(0.96);
-    }
-
-    .libranza-trusted-logo.is-datain {
-        max-width: 208px;
-        max-height: 58px;
-    }
-
-    .libranza-testimonials-shell {
+    .libranza-presence-shell {
         display: grid;
-        grid-template-columns: 1.2fr 0.8fr;
-        gap: 1.25rem;
-        align-items: stretch;
+        grid-template-columns: minmax(300px, 0.88fr) minmax(560px, 1.12fr);
+        gap: 2.3rem;
+        align-items: center;
+        padding: 3rem;
+        border-radius: 1.25rem;
+        border: 1px solid rgba(13, 181, 207, 0.16);
+        background: #ffffff;
+        box-shadow: 0 18px 44px rgba(15, 23, 42, 0.07);
     }
 
-    .libranza-testimonials-placeholder {
+    .libranza-presence-copy .libranza-section-title {
+        text-align: left;
+        margin-bottom: 0.9rem;
+    }
+
+    .libranza-presence-copy p {
+        color: #475569;
+        font-size: 1.05rem;
+        line-height: 1.65;
+        margin: 0;
+    }
+
+    .libranza-presence-metrics {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.8rem;
+        margin-top: 1.4rem;
+    }
+
+    .libranza-presence-metric,
+    .libranza-presence-empty {
+        min-height: 116px;
         display: flex;
         flex-direction: column;
         justify-content: center;
-        gap: 0.6rem;
-        color: #475569;
+        gap: 0.35rem;
+        padding: 1.25rem;
+        border-radius: 1rem;
+        background: #ffffff;
+        border: 1px solid rgba(14, 165, 233, 0.18);
+        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
     }
 
-    .libranza-testimonials-placeholder i {
-        font-size: 1.6rem;
-        color: #0891b2;
+    .libranza-presence-metric strong {
+        color: #0a192f;
+        font-size: 2rem;
+        line-height: 1;
+    }
+
+    .libranza-presence-metric span {
+        color: #64748b;
+        font-weight: 700;
+        font-size: 0.88rem;
+    }
+
+    .libranza-presence-metric.is-muted {
+        border-color: rgba(148, 163, 184, 0.24);
+        background: rgba(255, 255, 255, 0.72);
+    }
+
+    .libranza-active-cities {
+        margin-top: 1.15rem;
+    }
+
+    .libranza-active-cities p {
+        margin: 0 0 0.45rem;
+        color: #48677c;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+    }
+
+    .libranza-active-cities div {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+    }
+
+    .libranza-active-cities span {
+        display: inline-flex;
+        padding: 0.28rem 0.75rem;
+        border-radius: 999px;
+        background: #d8f6fb;
+        color: #075c78;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .libranza-map-card {
+        position: relative;
+        min-height: 520px;
+        padding: 0;
+        border-radius: 0;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        overflow: visible;
+    }
+
+    .libranza-map-frame {
+        position: relative;
+        width: 100%;
+        min-height: 500px;
+        background: transparent;
+        overflow: hidden;
+    }
+
+    .libranza-map-loading {
+        color: #0f4f5e;
+        font-weight: 800;
+        font-size: 0.95rem;
+    }
+
+    .libranza-colombia-map-svg {
+        width: 100%;
+        height: auto;
+        display: block;
+        overflow: visible;
+        filter: drop-shadow(0 18px 28px rgba(6, 145, 178, 0.10));
+    }
+
+    .libranza-map-country {
+        filter: drop-shadow(0 14px 26px rgba(6, 145, 178, 0.10));
+    }
+
+    .libranza-map-department {
+        fill: #e7f8fb;
+        stroke: #a7dce8;
+        stroke-width: 0.9;
+        vector-effect: non-scaling-stroke;
+        transition: fill 0.2s ease, stroke 0.2s ease, opacity 0.2s ease;
+    }
+
+    .libranza-map-department.is-active {
+        fill: #bdeef7;
+        stroke: #2bb7d1;
+        stroke-width: 1.1;
+    }
+
+    .libranza-map-point {
+        fill: #0677a3;
+        stroke: #ffffff;
+        stroke-width: 2;
+        filter: drop-shadow(0 8px 16px rgba(6, 119, 163, 0.26));
+    }
+
+    .libranza-map-point-group:hover .libranza-map-point,
+    .libranza-map-point-group:focus .libranza-map-point {
+        fill: #0a192f;
+    }
+
+    .libranza-map-label {
+        fill: #0a192f;
+        font-size: 0.62rem;
+        font-weight: 800;
+        paint-order: stroke;
+        stroke: rgba(255, 255, 255, 0.92);
+        stroke-width: 3px;
+        stroke-linejoin: round;
+        pointer-events: none;
+    }
+
+    .libranza-map-tooltip {
+        position: absolute;
+        z-index: 5;
+        min-width: 150px;
+        max-width: 220px;
+        padding: 0.7rem 0.85rem;
+        border-radius: 0.85rem;
+        background: rgba(10, 25, 47, 0.96);
+        color: #ffffff;
+        box-shadow: 0 16px 34px rgba(15, 23, 42, 0.22);
+        font-size: 0.82rem;
+        line-height: 1.35;
+        pointer-events: none;
+        opacity: 0;
+        transform: translate(-50%, calc(-100% - 18px));
+        transition: opacity 0.15s ease;
+    }
+
+    .libranza-map-tooltip strong {
+        display: block;
+        color: #22d3ee;
+        font-size: 0.88rem;
+        margin-bottom: 0.15rem;
+    }
+
+    .libranza-map-source {
+        margin: 0.25rem 0 0;
+        color: #6b8da0;
+        font-size: 0.68rem;
+        text-align: center;
+    }
+
+    .libranza-trusted-head,
+    .libranza-backers-head {
+        margin-bottom: 2rem;
+    }
+
+    .libranza-logo-rail {
+        --logo-rail-duration: 55s;
+        --logo-rail-duration-alt: 65s;
+        display: grid;
+        gap: 1rem;
+        margin-top: 2rem;
+        padding: 1.1rem 0;
+        overflow: hidden;
+        border-radius: 1.4rem;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.05);
+        -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 7%, #000 93%, transparent 100%);
+        mask-image: linear-gradient(90deg, transparent 0, #000 7%, #000 93%, transparent 100%);
+    }
+
+    .libranza-logo-rail.is-static {
+        overflow-x: visible;
+        -webkit-mask-image: none;
+        mask-image: none;
+    }
+
+    .libranza-logo-static-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        padding: 0 1rem;
+    }
+
+    .libranza-logo-rail-row {
+        overflow: hidden;
+    }
+
+    .libranza-logo-rail-track {
+        width: max-content;
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        animation: libranzaLogoRail var(--logo-rail-duration) linear infinite;
+        padding: 0 1rem;
+    }
+
+    .libranza-logo-rail-row.is-reverse .libranza-logo-rail-track {
+        animation-direction: reverse;
+        animation-duration: var(--logo-rail-duration-alt);
+    }
+
+    .libranza-logo-rail:hover .libranza-logo-rail-track {
+        animation-play-state: paused;
+    }
+
+    .libranza-logo-rail-repeat {
+        display: inline-flex;
+        gap: 1rem;
+    }
+
+    .libranza-logo-item {
+        min-width: 220px;
+        height: 110px;
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+        padding: 0.95rem 1.15rem;
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.96);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+    }
+
+    .libranza-company-logo {
+        display: block;
+        max-width: 176px;
+        max-height: 68px;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        filter: saturate(0.98);
+    }
+
+    .libranza-company-fallback {
+        min-width: 58px;
+        height: 58px;
+        padding: 0 0.85rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: #e8fbff;
+        color: #05758f;
+        border: 1px solid rgba(16, 184, 212, 0.28);
+        font-weight: 900;
+        letter-spacing: 0.02em;
+    }
+
+    .libranza-logo-item strong {
+        max-width: 190px;
+        color: #0f172a;
+        font-size: 0.88rem;
+        text-align: center;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    @keyframes libranzaLogoRail {
+        from { transform: translateX(0); }
+        to { transform: translateX(-50%); }
+    }
+
+    .libranza-backers-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+
+    .libranza-backer-card {
+        min-height: 178px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 0.75rem;
+        padding: 1.35rem;
+        border-radius: 1rem;
+        border: 1px solid #dbe7f3;
+        background: #f8fafc;
+        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.05);
+    }
+
+    .libranza-backer-logo {
+        width: 100%;
+        max-width: 210px;
+        height: 54px;
+        object-fit: contain;
+        object-position: left center;
+    }
+
+    .libranza-backer-card strong {
+        color: #0a192f;
+        font-size: 1rem;
+    }
+
+    .libranza-backer-card small {
+        color: #64748b;
+        font-size: 0.78rem;
+        line-height: 1.35;
+    }
+
+    @media (max-width: 960px) {
+        .libranza-presence-shell {
+            grid-template-columns: 1fr;
+            padding: 1.35rem;
+        }
+
+        .libranza-presence-metrics {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .libranza-map-card {
+            min-height: 420px;
+        }
+
+        .libranza-map-frame {
+            min-height: 350px;
+        }
+
+        .libranza-colombia-map-svg {
+            height: 340px;
+        }
+
+        .libranza-backers-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 520px) {
+        .libranza-presence-metrics {
+            grid-template-columns: 1fr;
+        }
+
+        .libranza-logo-item {
+            min-width: 156px;
+            height: 84px;
+            padding: 0.85rem;
+        }
+
+        .libranza-company-logo {
+            max-width: 128px;
+            max-height: 48px;
+        }
+
+        .libranza-logo-item strong {
+            max-width: 138px;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .libranza-logo-rail-track {
+            animation: none;
+        }
+
+        .libranza-logo-rail {
+            overflow-x: auto;
+            -webkit-mask-image: none;
+            mask-image: none;
+        }
     }
 
     .libranza-social-links {
@@ -737,13 +1090,6 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         margin-top: 1.25rem;
         justify-content: center;
         align-items: center;
-    }
-
-    .libranza-social-intro {
-        margin: 1.75rem 0 0;
-        color: #d7e0ea;
-        font-size: 0.96rem;
-        font-weight: 600;
     }
 
     .libranza-social-link {
@@ -762,44 +1108,6 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
     .libranza-social-link:hover {
         transform: translateY(-1px);
         background: rgba(255, 255, 255, 0.18);
-    }
-
-    @keyframes trustedLogosMarquee {
-        from { transform: translateX(0); }
-        to { transform: translateX(calc(-50% - 0.5rem)); }
-    }
-
-    @media (max-width: 960px) {
-        .libranza-testimonials-shell {
-            grid-template-columns: 1fr;
-        }
-
-        .libranza-trusted-logo-card {
-            width: 190px;
-            height: 84px;
-        }
-
-        .libranza-trusted-logo {
-            max-width: 148px;
-            max-height: 40px;
-        }
-
-        .libranza-trusted-logo.is-datain {
-            max-width: 176px;
-            max-height: 50px;
-        }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        .libranza-trusted-marquee-shell {
-            overflow-x: auto;
-            scrollbar-width: thin;
-        }
-
-        .libranza-trusted-marquee-track {
-            animation: none;
-            padding-inline: 1rem;
-        }
     }
 
     .libranza-hero-buttons {
@@ -960,18 +1268,6 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         box-shadow: 0 8px 20px rgba(6, 182, 212, 0.3);
     }
 
-    .libranza-adelanto-section {
-        padding: 4.5rem 1rem;
-        background: linear-gradient(180deg, #f8fcff 0%, #eef7ff 100%);
-    }
-
-    .libranza-adelanto-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
-        gap: 2rem;
-        align-items: start;
-    }
-
     .libranza-eyebrow {
         display: inline-flex;
         align-items: center;
@@ -985,166 +1281,78 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         text-transform: uppercase;
     }
 
-    .libranza-adelanto-benefits {
+    .libranza-contractors-section {
+        padding: 4.5rem 1rem;
+        background: linear-gradient(180deg, #f8fcff 0%, #eef7ff 100%);
+    }
+
+    .libranza-contractors-card {
         display: grid;
-        gap: 1rem;
-        margin: 1.5rem 0 2rem;
+        grid-template-columns: minmax(0, 1fr) minmax(300px, 0.84fr);
+        gap: 2rem;
+        align-items: center;
+        padding: 2rem;
+        border-radius: 1.25rem;
+        border: 1px solid rgba(6, 182, 212, 0.18);
+        background: #ffffff;
+        box-shadow: 0 18px 44px rgba(15, 23, 42, 0.07);
     }
 
-    .libranza-adelanto-benefit {
-        background: white;
-        border: 1px solid #dbe7f3;
-        border-radius: 18px;
-        padding: 1rem 1.1rem;
-        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+    .libranza-contractors-copy .libranza-section-title {
+        text-align: left;
+        margin: 0.75rem 0 1rem;
     }
 
-    .libranza-adelanto-benefit strong {
+    .libranza-contractors-copy p {
+        color: #475569;
+        line-height: 1.65;
+        margin-bottom: 1.3rem;
+    }
+
+    .libranza-contractors-copy small {
         display: block;
-        color: #0a192f;
-        margin-bottom: 0.25rem;
+        margin-top: 0.9rem;
+        color: #64748b;
+        font-weight: 600;
     }
 
-    .libranza-adelanto-benefit span {
-        color: #4b5563;
-        line-height: 1.5;
-    }
-
-    .libranza-adelanto-card {
-        background: #0f2035;
-        border-radius: 28px;
-        padding: 1.35rem;
-        box-shadow: 0 24px 50px rgba(15, 23, 42, 0.18);
-        color: #f8fbff;
-    }
-
-    .libranza-adelanto-card-head h3 {
-        margin: 0.7rem 0 0;
-        font-size: 1.45rem;
-        color: #ffffff;
-    }
-
-    .libranza-adelanto-form {
-        display: grid;
-        gap: 0.9rem;
-        margin-top: 1.2rem;
-    }
-
-    .libranza-adelanto-fields {
+    .libranza-contractors-steps {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.85rem;
+        gap: 0.9rem;
     }
 
-    .libranza-adelanto-field label {
-        display: block;
-        font-size: 0.83rem;
-        font-weight: 600;
-        color: rgba(255,255,255,0.8);
-        margin-bottom: 0.4rem;
+    .libranza-contractors-step {
+        min-height: 116px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 0.65rem;
+        padding: 1rem;
+        border-radius: 1rem;
+        background: linear-gradient(135deg, rgba(6, 182, 212, 0.1), rgba(34, 211, 238, 0.08));
+        border: 1px solid rgba(6, 182, 212, 0.16);
     }
 
-    .libranza-adelanto-field input {
-        width: 100%;
-        border: 1px solid rgba(255,255,255,0.14);
-        background: rgba(255,255,255,0.05);
+    .libranza-contractors-step span {
+        width: 34px;
+        height: 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: #06b6d4;
         color: #ffffff;
-        border-radius: 14px;
-        padding: 0.85rem 0.95rem;
-        outline: none;
+        font-weight: 800;
     }
 
-    .libranza-adelanto-field-wide {
-        grid-column: 1 / -1;
+    .libranza-contractors-step strong {
+        color: #0a192f;
+        line-height: 1.25;
     }
 
-    .libranza-adelanto-inline-note {
-        color: rgba(255,255,255,0.68);
-        font-size: 0.82rem;
-        line-height: 1.45;
-    }
-
-    .libranza-adelanto-submit[disabled] {
-        opacity: 0.7;
-        cursor: wait;
-    }
-
-    .libranza-adelanto-field input::placeholder {
-        color: rgba(255,255,255,0.36);
-    }
-
-    .libranza-adelanto-results {
-        margin-top: 1.15rem;
-        display: grid;
-        gap: 0.85rem;
-    }
-
-    .libranza-adelanto-result-main {
-        background: linear-gradient(135deg, rgba(34,211,238,0.16), rgba(6,182,212,0.08));
-        border: 1px solid rgba(34,211,238,0.2);
-        border-radius: 20px;
-        padding: 1.1rem 1.2rem;
-    }
-
-    .libranza-adelanto-result-main span,
-    .libranza-adelanto-result-main small {
-        display: block;
-        color: rgba(255,255,255,0.75);
-    }
-
-    .libranza-adelanto-result-main strong {
-        display: block;
-        font-size: 1.75rem;
-        margin: 0.35rem 0;
-    }
-
-    .libranza-adelanto-result-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.7rem;
-    }
-
-    .libranza-adelanto-result-grid div {
-        background: rgba(255,255,255,0.05);
-        border: 1px solid rgba(255,255,255,0.09);
-        border-radius: 16px;
-        padding: 0.8rem 0.85rem;
-    }
-
-    .libranza-adelanto-result-grid span {
-        display: block;
-        color: rgba(255,255,255,0.68);
-        font-size: 0.82rem;
-        margin-bottom: 0.25rem;
-    }
-
-    .libranza-adelanto-result-grid strong {
-        color: #ffffff;
-        font-size: 1rem;
-    }
-
-    .libranza-adelanto-note {
-        background: rgba(255,255,255,0.06);
-        border-radius: 16px;
-        padding: 0.9rem 1rem;
-        color: rgba(255,255,255,0.78);
-        line-height: 1.5;
-    }
-
-    @media (max-width: 960px) {
-        .libranza-adelanto-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .libranza-adelanto-fields,
-        .libranza-adelanto-result-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-    }
-
-    @media (max-width: 480px) {
-        .libranza-adelanto-fields,
-        .libranza-adelanto-result-grid {
+    @media (max-width: 860px) {
+        .libranza-contractors-card {
             grid-template-columns: 1fr;
         }
     }
@@ -1437,97 +1645,165 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
             });
         });
 
-        const simulatorForm = document.getElementById('adelantoSimulatorForm');
-        if (simulatorForm) {
-            const moneyInputs = simulatorForm.querySelectorAll('[data-money-input]');
-            const submitButton = document.getElementById('adelanto-submit-btn');
-            const formatCurrency = (value) => {
-                const number = Number(value || 0);
-                return new Intl.NumberFormat('es-CO', {
-                    style: 'currency',
-                    currency: 'COP',
-                    maximumFractionDigits: 0,
-                }).format(number);
-            };
-
-            const formatThousands = (value) => {
-                const cleaned = String(value || '').replace(/\D/g, '');
-                if (!cleaned) return '';
-                return new Intl.NumberFormat('es-CO', {
-                    maximumFractionDigits: 0,
-                }).format(Number(cleaned));
-            };
-
-            const parseMoneyInput = (input) => String(input?.value || '').replace(/\D/g, '') || '0';
-
-            const setLoadingState = (isLoading) => {
-                if (!submitButton) return;
-                submitButton.disabled = isLoading;
-                submitButton.querySelector('span').textContent = isLoading ? 'Calculando...' : 'Simular adelanto';
-            };
-
-            moneyInputs.forEach((input) => {
-                input.addEventListener('input', () => {
-                    const digits = parseMoneyInput(input);
-                    input.value = digits === '0' ? '' : formatThousands(digits);
-                });
-                input.addEventListener('blur', () => {
-                    const digits = parseMoneyInput(input);
-                    input.value = digits === '0' ? '' : formatThousands(digits);
-                });
-            });
-
-            simulatorForm.addEventListener('submit', async function (event) {
-                event.preventDefault();
-                const salario = parseMoneyInput(document.getElementById('adelanto-salario'));
-                const auxilio = parseMoneyInput(document.getElementById('adelanto-auxilio'));
-                const descuentos = parseMoneyInput(document.getElementById('adelanto-descuentos'));
-
-                setLoadingState(true);
-                if (window.AprobadoLoader) {
-                    window.AprobadoLoader.show('Calculando adelanto...', 'loading', { immediate: true });
-                }
-
-                try {
-                    const response = await fetch("{% url 'libranza:simular_adelanto' %}", {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': simulatorForm.querySelector('[name=csrfmiddlewaretoken]').value,
-                        },
-                        body: JSON.stringify({
-                            salario,
-                            auxilio_transporte: auxilio,
-                            descuentos,
-                        }),
-                    });
-
-                    const data = await response.json().catch(() => ({}));
-                    if (!response.ok) {
-                        throw new Error(data.error || 'No pudimos calcular la simulación en este momento.');
-                    }
-
-                    document.getElementById('adelanto-neto').textContent = formatCurrency(data.neto_a_recibir);
-                    document.getElementById('adelanto-bruto').textContent = formatCurrency(data.monto_bruto_adelanto);
-                    document.getElementById('adelanto-diario').textContent = formatCurrency(data.valor_diario_estimado);
-                    document.getElementById('adelanto-comision').textContent = formatCurrency(data.comision);
-                    document.getElementById('adelanto-iva').textContent = formatCurrency(data.iva_comision);
-                    document.getElementById('adelanto-interes').textContent = formatCurrency(data.interes);
-                    document.getElementById('adelanto-descuento').textContent = formatCurrency(data.descuento_nomina_estimado);
-                    document.getElementById('adelanto-estado').textContent = data.puede_solicitar
-                        ? 'Resultado estimado listo. Si cumples elegibilidad, puedes iniciar la solicitud.'
-                        : 'Con estos datos no se genera adelanto disponible. Revisa ingresos y descuentos.';
-                } catch (error) {
-                    document.getElementById('adelanto-estado').textContent = error.message || 'No pudimos calcular la simulación en este momento.';
-                } finally {
-                    setLoadingState(false);
-                    if (window.AprobadoLoader) {
-                        window.AprobadoLoader.hide();
-                    }
-                }
-            });
-        }
+        renderizarMapaPresenciaNacional();
     });
+
+    function renderizarMapaPresenciaNacional() {
+        const mapFrame = document.getElementById('libranza-colombia-map');
+        const dataScript = document.getElementById('libranza-presence-map-data');
+        const departmentsScript = document.getElementById('libranza-presence-departments-data');
+        if (!mapFrame || !dataScript) return;
+
+        const loading = document.getElementById('libranza-map-loading');
+        const tooltip = document.getElementById('libranza-map-tooltip');
+        const geojsonUrl = mapFrame.dataset.geojsonLocalUrl;
+        let ubicaciones = [];
+        let departamentosConPresencia = [];
+        try {
+            ubicaciones = JSON.parse(dataScript.textContent || '[]');
+        } catch (error) {
+            ubicaciones = [];
+        }
+        try {
+            departamentosConPresencia = JSON.parse(departmentsScript?.textContent || '[]');
+        } catch (error) {
+            departamentosConPresencia = [];
+        }
+
+        const crearSvg = (nombre, atributos = {}) => {
+            const elemento = document.createElementNS('http://www.w3.org/2000/svg', nombre);
+            Object.entries(atributos).forEach(([clave, valor]) => elemento.setAttribute(clave, valor));
+            return elemento;
+        };
+
+        const normalizar = (valor) => String(valor || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim();
+
+        const iterarCoordenadas = (geometry, callback) => {
+            const recorrer = (coords) => {
+                if (!Array.isArray(coords)) return;
+                if (typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+                    callback(coords[0], coords[1]);
+                    return;
+                }
+                coords.forEach(recorrer);
+            };
+            recorrer(geometry?.coordinates);
+        };
+
+        const construirPath = (geometry, proyectar) => {
+            const construirAnillo = (anillo) => anillo.map((coord, index) => {
+                const punto = proyectar(coord[0], coord[1]);
+                return `${index === 0 ? 'M' : 'L'}${punto.x.toFixed(2)},${punto.y.toFixed(2)}`;
+            }).join(' ') + ' Z';
+
+            if (geometry?.type === 'Polygon') {
+                return geometry.coordinates.map(construirAnillo).join(' ');
+            }
+            if (geometry?.type === 'MultiPolygon') {
+                return geometry.coordinates.flatMap((poligono) => poligono.map(construirAnillo)).join(' ');
+            }
+            return '';
+        };
+
+        fetch(geojsonUrl)
+            .then((response) => {
+                if (!response.ok) throw new Error('No se pudo cargar el mapa local.');
+                return response.json();
+            })
+            .then((geojson) => {
+                const features = Array.isArray(geojson.features) ? geojson.features : [];
+                const bounds = { minLon: Infinity, maxLon: -Infinity, minLat: Infinity, maxLat: -Infinity };
+                features.forEach((feature) => {
+                    iterarCoordenadas(feature.geometry, (lon, lat) => {
+                        bounds.minLon = Math.min(bounds.minLon, lon);
+                        bounds.maxLon = Math.max(bounds.maxLon, lon);
+                        bounds.minLat = Math.min(bounds.minLat, lat);
+                        bounds.maxLat = Math.max(bounds.maxLat, lat);
+                    });
+                });
+
+                const width = 680;
+                const height = 680;
+                const padding = 34;
+                const lonSpan = bounds.maxLon - bounds.minLon || 1;
+                const latSpan = bounds.maxLat - bounds.minLat || 1;
+                const scale = Math.min((width - padding * 2) / lonSpan, (height - padding * 2) / latSpan);
+                const mapWidth = lonSpan * scale;
+                const mapHeight = latSpan * scale;
+                const offsetX = (width - mapWidth) / 2;
+                const offsetY = (height - mapHeight) / 2;
+
+                const proyectar = (lon, lat) => ({
+                    x: offsetX + (lon - bounds.minLon) * scale,
+                    y: offsetY + (bounds.maxLat - lat) * scale,
+                });
+
+                const departamentosActivos = new Set(departamentosConPresencia.map(normalizar));
+                const svg = crearSvg('svg', {
+                    class: 'libranza-colombia-map-svg',
+                    viewBox: `0 0 ${width} ${height}`,
+                    role: 'img',
+                    'aria-label': 'Mapa de Colombia con presencia nacional de Aprobado',
+                });
+                const mapaGrupo = crearSvg('g', { class: 'libranza-map-country' });
+
+                features.forEach((feature) => {
+                    const nombreDepartamento = feature.properties?.NOMBRE_DPT || feature.properties?.name || '';
+                    const pathData = construirPath(feature.geometry, proyectar);
+                    if (!pathData) return;
+                    const path = crearSvg('path', {
+                        class: `libranza-map-department${departamentosActivos.has(normalizar(nombreDepartamento)) ? ' is-active' : ''}`,
+                        d: pathData,
+                    });
+                    mapaGrupo.appendChild(path);
+                });
+                svg.appendChild(mapaGrupo);
+
+                ubicaciones.forEach((ubicacion) => {
+                    if (ubicacion.latitud == null || ubicacion.longitud == null) return;
+                    const punto = proyectar(Number(ubicacion.longitud), Number(ubicacion.latitud));
+                    const total = Number(ubicacion.empresas || 1);
+                    const radio = 9;
+                    const grupo = crearSvg('g', {
+                        class: 'libranza-map-point-group',
+                        tabindex: '0',
+                        role: 'button',
+                        'aria-label': `${ubicacion.municipio || ubicacion.departamento}, ${ubicacion.departamento || 'Colombia'}: ${total} empresa${total === 1 ? '' : 's'}`,
+                    });
+                    grupo.appendChild(crearSvg('circle', { class: 'libranza-map-point', cx: punto.x, cy: punto.y, r: radio }));
+                    const texto = crearSvg('text', { class: 'libranza-map-label', x: punto.x + radio + 5, y: punto.y + 4 });
+                    texto.textContent = ubicacion.municipio || ubicacion.departamento;
+                    grupo.appendChild(texto);
+
+                    const mostrarTooltip = () => {
+                        if (!tooltip) return;
+                        tooltip.innerHTML = `<strong>${ubicacion.municipio || ubicacion.departamento}</strong>${ubicacion.departamento || 'Colombia'} · ${total} empresa${total === 1 ? '' : 's'}`;
+                        tooltip.style.left = `${(punto.x / width) * 100}%`;
+                        tooltip.style.top = `${(punto.y / height) * 100}%`;
+                        tooltip.style.opacity = '1';
+                    };
+                    const ocultarTooltip = () => {
+                        if (tooltip) tooltip.style.opacity = '0';
+                    };
+                    grupo.addEventListener('mouseenter', mostrarTooltip);
+                    grupo.addEventListener('focus', mostrarTooltip);
+                    grupo.addEventListener('mouseleave', ocultarTooltip);
+                    grupo.addEventListener('blur', ocultarTooltip);
+                    svg.appendChild(grupo);
+                });
+
+                mapFrame.appendChild(svg);
+                if (loading) loading.remove();
+            })
+            .catch(() => {
+                if (loading) loading.textContent = 'No fue posible cargar el mapa local.';
+            });
+    }
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>

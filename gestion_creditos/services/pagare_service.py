@@ -31,6 +31,7 @@ MESES_ESPANOL = {
 PAGARE_TEMPLATES = {
     '1.0': 'pagares/pagare_v1.0.html',
     '2.0': 'pagares/pagare_v2.0.html',
+    'prestadores-1.0': 'pagares/pagare_prestadores_v1.0.html',
 }
 
 
@@ -153,6 +154,106 @@ def generar_pagare_pdf(credito, usuario_creador=None, forzar_regeneracion=False)
         if pagare_nuevo:
             pagare.delete()
         raise
+
+
+def generar_pagare_prestador_pdf(formalizacion, usuario_creador=None):
+    """Genera un unico pagare para un origen de prestador ya versionado."""
+    from contractors.models import AprobacionInternaPrestador
+
+    origen = formalizacion.origen_credito_prestador
+    credito = formalizacion.credito
+    detalle = formalizacion.credito_libranza
+    if origen.estado != origen.Estado.COMPLETADO:
+        raise ValueError('El credito de prestador no tiene una originacion completada.')
+    if credito.estado not in {
+        Credito.EstadoCredito.EN_REVISION,
+        Credito.EstadoCredito.PENDIENTE_FIRMA,
+        Credito.EstadoCredito.FIRMADO,
+    }:
+        raise ValueError('El credito no esta disponible para formalizacion.')
+    if not detalle.es_prestador_servicios:
+        raise ValueError('El detalle no corresponde a un prestador de servicios.')
+
+    gate = AprobacionInternaPrestador.objects.select_related('solicitud').get(
+        pk=origen.gate_id
+    )
+    if gate.estado != AprobacionInternaPrestador.Estado.APROBADA_PARA_ORIGINAR:
+        raise ValueError('La aprobacion interna ya no habilita la formalizacion.')
+    if gate.version_datos != origen.gate_version:
+        raise ValueError('La version aprobada no coincide con el credito originado.')
+    if Decimal(str(credito.monto_aprobado or 0)) != Decimal(str(gate.monto_autorizado)):
+        raise ValueError('El monto originado no coincide con el monto autorizado.')
+    if int(credito.plazo or 0) != int(gate.plazo_autorizado):
+        raise ValueError('El plazo originado no coincide con el plazo autorizado.')
+    if Decimal(str(credito.tasa_interes or 0)) != Decimal(str(gate.tasa_mensual_snapshot)):
+        raise ValueError('La tasa originada no coincide con la tasa autorizada.')
+
+    pagare = formalizacion.pagare or getattr(credito, 'pagare', None)
+    if pagare is None:
+        pagare = _crear_pagare_base(credito, usuario_creador)
+    elif pagare.estado in {Pagare.EstadoPagare.SENT, Pagare.EstadoPagare.SIGNED}:
+        return pagare
+
+    fecha_documento = timezone.localdate()
+    ciudad = _resolver_ciudad_firma(credito, detalle)
+    contexto = {
+        'numero_pagare': pagare.numero_pagare,
+        'fecha_documento': _fecha_en_espanol(fecha_documento),
+        'ciudad_firma': ciudad,
+        'nombre_prestador': detalle.nombre_completo,
+        'tipo_documento': detalle.tipo_documento or 'CC',
+        'numero_documento': detalle.cedula,
+        'direccion': detalle.direccion,
+        'telefono': detalle.telefono,
+        'correo': detalle.correo_electronico,
+        'empresa_contratante': detalle.empresa.nombre,
+        'cargo_actividad': detalle.cargo_actividad_contractual,
+        'tipo_contrato': detalle.tipo_contrato,
+        'fecha_inicio_contrato': detalle.fecha_inicio_contrato,
+        'fecha_fin_contrato': detalle.fecha_fin_contrato,
+        'valor_total_contrato': formatear_cop(detalle.valor_total_contrato or 0),
+        'valor_pendiente_contrato': formatear_cop(detalle.valor_pendiente_contrato or 0),
+        'monto_credito': formatear_cop(credito.monto_aprobado),
+        'monto_credito_letras': numero_a_letras(credito.monto_aprobado),
+        'plazo_meses': credito.plazo,
+        'tasa_mensual': f'{Decimal(str(credito.tasa_interes)):.4f}',
+        'version_origen': origen.gate_version,
+    }
+    contexto_hash = _fingerprint_contexto_pagare(contexto)
+    hash_anterior = (pagare.evidencias or {}).get('contexto_pagare_hash')
+    if hash_anterior and hash_anterior != contexto_hash:
+        raise ValueError('El pagare existente fue generado con otro expediente autorizado.')
+    if hash_anterior == contexto_hash and _archivo_existe(pagare.archivo_pdf.name):
+        if formalizacion.pagare_id != pagare.id:
+            formalizacion.pagare = pagare
+            formalizacion.save(update_fields=['pagare', 'updated_at'])
+        return pagare
+
+    html_string = render_to_string(PAGARE_TEMPLATES['prestadores-1.0'], contexto)
+    pdf_bytes = HTML(string=html_string).write_pdf()
+    ruta_relativa = (
+        f'pagares/{timezone.now().year}/{timezone.now().month:02d}/'
+        f'pagare_{pagare.numero_pagare}.pdf'
+    )
+    ruta_completa = Path(settings.MEDIA_ROOT) / ruta_relativa
+    ruta_completa.parent.mkdir(parents=True, exist_ok=True)
+    ruta_completa.write_bytes(pdf_bytes)
+
+    pagare.archivo_pdf.name = ruta_relativa
+    pagare.hash_pdf = hashlib.sha256(pdf_bytes).hexdigest()
+    pagare.version_plantilla = 'prestadores-1.0'
+    pagare.evidencias = {
+        'contexto_pagare_hash': contexto_hash,
+        'formalizacion_id': formalizacion.id,
+        'origen_credito_prestador_id': origen.id,
+        'version_origen': origen.gate_version,
+    }
+    pagare.save(update_fields=[
+        'archivo_pdf', 'hash_pdf', 'version_plantilla', 'evidencias'
+    ])
+    formalizacion.pagare = pagare
+    formalizacion.save(update_fields=['pagare', 'updated_at'])
+    return pagare
 
 
 def _archivo_existe(ruta_relativa):

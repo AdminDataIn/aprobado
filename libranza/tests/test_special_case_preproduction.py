@@ -9,6 +9,7 @@ from django.urls import reverse
 from gestion_creditos.credit_services import activar_credito
 from gestion_creditos.forms import CreditoLibranzaForm
 from gestion_creditos.models import (
+    CondicionOriginacionLibranza,
     Credito,
     CreditoLibranza,
     CreditoReglaEspecialAudit,
@@ -57,6 +58,10 @@ class SpecialCasePreproductionFlowTests(TestCase):
         self.assertEqual(credito.iva_comision, Decimal('19000000.00'))
         self.assertEqual(credito.estado, Credito.EstadoCredito.EN_REVISION)
         self.assertEqual(CreditoLibranza.objects.filter(credito=credito).count(), 1)
+        snapshot = CondicionOriginacionLibranza.objects.get(credito=credito)
+        self.assertEqual(snapshot.origen, CondicionOriginacionLibranza.Origen.ESPECIAL)
+        self.assertEqual(snapshot.regla_especial, audit)
+        self.assertEqual(snapshot.valor_originacion, audit.commission_amount)
 
     def test_activar_credito_respects_forced_terms_and_persisted_commission_values(self):
         audit = self.create_audit()

@@ -1,0 +1,69 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <p>
+    Esta operacion cambia atomicamente la politica de score activa y registra
+    una auditoria inmutable. No modifica evaluaciones historicas.
+  </p>
+
+  <div class="module">
+    <h2>Politica activa actual</h2>
+    {% if activa_actual %}
+      <p><strong>Version:</strong> {{ activa_actual.version }}</p>
+      <p><strong>Version de score:</strong> {{ activa_actual.version_score }}</p>
+      <p>
+        <strong>Configuracion financiera:</strong>
+        {{ activa_actual.configuracion_financiera.version|default:"Sin configurar" }}
+      </p>
+      <p>
+        <strong>Pesos:</strong>
+        MiDecisor {{ activa_actual.peso_midecisor|default_if_none:activa_actual.peso_datacredito }},
+        HDCPlus {{ activa_actual.peso_hdcplus|default_if_none:"N/A" }},
+        capacidad {{ activa_actual.peso_capacidad }},
+        comportamiento {{ activa_actual.peso_comportamiento }},
+        riesgo {{ activa_actual.peso_riesgo }},
+        referencias {{ activa_actual.peso_referencias }}.
+      </p>
+    {% else %}
+      <p>No existe una politica activa.</p>
+    {% endif %}
+  </div>
+
+  <div class="module">
+    <h2>Politica objetivo</h2>
+    <p><strong>Version:</strong> {{ objetivo.version }}</p>
+    <p><strong>Version de score:</strong> {{ objetivo.version_score }}</p>
+    <p>
+      <strong>Configuracion financiera:</strong>
+      {{ objetivo.configuracion_financiera.version|default:"Sin configurar" }}
+    </p>
+    <p>
+      <strong>Pesos:</strong>
+      MiDecisor {{ objetivo.peso_midecisor|default_if_none:objetivo.peso_datacredito }},
+      HDCPlus {{ objetivo.peso_hdcplus|default_if_none:"N/A" }},
+      capacidad {{ objetivo.peso_capacidad }},
+      comportamiento {{ objetivo.peso_comportamiento }},
+      riesgo {{ objetivo.peso_riesgo }},
+      referencias {{ objetivo.peso_referencias }}.
+    </p>
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="form-row">
+      {{ form.motivo.errors }}
+      {{ form.motivo.label_tag }}
+      {{ form.motivo }}
+      {% if form.motivo.help_text %}<p class="help">{{ form.motivo.help_text }}</p>{% endif %}
+    </div>
+    <input type="hidden" name="{{ action_checkbox_name }}" value="{{ objetivo.pk }}">
+    <input type="hidden" name="action" value="activar_politica_seleccionada">
+    <input type="hidden" name="confirmar_activacion" value="1">
+    <input type="hidden" name="index" value="0">
+    <div class="submit-row">
+      <button type="submit" class="default">Confirmar activacion</button>
+      <a href="../">Cancelar</a>
+    </div>
+  </form>
+{% endblock %}

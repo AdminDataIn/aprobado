@@ -80,6 +80,12 @@ def _can_open_redis_socket(redis_url, timeout=0.15):
 PRIMARY_DOMAIN_HOST = os.environ.get('PRIMARY_DOMAIN_HOST', 'aprobado.com.co')
 EMPRENDER_SUBDOMAIN_HOST = os.environ.get('EMPRENDER_SUBDOMAIN_HOST', 'emprender.aprobado.com.co')
 MARKET_SUBDOMAIN_HOST = os.environ.get('MARKET_SUBDOMAIN_HOST', 'market.aprobado.com.co')
+CONTRACTORS_PORTAL_HOST = os.environ.get('CONTRACTORS_PORTAL_HOST', 'contratistas.aprobado.com.co')
+CONTRACTORS_LOCAL_HOST = os.environ.get('CONTRACTORS_LOCAL_HOST', 'contratistas.localhost')
+CONTRACTORS_PORTAL_HOSTS = _split_env_list(
+    'CONTRACTORS_PORTAL_HOSTS',
+    f'{CONTRACTORS_PORTAL_HOST},{CONTRACTORS_LOCAL_HOST}',
+)
 CONTACT_EMAIL = os.environ.get(
     'CONTACT_EMAIL',
     'Info@aprobado.com.co'
@@ -130,6 +136,8 @@ ALLOWED_HOSTS = _split_env_list(
         f'www.{PRIMARY_DOMAIN_HOST},'
         f'{EMPRENDER_SUBDOMAIN_HOST},'
         f'{MARKET_SUBDOMAIN_HOST},'
+        f'{CONTRACTORS_PORTAL_HOST},'
+        f'{CONTRACTORS_LOCAL_HOST},'
         '127.0.0.1,localhost,'
         '.onrender.com,aprobado-proj.onrender.com'
     )
@@ -141,15 +149,66 @@ CSRF_TRUSTED_ORIGINS = _split_env_list(
         'https://aprobado.com.co,'
         'https://www.aprobado.com.co,'
         'https://emprender.aprobado.com.co,'
-        'https://market.aprobado.com.co'
+        'https://market.aprobado.com.co,'
+        'https://contratistas.aprobado.com.co'
     )
 )
 
 USE_X_FORWARDED_HOST = True
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+CONTRACTORS_CONTRACT_AI_ENABLED = os.environ.get('CONTRACTORS_CONTRACT_AI_ENABLED', 'False').lower() in ('1', 'true', 'yes')
+CONTRACTORS_CONTRACT_AI_MODEL = os.environ.get('CONTRACTORS_CONTRACT_AI_MODEL', 'gpt-4.1-mini')
+CONTRACTORS_ALLOW_ID_UPLOAD_FALLBACK = os.environ.get('CONTRACTORS_ALLOW_ID_UPLOAD_FALLBACK', 'False').lower() in ('1', 'true', 'yes')
 MANUAL_PAYMENT_AUTH_KEY = os.environ.get('MANUAL_PAYMENT_AUTH_KEY', 'clave-secreta-para-desarrollo')
 MANUAL_PAYMENT_ROUNDING_TOLERANCE = os.environ.get('MANUAL_PAYMENT_ROUNDING_TOLERANCE', '100.00')
+
+# DataCredito permanece apagado salvo habilitacion explicita de ambos interruptores.
+DATACREDITO_ENABLED = env_bool('DATACREDITO_ENABLED', False)
+DATACREDITO_REAL_ENABLED = env_bool('DATACREDITO_REAL_ENABLED', False)
+DATACREDITO_ENVIRONMENT = os.environ.get('DATACREDITO_ENVIRONMENT', 'uat').strip().lower()
+DATACREDITO_DEFAULT_SERVICE = os.environ.get('DATACREDITO_DEFAULT_SERVICE', 'decisor').strip().lower()
+DATACREDITO_TIMEOUT_SECONDS = int(os.environ.get('DATACREDITO_TIMEOUT_SECONDS', '15'))
+DATACREDITO_PROXY_URL = os.environ.get('DATACREDITO_PROXY_URL', '').strip()
+DATACREDITO_REUSE_DAYS = int(os.environ.get('DATACREDITO_REUSE_DAYS', '30'))
+DATACREDITO_IN_PROGRESS_MINUTES = int(os.environ.get('DATACREDITO_IN_PROGRESS_MINUTES', '5'))
+DATACREDITO_DOCUMENT_HASH_SECRET = os.environ.get('DATACREDITO_DOCUMENT_HASH_SECRET', '').strip()
+DATACREDITO_AUTHORIZATION_TEXT_VERSION = os.environ.get(
+    'DATACREDITO_AUTHORIZATION_TEXT_VERSION', ''
+).strip()
+DATACREDITO_AUTHORIZATION_TEXT = os.environ.get('DATACREDITO_AUTHORIZATION_TEXT', '').strip()
+DATACREDITO_TOKEN_URL = os.environ.get('DATACREDITO_TOKEN_URL', '').strip()
+DATACREDITO_REVOKE_TOKEN_URL = os.environ.get('DATACREDITO_REVOKE_TOKEN_URL', '').strip()
+DATACREDITO_MIDECISOR_URL = os.environ.get('DATACREDITO_MIDECISOR_URL', '').strip()
+DATACREDITO_HISTORIAL_URL = os.environ.get('DATACREDITO_HISTORIAL_URL', '').strip()
+DATACREDITO_DECISOR_CLIENT_ID = os.environ.get('DATACREDITO_DECISOR_CLIENT_ID', '').strip()
+DATACREDITO_DECISOR_CLIENT_SECRET = os.environ.get('DATACREDITO_DECISOR_CLIENT_SECRET', '').strip()
+DATACREDITO_DECISOR_TOKEN_USERNAME = os.environ.get('DATACREDITO_DECISOR_TOKEN_USERNAME', '').strip()
+DATACREDITO_DECISOR_TOKEN_PASSWORD = os.environ.get('DATACREDITO_DECISOR_TOKEN_PASSWORD', '').strip()
+DATACREDITO_DECISOR_USERNAME = os.environ.get('DATACREDITO_DECISOR_USERNAME','').strip()
+DATACREDITO_DECISOR_PASSWORD = os.environ.get('DATACREDITO_DECISOR_PASSWORD','').strip()
+DATACREDITO_HDC_CLIENT_ID = os.environ.get('DATACREDITO_HDC_CLIENT_ID', '').strip()
+DATACREDITO_HDC_CLIENT_SECRET = os.environ.get('DATACREDITO_HDC_CLIENT_SECRET', '').strip()
+DATACREDITO_HDC_TOKEN_USERNAME = os.environ.get('DATACREDITO_HDC_TOKEN_USERNAME', '').strip()
+DATACREDITO_HDC_TOKEN_PASSWORD = os.environ.get('DATACREDITO_HDC_TOKEN_PASSWORD', '').strip()
+DATACREDITO_HDC_SERVICE_USER = os.environ.get('DATACREDITO_HDC_SERVICE_USER', '').strip()
+DATACREDITO_HDC_SERVICE_PASSWORD = os.environ.get('DATACREDITO_HDC_SERVICE_PASSWORD', '').strip()
+DATACREDITO_HDC_PRODUCT_ID = os.environ.get('DATACREDITO_HDC_PRODUCT_ID', '64').strip()
+DATACREDITO_HDC_INFO_ACCOUNT_TYPE = os.environ.get('DATACREDITO_HDC_INFO_ACCOUNT_TYPE', '1').strip()
+DATACREDITO_HDC_SERVER_IP_ADDRESS = os.environ.get('DATACREDITO_HDC_SERVER_IP_ADDRESS', '').strip()
+DATACREDITO_HDC_CHANNEL_NAME = os.environ.get('DATACREDITO_HDC_CHANNEL_NAME', 'Canal-01').strip()
+DATACREDITO_HDC_CHANNEL_TYPE = os.environ.get('DATACREDITO_HDC_CHANNEL_TYPE', '42').strip()
+DATACREDITO_HDC_PARAMETERS_JSON = os.environ.get('DATACREDITO_HDC_PARAMETERS_JSON', '').strip()
+
+# Compatibilidad de lectura; no habilita consumo por si sola.
+DATACREDITO_CLIENT_ID = os.environ.get('DATACREDITO_CLIENT_ID', '').strip()
+DATACREDITO_CLIENT_SECRET = os.environ.get('DATACREDITO_CLIENT_SECRET', '').strip()
+DATACREDITO_USERNAME = os.environ.get('DATACREDITO_USERNAME', '').strip()
+DATACREDITO_PASSWORD = os.environ.get('DATACREDITO_PASSWORD', '').strip()
+DATACREDITO_API_PASSWORD = os.environ.get('DATACREDITO_API_PASSWORD', '').strip()
+DATACREDITO_PRODUCT_ID = os.environ.get('DATACREDITO_PRODUCT_ID', '').strip()
+DATACREDITO_INFO_ACCOUNT_TYPE = os.environ.get('DATACREDITO_INFO_ACCOUNT_TYPE', '1').strip()
+DATACREDITO_SERVER_IP_ADDRESS = os.environ.get('DATACREDITO_SERVER_IP_ADDRESS', '').strip()
 
 # ========================
 # Aplicaciones
@@ -168,6 +227,8 @@ INSTALLED_APPS = [
     'configuraciones',
     'gestion_creditos',
     'usuariocreditos',
+    'contractors',
+    'integrations',
 ]
 
 if ALLAUTH_AVAILABLE:
@@ -310,6 +371,10 @@ if WHITENOISE_AVAILABLE:
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.environ.get('MEDIA_ROOT', os.path.join(BASE_DIR, 'media'))
+PRIVATE_DOCUMENTS_ROOT = os.environ.get(
+    'PRIVATE_DOCUMENTS_ROOT',
+    os.path.join(BASE_DIR, 'private_documents'),
+)
 
 # ========================
 # Seguridad

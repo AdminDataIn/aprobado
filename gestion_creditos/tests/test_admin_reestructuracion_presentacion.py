@@ -74,7 +74,7 @@ class AdminReestructuracionPresentacionTests(TestCase):
 
     def test_credito_sin_reestructuracion_separa_historico_y_plan(self):
         credito = self._crear_credito(
-            'CR-PRESENTACION-SIMPLE',
+            'CR-PRES-SIMPLE',
             Decimal('600000.00'),
             Decimal('660000.00'),
             date(2026, 9, 1),

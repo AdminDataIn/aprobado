@@ -6,6 +6,7 @@ from django.db import transaction
 
 from gestion_creditos.models import Credito, CreditoLibranza, CreditoReglaEspecialAudit, HistorialEstado
 from gestion_creditos.services.name_normalization import normalize_name_upper
+from gestion_creditos.services.costo_originacion_libranza import crear_snapshot_originacion_libranza
 from libranza.services.special_cases import MAX_SPECIAL_CASE_MONTHLY_RATE, TWOPLACES
 
 
@@ -81,6 +82,10 @@ def originate_special_case_libranza(*, audit_id, applicant_data, files, originat
     }
     audit.simulation_payload = payload
     audit.save(update_fields=['credito', 'simulation_payload'])
+    crear_snapshot_originacion_libranza(
+        credito=credito,
+        regla_especial=audit,
+    )
 
     HistorialEstado.objects.create(
         credito=credito,

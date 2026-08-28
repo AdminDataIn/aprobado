@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="es">
+<body style="font-family:Arial,sans-serif;color:#10233f;line-height:1.5">
+  <h1 style="font-size:22px">Novedad operativa de Prestadores de Servicios</h1>
+  <p>Se registró un crédito de prestador formalizado para gestión operativa.</p>
+  <ul>
+    <li>Crédito: {{ novedad.numero_credito }}</li>
+    <li>Titular: {{ novedad.titular_nombre }}</li>
+    <li>Documento: {{ novedad.documento_enmascarado }}</li>
+    <li>Monto formalizado: {{ novedad.monto_formalizado }}</li>
+    <li>Plazo: {{ novedad.plazo_meses }} meses</li>
+    <li>Fecha de firma: {{ novedad.fecha_firma }}</li>
+  </ul>
+  <p>Ingresa al portal del pagador para confirmar la recepción y registrar la gestión operativa.</p>
+  <p>Esta comunicación no modifica las condiciones financieras ni ejecuta transferencias.</p>
+</body>
+</html>

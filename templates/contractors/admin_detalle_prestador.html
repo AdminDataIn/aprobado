@@ -1,0 +1,392 @@
+{% extends "contractors/base.html" %}
+{% block title %}Detalle de revision | Aprobado{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="eyebrow">Detalle interno Aprobado</p>
+  <h1>Solicitud #{{ solicitud.id }}</h1>
+  <p>{{ solicitud.nombre_completo }} - {{ solicitud.empresa.nombre }}</p>
+</section>
+
+<main class="contenedor">
+  <section class="grid-3">
+    <article class="panel tarjeta-resumen"><span class="dato-label">Estado</span><strong>{{ solicitud.get_estado_display }}</strong></article>
+    <article class="panel tarjeta-resumen"><span class="dato-label">Documentos</span><strong>{{ progreso_documental.cargados }}/{{ progreso_documental.total }}</strong></article>
+    <article class="panel tarjeta-resumen"><span class="dato-label">Resultado read-only</span><strong>{% if auditoria %}{{ auditoria.get_resultado_display }}{% else %}Sin evaluacion formal{% endif %}</strong></article>
+  </section>
+
+  {% if origen_credito %}
+  <section class="panel">
+    <h2 class="titulo-seccion">Cierre financiero y postfirma</h2>
+    <p>Estado del credito: <strong>{{ origen_credito.credito.get_estado_display }}</strong></p>
+    <div class="grid-datos">
+      <div class="dato"><span>Monto base</span><strong>{{ origen_credito.monto_base|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Capital financiado</span><strong>{{ origen_credito.capital_total_financiado|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Cuota aprobada</span><strong>{{ origen_credito.cuota_aprobada|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Plazo</span><strong>{{ origen_credito.plazo|default:"Pendiente" }} meses</strong></div>
+      <div class="dato"><span>Total intereses</span><strong>{{ origen_credito.total_intereses|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Total a pagar</span><strong>{{ origen_credito.total_a_pagar|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Configuracion</span><strong>{{ origen_credito.version_configuracion|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Formula</span><strong>{{ origen_credito.version_formula|default:"Pendiente" }}</strong></div>
+    </div>
+    {% if puede_preparar_transferencia %}
+      <form method="post" action="{% url 'contractors:admin_preparar_transferencia' origen_credito.credito_id %}">
+        {% csrf_token %}
+        <button class="boton" type="submit">Preparar transferencia</button>
+      </form>
+    {% elif puede_confirmar_desembolso %}
+      <form method="post" enctype="multipart/form-data" action="{% url 'contractors:admin_confirmar_desembolso' origen_credito.credito_id %}" class="formulario-compacto">
+        {% csrf_token %}
+        <label>Comprobante de desembolso <input class="campo" type="file" name="comprobante" required></label>
+        <button class="boton" type="submit">Confirmar desembolso</button>
+      </form>
+    {% else %}
+      <p>El credito no tiene una accion postfirma disponible para este usuario.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <section class="panel">
+    <div class="encabezado-panel">
+      <div>
+        <p class="eyebrow">Evaluación formal</p>
+        <h2 class="titulo-seccion">Estado de la evaluación</h2>
+        <p class="subtitulo-seccion">Orquesta DataCrédito, score y predecisión mediante el servicio formal auditable.</p>
+      </div>
+      <span class="estado-pill">{{ estado_evaluacion.etiqueta }}</span>
+    </div>
+    <div class="grid-3 datos-grid">
+      <div class="dato"><span>Solicitud</span><strong>{{ solicitud.get_estado_display }}</strong></div>
+      <div class="dato"><span>Autorización DataCrédito</span><strong>{% if autorizacion_datacredito_vigente %}Vigente{% elif solicitud.autoriza_consulta_centrales %}Pendiente de evidencia vigente{% else %}No autorizada{% endif %}</strong></div>
+      <div class="dato"><span>Resultado</span><strong>{% if auditoria %}{{ auditoria.get_resultado_display }}{% else %}Pendiente{% endif %}</strong></div>
+    </div>
+    {% if estado_evaluacion.codigo == 'EN_PROCESO' %}
+      <div class="alerta-info">La evaluación está en proceso. No se iniciará una ejecución paralela.</div>
+    {% elif estado_evaluacion.codigo == 'ERROR_CONTROLADO' %}
+      <div class="alerta-info">La última evaluación terminó con un error controlado. Consulta la revisión manual y las acciones disponibles.</div>
+      {% if puede_ejecutar_evaluacion %}
+        <form method="post" action="{% url 'contractors:admin_ejecutar_evaluacion' solicitud.id %}">
+          {% csrf_token %}
+          <button class="boton" type="submit">Reintentar evaluación</button>
+        </form>
+      {% endif %}
+    {% elif puede_ejecutar_evaluacion %}
+      <form method="post" action="{% url 'contractors:admin_ejecutar_evaluacion' solicitud.id %}">
+        {% csrf_token %}
+        <button class="boton" type="submit">Ejecutar evaluación</button>
+      </form>
+    {% elif solicitud.estado == 'EVALUACION_PENDIENTE' %}
+      <p class="ayuda">Tu perfil no tiene permiso para ejecutar la evaluación formal.</p>
+    {% endif %}
+    <p class="ayuda"><strong>No constituye aprobación, originación, activación ni desembolso.</strong></p>
+  </section>
+
+  <section class="panel">
+    <h2 class="titulo-seccion">Datos basicos sanitizados</h2>
+    <div class="grid-2 datos-grid">
+      <div class="dato"><span>Prestador</span><strong>{{ solicitud.nombre_completo }}</strong></div>
+      <div class="dato"><span>Documento</span><strong>{{ documento_enmascarado }}</strong></div>
+      <div class="dato"><span>Empresa</span><strong>{{ solicitud.empresa.nombre }}</strong></div>
+      <div class="dato"><span>Cargo o actividad</span><strong>{{ solicitud.cargo }}</strong></div>
+      <div class="dato"><span>Estado contractual</span><strong>{{ solicitud.get_estado_contractual_declarado_display }}</strong></div>
+      <div class="dato"><span>Fechas</span><strong>{{ solicitud.fecha_inicio_contrato|default:"Pendiente" }} - {{ solicitud.fecha_fin_contrato|default:"No determinable" }}</strong></div>
+      <div class="dato"><span>Valor total</span><strong>{{ solicitud.valor_total_contrato|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Valor pagado</span><strong>{{ solicitud.valor_pagado_contrato|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Valor pendiente</span><strong>{{ solicitud.valor_pendiente_cobrar|default:"Pendiente" }}</strong></div>
+      <div class="dato"><span>Forma de pago</span><strong>{{ solicitud.get_forma_pago_display }}</strong></div>
+      <div class="dato"><span>Valor mensual contractual</span><strong>{{ solicitud.valor_mensual_contractual|default:"No informado" }}</strong></div>
+      <div class="dato"><span>Monto / plazo solicitado</span><strong>{{ solicitud.monto_solicitado|default:"Pendiente" }} / {{ solicitud.plazo_meses|default:"Pendiente" }} meses</strong></div>
+    </div>
+    {% if solicitud.evidencia_forma_pago %}
+      <p class="ayuda">
+        <strong>Evidencia de forma de pago:</strong> {{ solicitud.evidencia_forma_pago }}
+        {% if solicitud.fuente_forma_pago %} | Fuente: {{ solicitud.fuente_forma_pago }}{% endif %}
+        {% if solicitud.confianza_forma_pago != None %} | Confianza: {{ solicitud.confianza_forma_pago }}{% endif %}
+      </p>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <h2 class="titulo-seccion">Análisis contractual asistido</h2>
+    <div class="grid-3 datos-grid">
+      <div class="dato"><span>Estado</span><strong>{{ analisis_contractual_detalle.estado }}</strong></div>
+      <div class="dato"><span>Fecha</span><strong>{{ analisis_contractual_detalle.fecha|date:"Y-m-d H:i"|default:"No ejecutado" }}</strong></div>
+      <div class="dato"><span>Confianza</span><strong>{{ analisis_contractual_detalle.confianza }}</strong></div>
+    </div>
+    {% if analisis_contractual_detalle.empresa_sugerida.nombre %}
+      <p><strong>Empresa sugerida:</strong> {{ analisis_contractual_detalle.empresa_sugerida.nombre }}{% if analisis_contractual_detalle.empresa_sugerida.tipo_coincidencia %} ({{ analisis_contractual_detalle.empresa_sugerida.tipo_coincidencia }}){% endif %}</p>
+    {% endif %}
+    {% if analisis_contractual_detalle.advertencias %}<h3>Advertencias</h3><ul class="lista-alertas">{% for item in analisis_contractual_detalle.advertencias %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+    {% if analisis_contractual_detalle.bloqueos %}<h3>Bloqueos</h3><ul class="lista-alertas">{% for item in analisis_contractual_detalle.bloqueos %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+  </section>
+
+  <section class="panel">
+    <h2 class="titulo-seccion">Capacidad contractual y financiera</h2>
+    <div class="grid-3 datos-grid">
+      <div class="dato"><span>Calculable</span><strong>{% if simulacion_preliminar.calculable %}Si{% else %}No{% endif %}</strong></div>
+      <div class="dato"><span>Cuota preliminar</span><strong>{{ simulacion_preliminar.cuota_estimada_preliminar|default:"No calculable" }}</strong></div>
+      <div class="dato"><span>Compromiso</span><strong>{{ simulacion_preliminar.porcentaje_compromiso_valor_pendiente|default:"No calculable" }}</strong></div>
+      {% if auditoria %}
+        <div class="dato"><span>Ingreso contractual mensual</span><strong>{{ auditoria.ingreso_contractual_mensual|default:"No calculable" }}</strong></div>
+        <div class="dato"><span>MÃ©todo de ingreso</span><strong>{{ auditoria.metodo_ingreso_contractual|default:"No disponible" }}</strong></div>
+        <div class="dato"><span>VersiÃ³n de cÃ¡lculo</span><strong>{{ auditoria.version_calculo_ingreso|default:"No disponible" }}</strong></div>
+        <div class="dato"><span>Cuota mensual HDC</span><strong>{{ auditoria.cuota_mensual_hdc|default:"No disponible" }}</strong></div>
+        <div class="dato"><span>Cuota nueva estimada</span><strong>{{ auditoria.cuota_nueva_estimada|default:"No disponible" }}</strong></div>
+        <div class="dato"><span>RelaciÃ³n carga / ingreso</span><strong>{{ auditoria.relacion_carga_ingreso|default:"No disponible" }}</strong></div>
+        <div class="dato"><span>Capacidad disponible</span><strong>{{ auditoria.capacidad_disponible|default:"No disponible" }}</strong></div>
+      {% endif %}
+    </div>
+    {% if simulacion_preliminar.advertencias %}<h3>Advertencias</h3><ul class="lista-alertas">{% for item in simulacion_preliminar.advertencias %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+    {% if simulacion_preliminar.bloqueos %}<h3>Bloqueos</h3><ul class="lista-alertas">{% for item in simulacion_preliminar.bloqueos %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+  </section>
+
+  <section class="panel">
+    <h2 class="titulo-seccion">Documentos</h2>
+    <div class="lista-documentos">
+      {% for tipo, etiqueta, documento in estado_documentos %}
+        <article class="documento {% if documento %}cargado{% endif %}"><div><strong>{{ etiqueta }}</strong><p>{% if documento %}Cargado{% else %}Pendiente{% endif %}</p></div>{% if documento %}<a class="boton boton-secundario" href="{% url 'contractors:admin_descargar_documento' documento.id %}">Abrir documento</a>{% endif %}</article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="panel alerta-info">
+    <h2 class="titulo-seccion">Ultima predecision auditada</h2>
+    <p><strong>No constituye aprobacion, originacion ni desembolso.</strong></p>
+    {% if auditoria_detalle %}
+      <p>Resultado: <strong>{{ auditoria_detalle.resultado }}</strong></p>
+      <p>{{ auditoria_detalle.resumen }}</p>
+      {% if auditoria_detalle.razones %}<h3>Razones controladas</h3><ul class="lista-alertas">{% for item in auditoria_detalle.razones %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+      {% if auditoria_detalle.alertas %}<h3>Alertas controladas</h3><ul class="lista-alertas">{% for item in auditoria_detalle.alertas %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+      {% if auditoria_detalle.bloqueos %}<h3>Bloqueos controlados</h3><ul class="lista-alertas">{% for item in auditoria_detalle.bloqueos %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+      {% if puede_ver_score %}<p>Score interno: <strong>{{ auditoria_detalle.score|default:"No disponible" }}</strong></p>{% endif %}
+      {% if puede_ver_score %}<p>Politica: <strong>{{ auditoria_detalle.version_politica }}</strong></p>{% endif %}
+      {% if puede_ver_score and auditoria_detalle.centrales %}
+        <h3>Centrales de riesgo</h3>
+        <p>Estado consolidado: <strong>{{ auditoria_detalle.centrales.estado_global }}</strong></p>
+        <div class="grid-2 datos-grid">
+          <div class="dato">
+            <span>MiDecisor</span>
+            {% with fuente=auditoria_detalle.centrales.decisor %}
+              {% if fuente %}
+                <strong>{{ fuente.estado }}</strong>
+                <small>Fecha: {{ fuente.consultado_en|default:"No disponible" }}</small>
+                <small>Score externo: {{ fuente.score_externo|default_if_none:"No disponible" }}</small>
+                <small>Reutilizado: {{ fuente.reutilizado|yesno:"Si,No" }}</small>
+              {% else %}<strong>No consultado</strong>{% endif %}
+            {% endwith %}
+          </div>
+          <div class="dato">
+            <span>HDCPlus</span>
+            {% with fuente=auditoria_detalle.centrales.historial %}
+              {% if fuente %}
+                <strong>{{ fuente.estado }}</strong>
+                <small>Fecha: {{ fuente.consultado_en|default:"No disponible" }}</small>
+                <small>Obligaciones vigentes: {{ fuente.obligaciones_vigentes|default_if_none:"No disponible" }}</small>
+                <small>Cuota total: {{ fuente.cuota_mensual_total|default_if_none:"No disponible" }}</small>
+                <small>Saldo total: {{ fuente.saldo_total|default_if_none:"No disponible" }}</small>
+                <small>Mora actual: {{ fuente.mora_actual|yesno:"Si,No,No determinada" }}</small>
+                <small>Reutilizado: {{ fuente.reutilizado|yesno:"Si,No" }}</small>
+              {% else %}<strong>No consultado</strong>{% endif %}
+            {% endwith %}
+          </div>
+        </div>
+      {% endif %}
+    {% else %}<p>No existe evaluacion formal auditada.</p>{% endif %}
+  </section>
+
+  {% if puede_ver_aprobacion or puede_crear_aprobacion %}
+  <section class="panel">
+    <h2 class="titulo-seccion">AprobaciÃ³n interna de Aprobado</h2>
+    <p><strong>Esta decisiÃ³n no origina, firma, activa ni desembolsa. Una aprobaciÃ³n favorable pasa primero a confirmaciÃ³n de la empresa.</strong></p>
+    {% if aprobacion_interna %}
+      <div class="grid-3 datos-grid">
+        <div class="dato"><span>Estado</span><strong>{{ aprobacion_interna.get_estado_display }}</strong></div>
+        <div class="dato"><span>Monto maximo evaluado</span><strong>{{ aprobacion_interna.monto_maximo_evaluado }}</strong></div>
+        <div class="dato"><span>Monto autorizado</span><strong>{{ aprobacion_interna.monto_autorizado }}</strong></div>
+        <div class="dato"><span>Plazo maximo evaluado</span><strong>{{ aprobacion_interna.plazo_maximo_evaluado }} meses</strong></div>
+        <div class="dato"><span>Plazo autorizado</span><strong>{{ aprobacion_interna.plazo_autorizado }} meses</strong></div>
+        <div class="dato"><span>Politica / configuracion</span><strong>{{ aprobacion_interna.version_politica }} / {{ aprobacion_interna.version_configuracion_financiera }}</strong></div>
+      </div>
+      {% if origen_credito and origen_credito.estado == 'COMPLETADO' %}
+        <div class="alerta-info">
+          Credito originado en revision: <strong>{{ origen_credito.credito.numero_credito }}</strong>.
+          No implica activacion, firma ni desembolso.
+        </div>
+      {% elif puede_originar %}
+        <form method="post" action="{% url 'contractors:admin_originar_credito' aprobacion_interna.id %}">
+          {% csrf_token %}
+          <button class="boton" type="submit">Originar credito en revision</button>
+        </form>
+      {% endif %}
+      {% if puede_decidir_aprobacion and aprobacion_interna.estado == 'PENDIENTE' %}
+        <form method="post" action="{% url 'contractors:admin_accion_aprobacion_interna' aprobacion_interna.id %}">
+          {% csrf_token %}<button class="boton boton-secundario" name="accion" value="INICIAR">Iniciar analisis interno</button>
+        </form>
+      {% endif %}
+      {% if puede_decidir_aprobacion and aprobacion_interna.estado == 'PENDIENTE' or puede_decidir_aprobacion and aprobacion_interna.estado == 'EN_ANALISIS' %}
+        <form method="post" action="{% url 'contractors:admin_accion_aprobacion_interna' aprobacion_interna.id %}" class="formulario-compacto">
+          {% csrf_token %}<input type="hidden" name="accion" value="APROBAR">
+          <label>Monto autorizado <input class="campo" type="number" step="0.01" name="monto_autorizado" value="{{ aprobacion_interna.monto_autorizado }}" max="{{ aprobacion_interna.monto_maximo_evaluado }}"></label>
+          <label>Plazo autorizado <input class="campo" type="number" name="plazo_autorizado" value="{{ aprobacion_interna.plazo_autorizado }}" max="{{ aprobacion_interna.plazo_maximo_evaluado }}"></label>
+          <label>Comentario interno <textarea class="campo" name="comentario_interno" rows="2"></textarea></label>
+          <button class="boton" type="submit">Aprobar internamente</button>
+        </form>
+        <form method="post" action="{% url 'contractors:admin_accion_aprobacion_interna' aprobacion_interna.id %}" class="formulario-compacto">
+          {% csrf_token %}<input type="hidden" name="accion" value="DEVOLVER">
+          <label>Motivo <select class="campo" name="motivo">{% for value, label in motivos_aprobacion %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+          <label>Comentario interno <textarea class="campo" name="comentario_interno" rows="2" required></textarea></label>
+          <button class="boton boton-secundario" type="submit">Devolver a revision</button>
+        </form>
+      {% endif %}
+      {% if puede_cerrar_aprobacion and aprobacion_interna.estado != 'CERRADA_SIN_ORIGINAR' and aprobacion_interna.estado != 'CANCELADA' and aprobacion_interna.estado != 'DEVUELTA_A_REVISION' %}
+        <form method="post" action="{% url 'contractors:admin_accion_aprobacion_interna' aprobacion_interna.id %}" class="formulario-compacto">
+          {% csrf_token %}
+          <label>Motivo <select class="campo" name="motivo">{% for value, label in motivos_aprobacion %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+          <label>Comentario interno <textarea class="campo" name="comentario_interno" rows="2" required></textarea></label>
+          <button class="boton boton-secundario" name="accion" value="CERRAR">Cerrar sin originar</button>
+          {% if aprobacion_interna.estado == 'PENDIENTE' or aprobacion_interna.estado == 'EN_ANALISIS' %}<button class="boton boton-secundario" name="accion" value="CANCELAR">Cancelar</button>{% endif %}
+        </form>
+      {% endif %}
+    {% elif puede_crear_aprobacion %}
+      <p>La predecisiÃ³n read-only es favorable y puede pasar a la revisiÃ³n interna.</p>
+      <form method="post" action="{% url 'contractors:admin_crear_aprobacion_interna' solicitud.id %}">
+        {% csrf_token %}<button class="boton" type="submit">Crear aprobacion interna</button>
+      </form>
+    {% else %}
+      <p>No existe una aprobacion interna para esta solicitud.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if aprobacion_pagador %}
+  <section class="panel">
+    <h2 class="titulo-seccion">ConfirmaciÃ³n operativa de la empresa</h2>
+    <p>La empresa confirma hechos contractuales y capacidad operativa. No consulta ni decide el score interno.</p>
+    <div class="grid-3 datos-grid">
+      <div class="dato"><span>Estado</span><strong>{{ aprobacion_pagador.get_estado_display }}</strong></div>
+      <div class="dato"><span>Empresa</span><strong>{{ aprobacion_pagador.empresa.nombre }}</strong></div>
+      <div class="dato"><span>Decidida por</span><strong>{% if aprobacion_pagador.decidida_por %}{{ aprobacion_pagador.decidida_por.get_username }}{% else %}Pendiente{% endif %}</strong></div>
+      <div class="dato"><span>VÃ­nculo</span><strong>{{ aprobacion_pagador.confirma_vinculo|yesno:"Confirmado,Pendiente" }}</strong></div>
+      <div class="dato"><span>Contrato vigente</span><strong>{{ aprobacion_pagador.confirma_contrato_vigente|yesno:"Confirmado,Pendiente" }}</strong></div>
+      <div class="dato"><span>Pago mensual</span><strong>{{ aprobacion_pagador.confirma_forma_pago_mensual|yesno:"Confirmado,Pendiente" }}</strong></div>
+      <div class="dato"><span>Valores contractuales</span><strong>{{ aprobacion_pagador.confirma_valores_contractuales|yesno:"Confirmados,Pendientes" }}</strong></div>
+      <div class="dato"><span>Capacidad operativa</span><strong>{{ aprobacion_pagador.confirma_capacidad_operativa|yesno:"Confirmada,Pendiente" }}</strong></div>
+      <div class="dato"><span>GestiÃ³n del pago</span><strong>{{ aprobacion_pagador.acepta_gestionar_pago|yesno:"Aceptada,Pendiente" }}</strong></div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if puede_ver_formalizacion or puede_preparar_formalizacion %}
+  <section class="panel">
+    <h2 class="titulo-seccion">Formalización y firma</h2>
+    {% if formalizacion and puede_ver_formalizacion %}
+      <div class="resumen-grid">
+        <div class="dato"><span>Estado</span><strong>{{ formalizacion.get_estado_display }}</strong></div>
+        <div class="dato"><span>Identidad</span><strong>{{ formalizacion.get_estado_identidad_display }}</strong></div>
+        <div class="dato"><span>Selfie</span><strong>{{ formalizacion.identidad_selfie_validada|yesno:"Validada,Pendiente" }}</strong></div>
+        <div class="dato"><span>Documento</span><strong>{{ formalizacion.identidad_documento_validada|yesno:"Validado,Pendiente" }}</strong></div>
+        <div class="dato"><span>Firmante</span><strong>{{ formalizacion.identidad_firmante_coincide|yesno:"Coincide,Pendiente" }}</strong></div>
+        <div class="dato"><span>Pagaré</span><strong>{% if formalizacion.pagare %}{{ formalizacion.pagare.numero_pagare }}{% else %}Pendiente{% endif %}</strong></div>
+        <div class="dato"><span>Intentos de firma</span><strong>{{ formalizacion.intentos_firma }}</strong></div>
+      </div>
+      <div class="alerta-info">
+        La formalización no activa ni desembolsa el crédito. La identidad del titular debe estar
+        vigente antes de enviar el documento a firma.
+      </div>
+      {% if puede_reintentar_firma %}
+        <form method="post" action="{% url 'contractors:admin_enviar_formalizacion' formalizacion.id %}">
+          {% csrf_token %}
+          <button class="boton" type="submit">Enviar o reintentar firma</button>
+        </form>
+      {% endif %}
+    {% elif puede_preparar_formalizacion %}
+      <p>El crédito está originado en revisión y puede preparar su documento de formalización.</p>
+      <form method="post" action="{% url 'contractors:admin_preparar_formalizacion' origen_credito.id %}">
+        {% csrf_token %}
+        <button class="boton" type="submit">Preparar formalización</button>
+      </form>
+    {% else %}
+      <p>No existe una formalización disponible para esta solicitud.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if puede_ver_novedad_operativa or puede_crear_novedad_operativa %}
+  <section class="panel">
+    <h2 class="titulo-seccion">Novedad operativa posterior a firma</h2>
+    <p><strong>Esta etapa no desembolsa, activa ni modifica las condiciones del credito.</strong></p>
+    {% if novedad_operativa and puede_ver_novedad_operativa %}
+      <div class="resumen-grid">
+        <div class="dato"><span>Estado</span><strong>{{ novedad_operativa.get_estado_display }}</strong></div>
+        <div class="dato"><span>Canal</span><strong>{{ novedad_operativa.get_canal_envio_display }}</strong></div>
+        <div class="dato"><span>Intentos</span><strong>{{ novedad_operativa.intentos_envio }}</strong></div>
+        <div class="dato"><span>Generada</span><strong>{{ novedad_operativa.generada_en|date:"Y-m-d H:i" }}</strong></div>
+      </div>
+      {% if puede_enviar_novedad_operativa %}
+        <form method="post" action="{% url 'contractors:admin_enviar_novedad_operativa' novedad_operativa.id %}">
+          {% csrf_token %}
+          <button class="boton" type="submit">Enviar novedad operativa</button>
+        </form>
+      {% endif %}
+    {% elif puede_crear_novedad_operativa %}
+      <p>La firma esta confirmada y puede generarse la comunicacion operativa para la empresa.</p>
+      <form method="post" action="{% url 'contractors:admin_crear_novedad_operativa' formalizacion.id %}">
+        {% csrf_token %}
+        <button class="boton" type="submit">Generar novedad operativa</button>
+      </form>
+    {% else %}
+      <p>No existe una novedad operativa disponible.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2 class="titulo-seccion">Revisiones manuales</h2>
+    {% for revision in revisiones %}
+      <article class="documento">
+        <div>
+          <strong>#{{ revision.id }} - {{ revision.get_motivo_display }}</strong>
+          <p>{{ revision.get_estado_display }} | {{ revision.get_prioridad_display }} | {% if revision.asignado_a %}{{ revision.asignado_a.get_username }}{% else %}Sin asignar{% endif %}</p>
+        </div>
+        {% if revision.estado != 'RESUELTA' and revision.estado != 'CANCELADA' %}
+        <form method="post" action="{% url 'contractors:admin_accion_revision' revision.id %}" class="formulario-compacto">
+          {% csrf_token %}
+          {% if puede_asignar %}
+            <label>Asignar a <select name="asignado_a" class="campo"><option value="">Asignarme</option>{% for usuario in usuarios_asignables %}<option value="{{ usuario.id }}">{{ usuario.get_username }}</option>{% endfor %}</select></label>
+            <button class="boton boton-secundario" name="accion" value="ASIGNAR">Asignar revision</button>
+          {% endif %}
+          {% if puede_resolver %}<button class="boton boton-secundario" name="accion" value="INICIAR">Iniciar analisis</button><button class="boton boton-secundario" name="accion" value="REINTENTAR">Reintentar evaluacion</button>{% endif %}
+        </form>
+        {% if puede_solicitar %}
+        <form method="post" action="{% url 'contractors:admin_accion_revision' revision.id %}" class="formulario-compacto">
+          {% csrf_token %}<input type="hidden" name="accion" value="SOLICITAR_SUBSANACION">
+          <label>Subsanacion <select name="tipo_subsanacion" class="campo">{% for value, label in tipos_subsanacion %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+          <label>Detalle interno <textarea name="comentario_interno" class="campo" rows="2"></textarea></label>
+          <button class="boton" type="submit">Solicitar correccion</button>
+        </form>
+        <form method="post" action="{% url 'contractors:admin_accion_revision' revision.id %}">{% csrf_token %}<input type="hidden" name="accion" value="VALIDAR_EMPRESA"><button class="boton boton-secundario">Solicitar validacion empresa</button></form>
+        {% endif %}
+        {% if puede_resolver %}
+        <form method="post" action="{% url 'contractors:admin_accion_revision' revision.id %}" class="formulario-compacto">
+          {% csrf_token %}<input type="hidden" name="accion" value="RESOLVER">
+          <label>Resultado <select name="resultado" class="campo">{% for value, label in resultados_revision %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+          <label>Comentario interno <textarea name="comentario_interno" class="campo" rows="2"></textarea></label>
+          <button class="boton" type="submit">Resolver</button>
+        </form>
+        {% endif %}
+        {% endif %}
+      </article>
+    {% empty %}<p>No hay revisiones registradas.</p>{% endfor %}
+  </section>
+
+  <section class="panel">
+    <h2 class="titulo-seccion">Requerimientos de subsanacion</h2>
+    <div class="tabla-responsive"><table class="tabla"><thead><tr><th>Tipo</th><th>Estado</th><th>Mensaje publico</th><th>Fecha</th></tr></thead><tbody>{% for item in requerimientos %}<tr><td>{{ item.get_tipo_display }}</td><td>{{ item.get_estado_display }}</td><td>{{ item.mensaje_publico }}</td><td>{{ item.creado_en|date:"Y-m-d H:i" }}</td></tr>{% empty %}<tr><td colspan="4">Sin requerimientos.</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+
+  <section class="panel">
+    <h2 class="titulo-seccion">Timeline operativo</h2>
+    <div class="tabla-responsive"><table class="tabla"><thead><tr><th>Fecha</th><th>Evento</th><th>Usuario</th><th>Descripcion</th></tr></thead><tbody>{% for evento in timeline %}<tr><td>{{ evento.created_at|date:"Y-m-d H:i" }}</td><td>{{ evento.get_tipo_evento_display }}</td><td>{{ evento.creado_por.get_username|default:"Sistema" }}</td><td>{{ evento.descripcion }}</td></tr>{% empty %}<tr><td colspan="4">Sin eventos.</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+  <a class="boton boton-secundario" href="{% url 'contractors:admin_bandeja' %}">Volver a bandeja</a>
+</main>
+{% endblock %}

@@ -1,0 +1,172 @@
+{% extends "contractors/base.html" %}
+{% block title %}Gestión de Prestadores de Servicios | Aprobado{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="eyebrow">Gestión interna Aprobado</p>
+  <h1>Gestión de Prestadores de Servicios</h1>
+  <p>Seguimiento de solicitudes, evaluaciones, revisiones y aprobaciones internas.</p>
+</section>
+
+<main class="contenedor">
+  <section class="grid-2" aria-label="Resumen operativo">
+    <article class="panel tarjeta-resumen"><span>Pendientes de evaluación</span><strong>{{ resumen_bandeja.pendientes }}</strong></article>
+    <article class="panel tarjeta-resumen"><span>Revisiones manuales</span><strong>{{ resumen_bandeja.revisiones }}</strong></article>
+    <article class="panel tarjeta-resumen"><span>Preaprobados</span><strong>{{ resumen_bandeja.preaprobados }}</strong></article>
+    <article class="panel tarjeta-resumen"><span>Aprobaciones internas</span><strong>{{ resumen_bandeja.aprobaciones }}</strong></article>
+  </section>
+
+  <section class="panel">
+    <form method="get" class="grid-3 formulario-compacto" aria-label="Filtros de revision">
+      <label>Estado
+        <select name="estado" class="campo"><option value="">Todos</option>{% for value, label in estados_revision %}<option value="{{ value }}" {% if filtros.estado == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      </label>
+      <label>Motivo
+        <select name="motivo" class="campo"><option value="">Todos</option>{% for value, label in motivos_revision %}<option value="{{ value }}" {% if filtros.motivo == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      </label>
+      <label>Prioridad
+        <select name="prioridad" class="campo"><option value="">Todas</option>{% for value, label in prioridades_revision %}<option value="{{ value }}" {% if filtros.prioridad == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      </label>
+      <label>Empresa <input class="campo" type="number" name="empresa" value="{{ filtros.empresa }}"></label>
+      <label>Asignado a
+        <select name="asignado_a" class="campo"><option value="">Todos</option>{% for usuario in usuarios_asignables %}<option value="{{ usuario.id }}" {% if filtros.asignado_a == usuario.id|stringformat:'s' %}selected{% endif %}>{{ usuario.get_username }}</option>{% endfor %}</select>
+      </label>
+      <label>Desde <input class="campo" type="date" name="fecha_desde" value="{{ filtros.fecha_desde }}"></label>
+      <label>Hasta <input class="campo" type="date" name="fecha_hasta" value="{{ filtros.fecha_hasta }}"></label>
+      <label>Resultado
+        <select name="resultado" class="campo"><option value="">Todos</option>{% for value, label in resultados_predecision %}<option value="{{ value }}" {% if filtros.resultado == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      </label>
+      <label>Estado solicitud
+        <select name="estado_solicitud" class="campo"><option value="">Todos</option>{% for value, label in estados_solicitud %}<option value="{{ value }}" {% if filtros.estado_solicitud == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      </label>
+      {% if puede_ver_aprobaciones %}
+      <label>Estado aprobacion interna
+        <select name="estado_aprobacion" class="campo"><option value="">Todos</option>{% for value, label in estados_aprobacion %}<option value="{{ value }}" {% if filtros.estado_aprobacion == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      </label>
+      <label>Monto desde <input class="campo" type="number" name="monto_desde" value="{{ filtros.monto_desde }}"></label>
+      <label>Monto hasta <input class="campo" type="number" name="monto_hasta" value="{{ filtros.monto_hasta }}"></label>
+      {% endif %}
+      <div class="acciones"><button class="boton" type="submit">Filtrar</button><a class="boton boton-secundario" href="{% url 'contractors:admin_bandeja' %}">Limpiar</a></div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2 class="titulo-seccion">Solicitudes pendientes de evaluación</h2>
+    <p>La evaluación formal consulta los servicios configurados y registra una predecisión auditable. No crea crédito.</p>
+    <div class="tabla-responsive">
+      <table class="tabla">
+        <thead><tr><th>Solicitud</th><th>Solicitante</th><th>Empresa</th><th>Monto / plazo</th><th>Análisis contractual</th><th>Documentos</th><th>Fecha</th><th>Acción</th></tr></thead>
+        <tbody>
+        {% for fila in filas_pendientes %}
+          <tr>
+            <td><strong>#{{ fila.solicitud.id }}</strong><br><small>{{ fila.documento }}</small></td>
+            <td>{{ fila.solicitante }}</td>
+            <td>{{ fila.solicitud.empresa.nombre }}</td>
+            <td>{{ fila.solicitud.monto_solicitado|default:"Pendiente" }} / {{ fila.solicitud.plazo_meses|default:"Pendiente" }} meses</td>
+            <td>{{ fila.solicitud.get_estado_analisis_contractual_display }}</td>
+            <td>{{ fila.progreso.cargados }}/{{ fila.progreso.total }}</td>
+            <td>{{ fila.solicitud.created_at|date:"Y-m-d H:i" }}</td>
+            <td><a class="boton boton-secundario" href="{% url 'contractors:admin_detalle' fila.solicitud.id %}">Ver detalle</a></td>
+          </tr>
+        {% empty %}<tr><td colspan="8">No hay solicitudes pendientes de evaluación.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if pagina_pendientes.paginator.num_pages > 1 %}
+      <nav class="acciones" aria-label="Paginación de solicitudes pendientes">
+        {% if pagina_pendientes.has_previous %}<a class="boton boton-secundario" href="?{% if query_sin_pagina_evaluacion %}{{ query_sin_pagina_evaluacion }}&{% endif %}evaluation_page={{ pagina_pendientes.previous_page_number }}">Anterior</a>{% endif %}
+        <span>Página {{ pagina_pendientes.number }} de {{ pagina_pendientes.paginator.num_pages }}</span>
+        {% if pagina_pendientes.has_next %}<a class="boton boton-secundario" href="?{% if query_sin_pagina_evaluacion %}{{ query_sin_pagina_evaluacion }}&{% endif %}evaluation_page={{ pagina_pendientes.next_page_number }}">Siguiente</a>{% endif %}
+      </nav>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <h2 class="titulo-seccion">Revisiones manuales</h2>
+    <div class="tabla-responsive">
+      <table class="tabla">
+        <thead><tr><th>Solicitud</th><th>Solicitante</th><th>Empresa</th><th>Estado operativo</th><th>Predecision</th><th>Motivo</th><th>Prioridad</th><th>Asignado</th><th>Antiguedad</th><th>Fecha</th><th>Accion</th></tr></thead>
+        <tbody>
+        {% for fila in filas %}
+          {% with revision=fila.revision solicitud=fila.revision.solicitud %}
+          <tr>
+            <td><strong>#{{ solicitud.id }}</strong><br><small>{{ fila.documento }}</small></td>
+            <td>{{ fila.solicitante }}</td>
+            <td>{{ solicitud.empresa.nombre }}</td>
+            <td><span class="estado-pill">{{ solicitud.get_estado_display }}</span></td>
+            <td>{% if revision.auditoria_predecision %}{{ revision.auditoria_predecision.get_resultado_display }}{% else %}Sin auditoria{% endif %}</td>
+            <td>{{ revision.get_motivo_display }}</td>
+            <td>{{ revision.get_prioridad_display }}</td>
+            <td>{{ revision.asignado_a.get_username|default:"Sin asignar" }}</td>
+            <td>{{ revision.creada_en|timesince }}</td>
+            <td>{{ revision.creada_en|date:"Y-m-d H:i" }}</td>
+            <td><a class="boton boton-secundario" href="{% url 'contractors:admin_detalle' solicitud.id %}">Ver evaluacion</a></td>
+          </tr>
+          {% endwith %}
+        {% empty %}<tr><td colspan="11">No hay revisiones para los filtros seleccionados.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if pagina.paginator.num_pages > 1 %}
+      <nav class="acciones" aria-label="Paginacion">
+        {% if pagina.has_previous %}<a class="boton boton-secundario" href="?{% if query_sin_pagina %}{{ query_sin_pagina }}&{% endif %}page={{ pagina.previous_page_number }}">Anterior</a>{% endif %}
+        <span>Pagina {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+        {% if pagina.has_next %}<a class="boton boton-secundario" href="?{% if query_sin_pagina %}{{ query_sin_pagina }}&{% endif %}page={{ pagina.next_page_number }}">Siguiente</a>{% endif %}
+      </nav>
+    {% endif %}
+  </section>
+
+  {% if puede_ver_aprobaciones %}
+  <section class="panel">
+    <h2 class="titulo-seccion">Preaprobados pendientes de aprobación interna</h2>
+    <p>El resultado read-only no crea crédito ni habilita desembolso.</p>
+    <div class="tabla-responsive">
+      <table class="tabla">
+        <thead><tr><th>Solicitud</th><th>Empresa</th><th>Resultado</th><th>Monto sugerido</th><th>Fecha</th><th>Acción</th></tr></thead>
+        <tbody>
+        {% for auditoria in candidatos_gate %}
+          <tr>
+            <td>#{{ auditoria.solicitud_id }}</td>
+            <td>{{ auditoria.solicitud.empresa.nombre }}</td>
+            <td>Preaprobado pendiente de aprobación interna</td>
+            <td>{{ auditoria.snapshot_salida.monto_maximo_sugerido|default:"No disponible" }}</td>
+            <td>{{ auditoria.finalizada_en|date:"Y-m-d H:i" }}</td>
+            <td><a class="boton boton-secundario" href="{% url 'contractors:admin_detalle' auditoria.solicitud_id %}">Ver evaluación</a></td>
+          </tr>
+        {% empty %}<tr><td colspan="6">No hay preaprobados pendientes.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2 class="titulo-seccion">Aprobaciones internas</h2>
+    <div class="tabla-responsive">
+      <table class="tabla">
+        <thead><tr><th>Solicitud</th><th>Empresa</th><th>Estado</th><th>Analista</th><th>Monto</th><th>Plazo</th><th>Fecha</th><th>Acción</th></tr></thead>
+        <tbody>
+        {% for gate in pagina_aprobaciones.object_list %}
+          <tr>
+            <td>#{{ gate.solicitud_id }}</td>
+            <td>{{ gate.solicitud.empresa.nombre }}</td>
+            <td>{{ gate.get_estado_display }}</td>
+            <td>{{ gate.decidida_por.get_username|default:gate.creada_por.get_username|default:"Pendiente" }}</td>
+            <td>{{ gate.monto_autorizado }}</td>
+            <td>{{ gate.plazo_autorizado }} meses</td>
+            <td>{{ gate.creada_en|date:"Y-m-d H:i" }}</td>
+            <td><a class="boton boton-secundario" href="{% url 'contractors:admin_detalle' gate.solicitud_id %}">Ver aprobación</a></td>
+          </tr>
+        {% empty %}<tr><td colspan="8">No hay aprobaciones internas para los filtros.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if pagina_aprobaciones.paginator.num_pages > 1 %}
+      <nav class="acciones" aria-label="Paginación de aprobaciones internas">
+        {% if pagina_aprobaciones.has_previous %}<a class="boton boton-secundario" href="?{% if query_sin_pagina_aprobacion %}{{ query_sin_pagina_aprobacion }}&{% endif %}approval_page={{ pagina_aprobaciones.previous_page_number }}">Anterior</a>{% endif %}
+        <span>Página {{ pagina_aprobaciones.number }} de {{ pagina_aprobaciones.paginator.num_pages }}</span>
+        {% if pagina_aprobaciones.has_next %}<a class="boton boton-secundario" href="?{% if query_sin_pagina_aprobacion %}{{ query_sin_pagina_aprobacion }}&{% endif %}approval_page={{ pagina_aprobaciones.next_page_number }}">Siguiente</a>{% endif %}
+      </nav>
+    {% endif %}
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

@@ -6,6 +6,7 @@ Rol: Usuarios con PerfilPagador que gestionan pagos de libranza
 """
 from django.urls import path
 from usuarios import views as usuarios_views
+from contractors import views_pagador as contractors_views_pagador
 from .. import views
 
 app_name = 'pagador'
@@ -33,6 +34,41 @@ urlpatterns = [
     path('pago/<int:pago_id>/comprobante/', views.pagador_comprobante_pago_view, name='comprobante_pago'),
     path('obligaciones/pagar/', views.pagador_pagar_obligaciones_seleccionadas_view, name='pagar_obligaciones'),
     path('credito/<int:credito_id>/decision/', views.pagador_decidir_solicitud_view, name='decidir_solicitud'),
+    path(
+        'prestadores/aprobaciones/',
+        contractors_views_pagador.aprobaciones_prestadores_view,
+        name='prestadores_aprobaciones',
+    ),
+    path(
+        'prestadores/aprobaciones/<int:aprobacion_id>/',
+        contractors_views_pagador.detalle_aprobacion_prestador_view,
+        name='prestadores_aprobacion_detalle',
+    ),
+    path(
+        'prestadores/aprobaciones/<int:aprobacion_id>/decidir/',
+        contractors_views_pagador.decidir_aprobacion_prestador_view,
+        name='prestadores_aprobacion_decidir',
+    ),
+    path(
+        'prestadores/novedades/',
+        contractors_views_pagador.novedades_operativas_prestadores_view,
+        name='prestadores_novedades',
+    ),
+    path(
+        'prestadores/novedades/<int:novedad_id>/',
+        contractors_views_pagador.detalle_novedad_operativa_prestador_view,
+        name='prestadores_novedad_detalle',
+    ),
+    path(
+        'prestadores/novedades/<int:novedad_id>/confirmar-recepcion/',
+        contractors_views_pagador.confirmar_recepcion_novedad_prestador_view,
+        name='prestadores_novedad_confirmar_recepcion',
+    ),
+    path(
+        'prestadores/novedades/<int:novedad_id>/marcar-gestionada/',
+        contractors_views_pagador.marcar_gestionada_novedad_prestador_view,
+        name='prestadores_novedad_marcar_gestionada',
+    ),
 
     # ========================================
     # PROCESAMIENTO DE PAGOS - SIMULACIÓN

@@ -1,0 +1,9 @@
+<nav class="cp-breadcrumb" aria-label="Ruta de navegación">
+  <a href="{% url 'contractors:mi_credito' %}">Mi crédito</a>
+  {% if back_url and back_label %}
+    <span aria-hidden="true">/</span>
+    <a href="{{ back_url }}">{{ back_label }}</a>
+  {% endif %}
+  <span aria-hidden="true">/</span>
+  <span aria-current="page">{{ current_label }}</span>
+</nav>

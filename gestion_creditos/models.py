@@ -1,13 +1,51 @@
-from django.db import models
+from django.db import models, transaction
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator, FileExtensionValidator
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.text import slugify
 from decimal import Decimal
+from pathlib import Path
 import uuid
 
 from gestion_creditos.services.name_normalization import build_full_name_upper, normalize_name_upper
+from gestion_creditos.storage import private_document_storage
+
+
+DOCUMENTO_EMPRESA_EXTENSIONS = ('pdf', 'jpg', 'jpeg', 'png', 'webp')
+DOCUMENTO_EMPRESA_MAX_BYTES = 8 * 1024 * 1024
+
+
+def ruta_documento_empresa(instance, filename):
+    extension = Path(filename or '').suffix.lower()
+    empresa_id = instance.empresa_id or 'sin-empresa'
+    tipo = slugify(instance.tipo_documento or 'documento')
+    return f'empresas/{empresa_id}/{tipo}/{uuid.uuid4().hex}{extension}'
+
+
+def validar_archivo_documento_empresa(archivo):
+    if archivo.size > DOCUMENTO_EMPRESA_MAX_BYTES:
+        raise ValidationError('El documento no debe superar 8 MB.')
+
+    extension = Path(archivo.name or '').suffix.lower()
+    posicion_inicial = archivo.tell() if hasattr(archivo, 'tell') else 0
+    try:
+        archivo.seek(0)
+        if extension == '.pdf':
+            if archivo.read(5) != b'%PDF-':
+                raise ValidationError('El archivo PDF no tiene un contenido válido.')
+            return
+
+        try:
+            from PIL import Image
+
+            imagen = Image.open(archivo)
+            imagen.verify()
+        except Exception as exc:
+            raise ValidationError('La imagen no tiene un contenido válido.') from exc
+    finally:
+        if hasattr(archivo, 'seek'):
+            archivo.seek(posicion_inicial)
 
 class AsesorComercial(models.Model):
     usuario = models.OneToOneField(
@@ -113,6 +151,13 @@ class Empresa(models.Model):
     representante_legal = models.CharField(max_length=160, blank=True)
     correo_contacto = models.EmailField(blank=True)
     telefono_contacto = models.CharField(max_length=20, blank=True)
+    pais = models.CharField(max_length=80, blank=True, default='Colombia')
+    departamento = models.CharField(max_length=120, blank=True)
+    municipio = models.CharField(max_length=120, blank=True)
+    ciudad = models.CharField(max_length=120, blank=True)
+    direccion_principal = models.CharField(max_length=255, blank=True)
+    latitud = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitud = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     asesor_comercial = models.ForeignKey(
         AsesorComercial,
         on_delete=models.SET_NULL,
@@ -191,6 +236,129 @@ class Empresa(models.Model):
     @property
     def permite_marketplace(self):
         return self.tipo_empresa in {self.TipoEmpresa.MARKETPLACE_EXTERNA, self.TipoEmpresa.MIXTA}
+
+
+class DocumentoEmpresa(models.Model):
+    class TipoDocumento(models.TextChoices):
+        RUT = 'RUT', 'RUT'
+        CAMARA_COMERCIO = 'CAMARA_COMERCIO', 'Cámara de Comercio'
+        CEDULA_REPRESENTANTE_LEGAL = (
+            'CEDULA_REPRESENTANTE_LEGAL',
+            'Cédula del representante legal',
+        )
+
+    class EstadoDocumento(models.TextChoices):
+        VIGENTE = 'VIGENTE', 'Vigente'
+        VENCIDO = 'VENCIDO', 'Vencido'
+        REEMPLAZADO = 'REEMPLAZADO', 'Reemplazado'
+        ANULADO = 'ANULADO', 'Anulado'
+
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.PROTECT,
+        related_name='documentos_institucionales',
+    )
+    tipo_documento = models.CharField(max_length=40, choices=TipoDocumento.choices)
+    archivo = models.FileField(
+        upload_to=ruta_documento_empresa,
+        storage=private_document_storage,
+        validators=[
+            FileExtensionValidator(DOCUMENTO_EMPRESA_EXTENSIONS),
+            validar_archivo_documento_empresa,
+        ],
+    )
+    fecha_expedicion = models.DateField(null=True, blank=True)
+    fecha_vencimiento = models.DateField(null=True, blank=True)
+    estado = models.CharField(
+        max_length=20,
+        choices=EstadoDocumento.choices,
+        default=EstadoDocumento.VIGENTE,
+    )
+    observaciones = models.TextField(blank=True)
+    cargado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='documentos_empresa_cargados',
+    )
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['empresa', 'tipo_documento', '-creado_en']
+        verbose_name = 'Documento de empresa'
+        verbose_name_plural = 'Documentos de empresa'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['empresa', 'tipo_documento'],
+                condition=models.Q(activo=True),
+                name='uniq_doc_empresa_tipo_activo',
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=['empresa', 'tipo_documento', 'estado'],
+                name='doc_empresa_tipo_estado_idx',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.empresa} - {self.get_tipo_documento_display()} ({self.estado})'
+
+    def clean(self):
+        super().clean()
+        if (
+            self.fecha_expedicion
+            and self.fecha_vencimiento
+            and self.fecha_vencimiento < self.fecha_expedicion
+        ):
+            raise ValidationError({
+                'fecha_vencimiento': 'La fecha de vencimiento no puede ser anterior a la expedición.',
+            })
+        if self.activo and self.estado != self.EstadoDocumento.VIGENTE:
+            raise ValidationError({'activo': 'Solo un documento vigente puede permanecer activo.'})
+        if not self.activo and self.estado == self.EstadoDocumento.VIGENTE:
+            raise ValidationError({'estado': 'Un documento vigente debe permanecer activo.'})
+
+        if not self.pk:
+            return
+        anterior = type(self).objects.filter(pk=self.pk).only(
+            'empresa_id', 'tipo_documento', 'archivo', 'activo',
+        ).first()
+        if not anterior:
+            return
+        if anterior.empresa_id != self.empresa_id or anterior.tipo_documento != self.tipo_documento:
+            raise ValidationError('La empresa y el tipo no pueden cambiar en una versión existente.')
+        if anterior.archivo.name != self.archivo.name:
+            raise ValidationError({'archivo': 'Para reemplazar el archivo debes crear una nueva versión.'})
+        if not anterior.activo and self.activo:
+            raise ValidationError({'activo': 'Una versión histórica no puede reactivarse.'})
+
+    def save(self, *args, **kwargs):
+        es_nuevo_activo = self._state.adding and self.activo
+        self.full_clean(validate_constraints=False)
+        if not es_nuevo_activo:
+            return super().save(*args, **kwargs)
+
+        with transaction.atomic():
+            Empresa.objects.select_for_update().get(pk=self.empresa_id)
+            type(self).objects.filter(
+                empresa_id=self.empresa_id,
+                tipo_documento=self.tipo_documento,
+                activo=True,
+            ).update(
+                activo=False,
+                estado=self.EstadoDocumento.REEMPLAZADO,
+                actualizado_en=timezone.now(),
+            )
+            return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError(
+            'Los documentos institucionales no se eliminan; deben reemplazarse o anularse.'
+        )
 
 
 class MarketplaceItem(models.Model):
@@ -454,6 +622,52 @@ class MarketplaceLiquidacionEmpresa(models.Model):
         return f"{self.empresa.nombre} - {self.pedido.numero_pedido}"
 
 #? ----- Modelo principal de crédito ----
+class SecuenciaNumeroCredito(models.Model):
+    anio = models.PositiveSmallIntegerField(unique=True)
+    ultimo_numero = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Secuencia de numero de credito'
+        verbose_name_plural = 'Secuencias de numeros de credito'
+
+    def __str__(self):
+        return f'{self.anio}: {self.ultimo_numero}'
+
+
+def generar_numero_credito_seguro(anio):
+    """Reserva un consecutivo anual sin depender de leer el ultimo credito."""
+    from django.db import IntegrityError, transaction
+
+    prefijo = f'CR-{anio}-'
+    with transaction.atomic():
+        try:
+            secuencia = SecuenciaNumeroCredito.objects.select_for_update().get(anio=anio)
+        except SecuenciaNumeroCredito.DoesNotExist:
+            existentes = Credito.objects.filter(
+                numero_credito__startswith=prefijo
+            ).values_list('numero_credito', flat=True)
+            ultimo_existente = 0
+            for numero in existentes:
+                sufijo = numero[len(prefijo):]
+                if sufijo.isdigit():
+                    ultimo_existente = max(ultimo_existente, int(sufijo))
+            try:
+                with transaction.atomic():
+                    secuencia = SecuenciaNumeroCredito.objects.create(
+                        anio=anio,
+                        ultimo_numero=ultimo_existente,
+                    )
+            except IntegrityError:
+                secuencia = SecuenciaNumeroCredito.objects.select_for_update().get(
+                    anio=anio
+                )
+
+        secuencia.ultimo_numero += 1
+        secuencia.save(update_fields=['ultimo_numero', 'updated_at'])
+        return f'{prefijo}{secuencia.ultimo_numero:05d}'
+
+
 class Credito(models.Model):
     class LineaCredito(models.TextChoices):
         EMPRENDIMIENTO = 'EMPRENDIMIENTO', 'Emprendimiento'
@@ -605,21 +819,7 @@ class Credito(models.Model):
         """
         # 1. Generar numero_credito si es un crédito nuevo
         if not self.numero_credito:
-            from django.utils import timezone
-            today = timezone.now()
-            year = today.year
-            
-            # Generar el prefijo y buscar el último número para ese año
-            prefix = f'CR-{year}-'
-            last_credit = Credito.objects.filter(numero_credito__startswith=prefix).order_by('numero_credito').last()
-            
-            if last_credit and last_credit.numero_credito[len(prefix):].isdigit():
-                last_sequence = int(last_credit.numero_credito[len(prefix):])
-                new_sequence = last_sequence + 1
-            else:
-                new_sequence = 1
-            
-            self.numero_credito = f'{prefix}{new_sequence:05d}'
+            self.numero_credito = generar_numero_credito_seguro(timezone.now().year)
 
         # 2. Validación de transiciones de estado
         if self.pk:  # Si el objeto ya existe en la BD
@@ -985,6 +1185,25 @@ class CreditoLibranza(models.Model):
         verbose_name="Ingresos mensuales"
     )
 
+    # Datos contractuales de prestadores. Permanecen opcionales para no alterar
+    # solicitudes historicas de libranza tradicional.
+    es_prestador_servicios = models.BooleanField(default=False)
+    tipo_documento = models.CharField(max_length=10, blank=True)
+    cargo_actividad_contractual = models.CharField(max_length=160, blank=True)
+    tipo_contrato = models.CharField(max_length=80, blank=True)
+    fecha_inicio_contrato = models.DateField(null=True, blank=True)
+    fecha_fin_contrato = models.DateField(null=True, blank=True)
+    valor_total_contrato = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    valor_pagado_contrato = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    valor_pendiente_contrato = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    escenario_credito = models.CharField(max_length=32, blank=True)
+
     #? Archivos adjuntos
     cedula_frontal = models.FileField(
         upload_to='credito_libranza/cedulas/',
@@ -999,6 +1218,12 @@ class CreditoLibranza(models.Model):
         null=True,
         blank=True,
         verbose_name="Certificado laboral"
+    )
+    contrato_prestacion_servicios = models.FileField(
+        upload_to='credito_libranza/contratos_prestadores/',
+        null=True,
+        blank=True,
+        verbose_name='Contrato de prestacion de servicios',
     )
     desprendible_nomina = models.FileField(
         upload_to='credito_libranza/desprendibles_nomina/',
@@ -1034,6 +1259,178 @@ class CreditoLibranza(models.Model):
     @property
     def nombre_completo(self):
         return build_full_name_upper(self.nombres, self.apellidos)
+
+
+class OrigenCreditoPrestador(models.Model):
+    class Estado(models.TextChoices):
+        EN_PROCESO = 'EN_PROCESO', 'En proceso'
+        COMPLETADO = 'COMPLETADO', 'Completado'
+        ERROR_CONTROLADO = 'ERROR_CONTROLADO', 'Error controlado'
+
+    gate_id = models.PositiveBigIntegerField(unique=True)
+    gate_version = models.CharField(max_length=64)
+    clave_idempotencia = models.CharField(max_length=180, unique=True)
+    credito = models.OneToOneField(
+        Credito,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='origen_prestador',
+    )
+    credito_libranza = models.OneToOneField(
+        CreditoLibranza,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='origen_prestador',
+    )
+    estado = models.CharField(
+        max_length=24,
+        choices=Estado.choices,
+        default=Estado.EN_PROCESO,
+    )
+    monto_base = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    porcentaje_comision = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    comision = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    porcentaje_iva = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    iva = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    porcentaje_seguro = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    seguro_vida = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    porcentaje_fondo = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    fondo_garantia = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    otros_componentes = models.JSONField(default=dict, blank=True)
+    otros_costos_total = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    capital_total_financiado = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    tasa_mensual = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    plazo = models.PositiveSmallIntegerField(null=True, blank=True)
+    cuota_aprobada = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    total_intereses = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    total_a_pagar = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    version_formula = models.CharField(max_length=80, blank=True)
+    version_configuracion = models.CharField(max_length=80, blank=True)
+    version_score = models.CharField(max_length=80, blank=True)
+    version_politica = models.CharField(max_length=80, blank=True)
+    calculado_en = models.DateTimeField(null=True, blank=True)
+    snapshot_hash = models.CharField(max_length=64, blank=True, db_index=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='origenes_credito_prestador_creados',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        verbose_name = 'Origen de credito de prestador'
+        verbose_name_plural = 'Origenes de creditos de prestadores'
+        indexes = [
+            models.Index(fields=['estado', '-created_at'], name='orig_prest_estado_idx'),
+        ]
+    CAMPOS_SNAPSHOT_FINANCIERO = (
+        'monto_base', 'porcentaje_comision', 'comision', 'porcentaje_iva', 'iva',
+        'porcentaje_seguro', 'seguro_vida', 'porcentaje_fondo', 'fondo_garantia',
+        'otros_componentes', 'otros_costos_total', 'capital_total_financiado',
+        'tasa_mensual', 'plazo', 'cuota_aprobada', 'total_intereses',
+        'total_a_pagar', 'version_formula', 'version_configuracion',
+        'version_score', 'version_politica', 'calculado_en', 'snapshot_hash',
+    )
+    CAMPOS_SNAPSHOT_OBLIGATORIOS = tuple(
+        campo for campo in CAMPOS_SNAPSHOT_FINANCIERO
+        if campo != 'otros_componentes'
+    )
+
+    def save(self, *args, **kwargs):
+        """Protege el snapshot en guardados de instancia.
+
+        QuerySet.update(), bulk_update() y SQL directo omiten esta proteccion y
+        quedan reservados para migraciones o remediaciones controladas.
+        """
+        if self.pk:
+            anterior = type(self).objects.filter(pk=self.pk).first()
+            if anterior and anterior.estado == self.Estado.COMPLETADO:
+                if self.estado != self.Estado.COMPLETADO:
+                    raise ValidationError(
+                        'Un origen completado no puede volver a un estado anterior.'
+                    )
+                modificados = [
+                    campo for campo in self.CAMPOS_SNAPSHOT_FINANCIERO
+                    if getattr(anterior, campo) != getattr(self, campo)
+                ]
+                if modificados:
+                    raise ValidationError(
+                        'El snapshot financiero completado es inmutable: '
+                        + ', '.join(modificados)
+                    )
+                if self.snapshot_financiero_completo:
+                    self.componentes_financieros(validar_hash=True)
+                return super().save(*args, **kwargs)
+        if self.estado == self.Estado.COMPLETADO:
+            faltantes = self.campos_snapshot_faltantes
+            if faltantes:
+                raise ValidationError(
+                    'El origen no puede completarse sin snapshot financiero: '
+                    + ', '.join(faltantes)
+                )
+            self.componentes_financieros(validar_hash=True)
+        return super().save(*args, **kwargs)
+
+    @property
+    def campos_snapshot_faltantes(self):
+        return [
+            campo for campo in self.CAMPOS_SNAPSHOT_OBLIGATORIOS
+            if getattr(self, campo) in (None, '')
+        ]
+
+    @property
+    def snapshot_financiero_completo(self):
+        return not self.campos_snapshot_faltantes
+
+    def componentes_financieros(self, *, validar_hash=True):
+        from gestion_creditos.services.condiciones_financieras import (
+            ComponentesFinancierosCredito,
+            validar_consistencia_componentes,
+        )
+
+        if self.estado != self.Estado.COMPLETADO:
+            raise ValidationError('El origen no tiene un snapshot financiero completado.')
+        if not self.snapshot_financiero_completo:
+            raise ValidationError(
+                'El origen historico no tiene un snapshot financiero completo y '
+                'no puede continuar al desembolso.'
+            )
+        componentes = ComponentesFinancierosCredito(
+            monto_base=self.monto_base,
+            porcentaje_comision=self.porcentaje_comision,
+            comision=self.comision,
+            porcentaje_iva=self.porcentaje_iva,
+            iva=self.iva,
+            porcentaje_seguro=self.porcentaje_seguro,
+            seguro_vida=self.seguro_vida,
+            porcentaje_fondo=self.porcentaje_fondo,
+            fondo_garantia=self.fondo_garantia,
+            otros_componentes=self.otros_componentes or {},
+            otros_costos_total=self.otros_costos_total,
+            capital_total_financiado=self.capital_total_financiado,
+            tasa_mensual=self.tasa_mensual,
+            plazo=self.plazo,
+            cuota_aprobada=self.cuota_aprobada,
+            total_intereses=self.total_intereses,
+            total_a_pagar=self.total_a_pagar,
+            version_formula=self.version_formula,
+            version_configuracion=self.version_configuracion,
+            version_score=self.version_score,
+            version_politica=self.version_politica,
+        )
+        if validar_hash and componentes.calcular_hash() != self.snapshot_hash:
+            raise ValidationError('El hash del snapshot financiero no es valido.')
+        validar_consistencia_componentes(componentes)
+        return componentes
+
+    def __str__(self):
+        return f'Gate {self.gate_id} - {self.estado}'
 
 
 class AprobacionPagadorLibranza(models.Model):
@@ -1426,6 +1823,13 @@ class HistorialEstado(models.Model):
         upload_to='comprobantes_pago/', 
         blank=True, 
         null=True
+    )
+    clave_idempotencia = models.CharField(
+        max_length=180,
+        null=True,
+        blank=True,
+        unique=True,
+        help_text='Clave persistente para operaciones de estado idempotentes.',
     )
 
     class Meta:
@@ -2098,9 +2502,9 @@ class Pagare(models.Model):
         default=EstadoPagare.CREATED
     )
     version_plantilla = models.CharField(
-        max_length=10,
+        max_length=32,
         default='1.0',
-        help_text="Versión de la plantilla legal usada"
+        help_text="Identificador versionado de la plantilla legal usada"
     )
 
     # Archivos PDF
@@ -2269,56 +2673,6 @@ class ZapSignWebhookLog(models.Model):
         return f"{status} {self.event} - {self.doc_token} ({self.received_at})"
 
 
-class WhatsAppInternalApplication(models.Model):
-    class ProductType(models.TextChoices):
-        PAYROLL_LOAN = 'payroll_loan', 'Libranza'
-        WHATSAPP_CREDIT = 'whatsapp_credit', 'Credito WhatsApp'
-
-    class Status(models.TextChoices):
-        RECEIVED = 'received', 'Recibida'
-        PENDING_PAYROLL_VALIDATION = 'pending_payroll_validation', 'Pendiente validacion convenio'
-        PENDING_FORM_COMPLETION = 'pending_form_completion', 'Pendiente completar formulario'
-        REJECTED = 'rejected', 'Rechazada'
-
-    product_type = models.CharField(max_length=32, choices=ProductType.choices)
-    source = models.CharField(max_length=32, default='whatsapp')
-    status = models.CharField(max_length=40, choices=Status.choices, default=Status.RECEIVED)
-
-    tipo_documento = models.CharField(max_length=10)
-    numero_documento = models.CharField(max_length=30, db_index=True)
-    nombres = models.CharField(max_length=120)
-    apellidos = models.CharField(max_length=120)
-    celular = models.CharField(max_length=30)
-    correo = models.EmailField(blank=True)
-    ciudad = models.CharField(max_length=120, blank=True)
-    ocupacion = models.CharField(max_length=120, blank=True)
-    ingresos_mensuales = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    monto_solicitado = models.DecimalField(max_digits=12, decimal_places=2)
-    plazo_meses = models.PositiveSmallIntegerField()
-
-    empresa = models.ForeignKey(Empresa, on_delete=models.SET_NULL, null=True, blank=True)
-    convenio_validado = models.BooleanField(default=False)
-    vinculo_laboral_validado = models.BooleanField(default=False)
-
-    autorizacion_tratamiento_datos = models.BooleanField(default=False)
-    autorizacion_validacion_informacion = models.BooleanField(default=False)
-    metadata = models.JSONField(default=dict, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['product_type', 'numero_documento', '-created_at'], name='wa_app_product_doc_idx'),
-            models.Index(fields=['status', '-created_at'], name='wa_app_status_created_idx'),
-        ]
-        verbose_name = 'Solicitud interna WhatsApp'
-        verbose_name_plural = 'Solicitudes internas WhatsApp'
-
-    def __str__(self):
-        return f"{self.product_type} {self.numero_documento} ({self.status})"
-
-
 class CreditoReglaEspecialAudit(models.Model):
     credito = models.ForeignKey(
         Credito,
@@ -2363,60 +2717,92 @@ class CreditoReglaEspecialAudit(models.Model):
         return f"Regla especial {credito_ref} - ${self.amount} / {self.term_months} meses"
 
 
-class WhatsAppInternalConsent(models.Model):
-    class ProductType(models.TextChoices):
-        PAYROLL_LOAN = 'payroll_loan', 'Libranza'
-        WHATSAPP_CREDIT = 'whatsapp_credit', 'Credito WhatsApp'
+class CondicionOriginacionLibranza(models.Model):
+    class Origen(models.TextChoices):
+        NORMAL = 'NORMAL', 'Normal'
+        ESPECIAL = 'ESPECIAL', 'Especial'
 
-    product_type = models.CharField(max_length=32, choices=ProductType.choices)
-    source = models.CharField(max_length=32, default='whatsapp')
-    document_number = models.CharField(max_length=30, db_index=True)
-    phone = models.CharField(max_length=30, blank=True)
-    consent_type = models.CharField(max_length=80)
-    accepted = models.BooleanField(default=False)
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.CharField(max_length=255, blank=True)
-    evidence = models.JSONField(default=dict, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    credito = models.OneToOneField(
+        Credito,
+        on_delete=models.PROTECT,
+        related_name='condicion_originacion_libranza',
+    )
+    fecha_referencia = models.DateTimeField()
+    codigo_politica = models.CharField(max_length=64)
+    version_politica = models.CharField(max_length=40)
+    origen = models.CharField(max_length=10, choices=Origen.choices)
+    monto_base = models.DecimalField(max_digits=14, decimal_places=2)
+    plazo = models.PositiveSmallIntegerField()
+    porcentaje_originacion = models.DecimalField(
+        max_digits=7,
+        decimal_places=4,
+        null=True,
+        blank=True,
+    )
+    valor_originacion = models.DecimalField(max_digits=14, decimal_places=2)
+    porcentaje_iva = models.DecimalField(max_digits=7, decimal_places=4)
+    valor_iva = models.DecimalField(max_digits=14, decimal_places=2)
+    regla_especial = models.OneToOneField(
+        CreditoReglaEspecialAudit,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='condicion_originacion',
+    )
+    calculado_en = models.DateTimeField(auto_now_add=True)
+    snapshot_hash = models.CharField(max_length=64, unique=True, editable=False)
+
+    _CAMPOS_INMUTABLES = (
+        'credito_id',
+        'fecha_referencia',
+        'codigo_politica',
+        'version_politica',
+        'origen',
+        'monto_base',
+        'plazo',
+        'porcentaje_originacion',
+        'valor_originacion',
+        'porcentaje_iva',
+        'valor_iva',
+        'regla_especial_id',
+        'snapshot_hash',
+    )
 
     class Meta:
-        ordering = ['-created_at']
+        ordering = ['-calculado_en']
+        verbose_name = 'Condicion de originacion Libranza'
+        verbose_name_plural = 'Condiciones de originacion Libranza'
         indexes = [
-            models.Index(fields=['product_type', 'document_number', 'consent_type'], name='wa_consent_product_doc_idx'),
-            models.Index(fields=['-created_at'], name='wa_consent_created_idx'),
+            models.Index(fields=['codigo_politica', 'fecha_referencia'], name='cond_orig_lib_pol_fecha_idx'),
         ]
-        verbose_name = 'Consentimiento interno WhatsApp'
-        verbose_name_plural = 'Consentimientos internos WhatsApp'
+
+    def clean(self):
+        super().clean()
+        if self.credito_id and self.credito.linea != Credito.LineaCredito.LIBRANZA:
+            raise ValidationError('El snapshot solo puede asociarse a un credito de Libranza.')
+        if self.origen == self.Origen.ESPECIAL and not self.regla_especial_id:
+            raise ValidationError('Una condicion especial requiere su auditoria vinculada.')
+        if self.origen == self.Origen.NORMAL and self.regla_especial_id:
+            raise ValidationError('Una condicion normal no puede vincular una regla especial.')
+
+    def save(self, *args, **kwargs):
+        from gestion_creditos.services.costo_originacion_libranza import calcular_hash_snapshot
+
+        if self.pk:
+            anterior = type(self).objects.get(pk=self.pk)
+            if any(
+                getattr(anterior, campo) != getattr(self, campo)
+                for campo in self._CAMPOS_INMUTABLES
+            ):
+                raise ValidationError('El snapshot de originacion Libranza es inmutable.')
+        else:
+            self.full_clean(exclude=['snapshot_hash'])
+            self.snapshot_hash = calcular_hash_snapshot(self)
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('El snapshot de originacion Libranza no se puede eliminar.')
 
     def __str__(self):
-        return f"{self.product_type} {self.consent_type} ({self.accepted})"
-
-
-class WhatsAppInternalAPIAuditLog(models.Model):
-    action = models.CharField(max_length=80)
-    product_type = models.CharField(max_length=32, blank=True)
-    request_id = models.CharField(max_length=80, blank=True)
-    correlation_id = models.CharField(max_length=80, blank=True)
-    document_number_hash = models.CharField(max_length=64, blank=True, db_index=True)
-    document_number_masked = models.CharField(max_length=20, blank=True)
-    phone_masked = models.CharField(max_length=20, blank=True)
-    method = models.CharField(max_length=8)
-    path = models.CharField(max_length=255)
-    status_code = models.PositiveSmallIntegerField()
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.CharField(max_length=255, blank=True)
-    metadata = models.JSONField(default=dict, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['action', '-created_at'], name='wa_audit_action_created_idx'),
-            models.Index(fields=['document_number_hash'], name='wa_audit_doc_hash_idx'),
-        ]
-        verbose_name = 'Auditoria API interna WhatsApp'
-        verbose_name_plural = 'Auditoria API interna WhatsApp'
-
-    def __str__(self):
-        return f"{self.action} {self.status_code} ({self.created_at})"
+        return f'{self.credito.numero_credito} - {self.codigo_politica} v{self.version_politica}'
 

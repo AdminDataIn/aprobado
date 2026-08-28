@@ -16,6 +16,11 @@ app_name = 'libranza'
 urlpatterns = [
     path('', views.libranza_landing, name='landing'),
     path('simulador/', views.simulador_libranza, name='simulador'),
+    path(
+        'api/simulador/originacion/',
+        gestion_views.simular_libranza_financiera_view,
+        name='simular_originacion',
+    ),
     path('api/empresas/buscar/', gestion_views.buscar_empresas_convenio_view, name='buscar_empresas'),
     path('api/adelanto/simular/', gestion_views.simular_adelanto_nomina_view, name='simular_adelanto'),
 

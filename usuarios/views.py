@@ -4,6 +4,7 @@ from django.shortcuts import render, redirect
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.mail import EmailMultiAlternatives
+from django.contrib.staticfiles import finders
 from django.template.loader import render_to_string
 from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth.views import LoginView, LogoutView
@@ -17,6 +18,7 @@ from django.utils import timezone
 from django.db import transaction
 
 from gestion_creditos.models import AsesorComercial, Credito, Empresa
+from gestion_creditos.services.empresa_geografia import obtener_presencia_empresas
 from gestion_creditos.services.libranza_rules import LIBRANZA_MONTO_MAXIMO, LIBRANZA_MONTO_MINIMO_PUBLICO
 from gestion_creditos.services.tasa_service import obtener_tasa_credito
 from .forms import (
@@ -519,29 +521,60 @@ class MarketplaceAdminLoginView(MarketingLoginView):
 
 
 # Vista para la Landing Page de Crédito de Libranza
-def _build_landing_trusted_companies():
-    companies = (
-        Empresa.objects
-        .filter(convenio_activo=True)
-        .exclude(logo='')
-        .exclude(logo__isnull=True)
-        .only('nombre', 'logo', 'slug')
-        .order_by('nombre')
-    )
+def _iniciales_empresa(nombre):
+    partes = [parte for parte in str(nombre or '').split() if parte]
+    if not partes:
+        return 'AP'
+    return ''.join(parte[0].upper() for parte in partes[:2])
+
+
+def _build_landing_trusted_companies(companies=None):
+    companies = companies if companies is not None else Empresa.objects.filter(convenio_activo=True)
     trusted_companies = []
     for company in companies:
+        logo_url = None
         try:
             logo_url = company.logo.url
         except Exception:
-            continue
-        if not logo_url:
-            continue
+            logo_url = None
         trusted_companies.append({
             'nombre': company.nombre,
             'logo_url': logo_url,
+            'iniciales': _iniciales_empresa(company.nombre),
             'slug': company.slug,
         })
     return trusted_companies
+
+
+def _build_landing_presencia(companies=None):
+    companies = companies if companies is not None else Empresa.objects.filter(convenio_activo=True)
+    return obtener_presencia_empresas(companies)
+
+
+def _build_landing_backers():
+    respaldos = [
+        {
+            'nombre': 'DataCrédito Experian',
+            'logo_path': 'images/respaldos/datacredito-experian.png',
+            'descripcion': 'Información para fortalecer validaciones de riesgo cuando aplique.',
+        },
+        {
+            'nombre': 'FiGarantías',
+            'logo_path': 'images/respaldos/figarantias.svg',
+            'descripcion': 'Garantías que respaldan procesos de crédito de forma institucional.',
+        },
+        {
+            'nombre': 'Orinoco TIC',
+            'logo_path': 'images/respaldos/orinoco-tic.png',
+            'descripcion': 'Tecnología para soportar operación digital y trazabilidad.',
+        },
+        {
+            'nombre': 'Seguros SURA',
+            'logo_path': 'images/respaldos/seguros-sura.svg',
+            'descripcion': 'Seguro de vida deudores para acompañar el respaldo del crédito.',
+        },
+    ]
+    return [respaldo for respaldo in respaldos if finders.find(respaldo['logo_path'])]
 
 
 def libranza_landing(request):
@@ -562,6 +595,8 @@ def libranza_landing(request):
     """
     tasa_libranza = obtener_tasa_credito(Credito.LineaCredito.LIBRANZA)
     tasa_libranza_decimal = tasa_libranza / Decimal('100')
+    landing_companies = Empresa.objects.filter(convenio_activo=True).order_by('nombre')
+    landing_trusted_companies = _build_landing_trusted_companies(landing_companies)
     context = {
         'libranza_tasa_mensual': tasa_libranza,
         'libranza_tasa_decimal': tasa_libranza_decimal,
@@ -582,7 +617,9 @@ def libranza_landing(request):
                 'url': 'https://www.facebook.com/share/1AdTG9Qbim/?mibextid=wwXIfr',
             },
         ],
-        'landing_trusted_companies': _build_landing_trusted_companies(),
+        'landing_trusted_companies': landing_trusted_companies,
+        'landing_presencia': _build_landing_presencia(landing_companies),
+        'landing_backers': _build_landing_backers(),
         'landing_testimonials_enabled': False,
     }
     return render(request, 'libranza/libranza_landing.html', context)
@@ -597,7 +634,7 @@ def simulador_libranza(request):
     Permite calcular:
     - Monto solicitado: $500.000 - $3.000.000
     - Plazo: 1 - 6 meses
-    - Comisión: 10% + IVA (19%)
+    - Costo de originación: política backend vigente + IVA (19%)
     - Afianzadora: 4% + IVA (próximamente)
     - Cuota mensual
     - Total a pagar

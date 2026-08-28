@@ -67,7 +67,10 @@ class ZapSignClient:
         url_pdf: str,
         email_firmante: str,
         nombre_firmante: str,
-        brand_name: str = "Aprobado"
+        brand_name: str = "Aprobado",
+        external_id: Optional[str] = None,
+        require_identity_validation: Optional[bool] = None,
+        require_document_validation: bool = False,
     ) -> Dict:
         """
         Crea un documento en ZapSign para firma.
@@ -106,9 +109,13 @@ class ZapSignClient:
         # - selfie_validation_type = identity-verification aplica la validacion
         #   de identidad soportada por ZapSign en el flujo del firmante.
         # Se puede ajustar por settings, pero por defecto queda activa.
-        enable_selfie_validation = _to_bool(
-            getattr(settings, 'ZAPSIGN_ENABLE_SELFIE_VALIDATION', True),
-            default=True
+        enable_selfie_validation = (
+            _to_bool(
+                getattr(settings, 'ZAPSIGN_ENABLE_SELFIE_VALIDATION', True),
+                default=True,
+            )
+            if require_identity_validation is None
+            else bool(require_identity_validation)
         )
         selfie_validation_type = getattr(
             settings,
@@ -125,6 +132,9 @@ class ZapSignClient:
         }
         if enable_selfie_validation:
             signer_payload["require_selfie_photo"] = True
+        if require_document_validation:
+            signer_payload["require_document_photo"] = True
+            signer_payload["require_document_validation"] = True
         if enable_selfie_validation and selfie_validation_type:
             signer_payload["selfie_validation_type"] = selfie_validation_type
 
@@ -135,6 +145,8 @@ class ZapSignClient:
             "brand_name": brand_name,
             "lang": "es"
         }
+        if external_id:
+            payload["external_id"] = str(external_id)[:255]
 
         try:
             logger.info(f"Enviando documento a ZapSign: {nombre}")
@@ -144,8 +156,6 @@ class ZapSignClient:
                 enable_selfie_validation,
                 send_automatic_email
             )
-            logger.debug(f"Payload: {payload}")
-
             response = requests.post(
                 endpoint,
                 json=payload,
@@ -156,16 +166,16 @@ class ZapSignClient:
             response.raise_for_status()
             data = response.json()
 
-            logger.info(f"Documento creado exitosamente. Token: {data.get('token')}")
+            logger.info("Documento creado exitosamente en ZapSign")
             return data
 
         except requests.exceptions.HTTPError as e:
-            error_msg = f"Error HTTP {e.response.status_code}: {e.response.text}"
-            logger.error(f"Error al crear documento en ZapSign: {error_msg}")
+            error_msg = f"Error HTTP {e.response.status_code} al crear documento"
+            logger.error("Error HTTP al crear documento en ZapSign: %s", e.response.status_code)
             raise ZapSignAPIError(error_msg)
 
-        except requests.exceptions.RequestException as e:
-            error_msg = f"Error de conexión con ZapSign: {str(e)}"
+        except requests.exceptions.RequestException:
+            error_msg = "Error de conexion con ZapSign al crear documento"
             logger.error(error_msg)
             raise ZapSignAPIError(error_msg)
 
@@ -196,7 +206,7 @@ class ZapSignClient:
         endpoint = f"{self.base_url}/docs/{doc_token}/"
 
         try:
-            logger.info(f"Consultando estado del documento: {doc_token}")
+            logger.info("Consultando estado de documento en ZapSign")
 
             response = requests.get(
                 endpoint,
@@ -207,16 +217,16 @@ class ZapSignClient:
             response.raise_for_status()
             data = response.json()
 
-            logger.info(f"Estado del documento {doc_token}: {data.get('status')}")
+            logger.info("Estado de documento ZapSign consultado: %s", data.get('status'))
             return data
 
         except requests.exceptions.HTTPError as e:
-            error_msg = f"Error HTTP {e.response.status_code}: {e.response.text}"
-            logger.error(f"Error al consultar documento: {error_msg}")
+            error_msg = f"Error HTTP {e.response.status_code} al consultar documento"
+            logger.error("Error HTTP al consultar documento ZapSign: %s", e.response.status_code)
             raise ZapSignAPIError(error_msg)
 
-        except requests.exceptions.RequestException as e:
-            error_msg = f"Error de conexión con ZapSign: {str(e)}"
+        except requests.exceptions.RequestException:
+            error_msg = "Error de conexion con ZapSign al consultar documento"
             logger.error(error_msg)
             raise ZapSignAPIError(error_msg)
 
@@ -236,7 +246,7 @@ class ZapSignClient:
         endpoint = f"{self.base_url}/docs/{doc_token}/download-signed/"
 
         try:
-            logger.info(f"Descargando PDF firmado: {doc_token}")
+            logger.info("Descargando PDF firmado desde ZapSign")
 
             response = requests.get(
                 endpoint,
@@ -250,12 +260,12 @@ class ZapSignClient:
             return response.content
 
         except requests.exceptions.HTTPError as e:
-            error_msg = f"Error HTTP {e.response.status_code}: {e.response.text}"
-            logger.error(f"Error al descargar PDF firmado: {error_msg}")
+            error_msg = f"Error HTTP {e.response.status_code} al descargar PDF firmado"
+            logger.error("Error HTTP al descargar PDF firmado: %s", e.response.status_code)
             raise ZapSignAPIError(error_msg)
 
-        except requests.exceptions.RequestException as e:
-            error_msg = f"Error de conexión con ZapSign: {str(e)}"
+        except requests.exceptions.RequestException:
+            error_msg = "Error de conexion con ZapSign al descargar PDF firmado"
             logger.error(error_msg)
             raise ZapSignAPIError(error_msg)
 
@@ -304,6 +314,7 @@ def _obtener_datos_firmante(credito, detalle, usuario):
     return nombre_firmante, email_firmante, sorted(correos_copia)
 
 
+@transaction.atomic
 def enviar_pagare_a_zapsign(pagare: Pagare, url_pdf_publica: str) -> Pagare:
     """
     Envía un pagaré a ZapSign para firma electrónica.
@@ -322,6 +333,7 @@ def enviar_pagare_a_zapsign(pagare: Pagare, url_pdf_publica: str) -> Pagare:
 
     if not getattr(pagare, 'pk', None):
         raise ValueError("El pagaré debe existir antes de enviarlo a ZapSign")
+
 
     try:
         with transaction.atomic():
@@ -405,10 +417,7 @@ def enviar_pagare_a_zapsign(pagare: Pagare, url_pdf_publica: str) -> Pagare:
             except Exception as e:
                 logger.error(f"Error al enviar email local de firma para pagar? {pagare.numero_pagare}: {e}")
 
-        logger.info(
-            f"Pagar? {pagare.numero_pagare} enviado exitosamente a ZapSign. "
-            f"Token: {pagare.zapsign_doc_token}"
-        )
+        logger.info("Pagare %s enviado exitosamente a ZapSign", pagare.numero_pagare)
 
         return pagare
 

@@ -1,0 +1,165 @@
+{% extends "contractors/base.html" %}
+{% block title %}Documentos | Prestadores de Servicios{% endblock %}
+
+{% block content %}
+<main class="cp-page">
+  <div class="cp-shell">
+    {% include "contractors/components/breadcrumb.html" with current_label="Documentos" %}
+
+    <header class="cp-page-header">
+      <div>
+        <span class="cp-eyebrow">Documentación de la solicitud</span>
+        <h1 class="cp-title">Completa tus documentos</h1>
+        <p class="cp-description">
+          Revisa lo que ya recibimos y carga únicamente los documentos pendientes o
+          solicitados para corrección.
+        </p>
+      </div>
+      <span class="cp-status-badge {% if progreso_documental.completo %}cp-status-badge--ok{% endif %}">
+        {% if progreso_documental.completo %}Documentación completa{% else %}Carga en progreso{% endif %}
+      </span>
+    </header>
+
+    {% include "contractors/components/application_summary.html" with progreso_documental=progreso_documental %}
+
+    {% if form.errors %}
+      <div class="cp-alert cp-alert--danger" role="alert">
+        <strong>No pudimos cargar el documento.</strong>
+        <p>Revisa el formato y tamaño del archivo e inténtalo nuevamente.</p>
+        {{ form.non_field_errors }}
+        {{ form.archivo.errors }}
+        {{ form.tipo_documento.errors }}
+      </div>
+    {% endif %}
+
+    <section class="cp-surface cp-documents-panel" aria-labelledby="document-list-title">
+      <div class="cp-section-header">
+        <div>
+          <h2 id="document-list-title">Documentos requeridos</h2>
+          <p>Los archivos se mantienen privados y solo están disponibles dentro de tu solicitud.</p>
+        </div>
+        <div class="cp-progress" aria-label="Progreso documental">
+          <div
+            class="cp-progress-track"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="{{ progreso_documental.porcentaje }}"
+            aria-label="{{ progreso_documental.porcentaje }} por ciento completado"
+          >
+            <span style="width: {{ progreso_documental.porcentaje }}%"></span>
+          </div>
+          <strong>{{ progreso_documental.porcentaje }}%</strong>
+        </div>
+      </div>
+
+      <div class="cp-document-list">
+        {% for item in estado_documentos %}
+          <article class="cp-document-row" data-state="{{ item.estado }}">
+            <span class="cp-document-icon" aria-hidden="true">{{ item.icono }}</span>
+
+            <div class="cp-document-copy">
+              <h3>{{ item.etiqueta }}</h3>
+              <p>{{ item.descripcion }}</p>
+              <div class="cp-document-meta">
+                <span>Formato {{ item.formato }}</span>
+                {% if item.documento %}
+                  <time datetime="{{ item.documento.updated_at|date:'c' }}">
+                    Cargado el {{ item.documento.updated_at|date:'d/m/Y' }}
+                  </time>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="cp-document-state">
+              <strong>{{ item.estado_etiqueta }}</strong>
+              <span>{{ item.estado_detalle }}</span>
+            </div>
+
+            <div class="cp-document-actions">
+              {% if item.documento %}
+                <a
+                  class="cp-button cp-button--quiet"
+                  href="{% url 'contractors:ver_documento' solicitud.id item.documento.id %}"
+                  aria-label="Consultar {{ item.etiqueta }}"
+                >Consultar</a>
+              {% endif %}
+
+              <form method="post" enctype="multipart/form-data" class="cp-upload-form">
+                {% csrf_token %}
+                <input type="hidden" name="tipo_documento" value="{{ item.tipo }}">
+                <input
+                  class="cp-file-input"
+                  type="file"
+                  name="archivo"
+                  id="document-file-{{ item.tipo }}"
+                  accept="{{ item.accept }}"
+                  required
+                  data-document-file-input
+                >
+                <button
+                  class="cp-button {% if item.documento %}cp-button--secondary{% endif %}"
+                  type="button"
+                  data-document-file-trigger
+                  data-target="document-file-{{ item.tipo }}"
+                >
+                  {% if item.documento %}Reemplazar{% else %}Cargar documento{% endif %}
+                </button>
+                <span class="cp-upload-feedback" aria-live="polite" data-document-feedback></span>
+                <noscript><button type="submit" class="cp-button">Cargar</button></noscript>
+              </form>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+
+      <div class="cp-next-step">
+        <div>
+          {% if progreso_documental.completo %}
+            <h2>Tu documentación está completa</h2>
+            <p>Continúa con las condiciones de tu solicitud cuando estés listo.</p>
+          {% else %}
+            <h2>Aún faltan documentos</h2>
+            <p>Carga los documentos pendientes. Puedes regresar y continuar después.</p>
+          {% endif %}
+        </div>
+        <div class="cp-actions">
+          <a class="cp-button cp-button--secondary" href="{% url 'contractors:mi_credito' %}">Volver a Mi crédito</a>
+          {% if progreso_documental.completo %}
+            <a class="cp-button" href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">Continuar a condiciones</a>
+          {% else %}
+            <a class="cp-button" href="{% url 'contractors:solicitar' %}?solicitud_id={{ solicitud.id }}">Continuar solicitud</a>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    <aside class="cp-alert" aria-label="Ayuda documental">
+      <strong>¿Necesitas reemplazar un archivo?</strong>
+      <p>Usa “Reemplazar” en el documento correspondiente. Conservaremos únicamente la versión más reciente.</p>
+    </aside>
+  </div>
+</main>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('[data-document-file-trigger]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      const input = document.getElementById(button.dataset.target);
+      if (input) input.click();
+    });
+  });
+
+  document.querySelectorAll('[data-document-file-input]').forEach(function (input) {
+    input.addEventListener('change', function () {
+      if (!input.files || !input.files.length) return;
+      const form = input.closest('form');
+      const feedback = form.querySelector('[data-document-feedback]');
+      feedback.textContent = 'Cargando documento. Espera un momento.';
+      form.querySelector('button').disabled = true;
+      form.submit();
+    });
+  });
+});
+</script>
+{% endblock %}

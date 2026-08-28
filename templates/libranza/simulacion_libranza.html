@@ -8,7 +8,7 @@ Utiliza el navbar y footer de Libranza (sin enlaces a emprendimiento).
 CARACTERÍSTICAS:
 - Monto: $500.000 - $3.000.000
 - Plazo: 1 - 6 meses
-- Costo de originación: 10% + IVA (19%)
+- Costo de originación: calculado por política backend versionada
 - Tasa de interés: {{ libranza_tasa_mensual|default:"1.9" }}% EM (Efectiva Mensual)
 
 MODIFICAR:
@@ -116,31 +116,32 @@ MODIFICAR:
                                                class="simulador-result-input" readonly>
                                     </div>
                                     <div class="simulador-result-row">
-                                        <label for="comision" class="simulador-result-label">Costo de originación (10%):</label>
-                                        <input type="text" id="comision" name="comision" value="$ 200.000,00"
+                                        <label for="comision" class="simulador-result-label" id="comision-label">Costo de originación:</label>
+                                        <input type="text" id="comision" name="comision" value="-"
                                                class="simulador-result-input" readonly>
                                     </div>
                                     <div class="simulador-result-row">
                                         <label for="ivaComision" class="simulador-result-label">IVA sobre costo de originación (19%):</label>
-                                        <input type="text" id="ivaComision" name="ivaComision" value="$ 38.000,00"
+                                        <input type="text" id="ivaComision" name="ivaComision" value="-"
                                                class="simulador-result-input" readonly>
                                     </div>
                                     <div class="simulador-result-row">
                                         <label for="totalIntereses" class="simulador-result-label">Intereses ({{ libranza_tasa_mensual|default:"1.9" }}% EM):</label>
-                                        <input type="text" id="totalIntereses" name="totalIntereses" value="$ 151.160,81"
+                                        <input type="text" id="totalIntereses" name="totalIntereses" value="-"
                                                class="simulador-result-input" readonly>
                                     </div>
                                     <div class="simulador-result-row" style="border-top: 2px solid #06b6d4; padding-top: 10px; margin-top: 10px;">
                                         <label for="totalPagar" class="simulador-result-label" style="font-weight: 700;">Total a pagar:</label>
-                                        <input type="text" id="totalPagar" name="totalPagar" value="$ 2.389.160,81"
+                                        <input type="text" id="totalPagar" name="totalPagar" value="-"
                                                class="simulador-result-input" style="font-weight: 700;" readonly>
                                     </div>
                                     <div class="simulador-result-row">
                                         <label for="cuotaMensual" class="simulador-result-label" style="font-weight: 700; color: #06b6d4;">Cuota mensual:</label>
-                                        <input type="text" id="cuotaMensual" name="cuotaMensual" value="$ 398.193,47"
+                                        <input type="text" id="cuotaMensual" name="cuotaMensual" value="-"
                                                class="simulador-result-input" style="font-weight: 700; color: #06b6d4;" readonly>
                                     </div>
                                 </div>
+                                <p id="simulacion-error" class="simulador-legal-note" role="status" aria-live="polite"></p>
                                 <p class="simulador-legal-note">
                                     El costo de originación corresponde a la gestión, análisis y operación del crédito a través de la plataforma Aprobado.
                                     Este valor genera IVA según la normatividad vigente.
@@ -165,64 +166,59 @@ MODIFICAR:
         // SCRIPT PARA SIMULADOR DE LIBRANZA
         const totalPrestamoInput = document.getElementById("total-pr");
         const comisionInput = document.getElementById("comision");
+        const comisionLabel = document.getElementById("comision-label");
         const ivaComisionInput = document.getElementById("ivaComision");
         const totalInteresesInput = document.getElementById("totalIntereses");
         const totalPagarInput = document.getElementById("totalPagar");
         const cuotaMensualInput = document.getElementById("cuotaMensual");
+        const simulacionError = document.getElementById("simulacion-error");
         const aplicarAhora = document.getElementById("simulador-aplicar-ahora");
         const solicitudBaseUrl = "{% url 'libranza:solicitar' %}";
+        const simulacionApiUrl = "{% url 'libranza:simular_originacion' %}";
+        let simulacionAbortController = null;
         const enlacesSolicitud = Array.from(
             document.querySelectorAll(`a[href="${solicitudBaseUrl}"]`)
         );
 
-        /**
-         * Calcula la cuota usando la fórmula de anualidad (amortización francesa)
-         * MODIFICAR: Si cambias la tasa de interés, ajusta tasaMensual
-         */
-        function calcularCuotaAnualidad(monto, tasaMensual, meses) {
-            if (tasaMensual === 0) {
-                return monto / meses;
-            }
-            const factor = Math.pow(1 + tasaMensual, meses);
-            const cuota = monto * (tasaMensual * factor) / (factor - 1);
-            return cuota;
-        }
-
-        /**
-         * Actualiza todos los cálculos del simulador
-         */
-        function actualizarCalculosLibranza() {
+        async function actualizarCalculosLibranza() {
             const montoSolicitado = parseFloat(slider1.value);
-            const meses = parseFloat(slider2.value);
-
-            // MODIFICAR: Porcentajes aquí
-            const comision = montoSolicitado * 0.10;           // 10% de comisión
-            const ivaComision = comision * 0.19;                // 19% de IVA sobre costo de originación
-
-            // Capital financiado = monto + comisión + IVA (esto es lo que se financia en cuotas)
-            const capitalFinanciado = montoSolicitado + comision + ivaComision;
-
-            // Tasa de interés mensual parametrizable para Libranza
-            const tasaMensual = parseFloat('{{ libranza_tasa_decimal_js|default:"0.019" }}');
-
-            // Calcular cuota mensual sobre el capital financiado
-            const cuotaMensual = calcularCuotaAnualidad(capitalFinanciado, tasaMensual, meses);
-
-            // Total a pagar = suma de todas las cuotas
-            const totalAPagar = cuotaMensual * meses;
-
-            // Total de intereses = Total a pagar - Capital financiado
-            const totalIntereses = totalAPagar - capitalFinanciado;
-
-            // Actualizar valores en el formulario
+            const meses = parseInt(slider2.value, 10);
             totalPrestamoInput.value = formatColombianNumber(montoSolicitado);
-            comisionInput.value = formatColombianNumber(comision);
-ivaComisionInput.value = formatColombianNumber(ivaComision);
-            totalInteresesInput.value = formatColombianNumber(totalIntereses);
-            totalPagarInput.value = formatColombianNumber(totalAPagar);
-            cuotaMensualInput.value = formatColombianNumber(cuotaMensual);
-
             actualizarAplicarLink();
+
+            if (simulacionAbortController) {
+                simulacionAbortController.abort();
+            }
+            simulacionAbortController = new AbortController();
+            simulacionError.textContent = 'Calculando condiciones...';
+            try {
+                const params = new URLSearchParams({monto: String(montoSolicitado), plazo: String(meses)});
+                const response = await fetch(`${simulacionApiUrl}?${params.toString()}`, {
+                    headers: {'Accept': 'application/json'},
+                    signal: simulacionAbortController.signal,
+                });
+                const data = await response.json();
+                if (!response.ok || !data.ok) {
+                    throw new Error(data.error || 'No fue posible calcular la simulación.');
+                }
+                comisionLabel.textContent = `Costo de originación (${parseFloat(data.porcentaje_originacion)}%):`;
+                comisionInput.value = formatColombianNumber(parseFloat(data.valor_originacion));
+                ivaComisionInput.value = formatColombianNumber(parseFloat(data.valor_iva));
+                totalInteresesInput.value = formatColombianNumber(parseFloat(data.total_intereses));
+                totalPagarInput.value = formatColombianNumber(parseFloat(data.total_a_pagar));
+                cuotaMensualInput.value = formatColombianNumber(parseFloat(data.cuota_mensual));
+                simulacionError.textContent = '';
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    return;
+                }
+                comisionInput.value = '-';
+                ivaComisionInput.value = '-';
+                totalInteresesInput.value = '-';
+                totalPagarInput.value = '-';
+                cuotaMensualInput.value = '-';
+                simulacionError.textContent = error.message;
+            }
         }
 
         // Configuración de sliders

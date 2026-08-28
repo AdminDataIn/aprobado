@@ -1,0 +1,151 @@
+{% extends "contractors/base.html" %}
+{% load static humanize %}
+{% block title %}Mi crédito | Prestadores de Servicios{% endblock %}
+
+{% block content %}
+<main class="cp-page">
+  <div class="cp-shell">
+    {% if solicitud_principal %}
+      {% with solicitud=solicitud_principal.0 progreso=solicitud_principal.1 estado_publico=solicitud_principal.2 %}
+        <header class="cp-page-header">
+          <div>
+            <span class="cp-eyebrow">Prestadores de Servicios</span>
+            <h1 class="cp-title">Mi crédito</h1>
+            <p class="cp-description">Consulta el avance, tus condiciones guardadas y las acciones disponibles.</p>
+          </div>
+          <a class="cp-button cp-button--secondary cp-new-request" href="{% url 'contractors:solicitar' %}">Nueva solicitud</a>
+        </header>
+
+        {% include "contractors/components/application_summary.html" with estado_publico=estado_publico %}
+
+        <section class="cp-dashboard-hero" aria-labelledby="application-status-title">
+          <div>
+            <span class="cp-status-badge status-tone-{{ estado_publico.tono }}">{{ estado_publico.etiqueta }}</span>
+            <h1 id="application-status-title">{{ estado_publico.titulo }}</h1>
+            <p>{{ estado_publico.detalle }}</p>
+            {% if estado_publico.requerimiento %}
+              <div class="cp-alert cp-alert--warning" role="status">
+                <strong>Necesitamos información adicional</strong>
+                <p>{{ estado_publico.requerimiento.mensaje_publico }}</p>
+              </div>
+            {% endif %}
+          </div>
+          <div class="cp-dashboard-progress">
+            <small>Avance del proceso</small>
+            <strong>Etapa {{ timeline_publico_principal.etapa_actual }} de {{ timeline_publico_principal.total_etapas }}</strong>
+            <div class="cp-progress-track" role="progressbar" aria-valuemin="1" aria-valuemax="4" aria-valuenow="{{ timeline_publico_principal.etapa_actual }}">
+              <span style="width: {% widthratio timeline_publico_principal.etapa_actual timeline_publico_principal.total_etapas 100 %}%"></span>
+            </div>
+            <time datetime="{{ solicitud.updated_at|date:'c' }}">Actualizado el {{ solicitud.updated_at|date:'d/m/Y, g:i a' }}</time>
+          </div>
+        </section>
+
+        <div class="cp-dashboard-grid">
+          <section class="cp-surface cp-dashboard-section" aria-labelledby="application-summary-title">
+            <div class="cp-section-header"><div><h2 id="application-summary-title">Resumen</h2><p>Información principal registrada en tu solicitud.</p></div></div>
+            <dl class="cp-data-list">
+              <div class="cp-data-row"><dt>Monto solicitado</dt><dd>{% if solicitud.monto_solicitado %}${{ solicitud.monto_solicitado|floatformat:0|intcomma }}{% else %}Pendiente{% endif %}</dd></div>
+              <div class="cp-data-row"><dt>Plazo</dt><dd>{% if solicitud.plazo_meses %}{{ solicitud.plazo_meses }} meses{% else %}Pendiente{% endif %}</dd></div>
+              <div class="cp-data-row"><dt>Empresa</dt><dd>{{ solicitud.empresa.nombre }}</dd></div>
+              <div class="cp-data-row"><dt>Contrato</dt><dd>{{ solicitud.get_estado_contrato_display|default:'Pendiente de confirmación' }}</dd></div>
+              <div class="cp-data-row"><dt>Documentos</dt><dd>{{ progreso.cargados }} de {{ progreso.total }}</dd></div>
+            </dl>
+          </section>
+
+          <section class="cp-surface cp-dashboard-section" aria-labelledby="application-timeline-title">
+            <div class="cp-section-header"><div><h2 id="application-timeline-title">Proceso</h2><p>Resumen de los pasos de tu solicitud.</p></div></div>
+            <ol class="cp-timeline">
+              {% for evento in timeline_publico_principal.eventos %}
+                <li class="cp-timeline-item {% if evento.estado == 'COMPLETADO' %}is-complete{% elif evento.estado == 'ACTUAL' %}is-current{% endif %}">
+                  <span class="cp-timeline-marker" aria-hidden="true">{% if evento.estado == 'COMPLETADO' %}✓{% else %}{{ forloop.counter }}{% endif %}</span>
+                  <span class="cp-timeline-copy">
+                    <strong>{{ evento.titulo }}</strong>
+                    <span>{{ evento.detalle }}</span>
+                    {% if evento.fecha %}<time datetime="{{ evento.fecha|date:'c' }}">{{ evento.fecha|date:'d/m/Y' }}</time>{% endif %}
+                  </span>
+                </li>
+              {% endfor %}
+            </ol>
+          </section>
+        </div>
+
+        <nav class="cp-quick-actions" aria-label="Acciones de la solicitud">
+          {% if estado_publico.accion == 'SUBSANACION' and estado_publico.requerimiento %}
+            <a class="cp-button" href="{% url 'contractors:atender_subsanacion' solicitud.id estado_publico.requerimiento.id %}">{{ estado_publico.accion_etiqueta }}</a>
+          {% elif estado_publico.accion == 'DOCUMENTOS' %}
+            <a class="cp-button" href="{% url 'contractors:documentos' solicitud.id %}">{{ estado_publico.accion_etiqueta }}</a>
+          {% elif estado_publico.accion == 'SIMULACION' %}
+            <a class="cp-button" href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">{{ estado_publico.accion_etiqueta }}</a>
+          {% elif estado_publico.accion == 'CONDICIONES' %}
+            <a class="cp-button" href="{% url 'contractors:condiciones_solicitud' solicitud.id %}">{{ estado_publico.accion_etiqueta }}</a>
+          {% endif %}
+          {% if estado_publico.accion != 'DOCUMENTOS' %}
+            <a class="cp-button cp-button--secondary" href="{% url 'contractors:documentos' solicitud.id %}">Documentos</a>
+          {% endif %}
+          {% if solicitud.simulada_en and estado_publico.accion != 'CONDICIONES' %}
+            <a class="cp-button cp-button--secondary" href="{% url 'contractors:condiciones_solicitud' solicitud.id %}">Ver condiciones solicitadas</a>
+          {% endif %}
+        </nav>
+      {% endwith %}
+
+      {% if solicitudes_anteriores %}
+        <section class="cp-surface cp-history" aria-labelledby="previous-applications-title">
+          <div class="cp-section-header"><div><h2 id="previous-applications-title">Solicitudes anteriores</h2><p>Consulta el registro de procesos anteriores.</p></div></div>
+          <div class="cp-history-list">
+            {% for solicitud, progreso, estado_publico in solicitudes_anteriores %}
+              <article class="cp-history-row">
+                <div class="cp-history-cell"><small>Solicitud</small><strong>#{{ solicitud.id }}</strong></div>
+                <div class="cp-history-cell"><small>Empresa</small><strong>{{ solicitud.empresa.nombre }}</strong></div>
+                <div class="cp-history-cell"><small>Condiciones</small><strong>{% if solicitud.monto_solicitado %}${{ solicitud.monto_solicitado|floatformat:0|intcomma }} · {{ solicitud.plazo_meses }} meses{% else %}Pendientes{% endif %}</strong></div>
+                <div class="cp-history-cell"><small>Estado</small><strong>{{ estado_publico.etiqueta }}</strong></div>
+                {% if progreso.porcentaje < 100 %}
+                  <a class="cp-button cp-button--quiet" href="{% url 'contractors:documentos' solicitud.id %}">Completar</a>
+                {% elif solicitud.simulada_en %}
+                  <a class="cp-button cp-button--quiet" href="{% url 'contractors:condiciones_solicitud' solicitud.id %}">Consultar</a>
+                {% else %}
+                  <a class="cp-button cp-button--quiet" href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">Continuar</a>
+                {% endif %}
+              </article>
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+    {% else %}
+      <section class="cp-surface cp-empty-state">
+        <span class="cp-eyebrow">Prestadores de Servicios</span>
+        <h1>Aún no tienes solicitudes</h1>
+        <p>Registra la información de tu contrato para iniciar el proceso.</p>
+        <a class="cp-button" href="{% url 'contractors:solicitar' %}">Iniciar solicitud</a>
+      </section>
+    {% endif %}
+  </div>
+</main>
+
+{% for message in messages %}
+  {% if 'solicitud-registrada-modal' in message.tags %}
+    <div id="modalSolicitudRegistrada" class="div-prin-modal" style="display:flex" data-auto-open="true">
+      <div class="modal-contenido" role="dialog" aria-modal="true" aria-labelledby="modalSolicitudTitulo">
+        <button type="button" class="close-span" data-close-registration-modal aria-label="Cerrar">&times;</button>
+        <div class="div-log-mod"><img src="{% static 'images/logo.png' %}" alt="Aprobado"></div>
+        <div id="mensajeModal">
+          <h2 id="modalSolicitudTitulo">Solicitud registrada correctamente</h2>
+          <p>Registramos tus condiciones. Ahora continuaremos con las validaciones correspondientes.</p>
+          <p><strong>La simulación no representa una aprobación definitiva.</strong></p>
+          <button type="button" class="cp-button" data-close-registration-modal>Entendido</button>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+{% endfor %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const modal = document.getElementById('modalSolicitudRegistrada');
+  if (!modal) return;
+  function closeModal() { modal.style.display = 'none'; modal.removeAttribute('data-auto-open'); }
+  modal.querySelectorAll('[data-close-registration-modal]').forEach(button => button.addEventListener('click', closeModal));
+  modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') closeModal(); });
+});
+</script>
+{% endblock %}

@@ -5,7 +5,10 @@ from django.urls import path, reverse
 from django.shortcuts import redirect, get_object_or_404
 from django.utils.html import format_html
 from django.template.response import TemplateResponse
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.http import FileResponse, Http404
+import mimetypes
+from pathlib import Path
 from .models import (
     AsesorComercial, Credito, CreditoEmprendimiento, CreditoLibranza, Empresa, HistorialPago, WompiIntent, LotePagoEmpresa,
     CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, ImagenNegocio, Notificacion,
@@ -13,7 +16,8 @@ from .models import (
     MarketplacePedido, MarketplacePedidoItem, MarketplacePago, MarketplaceDireccionEntrega,
     MarketplaceLiquidacionEmpresa, InvestorAccount, InvestmentPosition, InvestmentCashflow,
     InvestmentReturnSnapshot, InvestmentEvent, VinculoLaboralEmpresa, CreditoAdelantoNomina,
-    PagoComisionEjecutivo, AprobacionPagadorLibranza,
+    PagoComisionEjecutivo, AprobacionPagadorLibranza, CondicionOriginacionLibranza, DocumentoEmpresa,
+    OrigenCreditoPrestador, SecuenciaNumeroCredito,
 )
 from django.utils import timezone
 from datetime import timedelta
@@ -69,6 +73,42 @@ class CreditoLibranzaInline(admin.StackedInline):
     can_delete = False
     verbose_name_plural = 'Detalle de Libranza'
     fk_name = 'credito'
+
+
+@admin.register(OrigenCreditoPrestador)
+class OrigenCreditoPrestadorAdmin(admin.ModelAdmin):
+    list_display = (
+        'gate_id', 'estado', 'credito', 'credito_libranza', 'created_by', 'created_at',
+    )
+    list_filter = ('estado', 'created_at')
+    search_fields = ('gate_id', 'clave_idempotencia', 'credito__numero_credito')
+    readonly_fields = tuple(
+        campo.name for campo in OrigenCreditoPrestador._meta.fields
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return request.method in {'GET', 'HEAD', 'OPTIONS'}
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(SecuenciaNumeroCredito)
+class SecuenciaNumeroCreditoAdmin(admin.ModelAdmin):
+    list_display = ('anio', 'ultimo_numero', 'updated_at')
+    readonly_fields = ('anio', 'ultimo_numero', 'updated_at')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return request.method in {'GET', 'HEAD', 'OPTIONS'}
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 class CreditoAdelantoNominaInline(admin.StackedInline):
@@ -337,14 +377,39 @@ class EmpresaAdminForm(forms.ModelForm):
         return empresa
 
 
+class DocumentoEmpresaInline(admin.TabularInline):
+    model = DocumentoEmpresa
+    extra = 0
+    can_delete = False
+    show_change_link = True
+    fields = (
+        'tipo_documento', 'estado', 'activo', 'fecha_expedicion',
+        'fecha_vencimiento', 'cargado_por', 'creado_en', 'archivo_protegido',
+    )
+    readonly_fields = fields
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    @admin.display(description='Archivo')
+    def archivo_protegido(self, obj):
+        if not obj or not obj.pk or not obj.archivo:
+            return 'Sin archivo'
+        url = reverse('admin:gestion_creditos_documentoempresa_descargar', args=[obj.pk])
+        return format_html('<a href="{}">Descargar de forma segura</a>', url)
+
+
 
 @admin.register(Empresa)
 class EmpresaAdmin(admin.ModelAdmin):
     form = EmpresaAdminForm
+    inlines = (DocumentoEmpresaInline,)
     list_display = (
         'nombre',
         'slug',
         'tipo_empresa',
+        'departamento',
+        'municipio',
         'referido_display',
         'asesor_display',
         'convenio_activo',
@@ -360,15 +425,17 @@ class EmpresaAdmin(admin.ModelAdmin):
         'convenio_activo',
         'pagos_habilitados',
         'requiere_doble_aprobacion_libranza',
+        'departamento',
+        'municipio',
         EmpresaReferidaFilter,
         'asesor_comercial',
     )
-    readonly_fields = ('asesor_actual_resumen',)
+    readonly_fields = ('asesor_actual_resumen', 'documentacion_empresa_resumen')
     fieldsets = (
-        ('Informacion base', {
+        ('Información general', {
             'fields': (
                 'nombre', 'slug', 'razon_social', 'nit', 'representante_legal',
-                'tipo_empresa', 'convenio_activo',
+                'correo_contacto', 'telefono_contacto',
             )
         }),
         ('Origen comercial', {
@@ -379,17 +446,30 @@ class EmpresaAdmin(admin.ModelAdmin):
         ('Marketplace y contacto', {
             'fields': (
                 'descripcion_marketplace', 'whatsapp_contacto', 'logo',
-                'correo_contacto', 'telefono_contacto',
-                'mp_user_id', 'mp_access_token', 'marketplace_fee_percent', 'pagos_habilitados',
+                'mp_user_id', 'mp_access_token',
             ),
             'description': 'Usa "Logo" como fuente única para marketplace y para la sección de empresas que confían '
                            'en nosotros. La presentación se controla desde frontend.',
         }),
-        ('Aprobacion pagador libranza', {
+        ('Ubicación / Presencia nacional', {
             'fields': (
+                'pais', 'departamento', 'municipio',
+                'direccion_principal', 'latitud', 'longitud',
+            ),
+            'description': 'Datos opcionales para presencia territorial. '
+                           'Registra solo ubicaciones y coordenadas verificadas.',
+        }),
+        ('Configuración crédito / convenio', {
+            'fields': (
+                'tipo_empresa', 'convenio_activo',
+                'marketplace_fee_percent', 'pagos_habilitados',
                 'requiere_doble_aprobacion_libranza',
                 'requiere_aprobadores_distintos_libranza',
             ),
+        }),
+        ('Documentación', {
+            'fields': ('documentacion_empresa_resumen',),
+            'description': 'Los documentos son privados. Las nuevas cargas conservan las versiones anteriores.',
         }),
     )
 
@@ -412,6 +492,98 @@ class EmpresaAdmin(admin.ModelAdmin):
             asesor.cedula,
         )
     asesor_actual_resumen.short_description = 'Ejecutivo vinculado'
+
+    @admin.display(description='Documentos institucionales')
+    def documentacion_empresa_resumen(self, obj):
+        if not obj or not obj.pk:
+            return 'Guarda la empresa antes de cargar documentos.'
+        listado_url = reverse('admin:gestion_creditos_documentoempresa_changelist')
+        agregar_url = reverse('admin:gestion_creditos_documentoempresa_add')
+        return format_html(
+            '<a href="{}?empresa__id__exact={}">Ver historial documental</a> &nbsp; '
+            '<a href="{}?empresa={}">Cargar nueva versión</a>',
+            listado_url,
+            obj.pk,
+            agregar_url,
+            obj.pk,
+        )
+
+
+@admin.register(DocumentoEmpresa)
+class DocumentoEmpresaAdmin(admin.ModelAdmin):
+    list_display = (
+        'empresa', 'tipo_documento', 'estado', 'activo', 'fecha_expedicion',
+        'fecha_vencimiento', 'cargado_por', 'creado_en', 'archivo_protegido',
+    )
+    list_filter = ('tipo_documento', 'estado', 'activo', 'creado_en')
+    search_fields = ('empresa__nombre', 'empresa__nit')
+    list_select_related = ('empresa', 'cargado_por')
+    date_hierarchy = 'creado_en'
+
+    def get_fields(self, request, obj=None):
+        if obj:
+            return (
+                'empresa', 'tipo_documento', 'estado', 'activo', 'archivo_protegido',
+                'fecha_expedicion', 'fecha_vencimiento', 'observaciones',
+                'cargado_por', 'creado_en', 'actualizado_en',
+            )
+        return (
+            'empresa', 'tipo_documento', 'archivo', 'fecha_expedicion',
+            'fecha_vencimiento', 'observaciones',
+        )
+
+    def get_readonly_fields(self, request, obj=None):
+        if not obj:
+            return ()
+        return self.get_fields(request, obj)
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.cargado_por = request.user
+            obj.estado = DocumentoEmpresa.EstadoDocumento.VIGENTE
+            obj.activo = True
+        super().save_model(request, obj, form, change)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_urls(self):
+        return [
+            path(
+                '<path:object_id>/descargar/',
+                self.admin_site.admin_view(self.descargar_documento),
+                name='gestion_creditos_documentoempresa_descargar',
+            ),
+        ] + super().get_urls()
+
+    def descargar_documento(self, request, object_id):
+        documento = self.get_object(request, object_id)
+        if not documento:
+            raise Http404('Documento no encontrado.')
+        if not self.has_view_permission(request, documento):
+            raise PermissionDenied('No tienes permiso para consultar este documento.')
+        if not documento.archivo:
+            raise Http404('El archivo no esta disponible.')
+        try:
+            archivo = documento.archivo.open('rb')
+        except (FileNotFoundError, OSError):
+            raise Http404('El archivo no esta disponible.')
+        content_type, _ = mimetypes.guess_type(documento.archivo.name)
+        extension = Path(documento.archivo.name).suffix.lower()
+        nombre = f'{documento.tipo_documento.lower()}-{documento.pk}{extension}'
+        return FileResponse(
+            archivo,
+            content_type=content_type or 'application/octet-stream',
+            as_attachment=True,
+            filename=nombre,
+        )
+
+    @admin.display(description='Archivo')
+    def archivo_protegido(self, obj):
+        if not obj or not obj.pk or not obj.archivo:
+            return 'Sin archivo'
+        url = reverse('admin:gestion_creditos_documentoempresa_descargar', args=[obj.pk])
+        return format_html('<a href="{}">Descargar</a>', url)
 
 
 @admin.register(AprobacionPagadorLibranza)
@@ -930,6 +1102,33 @@ class NotificacionAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('usuario')
+
+
+@admin.register(CondicionOriginacionLibranza)
+class CondicionOriginacionLibranzaAdmin(admin.ModelAdmin):
+    list_display = (
+        'credito',
+        'codigo_politica',
+        'version_politica',
+        'origen',
+        'monto_base',
+        'plazo',
+        'calculado_en',
+    )
+    list_filter = ('origen', 'codigo_politica', 'version_politica')
+    search_fields = ('credito__numero_credito',)
+    readonly_fields = tuple(
+        field.name for field in CondicionOriginacionLibranza._meta.fields
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 #? ----- ADMINISTRACIÃ“N DE PAGARÃ‰S (ZapSign) -----

@@ -1,6 +1,11 @@
 from .common import *
 from .common import _rate_limit_simple
 from gestion_creditos.services.libranza_rules import LIBRANZA_MONTO_MAXIMO
+from gestion_creditos.services.costo_originacion_libranza import (
+    CostoOriginacionLibranzaError,
+    crear_snapshot_originacion_libranza,
+    simular_libranza_normal,
+)
 
 
 @login_required(login_url='/libranza/login/')
@@ -37,16 +42,22 @@ def solicitud_credito_libranza_view(request):
                         monto_solicitado=form.cleaned_data['valor_credito'],
                         plazo_solicitado=form.cleaned_data['plazo']
                     )
+                    crear_snapshot_originacion_libranza(credito=credito_principal)
                     credito_libranza_detalle = form.save(commit=False)
                     credito_libranza_detalle.credito = credito_principal
                     credito_libranza_detalle.save()
                     # El parsing de certificado se ejecuta después del save para reutilizar
                     # el FileField persistido y dejar trazabilidad para una futura fase OCR.
                     procesar_certificado_bancario(credito_libranza_detalle)
-            except IntegrityError:
+            except (IntegrityError, CostoOriginacionLibranzaError) as exc:
+                mensaje = (
+                    exc.messages[0]
+                    if isinstance(exc, CostoOriginacionLibranzaError)
+                    else 'Ya existe una solicitud registrada con esta cedula. No es posible crear una nueva solicitud.'
+                )
                 form.add_error(
-                    'cedula',
-                    'Ya existe una solicitud registrada con esta cedula. No es posible crear una nueva solicitud.'
+                    None if isinstance(exc, CostoOriginacionLibranzaError) else 'cedula',
+                    mensaje,
                 )
                 if is_ajax:
                     return JsonResponse({'success': False, 'errors': form.errors}, status=400)
@@ -117,7 +128,7 @@ def solicitud_credito_libranza_view(request):
 
             if is_ajax:
                 return JsonResponse({'success': True})
-            return redirect('usuariocreditos:dashboard_libranza')
+            return redirect('libranza:mi_credito')
         else:
             if is_ajax:
                 return JsonResponse({'success': False, 'errors': form.errors}, status=400)
@@ -133,6 +144,38 @@ def solicitud_credito_libranza_view(request):
         'libranza_tasa_decimal': tasa_libranza_decimal,
         'libranza_tasa_decimal_js': format(tasa_libranza_decimal, 'f'),
         'libranza_monto_maximo': LIBRANZA_MONTO_MAXIMO,
+    })
+
+
+@require_http_methods(["GET"])
+def simular_libranza_financiera_view(request):
+    if not _rate_limit_simple(request, 'simular-libranza-financiera', limit=60, window=60):
+        return JsonResponse(
+            {'ok': False, 'error': 'Demasiadas simulaciones. Intenta de nuevo en un minuto.'},
+            status=429,
+        )
+
+    try:
+        simulacion = simular_libranza_normal(
+            fecha_referencia=timezone.now(),
+            monto=request.GET.get('monto'),
+            plazo=request.GET.get('plazo'),
+            tasa_mensual=obtener_tasa_credito(Credito.LineaCredito.LIBRANZA),
+        )
+    except CostoOriginacionLibranzaError as exc:
+        return JsonResponse(
+            {'ok': False, 'codigo': exc.codigo, 'error': exc.messages[0]},
+            status=400,
+        )
+
+    return JsonResponse({
+        'ok': True,
+        **{
+            key: format(value, 'f') if isinstance(value, Decimal) else value
+            for key, value in simulacion.items()
+            if key != 'fecha_referencia'
+        },
+        'fecha_referencia': simulacion['fecha_referencia'].isoformat(),
     })
 
 

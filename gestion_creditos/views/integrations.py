@@ -206,6 +206,62 @@ def zapsign_webhook_view(request):
         return 'ignored'
 
     ip_address = request.META.get('REMOTE_ADDR') or '0.0.0.0'
+    from contractors.services.formalizacion import (
+        es_documento_formalizacion_prestador,
+        hash_documento_proveedor,
+        procesar_callback_formalizacion_prestador,
+    )
+
+    if doc_token and es_documento_formalizacion_prestador(doc_token):
+        doc_token_hash = hash_documento_proveedor(doc_token)
+        payload_sanitizado = {
+            'event': str(event or '')[:50],
+            'status': str(payload.get('status') or '')[:40],
+        }
+        webhook_log = ZapSignWebhookLog.objects.create(
+            doc_token=f'sha256:{doc_token_hash}',
+            event=str(event or '')[:50],
+            payload=payload_sanitizado,
+            headers={},
+            ip_address=ip_address,
+            signature_valid=False,
+            processed=False,
+        )
+        secret_expected = getattr(settings, 'ZAPSIGN_WEBHOOK_SECRET', '') or ''
+        header_name = (
+            getattr(settings, 'ZAPSIGN_WEBHOOK_HEADER', 'X-ZapSign-Secret')
+            or 'X-ZapSign-Secret'
+        )
+        if secret_expected:
+            secret_received = request.headers.get(header_name, '')
+            if header_name.lower() == 'authorization' and secret_received.lower().startswith('bearer '):
+                secret_received = secret_received[7:]
+            if secret_received != secret_expected:
+                webhook_log.error_message = 'Secret token invalido'
+                webhook_log.save(update_fields=['error_message'])
+                return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+        webhook_log.signature_valid = True
+        webhook_log.save(update_fields=['signature_valid'])
+        try:
+            resultado = procesar_callback_formalizacion_prestador(
+                documento_id=doc_token,
+                accion=_zapsign_action_from_payload(event, payload),
+                estado_proveedor=payload.get('status') or '',
+            )
+            if resultado['estado'] == 'credit_cancelled_ignored':
+                webhook_log.error_message = (
+                    'Evento ignorado porque el credito de prestador esta ANULADO.'
+                )
+            webhook_log.processed = True
+            webhook_log.save(update_fields=['processed', 'error_message'])
+            return JsonResponse({'status': resultado['estado']}, status=200)
+        except Exception as exc:
+            webhook_log.error_message = type(exc).__name__
+            webhook_log.save(update_fields=['error_message'])
+            logger.exception('Error procesando webhook ZapSign de prestador')
+            return JsonResponse({'error': 'Internal server error'}, status=500)
+
     headers = {
         key: str(value)
         for key, value in request.META.items()
@@ -349,5 +405,5 @@ def zapsign_webhook_view(request):
     except Exception as e:
         webhook_log.error_message = str(e)
         webhook_log.save(update_fields=['error_message'])
-        logger.error(f"Error procesando webhook ZapSign {doc_token}: {str(e)}")
+        logger.error("Error procesando webhook ZapSign: %s", type(e).__name__)
         return JsonResponse({'error': 'Internal server error'}, status=500)

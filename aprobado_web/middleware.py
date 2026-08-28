@@ -18,9 +18,16 @@ class SubdomainRoutingMiddleware:
         primary_host = getattr(settings, "PRIMARY_DOMAIN_HOST", "aprobado.com.co").lower()
         emprender_host = getattr(settings, "EMPRENDER_SUBDOMAIN_HOST", "emprender.aprobado.com.co").lower()
         market_host = getattr(settings, "MARKET_SUBDOMAIN_HOST", "market.aprobado.com.co").lower()
+        contractors_hosts = {
+            item.lower()
+            for item in getattr(settings, "CONTRACTORS_PORTAL_HOSTS", [])
+            if item
+        }
         www_primary_host = f"www.{primary_host}"
 
-        if host in {'127.0.0.1', 'localhost'}:
+        if host in contractors_hosts:
+            request.urlconf = "aprobado_web.urls_contractors"
+        elif host in {'127.0.0.1', 'localhost'}:
             request.urlconf = self._urlconf_for_local_path(request.path)
         elif host == emprender_host:
             request.urlconf = "aprobado_web.urls_emprender"

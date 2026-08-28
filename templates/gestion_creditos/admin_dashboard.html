@@ -32,14 +32,34 @@
             box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
         }
         .dashboard-toolbar .toolbar-form {
+            width: 100%;
+        }
+        .toolbar-primary {
             display: flex;
-            align-items: end;
-            gap: 0.75rem;
+            align-items: center;
+            justify-content: space-between;
+            gap: .75rem;
             flex-wrap: wrap;
-            margin-left: auto;
+        }
+        .advanced-filters {
+            display: none;
+            grid-template-columns: repeat(6, minmax(145px, 1fr));
+            gap: .75rem;
+            padding-top: .85rem;
+            margin-top: .85rem;
+            border-top: 1px solid rgba(15, 23, 42, .08);
+        }
+        .advanced-filters.is-open { display: grid; }
+        .active-filter-dot {
+            display: inline-block;
+            width: .45rem;
+            height: .45rem;
+            border-radius: 50%;
+            background: #0ea5e9;
+            margin-left: .35rem;
         }
         .dashboard-toolbar .toolbar-field {
-            min-width: 190px;
+            min-width: 0;
         }
         .dashboard-toolbar .toolbar-label {
             display: block;
@@ -132,7 +152,121 @@
         .chart-card-compact .chart-container {
             min-height: 290px;
         }
+        .filter-actions,
+        .filter-shortcuts,
+        .obligation-shortcuts {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .filter-actions,
+        .filter-shortcuts {
+            grid-column: 1 / -1;
+        }
+        .filter-shortcuts .btn,
+        .obligation-shortcuts .btn {
+            border-radius: 999px;
+        }
+        .metric-note {
+            margin-top: 0.4rem;
+            font-size: 0.74rem;
+            color: var(--text-secondary);
+        }
+        .analytics-card { margin-bottom: 1rem; }
+        .analytics-card .analytics-heading {
+            align-items: flex-start;
+            margin-bottom: 1rem;
+            padding: 1.1rem 1rem 0;
+        }
+        .analytics-card .analytics-heading .section-title {
+            margin-bottom: 0.45rem !important;
+        }
+        .analytics-card .analytics-heading p {
+            line-height: 1.45;
+        }
+        .analytics-card .chart-container { height: 380px; position: relative; }
+        .analytics-tabs { display: flex; gap: .4rem; flex-wrap: wrap; }
+        .analytics-tabs .btn { border-radius: 999px; }
+        .company-metric-toggle { display: none; gap: .35rem; }
+        .company-metric-toggle.is-visible { display: flex; }
+        .chart-empty {
+            display: none;
+            height: 100%;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 2rem;
+        }
+        .chart-description {
+            margin: 0.25rem 0 0;
+            color: var(--text-secondary);
+            font-size: 0.78rem;
+        }
+        .export-report-modal .modal-content {
+            border: 0;
+            border-radius: 1rem;
+            box-shadow: 0 24px 70px rgba(15, 23, 42, 0.2);
+        }
+        .export-report-modal .modal-header,
+        .export-report-modal .modal-footer {
+            border-color: rgba(15, 23, 42, 0.08);
+        }
+        .export-mode-options {
+            display: grid;
+            gap: 0.65rem;
+        }
+        .export-mode-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.7rem;
+            padding: 0.8rem 0.9rem;
+            border: 1px solid rgba(15, 23, 42, 0.12);
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: border-color 0.15s ease, background-color 0.15s ease;
+        }
+        .export-mode-option:hover {
+            border-color: rgba(14, 165, 233, 0.5);
+            background: rgba(14, 165, 233, 0.035);
+        }
+        .export-mode-option .form-check-input {
+            flex: 0 0 auto;
+            margin-top: 0.2rem;
+        }
+        .export-mode-copy {
+            display: grid;
+            gap: 0.15rem;
+        }
+        .export-mode-copy small {
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+        .export-date-fields {
+            display: none;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(15, 23, 42, 0.08);
+        }
+        .export-date-fields.is-visible { display: grid; }
+        .export-form-error {
+            display: none;
+            grid-column: 1 / -1;
+            margin: 0;
+            color: #b91c1c;
+            font-size: 0.82rem;
+        }
+        .export-form-error.is-visible { display: block; }
         @media (max-width: 991px) {
+            .dashboard-toolbar .toolbar-form {
+                width: 100%;
+            }
+            .advanced-filters {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
             .accounting-cards-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
@@ -141,6 +275,11 @@
             }
         }
         @media (max-width: 767px) {
+            .advanced-filters {
+                grid-template-columns: 1fr;
+            }
+            .toolbar-primary, .filter-actions { align-items: stretch; }
+            .filter-actions .btn { flex: 1 1 auto; }
             .accounting-cards-grid {
                 grid-template-columns: 1fr;
             }
@@ -150,6 +289,8 @@
             .chart-card-compact .chart-container {
                 min-height: 240px;
             }
+            .analytics-card .chart-container { height: 300px; }
+            .export-date-fields { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -188,38 +329,46 @@
                     </ol>
                 </nav>
             </div>
-            <form method="get" class="toolbar-form">
-                <div class="toolbar-field">
-                    <label for="empresaFilter" class="toolbar-label">Empresa</label>
-                    <select id="empresaFilter" name="empresa" class="form-select form-select-sm">
-                        <option value="">Todas las empresas</option>
-                        {% for empresa in empresas_choices %}
-                        <option value="{{ empresa }}" {% if empresa_filter == empresa %}selected{% endif %}>{{ empresa }}</option>
+            <form method="get" class="toolbar-form" aria-label="Filtros administrativos">
+                <div class="toolbar-primary">
+                    <div class="filter-shortcuts" aria-label="Periodos rápidos">
+                        <span class="toolbar-label mb-0 me-1">Período:</span>
+                        {% for shortcut in periodo_links %}
+                        <a href="?{{ shortcut.query }}" class="btn btn-sm {% if periodo_filter == shortcut.value %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ shortcut.label }}</a>
                         {% endfor %}
-                    </select>
-                </div>
-                <div class="toolbar-field">
-                    <label for="asesorFilter" class="toolbar-label">Ejecutivo</label>
-                    <select id="asesorFilter" name="asesor" class="form-select form-select-sm">
-                        <option value="">Todos los ejecutivos</option>
-                        {% for asesor in asesores_choices %}
-                        <option value="{{ asesor.id }}" {% if asesor_filter == asesor.id|stringformat:"s" %}selected{% endif %}>{{ asesor.nombre }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="d-flex gap-2 flex-wrap">
-                    <button type="submit" class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-funnel me-1"></i>Aplicar
-                    </button>
-                    {% if empresa_filter or asesor_filter %}
-                    <a href="{% url 'gestion:dashboard' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+                    </div>
+                    <div class="filter-actions">
+                        <button id="advancedFiltersToggle" type="button" class="btn btn-sm btn-outline-secondary" aria-expanded="{% if filtros_avanzados_activos %}true{% else %}false{% endif %}" aria-controls="advancedFilters">
+                            <i class="bi bi-sliders me-1"></i>Filtros avanzados{% if filtros_avanzados_activos %}<span class="active-filter-dot" aria-label="Filtros activos"></span>{% endif %}
+                        </button>
+                        <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-funnel me-1"></i>Aplicar</button>
+                    {% if fecha_desde_filter or fecha_hasta_filter or empresa_filter or asesor_filter or estado_filter or linea_filter %}
+                        <a href="{% url 'gestion:dashboard' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
                     {% endif %}
-                    <a href="{% url 'gestion:dashboard_export' %}{% if empresa_filter or asesor_filter %}?{% endif %}{% if empresa_filter %}empresa={{ empresa_filter|urlencode }}{% endif %}{% if empresa_filter and asesor_filter %}&{% endif %}{% if asesor_filter %}asesor={{ asesor_filter|urlencode }}{% endif %}" class="btn btn-sm btn-primary" data-download="true">
-                        <i class="bi bi-file-earmark-spreadsheet me-1"></i>Exportar reporte Excel
-                    </a>
+                        <button type="button" id="openExportReportModal" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#exportReportModal" aria-controls="exportReportModal">
+                            <i class="bi bi-file-earmark-spreadsheet me-1"></i>Exportar reporte Excel
+                        </button>
+                    </div>
+                </div>
+                <div id="advancedFilters" class="advanced-filters {% if filtros_avanzados_activos %}is-open{% endif %}">
+                    <div class="toolbar-field"><label for="fechaDesdeFilter" class="toolbar-label">Fecha desde</label><input id="fechaDesdeFilter" name="fecha_desde" type="date" class="form-control form-control-sm" value="{{ fecha_desde_filter }}"></div>
+                    <div class="toolbar-field"><label for="fechaHastaFilter" class="toolbar-label">Fecha hasta</label><input id="fechaHastaFilter" name="fecha_hasta" type="date" class="form-control form-control-sm" value="{{ fecha_hasta_filter }}"></div>
+                    <div class="toolbar-field"><label for="empresaFilter" class="toolbar-label">Empresa</label><select id="empresaFilter" name="empresa" class="form-select form-select-sm"><option value="">Todas las empresas</option>{% for empresa in empresas_choices %}<option value="{{ empresa }}" {% if empresa_filter == empresa %}selected{% endif %}>{{ empresa }}</option>{% endfor %}</select></div>
+                    <div class="toolbar-field"><label for="estadoFilter" class="toolbar-label">Estado</label><select id="estadoFilter" name="estado" class="form-select form-select-sm"><option value="">Todos los estados</option>{% for value, label in estados_choices %}<option value="{{ value }}" {% if estado_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+                    <div class="toolbar-field"><label for="lineaFilter" class="toolbar-label">Línea / producto</label><select id="lineaFilter" name="linea" class="form-select form-select-sm"><option value="">Todas las líneas</option>{% for value, label in lineas_choices %}<option value="{{ value }}" {% if linea_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+                    <div class="toolbar-field"><label for="asesorFilter" class="toolbar-label">Ejecutivo</label><select id="asesorFilter" name="asesor" class="form-select form-select-sm"><option value="">Todos los ejecutivos</option>{% for asesor in asesores_choices %}<option value="{{ asesor.id }}" {% if asesor_filter == asesor.id|stringformat:"s" %}selected{% endif %}>{{ asesor.nombre }}</option>{% endfor %}</select></div>
                 </div>
             </form>
         </div>
+
+        {% if filtros_errores %}
+        <div class="alert alert-warning" role="alert">
+            <strong>Revisa los filtros:</strong>
+            <ul class="mb-0 mt-1">
+                {% for error in filtros_errores %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+        </div>
+        {% endif %}
 
         <div class="quick-actions compact-actions">
             <a href="{% url 'gestion:solicitudes' %}" class="action-card">
@@ -243,12 +392,12 @@
                 <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">Gestión de Mora</h3>
                 <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Seguimiento a pagos vencidos</p>
             </a>
-            <a href="#" class="action-card">
+            <a href="{% url 'gestion:obligaciones_pendientes' %}" class="action-card">
                 <div class="action-icon" style="background-color: var(--info);">
-                    <i class="bi bi-graph-up"></i>
+                    <i class="bi bi-calendar2-check"></i>
                 </div>
-                <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">Análisis Financiero</h3>
-                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Reportes y métricas avanzadas</p>
+                <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">Obligaciones Pendientes</h3>
+                <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Consultar cuotas por vencer y vencidas</p>
             </a>
             <a href="{% url 'billetera:gestion_dashboard' %}" class="action-card">
                 <div class="action-icon" style="background-color: var(--purple);">
@@ -267,16 +416,30 @@
         </div>
 
         <div class="row g-3 dashboard-top-grid">
-            <div class="col-12 col-md-6 col-xl-3">
+            <div class="col-12 col-md-6 col-xl">
                 <div class="card metric-card compact-metric">
                     <div class="metric-icon" style="background-color: var(--accent-blue);">
                         <i class="bi bi-wallet2"></i>
                     </div>
                     <div class="metric-value">${{ saldo_cartera_total|floatformat:2|intcomma }}</div>
-                    <div class="metric-label">Saldo Total de Cartera</div>
+                    <div class="metric-label">Saldo Total de Cartera <i class="bi bi-info-circle" title="Corte actual: capital financiado, intereses y cargos pendientes."></i></div>
                 </div>
             </div>
-            <div class="col-12 col-md-6 col-xl-3">
+            <div class="col-12 col-md-6 col-xl">
+                <div class="card metric-card compact-metric">
+                    <div class="metric-icon" style="background-color: #0f766e;">
+                        <i class="bi bi-bank"></i>
+                    </div>
+                    <div class="metric-value">${{ saldo_capital_pendiente|floatformat:2|intcomma }}</div>
+                    <div class="metric-label">Saldo Capital Pendiente <i class="bi bi-info-circle" title="Corte actual: solo capital principal por amortizar."></i></div>
+                    {% if capital_pendiente_incompleto %}
+                    <div class="metric-note text-warning">
+                        {{ capital_pendiente_incompleto }} crédito{{ capital_pendiente_incompleto|pluralize }} sin dato de capital.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-12 col-md-6 col-xl">
                 <div class="card metric-card compact-metric">
                     <div class="metric-icon" style="background-color: var(--danger);">
                         <i class="bi bi-exclamation-triangle"></i>
@@ -285,7 +448,7 @@
                     <div class="metric-label">Total en Mora</div>
                 </div>
             </div>
-            <div class="col-12 col-md-6 col-xl-3">
+            <div class="col-12 col-md-6 col-xl">
                 <div class="card metric-card compact-metric">
                     <div class="metric-icon" style="background-color: var(--success);">
                         <i class="bi bi-credit-card-2-front"></i>
@@ -294,7 +457,7 @@
                     <div class="metric-label">Total de Créditos</div>
                 </div>
             </div>
-            <div class="col-12 col-md-6 col-xl-3">
+            <div class="col-12 col-md-6 col-xl">
                 <div class="card metric-card compact-metric">
                     <div class="metric-icon" style="background-color: var(--warning);">
                         <i class="bi bi-clock-history"></i>
@@ -367,32 +530,36 @@
             </div>
         </div>
 
-        <div class="row g-3 mb-3">
-            <div class="col-12 col-lg-8">
-                <div class="card chart-card-compact">
-                    <div class="table-header">
-                        <h3 class="section-title">Evolución de Cartera (Saldo Mensual)</h3>
-                    </div>
-                    <div class="card-body">
-                        <div class="chart-container">
-                            <canvas id="portfolioChart"></canvas>
-                        </div>
-                    </div>
+        <section class="card analytics-card" aria-labelledby="analiticaTitle">
+            <div class="accounting-section-head analytics-heading">
+                <div>
+                    <h2 id="analiticaTitle" class="section-title mb-1">Analítica</h2>
+                    <p>Series basadas en fechas y movimientos persistidos. Los saldos se muestran únicamente como corte actual.</p>
                 </div>
             </div>
-            <div class="col-12 col-lg-4">
-                <div class="card h-100 chart-card-compact">
-                    <div class="table-header">
-                        <h3 class="section-title">Distribución por Empresas</h3>
+            <div class="card-body pt-0">
+                <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                    <div class="analytics-tabs" role="tablist" aria-label="Métrica analítica">
+                        <button type="button" class="btn btn-sm btn-primary" data-analytics-view="recaudo">Recaudo mensual</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-analytics-view="desembolsos">Desembolsos</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-analytics-view="solicitudes">Solicitudes</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-analytics-view="empresas">Cartera por empresa</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-analytics-view="estados">Créditos por estado</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-analytics-view="obligaciones">Estado obligaciones</button>
                     </div>
-                    <div class="card-body">
-                        <div class="chart-container">
-                            <canvas id="distributionChart"></canvas>
-                        </div>
+                    <div id="companyMetricToggle" class="company-metric-toggle" aria-label="Métrica por empresa">
+                        <button type="button" class="btn btn-sm btn-primary" data-company-metric="saldo">Saldo</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-company-metric="cantidad">Cantidad de créditos</button>
                     </div>
                 </div>
+                <h3 id="analyticsChartTitle" class="section-title mb-1">Recaudo mensual</h3>
+                <p id="analyticsChartDescription" class="chart-description mb-3">Detalle contable por fecha de aplicación.</p>
+                <div class="chart-container">
+                    <canvas id="analyticsChart" aria-label="Gráfica analítica"></canvas>
+                    <div id="analyticsEmpty" class="chart-empty">No hay información para el período seleccionado.</div>
+                </div>
             </div>
-        </div>
+        </section>
 
         <div class="row g-3">
             <div class="col-12 col-lg-6">
@@ -464,78 +631,232 @@
         </div>
     </div>
 
+    <div class="modal fade export-report-modal" id="exportReportModal" tabindex="-1" aria-labelledby="exportReportModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form id="exportReportForm" method="get" action="{% url 'gestion:dashboard_export' %}" data-loader="off">
+                    <div class="modal-header">
+                        <div>
+                            <h2 class="modal-title fs-5" id="exportReportModalTitle">Exportar reporte</h2>
+                            <p class="mb-0 mt-1 text-secondary small">Configura la descarga sin modificar los filtros del dashboard.</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <fieldset class="border-0 p-0 m-0">
+                            <legend class="visually-hidden">Tipo de reporte</legend>
+                            <div class="export-mode-options">
+                                <label class="export-mode-option" for="exportModeGeneral">
+                                    <input class="form-check-input" type="radio" name="report_type" id="exportModeGeneral" value="general" checked>
+                                    <span class="export-mode-copy">
+                                        <strong>Reporte general</strong>
+                                        <small>Incluye toda la información permitida, sin depender de los filtros aplicados en pantalla.</small>
+                                    </span>
+                                </label>
+                                <label class="export-mode-option" for="exportModeRange">
+                                    <input class="form-check-input" type="radio" name="report_type" id="exportModeRange" value="range">
+                                    <span class="export-mode-copy">
+                                        <strong>Reporte por rango de fechas</strong>
+                                        <small>Aplica el rango según la fecha correspondiente a cada hoja del reporte.</small>
+                                    </span>
+                                </label>
+                            </div>
+                        </fieldset>
+                        <div id="exportDateFields" class="export-date-fields" aria-hidden="true">
+                            <div>
+                                <label for="exportFechaDesde" class="form-label small fw-semibold">Fecha desde</label>
+                                <input id="exportFechaDesde" name="fecha_desde" type="date" class="form-control" disabled>
+                            </div>
+                            <div>
+                                <label for="exportFechaHasta" class="form-label small fw-semibold">Fecha hasta</label>
+                                <input id="exportFechaHasta" name="fecha_hasta" type="date" class="form-control" disabled>
+                            </div>
+                            <p id="exportRangeError" class="export-form-error" role="alert" aria-live="polite"></p>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-download me-1"></i>Descargar Excel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const portfolioCtx = document.getElementById('portfolioChart').getContext('2d');
-        new Chart(portfolioCtx, {
-            type: 'line',
-            data: {
-                labels: {{ portfolio_labels|safe }},
-                datasets: [{
-                    label: 'Saldo Cartera Emprendimiento',
-                    data: {{ emprendimiento_data|safe }},
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    fill: true,
-                    tension: 0.3
-                }, {
-                    label: 'Saldo Cartera Libranza',
-                    data: {{ libranza_data|safe }},
-                    borderColor: '#f59e0b',
-                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                    fill: true,
-                    tension: 0.3
-                }, {
-                    label: 'Saldo Cartera Adelanto de Nómina',
-                    data: {{ adelanto_data|safe }},
-                    borderColor: '#8b5cf6',
-                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                    fill: true,
-                    tension: 0.3
-                }, {
-                    label: 'Saldo Total',
-                    data: {{ total_data|safe }},
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    fill: true,
-                    tension: 0.3
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
-                }
-            }
+        const advancedToggle = document.getElementById('advancedFiltersToggle');
+        const advancedFilters = document.getElementById('advancedFilters');
+        advancedToggle?.addEventListener('click', () => {
+            const isOpen = advancedFilters.classList.toggle('is-open');
+            advancedToggle.setAttribute('aria-expanded', String(isOpen));
         });
 
-        const distributionCtx = document.getElementById('distributionChart').getContext('2d');
-        new Chart(distributionCtx, {
-            type: 'doughnut',
-            data: {
-                labels: {{ distribution_labels|safe }},
-                datasets: [{
-                    data: {{ distribution_data|safe }},
-                    backgroundColor: ['#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6', '#06b6d4', '#14b8a6', '#f97316', '#6366f1', '#ec4899']
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
-                    }
-                }
+        const exportReportForm = document.getElementById('exportReportForm');
+        const exportModeInputs = document.querySelectorAll('input[name="report_type"]');
+        const exportDateFields = document.getElementById('exportDateFields');
+        const exportFechaDesde = document.getElementById('exportFechaDesde');
+        const exportFechaHasta = document.getElementById('exportFechaHasta');
+        const exportRangeError = document.getElementById('exportRangeError');
+
+        function clearExportRangeError() {
+            exportFechaDesde.setCustomValidity('');
+            exportFechaHasta.setCustomValidity('');
+            exportRangeError.textContent = '';
+            exportRangeError.classList.remove('is-visible');
+        }
+
+        function updateExportMode() {
+            const isRange = document.querySelector('input[name="report_type"]:checked')?.value === 'range';
+            exportDateFields.classList.toggle('is-visible', isRange);
+            exportDateFields.setAttribute('aria-hidden', String(!isRange));
+            exportFechaDesde.disabled = !isRange;
+            exportFechaHasta.disabled = !isRange;
+            exportFechaDesde.required = isRange;
+            exportFechaHasta.required = isRange;
+            clearExportRangeError();
+        }
+
+        exportModeInputs.forEach(input => input.addEventListener('change', updateExportMode));
+        exportFechaDesde.addEventListener('change', clearExportRangeError);
+        exportFechaHasta.addEventListener('change', clearExportRangeError);
+        exportReportForm.addEventListener('submit', event => {
+            const isRange = document.querySelector('input[name="report_type"]:checked')?.value === 'range';
+            clearExportRangeError();
+            if (isRange && exportFechaDesde.value && exportFechaHasta.value && exportFechaDesde.value > exportFechaHasta.value) {
+                event.preventDefault();
+                const message = 'La fecha desde no puede ser posterior a la fecha hasta.';
+                exportFechaHasta.setCustomValidity(message);
+                exportRangeError.textContent = message;
+                exportRangeError.classList.add('is-visible');
+                exportFechaHasta.reportValidity();
             }
         });
+        updateExportMode();
+
+        Chart.defaults.font.family = "Inter, system-ui, -apple-system, 'Segoe UI', sans-serif";
+        Chart.defaults.color = '#64748b';
+        const formatCOP = value => '$' + Number(value).toLocaleString('es-CO', { maximumFractionDigits: 0 });
+        const palette = ['#0ea5e9', '#0f766e', '#f59e0b', '#dc2626', '#7c3aed', '#64748b', '#14b8a6', '#f97316'];
+        const analyticsData = {
+            recaudo: {
+                title: 'Recaudo mensual', description: 'Detalle contable por fecha de aplicación.', type: 'bar', money: true,
+                labels: {{ recaudo_labels|safe }},
+                datasets: [
+                    { label: 'Capital', data: {{ recaudo_capital|safe }}, backgroundColor: '#0ea5e9', borderRadius: 5 },
+                    { label: 'Interés', data: {{ recaudo_interes|safe }}, backgroundColor: '#7c3aed', borderRadius: 5 },
+                    { label: 'Comisión', data: {{ recaudo_comision|safe }}, backgroundColor: '#f59e0b', borderRadius: 5 },
+                    { label: 'IVA', data: {{ recaudo_iva|safe }}, backgroundColor: '#dc2626', borderRadius: 5 }
+                ], stacked: true
+            },
+            desembolsos: {
+                title: 'Desembolsos por mes', description: 'Monto desembolsado y cantidad de créditos.', type: 'bar', money: true,
+                labels: {{ desembolso_labels|safe }},
+                datasets: [
+                    { type: 'bar', label: 'Monto desembolsado', data: {{ desembolso_monto|safe }}, backgroundColor: '#0ea5e9', borderRadius: 6, yAxisID: 'y' },
+                    { type: 'line', label: 'Cantidad', data: {{ desembolso_cantidad|safe }}, borderColor: '#0f766e', backgroundColor: '#0f766e', pointRadius: 4, tension: .3, yAxisID: 'yCount' }
+                ]
+            },
+            solicitudes: {
+                title: 'Solicitudes recibidas', description: 'Conteo demostrable por fecha de solicitud.', type: 'bar',
+                labels: {{ solicitud_labels|safe }}, datasets: [{ label: 'Solicitudes', data: {{ solicitud_cantidad|safe }}, backgroundColor: '#0f766e', borderRadius: 6 }]
+            },
+            empresas: {
+                title: 'Cartera actual por empresa', description: 'Top de empresas y agrupación de las restantes en Otros.', type: 'bar', horizontal: true, money: true,
+                labels: {{ cartera_empresa_labels|safe }},
+                saldo: {{ cartera_empresa_data|safe }}, cantidad: {{ cartera_empresa_cantidad|safe }}
+            },
+            estados: {
+                title: 'Créditos por estado actual', description: 'Distribución del estado operativo actual.', type: 'doughnut',
+                labels: {{ estado_chart_labels|safe }}, datasets: [{ data: {{ estado_chart_data|safe }}, backgroundColor: palette, borderWidth: 0 }]
+            },
+            obligaciones: {
+                title: 'Estado de obligaciones', description: 'Clasificación de la primera cuota no pagada por crédito.', type: 'doughnut',
+                labels: {{ obligaciones_chart_labels|safe }}, datasets: [{ data: {{ obligaciones_chart_data|safe }}, backgroundColor: ['#dc2626', '#f97316', '#f59e0b', '#16a34a'], borderWidth: 0 }]
+            }
+        };
+        let analyticsChart = null;
+        let currentView = 'recaudo';
+        let companyMetric = 'saldo';
+
+        function chartOptions(definition) {
+            const options = {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true, padding: 16 } },
+                    tooltip: { padding: 12 }
+                }
+            };
+            if (definition.type !== 'doughnut') {
+                options.indexAxis = definition.horizontal ? 'y' : 'x';
+                options.scales = {
+                    x: { stacked: Boolean(definition.stacked), grid: { color: 'rgba(148,163,184,.14)' } },
+                    y: { stacked: Boolean(definition.stacked), beginAtZero: true, grid: { color: 'rgba(148,163,184,.14)' } }
+                };
+                const valueAxis = definition.horizontal ? options.scales.x : options.scales.y;
+                if (definition.money) valueAxis.ticks = { callback: formatCOP };
+                if (currentView === 'desembolsos') {
+                    options.scales.yCount = { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { precision: 0 } };
+                }
+            } else {
+                options.cutout = '68%';
+            }
+            return options;
+        }
+
+        function renderAnalytics(view) {
+            currentView = view;
+            const definition = analyticsData[view];
+            const companyToggle = document.getElementById('companyMetricToggle');
+            companyToggle.classList.toggle('is-visible', view === 'empresas');
+            document.getElementById('analyticsChartTitle').textContent = definition.title;
+            document.getElementById('analyticsChartDescription').textContent = definition.description;
+            document.querySelectorAll('[data-analytics-view]').forEach(button => {
+                const active = button.dataset.analyticsView === view;
+                button.classList.toggle('btn-primary', active);
+                button.classList.toggle('btn-outline-secondary', !active);
+            });
+
+            let datasets = definition.datasets;
+            if (view === 'empresas') {
+                const values = companyMetric === 'saldo' ? definition.saldo : definition.cantidad;
+                datasets = [{
+                    label: companyMetric === 'saldo' ? 'Saldo actual' : 'Cantidad de créditos',
+                    data: values,
+                    backgroundColor: '#0ea5e9',
+                    borderRadius: 6
+                }];
+                definition.money = companyMetric === 'saldo';
+            }
+            const hasData = definition.labels.length > 0 && datasets.some(dataset => dataset.data.some(value => Number(value) !== 0));
+            document.getElementById('analyticsChart').style.display = hasData ? 'block' : 'none';
+            document.getElementById('analyticsEmpty').style.display = hasData ? 'none' : 'flex';
+            analyticsChart?.destroy();
+            analyticsChart = null;
+            if (hasData) {
+                analyticsChart = new Chart(document.getElementById('analyticsChart'), {
+                    type: definition.type,
+                    data: { labels: definition.labels, datasets },
+                    options: chartOptions(definition)
+                });
+            }
+        }
+
+        document.querySelectorAll('[data-analytics-view]').forEach(button => button.addEventListener('click', () => renderAnalytics(button.dataset.analyticsView)));
+        document.querySelectorAll('[data-company-metric]').forEach(button => button.addEventListener('click', () => {
+            companyMetric = button.dataset.companyMetric;
+            document.querySelectorAll('[data-company-metric]').forEach(item => {
+                const active = item.dataset.companyMetric === companyMetric;
+                item.classList.toggle('btn-primary', active);
+                item.classList.toggle('btn-outline-secondary', !active);
+            });
+            renderAnalytics('empresas');
+        }));
+        renderAnalytics('recaudo');
     </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
 <script src="{% static 'js/global_loader.js' %}"></script>

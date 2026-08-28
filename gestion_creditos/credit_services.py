@@ -98,31 +98,67 @@ def _registrar_nota_cierre_por_tolerancia(pago, cuota, diferencia, *, usuario=No
     pago.save(update_fields=['notas'])
 
 @transaction.atomic
-def gestionar_cambio_estado_credito(credito, nuevo_estado, motivo, usuario_modificacion=None, comprobante=None):
+def gestionar_cambio_estado_credito(
+    credito,
+    nuevo_estado,
+    motivo,
+    usuario_modificacion=None,
+    comprobante=None,
+    componentes_financieros=None,
+    clave_idempotencia=None,
+):
     """
     Centraliza todos los cambios de estado de un crédito, registrando el historial.
     También envía notificaciones por email al cliente.
     """
     from .email_service import enviar_notificacion_cambio_estado
 
+    if clave_idempotencia:
+        historial_existente = HistorialEstado.objects.filter(
+            clave_idempotencia=clave_idempotencia,
+        ).first()
+        if historial_existente:
+            return historial_existente
+
     estado_anterior = credito.estado
 
     if estado_anterior == nuevo_estado:
         return
 
+    if (
+        nuevo_estado == Credito.EstadoCredito.ACTIVO
+        and componentes_financieros is not None
+        and estado_anterior != Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA
+    ):
+        raise ValidationError(
+            'Un credito de prestador solo puede activarse desde pendiente de transferencia.'
+        )
+
+    activacion_prestador = (
+        nuevo_estado == Credito.EstadoCredito.ACTIVO
+        and componentes_financieros is not None
+    )
+    if activacion_prestador:
+        activar_credito(credito, componentes_financieros=componentes_financieros)
+
     credito.estado = nuevo_estado
     credito.save()
 
-    if nuevo_estado == Credito.EstadoCredito.ACTIVO and estado_anterior != Credito.EstadoCredito.ACTIVO:
+    if (
+        nuevo_estado == Credito.EstadoCredito.ACTIVO
+        and estado_anterior != Credito.EstadoCredito.ACTIVO
+        and not activacion_prestador
+    ):
         activar_credito(credito)
 
-    HistorialEstado.objects.create(
+    historial = HistorialEstado.objects.create(
         credito=credito,
         estado_anterior=estado_anterior,
         estado_nuevo=nuevo_estado,
         motivo=motivo,
         comprobante_pago=comprobante,
-        usuario_modificacion=usuario_modificacion
+        usuario_modificacion=usuario_modificacion,
+        clave_idempotencia=clave_idempotencia,
     )
     logger.info(f"Crédito {credito.id} cambió de {estado_anterior} a {nuevo_estado}. Motivo: {motivo}")
 
@@ -132,6 +168,9 @@ def gestionar_cambio_estado_credito(credito, nuevo_estado, motivo, usuario_modif
         logger.info(f"Notificación de email enviada para crédito {credito.id} - Estado: {nuevo_estado}")
     except Exception as e:
         logger.error(f"Error al enviar notificación de email para crédito {credito.id}: {e}")
+
+    return historial
+
 
 @transaction.atomic
 def preparar_documento_para_firma(credito, usuario_modificacion):
@@ -185,10 +224,9 @@ def preparar_documento_para_firma(credito, usuario_modificacion):
                     url_pdf_publica = generar_url_publica_temporal(pagare_db)
                     pagare_enviado = enviar_pagare_a_zapsign(pagare_db, url_pdf_publica)
                     logger.info(
-                        "Pagare %s enviado a ZapSign. credito=%s token=%s",
+                        "Pagare %s enviado a ZapSign. credito=%s",
                         pagare_enviado.numero_pagare,
                         pagare_enviado.credito_id,
-                        pagare_enviado.zapsign_doc_token
                     )
 
                     credito_db = pagare_enviado.credito
@@ -696,7 +734,7 @@ def obtener_puntaje_interno(parametros: dict) -> int:
     return suma_estimaciones
 
 
-def filtrar_creditos(request, creditos_base):
+def filtrar_creditos(request, creditos_base, *, aplicar_dimensiones=True):
     """
     ✅ CORRECTO: Esta función ya está bien porque busca en campos que aún existen en los detalles
     """
@@ -717,6 +755,9 @@ def filtrar_creditos(request, creditos_base):
             Q(detalle_adelanto_nomina__vinculo_laboral__nombre_empleado__icontains=search_text) |
             Q(detalle_adelanto_nomina__vinculo_laboral__documento_empleado__icontains=search_text)
         )
+
+    if not aplicar_dimensiones:
+        return queryset.distinct()
 
     empresa_filter = request.GET.get('empresa', '').strip()
     if empresa_filter:
@@ -753,7 +794,7 @@ def calcular_total_en_mora(creditos=None):
 def get_admin_dashboard_context(user, request=None):
     return _dashboard_get_admin_dashboard_context(user, request=request)
 
-def activar_credito(credito):
+def activar_credito(credito, componentes_financieros=None):
     """
     Activa un crédito generando todos los cálculos financieros y la tabla de amortización.
 
@@ -784,6 +825,19 @@ def activar_credito(credito):
         logger.error(error_msg)
         raise ValueError(error_msg)
 
+    if componentes_financieros is not None:
+        if credito.estado != Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA:
+            raise ValidationError(
+                'Un credito de prestador solo puede activarse desde pendiente de transferencia.'
+            )
+        return _activar_credito_con_componentes_financieros(
+            credito, componentes_financieros
+        )
+    if hasattr(credito, 'origen_prestador'):
+        raise ValidationError(
+            'Un credito de prestador requiere su snapshot financiero para activarse.'
+        )
+
     # ✅ Determinar tasa de interés según la línea de crédito
     if credito.tasa_interes:
         # Si ya tiene tasa asignada, usarla
@@ -796,8 +850,36 @@ def activar_credito(credito):
     tasa_interes = obtener_tasa_credito_aplicada(credito, tasa_interes)
 
     # ✅ Calcular componentes financieros
-    comision = credito.comision or (credito.monto_aprobado * Decimal('0.10'))
-    iva_comision = credito.iva_comision or (comision * Decimal('0.19'))
+    if credito.linea == Credito.LineaCredito.LIBRANZA:
+        from gestion_creditos.models import CondicionOriginacionLibranza
+        from gestion_creditos.services.costo_originacion_libranza import (
+            requiere_snapshot_originacion_libranza,
+            validar_snapshot_originacion_libranza,
+        )
+
+        try:
+            condicion_originacion = credito.condicion_originacion_libranza
+        except CondicionOriginacionLibranza.DoesNotExist:
+            condicion_originacion = None
+
+        if condicion_originacion is not None:
+            validar_snapshot_originacion_libranza(credito, condicion_originacion)
+            comision = condicion_originacion.valor_originacion
+            iva_comision = condicion_originacion.valor_iva
+        elif requiere_snapshot_originacion_libranza(credito):
+            raise ValidationError(
+                'Una Libranza nueva requiere condiciones de originacion congeladas antes de activarse.'
+            )
+        else:
+            comision = credito.comision if credito.comision is not None else (
+                credito.monto_aprobado * Decimal('0.10')
+            )
+            iva_comision = credito.iva_comision if credito.iva_comision is not None else (
+                comision * Decimal('0.19')
+            )
+    else:
+        comision = credito.comision or (credito.monto_aprobado * Decimal('0.10'))
+        iva_comision = credito.iva_comision or (comision * Decimal('0.19'))
 
     # El capital financiado incluye monto + comisión + IVA (esto se paga en cuotas)
     capital_financiado = credito.monto_aprobado + comision + iva_comision
@@ -902,6 +984,74 @@ def activar_credito(credito):
         f"Cuota: ${valor_cuota:,.2f}, Plazo: {credito.plazo} meses, "
         f"Total a pagar: ${total_a_pagar:,.2f}"
     )
+
+def _activar_credito_con_componentes_financieros(credito, componentes):
+    from gestion_creditos.services.condiciones_financieras import (
+        CENTAVO,
+        generar_plan_financiero,
+        redondear_moneda,
+        validar_paridad_componentes,
+    )
+
+    if credito.estado == Credito.EstadoCredito.ANULADO:
+        raise ValidationError('Un credito anulado no puede activarse.')
+    if redondear_moneda(credito.monto_aprobado) != componentes.monto_base:
+        raise ValidationError('El monto aprobado no coincide con el snapshot financiero.')
+    if int(credito.plazo) != int(componentes.plazo):
+        raise ValidationError('El plazo aprobado no coincide con el snapshot financiero.')
+    if Decimal(credito.tasa_interes) != componentes.tasa_mensual:
+        raise ValidationError('La tasa aprobada no coincide con el snapshot financiero.')
+    if CuotaAmortizacion.objects.filter(credito=credito).exists():
+        raise ValidationError('El credito ya tiene una tabla de amortizacion.')
+
+    plan = generar_plan_financiero(componentes)
+    validar_paridad_componentes(componentes, plan, tolerancia=CENTAVO)
+    comparaciones = {
+        'comision': (credito.comision, componentes.comision),
+        'iva': (credito.iva_comision, componentes.iva),
+        'cuota': (credito.valor_cuota, componentes.cuota_aprobada),
+        'total': (credito.total_a_pagar, componentes.total_a_pagar),
+    }
+    diferencias = [
+        nombre for nombre, (actual, esperado) in comparaciones.items()
+        if actual is not None and abs(redondear_moneda(actual) - esperado) > CENTAVO
+    ]
+    if diferencias:
+        raise ValidationError(
+            'El credito difiere del snapshot aprobado: ' + ', '.join(diferencias)
+        )
+
+    credito.comision = componentes.comision
+    credito.iva_comision = componentes.iva
+    credito.tasa_interes = componentes.tasa_mensual
+    credito.plazo = componentes.plazo
+    credito.valor_cuota = componentes.cuota_aprobada
+    credito.total_a_pagar = componentes.total_a_pagar
+    credito.saldo_pendiente = componentes.capital_total_financiado
+    credito.capital_pendiente = componentes.monto_base
+    hoy = timezone.now().date()
+    credito.fecha_proximo_pago = obtener_fecha_primera_cuota_credito(credito, hoy)
+    if not credito.fecha_desembolso:
+        credito.fecha_desembolso = timezone.now()
+    credito.save()
+
+    fecha_cuota = credito.fecha_proximo_pago
+    dia_ancla = obtener_dia_ancla_vencimiento(credito, fecha_cuota)
+    cuotas = []
+    for calculada in plan:
+        cuotas.append(CuotaAmortizacion(
+            credito=credito,
+            numero_cuota=calculada.numero,
+            fecha_vencimiento=fecha_cuota,
+            capital_a_pagar=calculada.capital,
+            interes_a_pagar=calculada.interes,
+            valor_cuota=calculada.valor,
+            saldo_capital_pendiente=calculada.saldo,
+        ))
+        fecha_cuota = sumar_meses_con_dia_ancla(fecha_cuota, 1, dia_ancla)
+    CuotaAmortizacion.objects.bulk_create(cuotas)
+    return credito
+
 
 def _reverse_url_safe(view_name, *, urlconf=None, fallback=None, kwargs=None):
     try:

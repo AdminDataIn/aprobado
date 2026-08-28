@@ -1,6 +1,33 @@
-from django.core.checks import Warning, register
+from pathlib import Path
+
+from django.conf import settings
+from django.core.checks import Error, Warning, register
 from django.db import connections
 from django.db.migrations.executor import MigrationExecutor
+
+
+def _ruta_contenida(ruta, contenedor):
+    ruta = Path(ruta).resolve()
+    contenedor = Path(contenedor).resolve()
+    return ruta == contenedor or contenedor in ruta.parents
+
+
+@register()
+def check_private_documents_root(app_configs, **kwargs):
+    private_root = settings.PRIVATE_DOCUMENTS_ROOT
+    rutas_publicas = {
+        'MEDIA_ROOT': settings.MEDIA_ROOT,
+        'STATIC_ROOT': settings.STATIC_ROOT,
+    }
+    errores = []
+    for nombre, ruta_publica in rutas_publicas.items():
+        if ruta_publica and _ruta_contenida(private_root, ruta_publica):
+            errores.append(Error(
+                f'PRIVATE_DOCUMENTS_ROOT no puede estar dentro de {nombre}.',
+                hint='Configura un directorio privado que el servidor web no publique.',
+                id='gestion_creditos.E002',
+            ))
+    return errores
 
 
 @register()

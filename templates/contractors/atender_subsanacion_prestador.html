@@ -1,0 +1,30 @@
+{% extends 'contractors/base.html' %}
+
+{% block title %}Atender requerimiento | Prestadores de Servicios{% endblock %}
+
+{% block content %}
+<main class="contenedor contractors-subsanacion">
+  <section class="panel">
+    <p class="eyebrow">Solicitud #{{ solicitud.id }}</p>
+    <h1>Actualiza la información solicitada</h1>
+    <p class="subtitulo-seccion">{{ requerimiento.mensaje_publico }}</p>
+    <p class="alerta-info">La información registrada quedará pendiente de validación interna. Atender este requerimiento no implica aprobación.</p>
+
+    <form method="post" enctype="multipart/form-data" class="formulario-compacto">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      {% for field in form %}
+        <div class="campo-grupo">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% for error in field.errors %}<p class="error-campo">{{ error }}</p>{% endfor %}
+        </div>
+      {% endfor %}
+      <div class="acciones">
+        <button type="submit" class="boton">Confirmar envío</button>
+        <a href="{% url 'contractors:mi_credito' %}" class="boton boton-secundario">Volver a Mi crédito</a>
+      </div>
+    </form>
+  </section>
+</main>
+{% endblock %}

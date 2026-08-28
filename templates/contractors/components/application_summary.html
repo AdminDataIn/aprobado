@@ -1,0 +1,26 @@
+<div class="cp-summary-bar" aria-label="Resumen de la solicitud">
+  <div class="cp-summary-item">
+    <small>Solicitud</small>
+    <strong>#{{ solicitud.id }}</strong>
+  </div>
+  <div class="cp-summary-item">
+    <small>Empresa contratante</small>
+    <strong>{{ solicitud.empresa.nombre }}</strong>
+  </div>
+  <div class="cp-summary-item">
+    <small>Registrada</small>
+    <strong>{{ solicitud.created_at|date:'d/m/Y' }}</strong>
+  </div>
+  <div class="cp-summary-item">
+    {% if progreso_documental %}
+      <small>Documentos</small>
+      <strong>{{ progreso_documental.cargados }} de {{ progreso_documental.total }} recibidos</strong>
+    {% elif estado_publico %}
+      <small>Estado</small>
+      <strong>{{ estado_publico.etiqueta }}</strong>
+    {% else %}
+      <small>Última actualización</small>
+      <strong>{{ solicitud.updated_at|date:'d/m/Y' }}</strong>
+    {% endif %}
+  </div>
+</div>
