@@ -2,6 +2,7 @@
 Context processors para usuarios.
 """
 from django.conf import settings
+from django.utils.http import url_has_allowed_host_and_scheme
 
 
 def user_groups_processor(request):
@@ -79,6 +80,37 @@ def public_whatsapp_processor(request):
         'whatsapp_floating_enabled': bool(
             getattr(settings, 'WHATSAPP_FLOATING_ENABLED', False) and numero_normalizado
         ),
+    }
+
+
+def auth_portal_processor(request):
+    """Expone el contexto seguro del portal para las pantallas de Allauth."""
+    host = request.get_host().split(':', 1)[0].rstrip('.').lower()
+    contractors_hosts = {
+        str(item).split(':', 1)[0].rstrip('.').lower()
+        for item in getattr(settings, 'CONTRACTORS_PORTAL_HOSTS', [])
+        if item
+    }
+    is_contractors = host in contractors_hosts
+    default_next = '/solicitar/' if is_contractors else '/'
+    requested_next = request.POST.get('next') or request.GET.get('next') or ''
+
+    if (
+        requested_next.startswith('/')
+        and not requested_next.startswith('//')
+        and url_has_allowed_host_and_scheme(
+            requested_next,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        )
+    ):
+        safe_next = requested_next
+    else:
+        safe_next = default_next
+
+    return {
+        'auth_is_contractors': is_contractors,
+        'auth_next_url': safe_next,
     }
 
 

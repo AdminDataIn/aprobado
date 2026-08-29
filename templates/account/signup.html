@@ -1,0 +1,68 @@
+{% extends "account/_base.html" %}
+{% load socialaccount static %}
+
+{% block title %}{% if auth_is_contractors %}Crear cuenta Prestadores{% else %}Crear cuenta{% endif %} - Aprobado{% endblock %}
+
+{% block content %}
+{% get_providers as socialaccount_providers %}
+{% include "account/_auth_content_styles.html" %}
+<main class="section-main">
+  <section class="hero-section-account">
+    <div class="container-account">
+      <div class="div-card-agent-account is-status-card">
+        {% if auth_is_contractors %}
+        <div class="mb-3"><span class="badge rounded-pill border">REGISTRO PRESTADORES</span></div>
+        <h1>Crea tu cuenta de Prestadores de Servicios</h1>
+        <p class="auth-desc">Registra tu correo para iniciar y dar seguimiento a tu solicitud.</p>
+        {% else %}
+        <div class="mb-3"><span class="badge rounded-pill border">Crear cuenta</span></div>
+        <h1>Crea tu cuenta</h1>
+        <p class="auth-desc">Completa los datos para crear tu acceso a Aprobado.</p>
+        {% endif %}
+
+        {% if auth_is_contractors %}
+          {% for provider in socialaccount_providers %}
+            {% if provider.id == "google" %}
+            <a
+              href="{% provider_login_url provider.id process='login' next=auth_next_url %}"
+              class="btn-social-account is-google"
+              data-auth-google
+            >
+              <img src="{% static 'images/google-g.svg' %}" alt="" class="auth-google-icon">
+              <span>Continuar con Google</span>
+            </a>
+            {% endif %}
+          {% endfor %}
+          {% if socialaccount_providers %}<div class="auth-divider">o crea tu cuenta con correo</div>{% endif %}
+        {% endif %}
+
+        <form method="post" action="{% url 'account_signup' %}">
+          {% csrf_token %}
+          {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+          {% for field in form %}
+          <div class="auth-field">
+            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<div class="auth-helper-text">{{ field.help_text|safe }}</div>{% endif %}
+            {% if field.errors %}{{ field.errors }}{% endif %}
+          </div>
+          {% endfor %}
+          <input type="hidden" name="{{ redirect_field_name|default:'next' }}" value="{{ auth_next_url }}">
+          <button type="submit" class="btn-account">Crear cuenta</button>
+        </form>
+
+        <p class="auth-choice-copy">¿Ya tienes una cuenta?</p>
+        <a href="{% url 'account_login' %}?next={{ auth_next_url|urlencode }}" class="auth-secondary-action">Iniciar sesión</a>
+
+        <div class="auth-footer-links is-centered">
+          {% if auth_is_contractors %}
+          <a href="/solicitar/">&larr; Volver al portal de Prestadores</a>
+          {% else %}
+          <a href="{% url 'home' %}">&larr; Volver al inicio</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+{% endblock %}

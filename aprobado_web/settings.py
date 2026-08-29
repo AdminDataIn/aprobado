@@ -263,6 +263,10 @@ SOCIALACCOUNT_AUTO_SIGNUP = True
 ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
 ACCOUNT_EMAIL_VERIFICATION = 'optional'
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = os.environ.get(
+    'ACCOUNT_DEFAULT_HTTP_PROTOCOL',
+    'http' if DEBUG or RUNNING_TESTS else 'https',
+).strip().lower()
 
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
@@ -312,6 +316,7 @@ TEMPLATES = [
                 'usuarios.context_processors.notificaciones_processor',
                 'usuarios.context_processors.producto_context_processor',
                 'usuarios.context_processors.public_whatsapp_processor',
+                'usuarios.context_processors.auth_portal_processor',
             ],
         },
     },

@@ -1,20 +1,19 @@
-{% extends "account/libranza/_base.html" %}
+{% extends "account/_base.html" %}
+{% load socialaccount static %}
 {% block title %}
-{% with host=request.get_host %}
-{% if "contratistas" in host or "contractors" in host %}Acceso Prestadores - Aprobado{% else %}Acceso general - Aprobado{% endif %}
-{% endwith %}
+{% if auth_is_contractors %}Acceso Prestadores - Aprobado{% else %}Acceso general - Aprobado{% endif %}
 {% endblock %}
 {% block body_class %}auth-body{% endblock %}
 
 {% block content %}
+{% get_providers as socialaccount_providers %}
 {% include "account/common/_auth_content_styles.html" %}
 
 <main class="section-main">
   <section class="hero-section-account">
     <div class="container-account">
-      <div class="div-card-agent-account is-status-card">
-        {% with host=request.get_host %}
-        {% if "contratistas" in host or "contractors" in host %}
+      <div class="div-card-agent-account is-status-card auth-login-card">
+        {% if auth_is_contractors %}
         <div class="mb-3">
           <span class="badge rounded-pill border">ACCESO PRESTADORES</span>
         </div>
@@ -27,7 +26,6 @@
         <h1>Accede a tu cuenta</h1>
         <p class="auth-desc">Usa este acceso solo cuando vengas de un flujo interno de autenticacion. Para clientes, entra desde Libranza, Emprendimiento, Marketplace o Inversionista.</p>
         {% endif %}
-        {% endwith %}
 
         <form method="post">
           {% csrf_token %}
@@ -39,31 +37,41 @@
             {{ form.login }}
           </div>
           <div class="auth-field">
-            <label class="form-label" for="{{ form.password.id_for_label }}">Contrasena</label>
+            <label class="form-label" for="{{ form.password.id_for_label }}">Contraseña</label>
             {{ form.password }}
           </div>
-          {% if redirect_field_value %}
-          <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}">
-          {% endif %}
+          <input type="hidden" name="{{ redirect_field_name|default:'next' }}" value="{{ auth_next_url }}">
           <div class="forgot-row">
-            <a href="/accounts/password/reset/">Recuperar acceso</a>
+            <a href="{% url 'account_reset_password' %}?next={{ auth_next_url|urlencode }}">Recuperar acceso</a>
           </div>
-          <button type="submit" class="btn-account">Continuar con correo</button>
+          <button type="submit" class="btn-account">Iniciar sesión</button>
         </form>
 
-        {% if google_login_url %}
-        <div class="auth-divider">o continua con</div>
-        <a href="{{ google_login_url }}" class="btn-social-account">Continuar con Google</a>
+        {% if auth_is_contractors %}
+        <div class="auth-divider">otras opciones</div>
+        <div class="auth-alternative-actions">
+          {% for provider in socialaccount_providers %}
+            {% if provider.id == "google" %}
+            <a
+              href="{% provider_login_url provider.id process='login' next=auth_next_url %}"
+              class="btn-social-account is-google"
+              data-auth-google
+            >
+              <img src="{% static 'images/google-g.svg' %}" alt="" class="auth-google-icon">
+              <span>Continuar con Google</span>
+            </a>
+            {% endif %}
+          {% endfor %}
+          <a href="{% url 'account_signup' %}?next={{ auth_next_url|urlencode }}" class="auth-secondary-action">Crear cuenta</a>
+        </div>
         {% endif %}
 
         <div class="auth-footer-links is-centered">
-          {% with host=request.get_host %}
-          {% if "contratistas" in host or "contractors" in host %}
+          {% if auth_is_contractors %}
           <a href="/solicitar/">&larr; Volver al portal de Prestadores</a>
           {% else %}
           <a href="{% url 'home' %}">&larr; Volver al inicio</a>
           {% endif %}
-          {% endwith %}
         </div>
       </div>
     </div>
