@@ -835,6 +835,15 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         pointer-events: none;
     }
 
+    .libranza-map-connector {
+        stroke: #5b9caf;
+        stroke-width: 1;
+        stroke-linecap: round;
+        vector-effect: non-scaling-stroke;
+        opacity: 0.72;
+        pointer-events: none;
+    }
+
     .libranza-map-tooltip {
         position: absolute;
         z-index: 5;
@@ -1068,6 +1077,11 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
 
         .libranza-logo-item strong {
             max-width: 138px;
+        }
+
+        .libranza-map-label,
+        .libranza-map-connector {
+            display: none;
         }
     }
 
@@ -1764,9 +1778,28 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                 });
                 svg.appendChild(mapaGrupo);
 
+                const conectoresGrupo = crearSvg('g', { class: 'libranza-map-connectors' });
+                const marcadoresGrupo = crearSvg('g', { class: 'libranza-map-markers' });
+                const etiquetasGrupo = crearSvg('g', { class: 'libranza-map-labels' });
+                svg.appendChild(conectoresGrupo);
+                svg.appendChild(marcadoresGrupo);
+                svg.appendChild(etiquetasGrupo);
+                mapFrame.appendChild(svg);
+
+                const ubicacionesUnicas = new Map();
                 ubicaciones.forEach((ubicacion) => {
-                    if (ubicacion.latitud == null || ubicacion.longitud == null) return;
-                    const punto = proyectar(Number(ubicacion.longitud), Number(ubicacion.latitud));
+                    const latitud = Number(ubicacion.latitud);
+                    const longitud = Number(ubicacion.longitud);
+                    if (!Number.isFinite(latitud) || !Number.isFinite(longitud)) return;
+                    const clave = `${normalizar(ubicacion.departamento)}|${normalizar(ubicacion.municipio)}`;
+                    if (!ubicacionesUnicas.has(clave)) {
+                        ubicacionesUnicas.set(clave, { ...ubicacion, latitud, longitud });
+                    }
+                });
+
+                const puntosMapa = [];
+                ubicacionesUnicas.forEach((ubicacion) => {
+                    const punto = proyectar(ubicacion.longitud, ubicacion.latitud);
                     const total = Number(ubicacion.empresas || 1);
                     const radio = 9;
                     const grupo = crearSvg('g', {
@@ -1776,13 +1809,23 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                         'aria-label': `${ubicacion.municipio || ubicacion.departamento}, ${ubicacion.departamento || 'Colombia'}: ${total} empresa${total === 1 ? '' : 's'}`,
                     });
                     grupo.appendChild(crearSvg('circle', { class: 'libranza-map-point', cx: punto.x, cy: punto.y, r: radio }));
-                    const texto = crearSvg('text', { class: 'libranza-map-label', x: punto.x + radio + 5, y: punto.y + 4 });
-                    texto.textContent = ubicacion.municipio || ubicacion.departamento;
-                    grupo.appendChild(texto);
 
                     const mostrarTooltip = () => {
                         if (!tooltip) return;
-                        tooltip.innerHTML = `<strong>${ubicacion.municipio || ubicacion.departamento}</strong>${ubicacion.departamento || 'Colombia'} · ${total} empresa${total === 1 ? '' : 's'}`;
+                        const titulo = document.createElement('strong');
+                        titulo.textContent = ubicacion.municipio || ubicacion.departamento;
+                        const nombres = Array.isArray(ubicacion.nombres_empresas)
+                            ? ubicacion.nombres_empresas.filter(Boolean)
+                            : [];
+                        const detalleEmpresas = nombres.length
+                            ? nombres.slice(0, 3).join(', ') + (nombres.length > 3 ? ` y ${nombres.length - 3} más` : '')
+                            : `${total} empresa${total === 1 ? '' : 's'}`;
+                        tooltip.replaceChildren(
+                            titulo,
+                            document.createTextNode(
+                                `${ubicacion.departamento || 'Colombia'} · ${detalleEmpresas}`
+                            ),
+                        );
                         tooltip.style.left = `${(punto.x / width) * 100}%`;
                         tooltip.style.top = `${(punto.y / height) * 100}%`;
                         tooltip.style.opacity = '1';
@@ -1794,10 +1837,123 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                     grupo.addEventListener('focus', mostrarTooltip);
                     grupo.addEventListener('mouseleave', ocultarTooltip);
                     grupo.addEventListener('blur', ocultarTooltip);
-                    svg.appendChild(grupo);
+                    grupo.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        mostrarTooltip();
+                    });
+                    marcadoresGrupo.appendChild(grupo);
+                    puntosMapa.push({
+                        ubicacion,
+                        punto,
+                        radio,
+                        cajaPunto: {
+                            x: punto.x - radio - 3,
+                            y: punto.y - radio - 3,
+                            width: (radio + 3) * 2,
+                            height: (radio + 3) * 2,
+                        },
+                    });
                 });
 
-                mapFrame.appendChild(svg);
+                const expandirCaja = (caja, margen) => ({
+                    x: caja.x - margen,
+                    y: caja.y - margen,
+                    width: caja.width + margen * 2,
+                    height: caja.height + margen * 2,
+                });
+                const cajasColisionan = (a, b) => !(
+                    a.x + a.width <= b.x
+                    || b.x + b.width <= a.x
+                    || a.y + a.height <= b.y
+                    || b.y + b.height <= a.y
+                );
+                const cajaDentroDelMapa = (caja) => (
+                    caja.x >= 8
+                    && caja.y >= 8
+                    && caja.x + caja.width <= width - 8
+                    && caja.y + caja.height <= height - 8
+                );
+                const cajasPuntos = puntosMapa.map(({ cajaPunto }) => cajaPunto);
+                const cajasEtiquetas = [];
+                const posicionesBase = [
+                    { direccion: 'derecha', dx: 18, dy: 0, anchor: 'start' },
+                    { direccion: 'izquierda', dx: -18, dy: 0, anchor: 'end' },
+                    { direccion: 'arriba-derecha', dx: 15, dy: -17, anchor: 'start' },
+                    { direccion: 'arriba-izquierda', dx: -15, dy: -17, anchor: 'end' },
+                    { direccion: 'abajo-derecha', dx: 15, dy: 17, anchor: 'start' },
+                    { direccion: 'abajo-izquierda', dx: -15, dy: 17, anchor: 'end' },
+                    { direccion: 'arriba', dx: 0, dy: -22, anchor: 'middle' },
+                    { direccion: 'abajo', dx: 0, dy: 22, anchor: 'middle' },
+                ];
+
+                puntosMapa
+                    .slice()
+                    .sort((a, b) => a.punto.y - b.punto.y || a.punto.x - b.punto.x)
+                    .forEach(({ ubicacion, punto, cajaPunto }) => {
+                        const texto = crearSvg('text', {
+                            class: 'libranza-map-label',
+                            'dominant-baseline': 'middle',
+                        });
+                        texto.textContent = ubicacion.municipio || ubicacion.departamento;
+                        etiquetasGrupo.appendChild(texto);
+
+                        const candidatos = [];
+                        [1, 1.65, 2.35, 3.1, 4].forEach((escala) => {
+                            posicionesBase.forEach((posicion) => candidatos.push({
+                                ...posicion,
+                                dx: posicion.dx * escala,
+                                dy: posicion.dy * escala,
+                            }));
+                        });
+
+                        let mejor = null;
+                        candidatos.some((candidato) => {
+                            texto.setAttribute('x', punto.x + candidato.dx);
+                            texto.setAttribute('y', punto.y + candidato.dy);
+                            texto.setAttribute('text-anchor', candidato.anchor);
+                            const caja = expandirCaja(texto.getBBox(), 4);
+                            const colisionesEtiquetas = cajasEtiquetas.filter(
+                                (existente) => cajasColisionan(caja, existente)
+                            ).length;
+                            const colisionesPuntos = cajasPuntos.filter(
+                                (existente) => existente !== cajaPunto && cajasColisionan(caja, existente)
+                            ).length;
+                            const fueraDelMapa = cajaDentroDelMapa(caja) ? 0 : 1;
+                            const penalizacion = colisionesEtiquetas * 100
+                                + colisionesPuntos * 30
+                                + fueraDelMapa * 200;
+                            if (!mejor || penalizacion < mejor.penalizacion) {
+                                mejor = { candidato, caja, penalizacion };
+                            }
+                            return penalizacion === 0;
+                        });
+
+                        const posicion = mejor.candidato;
+                        texto.setAttribute('x', punto.x + posicion.dx);
+                        texto.setAttribute('y', punto.y + posicion.dy);
+                        texto.setAttribute('text-anchor', posicion.anchor);
+                        texto.dataset.posicion = posicion.direccion;
+                        const cajaFinal = expandirCaja(texto.getBBox(), 4);
+                        cajasEtiquetas.push(cajaFinal);
+
+                        const distancia = Math.hypot(posicion.dx, posicion.dy);
+                        if (distancia > 30) {
+                            const conector = crearSvg('line', {
+                                class: 'libranza-map-connector',
+                                x1: punto.x,
+                                y1: punto.y,
+                                x2: punto.x + posicion.dx * 0.78,
+                                y2: punto.y + posicion.dy * 0.78,
+                                'aria-hidden': 'true',
+                            });
+                            conectoresGrupo.appendChild(conector);
+                        }
+                    });
+
+                svg.addEventListener('click', () => {
+                    if (tooltip) tooltip.style.opacity = '0';
+                });
+
                 if (loading) loading.remove();
             })
             .catch(() => {

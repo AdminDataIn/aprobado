@@ -1,6 +1,8 @@
 from decimal import Decimal
+from io import StringIO
 
 from django.contrib.admin.sites import AdminSite
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 
@@ -148,6 +150,21 @@ class EmpresaGeografiaTests(TestCase):
         self.assertTrue(geografia['ubicacion_representable'])
         self.assertEqual(geografia['fuente_coordenadas'], FUENTE_COORDENADAS_DATASET)
 
+    def test_aliases_dane_bogota_y_cartagena_resuelven(self):
+        bogota = Empresa.objects.create(
+            nombre='Empresa Bogota Alias',
+            departamento='Bogota DC',
+            municipio='Bogota',
+        )
+        cartagena = Empresa.objects.create(
+            nombre='Empresa Cartagena Alias',
+            departamento='Bolivar',
+            municipio='Cartagena',
+        )
+
+        self.assertTrue(describir_geografia_empresa(bogota)['ubicacion_representable'])
+        self.assertTrue(describir_geografia_empresa(cartagena)['ubicacion_representable'])
+
     def test_dataset_oficial_se_carga_una_vez_por_proceso(self):
         _cargar_dataset_centroides.cache_clear()
 
@@ -213,6 +230,27 @@ class EmpresaGeografiaTests(TestCase):
         self.assertEqual(len(presencia['mapa_ubicaciones']), 1)
         self.assertEqual(presencia['mapa_ubicaciones'][0]['empresas'], 2)
 
+    def test_municipio_genera_un_punto_y_prioriza_coordenadas_explicitas(self):
+        Empresa.objects.create(
+            nombre='Empresa Dataset',
+            departamento='Meta',
+            municipio='Villavicencio',
+        )
+        Empresa.objects.create(
+            nombre='Empresa Coordenadas',
+            departamento='META',
+            municipio='villavicencio',
+            latitud=Decimal('4.150000'),
+            longitud=Decimal('-73.630000'),
+        )
+
+        presencia = obtener_presencia_empresas()
+
+        self.assertEqual(len(presencia['mapa_ubicaciones']), 1)
+        self.assertEqual(presencia['mapa_ubicaciones'][0]['empresas'], 2)
+        self.assertEqual(presencia['mapa_ubicaciones'][0]['latitud'], 4.15)
+        self.assertEqual(presencia['mapa_ubicaciones'][0]['longitud'], -73.63)
+
     def test_conteos_y_estructura_del_mapa_son_consistentes(self):
         Empresa.objects.create(
             nombre='Empresa Meta',
@@ -274,6 +312,37 @@ class EmpresaGeografiaTests(TestCase):
         self.assertNotIn('3001234567', resultado)
         self.assertNotIn('Direccion privada 123', resultado)
 
+    def test_comando_auditoria_reporta_origen_resumen_y_duplicados(self):
+        Empresa.objects.create(
+            nombre='Empresa Uno',
+            convenio_activo=True,
+            departamento='Meta',
+            municipio='Villavicencio',
+        )
+        Empresa.objects.create(
+            nombre='Empresa Dos',
+            convenio_activo=True,
+            departamento='Meta',
+            municipio='Villavicencio',
+        )
+        Empresa.objects.create(
+            nombre='Empresa Sin Coordenadas',
+            convenio_activo=True,
+            departamento='Departamento Inexistente',
+            municipio='Municipio Inexistente',
+        )
+        salida = StringIO()
+
+        call_command('auditar_geografia_empresas', stdout=salida)
+
+        contenido = salida.getvalue()
+        self.assertIn('DATASET_LOCAL_DANE_MGN_2024', contenido)
+        self.assertIn('Municipios unicos: 2', contenido)
+        self.assertIn('Representables: 1', contenido)
+        self.assertIn('Sin coordenadas: 1', contenido)
+        self.assertIn('Duplicados: 1', contenido)
+        self.assertIn('NO REPRESENTABLE | Departamento Inexistente | Municipio Inexistente', contenido)
+
 
 class EmpresaGeografiaLandingAdminTests(TestCase):
     def test_landing_usa_conteos_geograficos_del_servicio(self):
@@ -316,6 +385,26 @@ class EmpresaGeografiaLandingAdminTests(TestCase):
         self.assertNotContains(response, 'ubicacion.ciudad')
         self.assertContains(response, 'ubicacion.municipio')
         self.assertContains(response, 'Municipios activos')
+
+    def test_landing_incluye_colisiones_conectores_y_puntos_unicos(self):
+        for nombre in ('Aliado Uno', 'Aliado Dos'):
+            Empresa.objects.create(
+                nombre=nombre,
+                convenio_activo=True,
+                departamento='Meta',
+                municipio='Villavicencio',
+            )
+
+        response = self.client.get(reverse('libranza:landing'))
+
+        self.assertEqual(response.status_code, 200)
+        punto = response.context['landing_presencia']['mapa_ubicaciones'][0]
+        self.assertEqual(len(response.context['landing_presencia']['mapa_ubicaciones']), 1)
+        self.assertEqual(punto['nombres_empresas'], ['Aliado Dos', 'Aliado Uno'])
+        self.assertContains(response, 'libranza-map-connector')
+        self.assertContains(response, 'cajasColisionan')
+        self.assertContains(response, 'ubicacionesUnicas')
+        self.assertContains(response, 'Number.isFinite')
 
     def test_admin_empresa_expone_seccion_geografica_opcional(self):
         model_admin = EmpresaAdmin(Empresa, AdminSite())

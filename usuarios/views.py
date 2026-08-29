@@ -548,7 +548,7 @@ def _build_landing_trusted_companies(companies=None):
 
 def _build_landing_presencia(companies=None):
     companies = companies if companies is not None else Empresa.objects.filter(convenio_activo=True)
-    return obtener_presencia_empresas(companies)
+    return obtener_presencia_empresas(companies, incluir_nombres_empresas=True)
 
 
 def _build_landing_backers():

@@ -35,11 +35,40 @@ UBICACIONES_PLACEHOLDER = {
     'sin ubicacion registrada',
 }
 
+_ALIAS_DEPARTAMENTOS = {
+    'bogota dc': 'bogota d c',
+    'bogota distrito capital': 'bogota d c',
+    'distrito capital': 'bogota d c',
+    'san andres providencia y santa catalina': (
+        'archipielago de san andres providencia y santa catalina'
+    ),
+}
+
+_ALIAS_MUNICIPIOS = {
+    ('bogota d c', 'bogota'): 'bogota d c',
+    ('bogota d c', 'bogota dc'): 'bogota d c',
+    ('bolivar', 'cartagena'): 'cartagena de indias',
+}
+
 def _normalizar_clave(valor):
     texto = unicodedata.normalize('NFKD', str(valor or ''))
     texto = ''.join(caracter for caracter in texto if not unicodedata.combining(caracter))
     texto = re.sub(r'[^a-zA-Z0-9\s]', ' ', texto).lower()
     return ' '.join(texto.split())
+
+
+def _clave_departamento(valor):
+    clave = _normalizar_clave(valor)
+    return _ALIAS_DEPARTAMENTOS.get(clave, clave)
+
+
+def _clave_municipio(departamento, municipio):
+    departamento_clave = _clave_departamento(departamento)
+    municipio_clave = _normalizar_clave(municipio)
+    return _ALIAS_MUNICIPIOS.get(
+        (departamento_clave, municipio_clave),
+        municipio_clave,
+    )
 
 
 def _normalizar_texto_geografico(valor):
@@ -93,7 +122,10 @@ def _cargar_dataset_centroides(ruta_dataset):
         if not departamento or not municipio or not codigo_departamento or not codigo_municipio:
             raise ValueError('El dataset contiene identificadores territoriales vacios.')
         latitud, longitud = _validar_coordenadas(registro['latitud'], registro['longitud'])
-        clave = (_normalizar_clave(departamento), _normalizar_clave(municipio))
+        clave = (
+            _clave_departamento(departamento),
+            _clave_municipio(departamento, municipio),
+        )
         if clave in centroides:
             raise ValueError('El dataset contiene municipios duplicados por departamento y nombre.')
         centroides[clave] = (latitud, longitud)
@@ -121,8 +153,8 @@ def obtener_catalogo_centroides_municipales():
 
 
 def _resolver_centroide(departamento, municipio):
-    departamento_clave = _normalizar_clave(departamento)
-    municipio_clave = _normalizar_clave(municipio)
+    departamento_clave = _clave_departamento(departamento)
+    municipio_clave = _clave_municipio(departamento, municipio)
     if not municipio_clave:
         return None
     catalogo = obtener_catalogo_centroides_municipales()
@@ -163,10 +195,9 @@ def describir_geografia_empresa(empresa):
     }
 
 
-def obtener_presencia_empresas(queryset=None):
+def obtener_presencia_empresas(queryset=None, incluir_nombres_empresas=False):
     empresas = queryset if queryset is not None else Empresa.objects.all()
     grupos_registrados = {}
-    grupos_mapa = {}
     con_ubicacion = 0
     sin_ubicacion = 0
     representables = 0
@@ -188,8 +219,8 @@ def obtener_presencia_empresas(queryset=None):
             municipios.add(municipio)
 
         clave_registrada = (
-            _normalizar_clave(departamento),
-            _normalizar_clave(municipio),
+            _clave_departamento(departamento),
+            _clave_municipio(departamento, municipio),
         )
         grupo = grupos_registrados.setdefault(clave_registrada, {
             'departamento': departamento,
@@ -198,31 +229,46 @@ def obtener_presencia_empresas(queryset=None):
             'longitud': geografia['longitud'],
             'empresas': 0,
             'ubicacion_representable': geografia['ubicacion_representable'],
+            'fuente_coordenadas': geografia['fuente_coordenadas'],
+            'nombres_empresas': [],
         })
         grupo['empresas'] += 1
+        if incluir_nombres_empresas:
+            grupo['nombres_empresas'].append(empresa.nombre)
 
         if not geografia['ubicacion_representable']:
             continue
         representables += 1
-        clave_mapa = (
-            clave_registrada,
-            geografia['latitud'],
-            geografia['longitud'],
-        )
-        punto = grupos_mapa.setdefault(clave_mapa, {
-            'departamento': departamento or geografia['pais'] or 'Colombia',
-            'municipio': municipio or departamento,
-            'latitud': geografia['latitud'],
-            'longitud': geografia['longitud'],
-            'empresas': 0,
-        })
-        punto['empresas'] += 1
+        if (
+            not grupo['ubicacion_representable']
+            or (
+                geografia['fuente_coordenadas'] == 'REGISTRADAS'
+                and grupo['fuente_coordenadas'] != 'REGISTRADAS'
+            )
+        ):
+            grupo['latitud'] = geografia['latitud']
+            grupo['longitud'] = geografia['longitud']
+            grupo['fuente_coordenadas'] = geografia['fuente_coordenadas']
+        grupo['ubicacion_representable'] = True
 
     def clave_orden(item):
         return (-item['empresas'], item['departamento'] or '', item['municipio'] or '')
 
     ubicaciones = sorted(grupos_registrados.values(), key=clave_orden)
-    mapa_ubicaciones = sorted(grupos_mapa.values(), key=clave_orden)
+    mapa_ubicaciones = []
+    for grupo in ubicaciones:
+        if not grupo['ubicacion_representable']:
+            continue
+        punto = {
+            'departamento': grupo['departamento'],
+            'municipio': grupo['municipio'],
+            'latitud': grupo['latitud'],
+            'longitud': grupo['longitud'],
+            'empresas': grupo['empresas'],
+        }
+        if incluir_nombres_empresas:
+            punto['nombres_empresas'] = sorted(set(grupo['nombres_empresas']))
+        mapa_ubicaciones.append(punto)
     return {
         'ubicaciones': ubicaciones,
         'mapa_ubicaciones': mapa_ubicaciones,
