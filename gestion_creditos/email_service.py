@@ -22,6 +22,7 @@ from django.urls import reverse
 from weasyprint import HTML
 from pypdf import PdfReader, PdfWriter
 from .models import Credito
+from .services.mora_notifications import preparar_alerta_mora_colaborador
 
 logger = logging.getLogger(__name__)
 
@@ -792,6 +793,18 @@ def enviar_alerta_obligacion_pendiente_usuario(*, credito, cuota, dias_atraso):
         logger.warning("No hay destinatario para alerta de atraso del credito %s.", credito.numero_credito)
         return False
 
+    alerta = preparar_alerta_mora_colaborador(
+        dias_mora=dias_atraso,
+        numero_credito=credito.numero_credito,
+    )
+    if alerta is None:
+        logger.info(
+            "Alerta de atraso omitida para credito %s: %s dias no alcanza el umbral.",
+            credito.numero_credito,
+            dias_atraso,
+        )
+        return False
+
     restante = (cuota.valor_cuota or Decimal('0.00')) - (cuota.monto_pagado or Decimal('0.00'))
     context = {
         'credito': credito,
@@ -799,10 +812,11 @@ def enviar_alerta_obligacion_pendiente_usuario(*, credito, cuota, dias_atraso):
         'dias_atraso': dias_atraso,
         'restante': restante,
         'nombre_cliente': credito.nombre_cliente,
+        **alerta,
     }
     return enviar_email_html(
         destinatario=destinatario,
-        asunto=f'Pon al dia tu cuota pendiente - {credito.numero_credito}',
+        asunto=alerta['asunto'],
         template_html='emails/usuarios/usuario_alerta_obligacion_pendiente.html',
         context=context,
     )

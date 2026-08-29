@@ -13,15 +13,15 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
-from .models import Credito, CuotaAmortizacion
+from .models import Credito
 from .credit_services import marcar_creditos_en_mora, gestionar_cambio_estado_credito
 from .email_service import (
-    enviar_alerta_obligacion_pendiente_usuario,
     enviar_recordatorio_pago,
     enviar_alerta_mora,
     enviar_notificacion_cambio_estado,
 )
 from .services.pagador_notifications import enviar_resumenes_pagador
+from .services.mora_notifications import procesar_alertas_mora_colaborador
 
 logger = logging.getLogger(__name__)
 
@@ -341,39 +341,7 @@ def enviar_alertas_usuario_cuota_pendiente_task():
     if not getattr(settings, 'WORKER_PENDING_PAYMENT_ALERTS_ENABLED', True):
         return {'status': 'skipped', 'reason': 'disabled'}
 
-    hoy = timezone.now().date()
-    cuotas = (
-        CuotaAmortizacion.objects.filter(
-            pagada=False,
-            fecha_vencimiento__lte=hoy - timedelta(days=10),
-            credito__linea__in=[
-                Credito.LineaCredito.LIBRANZA,
-                Credito.LineaCredito.ADELANTO_NOMINA,
-            ],
-            credito__estado__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA],
-            fecha_ultimo_recordatorio_pagador__isnull=False,
-        )
-        .select_related('credito__usuario')
-        .order_by('fecha_vencimiento')
-    )
-
-    alertas = 0
-    for cuota in cuotas:
-        ultima_alerta = cuota.fecha_ultimo_aviso_usuario_mora
-        if ultima_alerta:
-            ultima_fecha = timezone.localtime(ultima_alerta).date()
-            if ultima_fecha >= hoy:
-                continue
-
-        dias_atraso = (hoy - cuota.fecha_vencimiento).days
-        if enviar_alerta_obligacion_pendiente_usuario(
-            credito=cuota.credito,
-            cuota=cuota,
-            dias_atraso=dias_atraso,
-        ):
-            cuota.fecha_ultimo_aviso_usuario_mora = timezone.now()
-            cuota.save(update_fields=['fecha_ultimo_aviso_usuario_mora'])
-            alertas += 1
-
-    return {'status': 'success', 'alertas_enviadas': alertas, 'timestamp': timezone.now().isoformat()}
+    resultado = procesar_alertas_mora_colaborador()
+    resultado.update({'status': 'success', 'timestamp': timezone.now().isoformat()})
+    return resultado
 

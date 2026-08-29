@@ -8,6 +8,8 @@ from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils import timezone
 
+from gestion_creditos.services.mora_notifications import preparar_alerta_mora_colaborador
+
 
 @dataclass(frozen=True)
 class EmailPreviewSpec:
@@ -126,6 +128,10 @@ def _sample_common_context():
     pedido, order_items, direccion = _sample_marketplace_order()
     reset_url = 'https://aprobado.com.co/accounts/reset/demo-token/'
     dashboard_pagador = 'https://aprobado.com.co/pagador/'
+    alerta_mora_colaborador = preparar_alerta_mora_colaborador(
+        dias_mora=12,
+        numero_credito=credito.numero_credito,
+    )
     return {
         'credito': credito,
         'empresa': empresa,
@@ -150,6 +156,7 @@ def _sample_common_context():
         'metodo_pago': 'Transferencia directa',
         'banco': 'Bancolombia',
         'dias_mora': 12,
+        **alerta_mora_colaborador,
         'saldo_pendiente': '$1.985.750,00',
         'detalle': SimpleNamespace(
             nombre_completo='Carlos Daniel Ortiz',

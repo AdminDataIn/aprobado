@@ -7,17 +7,28 @@
     <img src="https://aprobado.com.co/static/images/logo-dark.png" alt="Aprobado" class="logo">
 </div>
 
-<div class="status-badge badge-yellow">Cuota pendiente</div>
+<div class="status-badge" style="background-color: {{ severidad_fondo }}; color: {{ severidad_color }}; border: 1px solid {{ severidad_borde }};">
+    Nivel {{ severidad_etiqueta }}
+</div>
 
 <div class="email-content">
-    <h1 class="greeting">Tienes una cuota pendiente por regularizar</h1>
+    <h1 class="greeting">Tu cr&eacute;dito contin&uacute;a pendiente de normalizaci&oacute;n</h1>
     <p class="subtitle">
-        Hola {{ nombre_cliente }}, han pasado <strong>10 d&iacute;as</strong> desde el cierre mensual informado a la empresa
-        y tu obligaci&oacute;n <strong>{{ credito.numero_credito }}</strong> sigue pendiente por regularizar.
+        Hola {{ nombre_cliente }}, la cuota de tu obligaci&oacute;n <strong>{{ credito.numero_credito }}</strong>
+        presenta <strong>{{ dias_mora }} d&iacute;as de mora</strong>. La novedad sigue pendiente de normalizaci&oacute;n
+        por parte de tu empresa o pagadur&iacute;a.
     </p>
 
-    <div class="info-card">
+    <div class="info-card" style="border-left: 4px solid {{ severidad_borde }};">
         <table class="info-table">
+            <tr>
+                <td class="label">Nivel de alerta</td>
+                <td class="value">{{ severidad_etiqueta }}</td>
+            </tr>
+            <tr>
+                <td class="label">D&iacute;as reales de mora</td>
+                <td class="value">{{ dias_mora }} d&iacute;as</td>
+            </tr>
             <tr>
                 <td class="label">Fecha de vencimiento</td>
                 <td class="value">{{ cuota.fecha_vencimiento|date:"d/m/Y" }}</td>
@@ -30,8 +41,11 @@
     </div>
 
     <div class="cta-box yellow">
-        <p class="cta-title">Revisa el estado de tu obligaci&oacute;n</p>
-        <p class="cta-subtitle">Valida con tu empresa el estado de este pago o ingresa a tu panel para revisar el detalle.</p>
+        <p class="cta-title">Te mantenemos informado</p>
+        <p class="cta-subtitle">
+            Este aviso no atribuye la novedad a tu gesti&oacute;n. Consulta con tu empresa o pagadur&iacute;a el estado
+            de la normalizaci&oacute;n y revisa el detalle actualizado en tu panel.
+        </p>
         <a href="https://aprobado.com.co/libranza/login/?next=/libranza/mi-credito/" class="cta-button">Consultar mi cr&eacute;dito</a>
     </div>
 </div>
