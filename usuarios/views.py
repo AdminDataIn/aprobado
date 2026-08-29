@@ -573,6 +573,11 @@ def _build_landing_backers():
             'logo_path': 'images/respaldos/seguros-sura.svg',
             'descripcion': 'Seguro de vida deudores para acompañar el respaldo del crédito.',
         },
+        {
+            'nombre': 'DATAIN',
+            'logo_path': 'images/respaldos/datain.png',
+            'descripcion': 'Respaldo tecnológico y desarrollo de software.',
+        },
     ]
     return [respaldo for respaldo in respaldos if finders.find(respaldo['logo_path'])]
 

@@ -68,6 +68,18 @@ class LibranzaLandingMarketingTests(TestCase):
         self.assertNotContains(response, 'Testimonios')
         self.assertNotContains(response, 'Solicitar adelanto')
 
+    def test_landing_renderiza_datain_y_conserva_respaldos_institucionales(self):
+        response = self.client.get(reverse('libranza:landing'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'DATAIN')
+        self.assertContains(response, 'Respaldo tecnológico y desarrollo de software.')
+        self.assertContains(response, 'images/respaldos/datain.png')
+        self.assertContains(response, 'DataCrédito Experian')
+        self.assertContains(response, 'FiGarantías')
+        self.assertContains(response, 'Orinoco TIC')
+        self.assertContains(response, 'Seguros SURA')
+
     def test_logo_acepta_proporcion_estrecha_y_svg(self):
         empresa_svg = Empresa(
             nombre='Empresa SVG',
