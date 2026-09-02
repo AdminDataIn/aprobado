@@ -1,0 +1,50 @@
+{% extends 'base_general.html' %}
+{% load humanize l10n %}
+
+{% block title %}Pagos BRE-B por verificar | Aprobado{% endblock %}
+
+{% block content %}
+<main class="container-fluid py-4" style="max-width: 1440px;">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+        <div><h1 class="h3 mb-1">Pagos BRE-B por verificar</h1><p class="text-muted mb-0">El comprobante no modifica cartera hasta que el pago sea aprobado.</p></div>
+        <a href="{% url 'gestion:dashboard' %}" class="btn btn-outline-secondary">Volver al dashboard</a>
+    </div>
+    {% if messages %}{% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>{% endfor %}{% endif %}
+
+    <form method="get" class="card card-body mb-4">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4"><label class="form-label" for="estado">Estado</label><select class="form-select" id="estado" name="estado"><option value="">Todos</option>{% for value,label in estados_breb %}<option value="{{ value }}" {% if estado_actual == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+            <div class="col-md-4"><label class="form-label" for="empresa">Empresa</label><select class="form-select" id="empresa" name="empresa"><option value="">Todas</option>{% for empresa in empresas_breb %}<option value="{{ empresa.id }}" {% if empresa_actual == empresa.id|stringformat:'s' %}selected{% endif %}>{{ empresa.nombre }}</option>{% endfor %}</select></div>
+            <div class="col-md-4 d-flex gap-2"><button class="btn btn-primary" type="submit">Filtrar</button><a href="{% url 'gestion:pagos_breb' %}" class="btn btn-outline-secondary">Limpiar</a></div>
+        </div>
+    </form>
+
+    <div class="card"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+        <thead><tr><th>Crédito / cliente</th><th>Empresa</th><th>Valor</th><th>Fechas</th><th>Estado</th><th>Comprobante</th><th style="min-width:330px">Decisión</th></tr></thead>
+        <tbody>
+        {% for pago in pagos_breb %}
+        <tr>
+            <td><strong>{{ pago.credito.numero_credito }}</strong><br><span class="small text-muted">{{ pago.credito.nombre_cliente }}</span></td>
+            <td>{{ pago.empresa.nombre|default:'-' }}</td>
+            <td>Reportado: ${{ pago.valor_reportado|floatformat:2|intcomma }}{% if pago.valor_aprobado %}<br><strong>Aplicado: ${{ pago.valor_aprobado|floatformat:2|intcomma }}</strong>{% endif %}</td>
+            <td>Pago: {{ pago.fecha_pago_reportada|date:"d/m/Y" }}<br><span class="small text-muted">Recibido: {{ pago.creado_en|date:"d/m/Y H:i" }}</span></td>
+            <td><span class="badge {% if pago.estado == 'APROBADO' %}text-bg-success{% elif pago.estado == 'RECHAZADO' %}text-bg-danger{% else %}text-bg-warning{% endif %}">{{ pago.get_estado_display }}</span></td>
+            <td><a href="{% url 'gestion:pago_breb_comprobante' pago.id %}" class="btn btn-sm btn-outline-secondary">Ver comprobante</a></td>
+            <td>
+            {% if pago.estado == 'PENDIENTE_VERIFICACION' %}
+                <form method="post" action="{% url 'gestion:pago_breb_decidir' pago.id %}" class="d-flex flex-column gap-2">{% csrf_token %}
+                    <label class="small fw-semibold" for="valor-{{ pago.id }}">Valor reconocido</label>
+                    <input class="form-control form-control-sm" id="valor-{{ pago.id }}" type="number" step="0.01" min="0.01" name="valor_aprobado" value="{{ pago.valor_reportado|unlocalize }}" required>
+                    <textarea class="form-control form-control-sm" name="motivo_rechazo" rows="2" placeholder="Motivo obligatorio al rechazar"></textarea>
+                    <div class="d-flex gap-2"><button class="btn btn-sm btn-success" type="submit" name="accion" value="aprobar">Aprobar y aplicar</button><button class="btn btn-sm btn-outline-danger" type="submit" name="accion" value="rechazar">Rechazar</button></div>
+                </form>
+            {% elif pago.motivo_rechazo %}<span class="small text-danger">{{ pago.motivo_rechazo }}</span>{% else %}<span class="small text-muted">Revisado por {{ pago.revisado_por|default:'-' }}</span>{% endif %}
+            </td>
+        </tr>
+        {% empty %}<tr><td colspan="7" class="text-center text-muted py-5">No hay pagos BRE-B con estos filtros.</td></tr>{% endfor %}
+        </tbody>
+    </table></div></div>
+
+    {% if pagos_breb.has_other_pages %}<nav class="mt-3"><ul class="pagination justify-content-end">{% if pagos_breb.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ pagos_breb.previous_page_number }}&estado={{ estado_actual }}&empresa={{ empresa_actual }}">Anterior</a></li>{% endif %}<li class="page-item disabled"><span class="page-link">{{ pagos_breb.number }} de {{ pagos_breb.paginator.num_pages }}</span></li>{% if pagos_breb.has_next %}<li class="page-item"><a class="page-link" href="?page={{ pagos_breb.next_page_number }}&estado={{ estado_actual }}&empresa={{ empresa_actual }}">Siguiente</a></li>{% endif %}</ul></nav>{% endif %}
+</main>
+{% endblock %}

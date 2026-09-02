@@ -1,0 +1,89 @@
+{% extends 'base_general.html' %}
+{% load humanize %}
+
+{% block title %}Pagar por BRE-B | Aprobado{% endblock %}
+
+{% block content %}
+<main class="container py-4" style="max-width: 1040px;">
+    <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <span class="badge text-bg-info mb-2">PAGO ALTERNATIVO</span>
+            <h1 class="h3 mb-1">Pagar por BRE-B</h1>
+            <p class="text-muted mb-0">Crédito {{ credito.numero_credito }}</p>
+        </div>
+        <a href="{% url 'libranza:mi_credito_detalle' credito.id %}" class="btn btn-outline-secondary">Volver</a>
+    </div>
+
+    {% if messages %}{% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>{% endfor %}{% endif %}
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <section class="card h-100">
+                <div class="card-body text-center p-4">
+                    <h2 class="h5 mb-3">Escanea el QR</h2>
+                    <img
+                        src="{% url 'libranza:pago_breb_qr' credito.id %}"
+                        alt="QR para pago BRE-B"
+                        class="img-fluid border rounded p-2 bg-white mb-3"
+                        style="width: 300px; aspect-ratio: 1; object-fit: contain;"
+                    >
+                    <dl class="text-start mb-0">
+                        <div class="d-flex justify-content-between gap-3 py-2 border-bottom"><dt>Receptor</dt><dd class="mb-0 text-end">{{ configuracion_breb.nombre_receptor }}</dd></div>
+                        <div class="d-flex justify-content-between gap-3 py-2 border-bottom"><dt>Entidad</dt><dd class="mb-0 text-end">{{ configuracion_breb.entidad_financiera }}</dd></div>
+                        <div class="d-flex justify-content-between gap-3 py-2 border-bottom"><dt>{{ configuracion_breb.get_tipo_llave_display }}</dt><dd class="mb-0 text-end"><code>{{ configuracion_breb.llave_mostrable }}</code></dd></div>
+                    </dl>
+                    {% if configuracion_breb.instrucciones %}<p class="small text-muted text-start mt-3 mb-0">{{ configuracion_breb.instrucciones|linebreaksbr }}</p>{% endif %}
+                </div>
+            </section>
+        </div>
+        <div class="col-lg-7">
+            <section class="card">
+                <div class="card-body p-4">
+                    <h2 class="h5">Reportar transferencia</h2>
+                    <div class="alert alert-warning small">
+                        El pago será aplicado después de validar el comprobante. Cargarlo no modifica automáticamente tu crédito.
+                    </div>
+                    <form method="post" enctype="multipart/form-data" novalidate>
+                        {% csrf_token %}
+                        {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+                        {% for field in form %}
+                        <div class="mb-3">
+                            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                            {% for error in field.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+                        </div>
+                        {% endfor %}
+                        <button class="btn btn-primary" type="submit"><i class="bi bi-upload me-1"></i>Reportar pago</button>
+                    </form>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <section class="card mt-4">
+        <div class="card-body p-4">
+            <h2 class="h5 mb-3">Reportes recientes</h2>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead><tr><th>Radicación</th><th>Fecha reportada</th><th>Valor</th><th>Estado</th><th>Comprobante</th></tr></thead>
+                    <tbody>
+                    {% for pago in reportes_breb %}
+                        <tr>
+                            <td>{{ pago.creado_en|date:"d/m/Y H:i" }}</td>
+                            <td>{{ pago.fecha_pago_reportada|date:"d/m/Y" }}</td>
+                            <td>${{ pago.valor_reportado|floatformat:2|intcomma }}</td>
+                            <td><span class="badge {% if pago.estado == 'APROBADO' %}text-bg-success{% elif pago.estado == 'RECHAZADO' %}text-bg-danger{% else %}text-bg-warning{% endif %}">{{ pago.get_estado_display }}</span></td>
+                            <td><a href="{% url 'libranza:pago_breb_comprobante' pago.id %}" class="btn btn-sm btn-outline-secondary">Descargar</a></td>
+                        </tr>
+                        {% if pago.estado == 'RECHAZADO' and pago.motivo_rechazo %}<tr><td colspan="5" class="small text-danger">Motivo: {{ pago.motivo_rechazo }}</td></tr>{% endif %}
+                    {% empty %}
+                        <tr><td colspan="5" class="text-muted text-center py-4">Aún no tienes pagos BRE-B reportados.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</main>
+{% endblock %}

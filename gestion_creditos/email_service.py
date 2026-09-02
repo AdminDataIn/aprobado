@@ -879,6 +879,64 @@ def enviar_alerta_obligacion_pendiente_usuario(*, credito, cuota, dias_atraso):
         return False
 
 
+def _enviar_notificacion_pago_breb(pago, *, asunto, titulo, mensaje):
+    destinatario = (getattr(pago.usuario, 'email', '') or '').strip()
+    if not destinatario:
+        logger.warning('No se envió notificación BRE-B para reporte %s: usuario sin correo.', pago.pk)
+        return False
+    try:
+        html = render_to_string('emails/usuarios/notificacion_pago_breb.html', {
+            'titulo': titulo,
+            'mensaje': mensaje,
+            'pago_breb': pago,
+            'credito': pago.credito,
+        })
+        email = EmailMultiAlternatives(
+            subject=asunto,
+            body=(
+                f'{titulo}\n{mensaje}\n'
+                f'Crédito: {pago.credito.numero_credito}\n'
+                f'Valor reportado: ${pago.valor_reportado:,.2f}\n'
+                f'Estado: {pago.get_estado_display()}\n'
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[destinatario],
+        )
+        email.attach_alternative(html, 'text/html')
+        email.send()
+        return True
+    except Exception:
+        logger.exception('No fue posible enviar la notificación BRE-B del reporte %s.', pago.pk)
+        return False
+
+
+def enviar_pago_breb_reportado(pago):
+    return _enviar_notificacion_pago_breb(
+        pago,
+        asunto=f'Pago BRE-B recibido - {pago.credito.numero_credito}',
+        titulo='Pago pendiente de verificación',
+        mensaje='Recibimos tu comprobante. Aún no se ha aplicado a tu crédito.',
+    )
+
+
+def enviar_pago_breb_aprobado(pago):
+    return _enviar_notificacion_pago_breb(
+        pago,
+        asunto=f'Pago BRE-B aplicado - {pago.credito.numero_credito}',
+        titulo='Pago validado y aplicado',
+        mensaje=f'Validamos y aplicamos ${pago.valor_aprobado:,.2f} a tu crédito.',
+    )
+
+
+def enviar_pago_breb_rechazado(pago):
+    return _enviar_notificacion_pago_breb(
+        pago,
+        asunto=f'Reporte BRE-B rechazado - {pago.credito.numero_credito}',
+        titulo='El comprobante no pudo ser validado',
+        mensaje=f'Motivo: {pago.motivo_rechazo}',
+    )
+
+
 def generar_pdf_plan_pagos(credito):
     """
     Genera un PDF con el plan de pagos del crédito.

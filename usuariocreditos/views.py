@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.http import HttpResponse
 from django.urls import reverse
 from gestion_creditos.models import Credito, HistorialPago, HistorialEstado, CuentaAhorro, MovimientoAhorro, ConfiguracionTasaInteres, CuotaAmortizacion
+from gestion_creditos.services.breb_payments import obtener_configuracion_breb_activa
 from gestion_creditos.services.adelanto_nomina_service import evaluar_elegibilidad_adelanto
 from django.utils import timezone
 from django.db.models import Sum
@@ -150,6 +151,7 @@ def dashboard_libranza_view(request, credito_id=None):
         'mostrar_info_financiera': _puede_ver_info_financiera(credito_actual),
         'es_libranza': True,  # ⭐ Flag para identificar dashboard de Libranza
         'adelanto_eligibility': evaluar_elegibilidad_adelanto(request.user),
+        'configuracion_breb': obtener_configuracion_breb_activa(),
     }
     return render(request, 'usuariocreditos/dashboard_libranza.html', context)
 

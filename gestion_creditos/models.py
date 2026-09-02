@@ -6,6 +6,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from decimal import Decimal
 from pathlib import Path
+import hashlib
 import uuid
 
 from gestion_creditos.services.name_normalization import build_full_name_upper, normalize_name_upper
@@ -14,6 +15,24 @@ from gestion_creditos.storage import private_document_storage
 
 DOCUMENTO_EMPRESA_EXTENSIONS = ('pdf', 'jpg', 'jpeg', 'png', 'webp')
 DOCUMENTO_EMPRESA_MAX_BYTES = 8 * 1024 * 1024
+
+
+def calcular_hash_archivo(archivo):
+    posicion_inicial = archivo.tell() if hasattr(archivo, 'tell') else 0
+    digest = hashlib.sha256()
+    try:
+        archivo.seek(0)
+        bloques = (
+            archivo.chunks()
+            if hasattr(archivo, 'chunks')
+            else iter(lambda: archivo.read(65536), b'')
+        )
+        for bloque in bloques:
+            digest.update(bloque)
+    finally:
+        if hasattr(archivo, 'seek'):
+            archivo.seek(posicion_inicial)
+    return digest.hexdigest()
 
 
 def ruta_documento_empresa(instance, filename):
@@ -46,6 +65,12 @@ def validar_archivo_documento_empresa(archivo):
     finally:
         if hasattr(archivo, 'seek'):
             archivo.seek(posicion_inicial)
+
+
+def ruta_archivo_breb(instance, filename):
+    extension = Path(filename or '').suffix.lower()
+    categoria = 'configuracion' if isinstance(instance, ConfiguracionPagoBREB) else 'comprobantes'
+    return f'breb/{categoria}/{uuid.uuid4().hex}{extension}'
 
 class AsesorComercial(models.Model):
     usuario = models.OneToOneField(
@@ -1643,6 +1668,7 @@ class HistorialPago(models.Model):
         WOMPI = 'WOMPI', 'Wompi'
         TRANSFERENCIA_DIRECTA = 'TRANSFERENCIA_DIRECTA', 'Transferencia directa'
         OFFLINE_MANUAL = 'OFFLINE_MANUAL', 'Offline manual'
+        BREB = 'BREB', 'BRE-B'
 
     class OrigenRegistro(models.TextChoices):
         LEGACY = 'LEGACY', 'Legacy'
@@ -1650,6 +1676,7 @@ class HistorialPago(models.Model):
         CARGA_MASIVA_EMPRESA = 'CARGA_MASIVA_EMPRESA', 'Carga masiva empresa'
         REGISTRO_MANUAL_ADMIN = 'REGISTRO_MANUAL_ADMIN', 'Registro manual admin'
         REGISTRO_MANUAL_PAGADOR = 'REGISTRO_MANUAL_PAGADOR', 'Registro manual pagador'
+        REPORTE_BREB = 'REPORTE_BREB', 'Reporte BRE-B verificado'
 
     #! Relación con el crédito principal
     credito = models.ForeignKey(Credito, on_delete=models.CASCADE, related_name='historial_pagos')
@@ -1747,6 +1774,172 @@ class HistorialPago(models.Model):
 
     def __str__(self):
         return f"Pago {self.referencia_pago} - ${self.monto} ({self.get_estado_display()})"
+
+
+class ConfiguracionPagoBREB(models.Model):
+    class TipoLlave(models.TextChoices):
+        CELULAR = 'CELULAR', 'Celular'
+        CEDULA_NIT = 'CEDULA_NIT', 'Cédula o NIT'
+        CORREO = 'CORREO', 'Correo'
+        ALFANUMERICA = 'ALFANUMERICA', 'Llave alfanumérica'
+
+    activo = models.BooleanField(default=False)
+    nombre_receptor = models.CharField(max_length=160)
+    entidad_financiera = models.CharField(max_length=120)
+    tipo_llave = models.CharField(max_length=20, choices=TipoLlave.choices)
+    llave_mostrable = models.CharField(max_length=160)
+    qr = models.ImageField(
+        upload_to=ruta_archivo_breb,
+        storage=private_document_storage,
+        validators=[
+            FileExtensionValidator(('jpg', 'jpeg', 'png')),
+            validar_archivo_documento_empresa,
+        ],
+    )
+    instrucciones = models.TextField(blank=True)
+    hash_qr = models.CharField(max_length=64, editable=False, blank=True, db_index=True)
+    monto_minimo = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+    actualizado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='configuraciones_breb_actualizadas',
+    )
+
+    class Meta:
+        ordering = ['-activo', '-fecha_actualizacion']
+        verbose_name = 'Configuración de pago BRE-B'
+        verbose_name_plural = 'Configuraciones de pago BRE-B'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['activo'],
+                condition=models.Q(activo=True),
+                name='uniq_config_pago_breb_activa',
+            ),
+        ]
+
+    def __str__(self):
+        estado = 'activa' if self.activo else 'inactiva'
+        return f'{self.entidad_financiera} - {self.get_tipo_llave_display()} ({estado})'
+
+    def save(self, *args, **kwargs):
+        if self.qr:
+            self.hash_qr = calcular_hash_archivo(self.qr)
+            if kwargs.get('update_fields') is not None:
+                kwargs['update_fields'] = set(kwargs['update_fields']) | {'hash_qr'}
+        super().save(*args, **kwargs)
+
+
+class PagoBREB(models.Model):
+    class Estado(models.TextChoices):
+        PENDIENTE_VERIFICACION = 'PENDIENTE_VERIFICACION', 'Pendiente de verificación'
+        APROBADO = 'APROBADO', 'Aprobado'
+        RECHAZADO = 'RECHAZADO', 'Rechazado'
+        ANULADO = 'ANULADO', 'Anulado'
+
+    credito = models.ForeignKey(
+        Credito,
+        on_delete=models.PROTECT,
+        related_name='pagos_breb',
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='pagos_breb_reportados',
+    )
+    empresa = models.ForeignKey(
+        'Empresa',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='pagos_breb',
+    )
+    configuracion = models.ForeignKey(
+        ConfiguracionPagoBREB,
+        on_delete=models.PROTECT,
+        related_name='pagos_reportados',
+    )
+    valor_reportado = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    valor_aprobado = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    fecha_pago_reportada = models.DateField()
+    referencia_reportada = models.CharField(max_length=120, blank=True)
+    comprobante = models.FileField(
+        upload_to=ruta_archivo_breb,
+        storage=private_document_storage,
+        validators=[
+            FileExtensionValidator(('pdf', 'jpg', 'jpeg', 'png')),
+            validar_archivo_documento_empresa,
+        ],
+    )
+    estado = models.CharField(
+        max_length=30,
+        choices=Estado.choices,
+        default=Estado.PENDIENTE_VERIFICACION,
+    )
+    hash_comprobante = models.CharField(max_length=64, editable=False, db_index=True)
+    clave_idempotencia = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    revisado_en = models.DateTimeField(null=True, blank=True)
+    revisado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='pagos_breb_revisados',
+    )
+    motivo_rechazo = models.TextField(blank=True)
+    historial_pago = models.OneToOneField(
+        HistorialPago,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='solicitud_breb',
+    )
+
+    class Meta:
+        ordering = ['-creado_en']
+        verbose_name = 'Pago BRE-B reportado'
+        verbose_name_plural = 'Pagos BRE-B reportados'
+        permissions = [
+            ('review_pagobreb', 'Puede verificar y decidir pagos BRE-B'),
+        ]
+        indexes = [
+            models.Index(fields=['estado', '-creado_en'], name='pago_breb_estado_fecha_idx'),
+            models.Index(fields=['credito', '-creado_en'], name='pago_breb_credito_fecha_idx'),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(estado='APROBADO')
+                    | (
+                        models.Q(historial_pago__isnull=False)
+                        & models.Q(valor_aprobado__isnull=False)
+                    )
+                ),
+                name='pago_breb_aprobado_con_aplicacion',
+            ),
+        ]
+
+    def __str__(self):
+        return f'BRE-B {self.credito.numero_credito} - {self.get_estado_display()}'
 
 
 #? ----- Modelo de intentos de pago WOMPI -----

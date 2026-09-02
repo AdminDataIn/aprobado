@@ -17,7 +17,7 @@ from .models import (
     MarketplaceLiquidacionEmpresa, InvestorAccount, InvestmentPosition, InvestmentCashflow,
     InvestmentReturnSnapshot, InvestmentEvent, VinculoLaboralEmpresa, CreditoAdelantoNomina,
     PagoComisionEjecutivo, AprobacionPagadorLibranza, CondicionOriginacionLibranza, DocumentoEmpresa,
-    OrigenCreditoPrestador, SecuenciaNumeroCredito,
+    OrigenCreditoPrestador, SecuenciaNumeroCredito, ConfiguracionPagoBREB, PagoBREB,
 )
 from django.utils import timezone
 from datetime import timedelta
@@ -979,6 +979,79 @@ class HistorialPagoAdmin(admin.ModelAdmin):
         if obj.lote_pago_id and obj.lote_pago.comprobante:
             return format_html('<a href="{}" target="_blank" rel="noopener">Ver lote</a>', obj.lote_pago.comprobante.url)
         return '-'
+
+
+@admin.register(ConfiguracionPagoBREB)
+class ConfiguracionPagoBREBAdmin(admin.ModelAdmin):
+    list_display = (
+        'entidad_financiera', 'nombre_receptor', 'tipo_llave', 'activo',
+        'fecha_actualizacion', 'actualizado_por',
+    )
+    list_filter = ('activo', 'tipo_llave', 'entidad_financiera')
+    search_fields = ('entidad_financiera', 'nombre_receptor')
+
+    def get_fields(self, request, obj=None):
+        campos = [
+            'activo', 'nombre_receptor', 'entidad_financiera', 'tipo_llave',
+            'llave_mostrable',
+        ]
+        campos.append('qr' if obj is None else 'qr_protegido')
+        campos.extend(['instrucciones', 'monto_minimo', 'actualizado_por', 'fecha_actualizacion'])
+        return campos
+
+    def get_readonly_fields(self, request, obj=None):
+        return ('qr_protegido', 'actualizado_por', 'fecha_actualizacion') if obj else (
+            'actualizado_por', 'fecha_actualizacion',
+        )
+
+    def save_model(self, request, obj, form, change):
+        from django.db import transaction
+
+        obj.actualizado_por = request.user
+        with transaction.atomic():
+            if obj.activo:
+                ConfiguracionPagoBREB.objects.select_for_update().filter(
+                    activo=True,
+                ).exclude(pk=obj.pk).update(activo=False)
+            super().save_model(request, obj, form, change)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    @admin.display(description='QR privado')
+    def qr_protegido(self, obj):
+        return 'QR almacenado de forma privada. Crea una nueva configuración para reemplazarlo.'
+
+
+@admin.register(PagoBREB)
+class PagoBREBAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'credito', 'usuario', 'empresa', 'valor_reportado', 'valor_aprobado',
+        'estado', 'creado_en', 'revisado_por',
+    )
+    list_filter = ('estado', 'empresa', 'creado_en')
+    search_fields = ('credito__numero_credito', 'usuario__email', 'referencia_reportada')
+    list_select_related = ('credito', 'usuario', 'empresa', 'revisado_por', 'historial_pago')
+    readonly_fields = (
+        'credito', 'usuario', 'empresa', 'configuracion', 'valor_reportado',
+        'valor_aprobado', 'fecha_pago_reportada', 'referencia_reportada',
+        'estado', 'clave_idempotencia', 'creado_en', 'revisado_en',
+        'revisado_por', 'motivo_rechazo', 'historial_pago', 'comprobante_protegido',
+    )
+    fields = readonly_fields
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    @admin.display(description='Comprobante')
+    def comprobante_protegido(self, obj):
+        if not obj or not obj.pk:
+            return '-'
+        url = reverse('gestion:pago_breb_comprobante', args=[obj.pk])
+        return format_html('<a href="{}">Descargar de forma segura</a>', url)
 
 
 @admin.register(LotePagoEmpresa)

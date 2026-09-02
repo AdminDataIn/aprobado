@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="es">
+<body style="margin:0;background:#f4f7fb;font-family:Arial,sans-serif;color:#10233f;">
+  <div style="max-width:600px;margin:0 auto;padding:32px 20px;">
+    <div style="background:#fff;border:1px solid #dbe5ef;border-radius:8px;padding:28px;">
+      <p style="margin:0 0 8px;color:#08a9cc;font-size:12px;font-weight:700;">PAGO BRE-B</p>
+      <h1 style="margin:0 0 16px;font-size:24px;">{{ titulo }}</h1>
+      <p style="line-height:1.6;">{{ mensaje }}</p>
+      <table style="width:100%;border-collapse:collapse;margin-top:20px;">
+        <tr><td style="padding:8px 0;color:#617087;">Crédito</td><td style="padding:8px 0;text-align:right;font-weight:700;">{{ credito.numero_credito }}</td></tr>
+        <tr><td style="padding:8px 0;color:#617087;">Valor reportado</td><td style="padding:8px 0;text-align:right;font-weight:700;">${{ pago_breb.valor_reportado|floatformat:2 }}</td></tr>
+        <tr><td style="padding:8px 0;color:#617087;">Estado</td><td style="padding:8px 0;text-align:right;font-weight:700;">{{ pago_breb.get_estado_display }}</td></tr>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

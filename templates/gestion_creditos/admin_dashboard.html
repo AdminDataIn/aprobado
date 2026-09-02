@@ -399,6 +399,12 @@
                 <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0;">Obligaciones Pendientes</h3>
                 <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0;">Consultar cuotas por vencer y vencidas</p>
             </a>
+            {% if perms.gestion_creditos.review_pagobreb %}
+            <a href="{% url 'gestion:pagos_breb' %}" class="action-card">
+                <div class="action-icon"><i class="bi bi-qr-code-scan"></i></div>
+                <div><h3>Pagos BRE-B</h3><p>Verificar comprobantes antes de aplicar pagos.</p></div>
+            </a>
+            {% endif %}
             <a href="{% url 'billetera:gestion_dashboard' %}" class="action-card">
                 <div class="action-icon" style="background-color: var(--purple);">
                     <i class="bi bi-wallet2"></i>

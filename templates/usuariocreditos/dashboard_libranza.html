@@ -375,6 +375,23 @@
                 </div>
 
 
+                {% if configuracion_breb %}
+                {% if credito_actual.estado == 'ACTIVO' or credito_actual.estado == 'EN_MORA' %}
+                <div class="payment-card mb-4">
+                    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+                        <div>
+                            <h5 class="mb-1"><i class="bi bi-qr-code me-2"></i>Pagar por BRE-B</h5>
+                            <p class="text-muted mb-0">Transfiere con el QR y reporta el comprobante para verificación.</p>
+                        </div>
+                        <a href="{% url 'libranza:pago_breb' credito_actual.id %}" class="btn btn-primary">
+                            <i class="bi bi-receipt me-1"></i>Reportar pago
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+                {% endif %}
+
+
 
                 <!-- Historial de Pagos -->
                 <div class="table-modern">

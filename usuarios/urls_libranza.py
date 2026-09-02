@@ -75,6 +75,9 @@ urlpatterns = [
 
     path('mi-credito/', credito_views.dashboard_libranza_view, name='mi_credito'),
     path('mi-credito/<int:credito_id>/', credito_views.dashboard_libranza_view, name='mi_credito_detalle'),
+    path('mi-credito/<int:credito_id>/pagar-breb/', gestion_views.usuario_reportar_pago_breb_view, name='pago_breb'),
+    path('mi-credito/<int:credito_id>/pagar-breb/qr/', gestion_views.usuario_qr_breb_view, name='pago_breb_qr'),
+    path('pagos-breb/<int:pago_id>/comprobante/', gestion_views.comprobante_pago_breb_view, name='pago_breb_comprobante'),
     path('mi-credito/<int:credito_id>/extracto/', credito_views.descargar_extracto, name='descargar_extracto'),
     path('mi-credito/<int:credito_id>/plan-pagos/', credito_views.descargar_plan_pagos_pdf, name='descargar_plan_pagos'),
 ]
