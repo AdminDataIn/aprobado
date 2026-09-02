@@ -483,6 +483,29 @@ class PagoBREBTest(TestCase):
 class PagoBREBConcurrenciaPostgresTest(TransactionTestCase):
     reset_sequences = True
 
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.private_root = tempfile.mkdtemp(prefix='aprobado-breb-concurrente-')
+        cls.private_override = override_settings(PRIVATE_DOCUMENTS_ROOT=cls.private_root)
+        cls.private_override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.private_override.disable()
+        shutil.rmtree(cls.private_root, ignore_errors=True)
+        super().tearDownClass()
+
+    @staticmethod
+    def _imagen(nombre='qr-concurrente.png'):
+        buffer = io.BytesIO()
+        Image.new('RGB', (32, 32), 'white').save(buffer, format='PNG')
+        return SimpleUploadedFile(nombre, buffer.getvalue(), content_type='image/png')
+
+    @staticmethod
+    def _pdf(nombre='concurrente.pdf'):
+        return SimpleUploadedFile(nombre, b'%PDF-1.4\ncomprobante', content_type='application/pdf')
+
     def setUp(self):
         self.usuario = User.objects.create_user('cliente-breb-concurrente', password='test1234')
         self.revisor = User.objects.create_user(
@@ -496,7 +519,7 @@ class PagoBREBConcurrenciaPostgresTest(TransactionTestCase):
             entidad_financiera='BANCO PRUEBA',
             tipo_llave=ConfiguracionPagoBREB.TipoLlave.ALFANUMERICA,
             llave_mostrable='APROBADO-CONCURRENTE',
-            qr='breb/configuracion/qr-concurrente.png',
+            qr=self._imagen(),
         )
         credito = Credito.objects.create(
             usuario=self.usuario,
@@ -542,7 +565,7 @@ class PagoBREBConcurrenciaPostgresTest(TransactionTestCase):
             configuracion=configuracion,
             valor_reportado=Decimal('110000.00'),
             fecha_pago_reportada=date(2026, 8, 29),
-            comprobante='breb/comprobantes/concurrente.pdf',
+            comprobante=self._pdf(),
             hash_comprobante='a' * 64,
         )
 
