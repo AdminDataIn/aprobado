@@ -13,7 +13,6 @@ from .models import (
     MovimientoAhorro,
     MarketplaceItem,
     PagoComisionEjecutivo,
-    PagoBREB,
     VinculoLaboralEmpresa,
 )
 from decimal import Decimal
@@ -748,6 +747,21 @@ class PagoObligacionesSeleccionadasForm(forms.Form):
         initial=HistorialPago.MetodoPago.OFFLINE_MANUAL,
         widget=forms.Select(attrs={'class': 'form-select'}),
     )
+    fecha_pago_reportada = forms.DateField(
+        label='Fecha de la transferencia',
+        required=False,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+    )
+    referencia_reportada = forms.CharField(
+        label='Referencia BRE-B',
+        required=False,
+        max_length=120,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'autocomplete': 'off',
+            'placeholder': 'Referencia de la transferencia',
+        }),
+    )
     comprobante = forms.FileField(
         label='Comprobante de pago',
         required=True,
@@ -768,6 +782,17 @@ class PagoObligacionesSeleccionadasForm(forms.Form):
         }),
     )
 
+    def __init__(self, *args, breb_disponible=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        opciones = []
+        if breb_disponible:
+            opciones.append((HistorialPago.MetodoPago.BREB, 'BRE-B'))
+        opciones.append((HistorialPago.MetodoPago.OFFLINE_MANUAL, 'Registro offline manual'))
+        self.fields['metodo_pago'].choices = opciones
+        if breb_disponible:
+            self.fields['metodo_pago'].initial = HistorialPago.MetodoPago.BREB
+        self.fields['fecha_pago_reportada'].initial = timezone.localdate
+
     def clean_comprobante(self):
         comprobante = self.cleaned_data.get('comprobante')
         if not comprobante:
@@ -775,6 +800,16 @@ class PagoObligacionesSeleccionadasForm(forms.Form):
         if comprobante and comprobante.size > 8 * 1024 * 1024:
             raise forms.ValidationError('El comprobante no debe superar 8MB.')
         return comprobante
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('metodo_pago') == HistorialPago.MetodoPago.BREB:
+            fecha = cleaned.get('fecha_pago_reportada')
+            if not fecha:
+                self.add_error('fecha_pago_reportada', 'Debes indicar la fecha de la transferencia.')
+            elif fecha > timezone.localdate():
+                self.add_error('fecha_pago_reportada', 'La fecha reportada no puede estar en el futuro.')
+        return cleaned
 
 
 class PagoMasivoEmpresaUploadForm(forms.ModelForm):
@@ -895,59 +930,6 @@ class PagoComisionEjecutivoForm(forms.ModelForm):
         return comprobante
 
 
-class ReportePagoBREBForm(forms.ModelForm):
-    class Meta:
-        model = PagoBREB
-        fields = [
-            'valor_reportado',
-            'fecha_pago_reportada',
-            'referencia_reportada',
-            'comprobante',
-        ]
-        widgets = {
-            'valor_reportado': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'step': '0.01',
-                'min': '0.01',
-            }),
-            'fecha_pago_reportada': forms.DateInput(attrs={
-                'class': 'form-control',
-                'type': 'date',
-            }),
-            'referencia_reportada': forms.TextInput(attrs={
-                'class': 'form-control',
-                'maxlength': '120',
-                'autocomplete': 'off',
-                'placeholder': 'Opcional',
-            }),
-            'comprobante': forms.FileInput(attrs={
-                'class': 'form-control',
-                'accept': '.pdf,.jpg,.jpeg,.png',
-            }),
-        }
-
-    def __init__(self, *args, configuracion=None, monto_sugerido=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.configuracion = configuracion
-        self.fields['fecha_pago_reportada'].initial = timezone.localdate
-        if monto_sugerido:
-            self.fields['valor_reportado'].initial = monto_sugerido
-        self.fields['comprobante'].help_text = 'PDF, JPG o PNG. Máximo 8 MB.'
-
-    def clean_valor_reportado(self):
-        valor = self.cleaned_data['valor_reportado']
-        minimo = getattr(self.configuracion, 'monto_minimo', None)
-        if minimo is not None and valor < minimo:
-            raise forms.ValidationError(f'El valor mínimo para reportar es ${minimo:,.2f}.')
-        return valor
-
-    def clean_fecha_pago_reportada(self):
-        fecha = self.cleaned_data['fecha_pago_reportada']
-        if fecha > timezone.localdate():
-            raise forms.ValidationError('La fecha reportada no puede estar en el futuro.')
-        return fecha
-
-
 class RevisionPagoBREBForm(forms.Form):
     valor_aprobado = forms.DecimalField(
         required=False,
@@ -960,6 +942,7 @@ class RevisionPagoBREBForm(forms.Form):
             'min': '0.01',
         }),
     )
+
     motivo_rechazo = forms.CharField(
         required=False,
         max_length=1000,
@@ -969,8 +952,6 @@ class RevisionPagoBREBForm(forms.Form):
     def clean(self):
         cleaned = super().clean()
         accion = self.data.get('accion')
-        if accion == 'aprobar' and cleaned.get('valor_aprobado') is None:
-            self.add_error('valor_aprobado', 'Debes indicar el valor reconocido.')
         if accion == 'rechazar' and not (cleaned.get('motivo_rechazo') or '').strip():
             self.add_error('motivo_rechazo', 'Debes indicar el motivo del rechazo.')
         if accion not in {'aprobar', 'rechazar'}:

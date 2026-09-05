@@ -17,7 +17,7 @@ from .models import (
     MarketplaceLiquidacionEmpresa, InvestorAccount, InvestmentPosition, InvestmentCashflow,
     InvestmentReturnSnapshot, InvestmentEvent, VinculoLaboralEmpresa, CreditoAdelantoNomina,
     PagoComisionEjecutivo, AprobacionPagadorLibranza, CondicionOriginacionLibranza, DocumentoEmpresa,
-    OrigenCreditoPrestador, SecuenciaNumeroCredito, ConfiguracionPagoBREB, PagoBREB,
+    OrigenCreditoPrestador, SecuenciaNumeroCredito, ConfiguracionPagoBREB, PagoBREB, PagoBREBDetalle,
 )
 from django.utils import timezone
 from datetime import timedelta
@@ -1023,18 +1023,37 @@ class ConfiguracionPagoBREBAdmin(admin.ModelAdmin):
         return 'QR almacenado de forma privada. Crea una nueva configuración para reemplazarlo.'
 
 
+class PagoBREBDetalleInline(admin.TabularInline):
+    model = PagoBREBDetalle
+    extra = 0
+    can_delete = False
+    readonly_fields = (
+        'credito', 'cuota', 'numero_cuota_snapshot', 'fecha_vencimiento_snapshot',
+        'valor_cuota_snapshot', 'valor_reportado', 'valor_aprobado',
+        'historial_pago', 'aplicado_en', 'creado_en',
+    )
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(PagoBREB)
 class PagoBREBAdmin(admin.ModelAdmin):
     list_display = (
-        'id', 'credito', 'usuario', 'empresa', 'valor_reportado', 'valor_aprobado',
+        'id', 'empresa', 'usuario', 'cantidad_obligaciones', 'valor_reportado', 'valor_aprobado',
         'estado', 'creado_en', 'revisado_por',
     )
     list_filter = ('estado', 'empresa', 'creado_en')
-    search_fields = ('credito__numero_credito', 'usuario__email', 'referencia_reportada')
+    search_fields = (
+        'credito__numero_credito', 'detalles__credito__numero_credito',
+        'usuario__email', 'referencia_reportada',
+    )
     list_select_related = ('credito', 'usuario', 'empresa', 'revisado_por', 'historial_pago')
+    inlines = (PagoBREBDetalleInline,)
     readonly_fields = (
         'credito', 'usuario', 'empresa', 'configuracion', 'valor_reportado',
         'valor_aprobado', 'fecha_pago_reportada', 'referencia_reportada',
+        'notas', 'fingerprint_reporte',
         'estado', 'clave_idempotencia', 'creado_en', 'revisado_en',
         'revisado_por', 'motivo_rechazo', 'historial_pago', 'comprobante_protegido',
     )
@@ -1045,6 +1064,10 @@ class PagoBREBAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    @admin.display(description='Obligaciones')
+    def cantidad_obligaciones(self, obj):
+        return obj.detalles.count()
 
     @admin.display(description='Comprobante')
     def comprobante_protegido(self, obj):

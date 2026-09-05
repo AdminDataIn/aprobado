@@ -264,7 +264,7 @@
                                 </div>
                             </div>
 
-                            {% if not es_empleado and credito_actual.estado == 'ACTIVO' and credito_actual.linea != 'LIBRANZA' %}
+                            {% if wompi_payments_enabled and not es_empleado and credito_actual.estado == 'ACTIVO' and credito_actual.linea != 'LIBRANZA' %}
                             <div class="d-flex flex-column gap-2">
                                 <a class="btn btn-payment" href="{% url 'emprendimiento:pagar_wompi' credito_actual.id %}">
                                     <i class="bi bi-credit-card-fill me-2"></i>

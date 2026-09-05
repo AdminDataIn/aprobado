@@ -598,6 +598,10 @@ def iniciar_pago_wompi_emprendimiento_view(request, credito_id):
     """
     Muestra el formulario de pago con WOMPI para clientes de emprendimiento.
     """
+    if not getattr(settings, 'WOMPI_PAYMENTS_ENABLED', False):
+        messages.info(request, 'Los pagos por Wompi no estan disponibles en este momento.')
+        return redirect('emprendimiento:mi_credito')
+
     from ..services.wompi_client import WompiClient, WompiAPIException
 
     if not settings.WOMPI_PUBLIC_KEY or not settings.WOMPI_PRIVATE_KEY:
@@ -693,6 +697,10 @@ def procesar_pago_wompi_emprendimiento_view(request):
     """
     Procesa el pago con WOMPI para clientes de emprendimiento.
     """
+    if not getattr(settings, 'WOMPI_PAYMENTS_ENABLED', False):
+        messages.info(request, 'Los pagos por Wompi no estan disponibles en este momento.')
+        return redirect('emprendimiento:mi_credito')
+
     from ..services.wompi_client import WompiClient, WompiAPIException
 
     intent = None

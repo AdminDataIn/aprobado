@@ -33,6 +33,8 @@ urlpatterns = [
     path('credito/<int:credito_id>/registrar-pago-offline/', views.pagador_registrar_pago_offline_view, name='registrar_pago_offline'),
     path('pago/<int:pago_id>/comprobante/', views.pagador_comprobante_pago_view, name='comprobante_pago'),
     path('obligaciones/pagar/', views.pagador_pagar_obligaciones_seleccionadas_view, name='pagar_obligaciones'),
+    path('pagos-breb/qr/', views.pagador_qr_breb_view, name='pago_breb_qr'),
+    path('pagos-breb/<int:pago_id>/comprobante/', views.comprobante_pago_breb_view, name='pago_breb_comprobante'),
     path('credito/<int:credito_id>/decision/', views.pagador_decidir_solicitud_view, name='decidir_solicitud'),
     path(
         'prestadores/aprobaciones/',

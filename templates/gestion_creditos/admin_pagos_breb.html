@@ -1,50 +1,248 @@
-{% extends 'base_general.html' %}
-{% load humanize l10n %}
-
-{% block title %}Pagos BRE-B por verificar | Aprobado{% endblock %}
-
-{% block content %}
-<main class="container-fluid py-4" style="max-width: 1440px;">
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
-        <div><h1 class="h3 mb-1">Pagos BRE-B por verificar</h1><p class="text-muted mb-0">El comprobante no modifica cartera hasta que el pago sea aprobado.</p></div>
-        <a href="{% url 'gestion:dashboard' %}" class="btn btn-outline-secondary">Volver al dashboard</a>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pagos BRE-B por verificar | Aprobado</title>
+    {% load static humanize l10n %}
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+    {% include 'base/favicon.html' %}
+    <style>
+        .breb-page-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+        .breb-title-group { display: flex; align-items: center; gap: .85rem; }
+        .breb-logo-crop { width: 100px;}
+        .breb-logo-crop img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .breb-filter-shell, .breb-review-card { background: #fff; border: 1px solid rgba(15, 23, 42, .09); border-radius: 8px; box-shadow: 0 8px 24px rgba(15, 23, 42, .045); }
+        .breb-filter-shell { padding: .9rem 1rem; margin-bottom: 1rem; }
+        .breb-filter-actions { display: grid; grid-template-columns: repeat(2, 44px); gap: .45rem; justify-content: end; align-items: end; }
+        .breb-filter-actions .btn { display: grid; place-items: center; width: 44px; min-width: 44px; height: 44px; padding: 0; gap: 0; }
+        .breb-review-card { overflow: hidden; }
+        .breb-review-card.is-resolved .breb-review-head { padding-top: .7rem; padding-bottom: .7rem; }
+        .breb-review-card.is-resolved .breb-review-body { padding-top: .75rem; padding-bottom: .75rem; }
+        .breb-review-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding: .9rem 1rem; background: #f8fafc; border-bottom: 1px solid rgba(15, 23, 42, .08); }
+        .breb-review-body { padding: 1rem; }
+        .breb-report-kicker { color: var(--text-secondary); font-size: .72rem; text-transform: uppercase; font-weight: 700; }
+        .breb-report-title { font-size: 1rem; color: var(--text-primary); margin: .1rem 0; }
+        .breb-state { display: inline-flex; align-items: center; gap: .35rem; border-radius: 999px; padding: .34rem .6rem; font-size: .7rem; font-weight: 700; }
+        .breb-state.pending { color: #8a5b00; background: #fff7db; }
+        .breb-state.approved { color: #08775f; background: #e7f8f1; }
+        .breb-state.rejected { color: #b42318; background: #feeceb; }
+        .breb-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .65rem; margin-bottom: 1rem; }
+        .breb-review-card.is-resolved .breb-facts { margin-bottom: .7rem; }
+        .breb-fact { padding: .65rem .75rem; background: #f8fafc; border-radius: 7px; min-width: 0; }
+        .breb-fact span { display: block; color: var(--text-secondary); font-size: .7rem; margin-bottom: .15rem; }
+        .breb-fact strong { display: block; color: var(--text-primary); font-size: .86rem; overflow-wrap: anywhere; }
+        .breb-details-table { margin-bottom: 0; }
+        .breb-details-table thead th { color: var(--text-secondary); font-size: .7rem; text-transform: uppercase; white-space: nowrap; }
+        .breb-details-table td { font-size: .82rem; padding-top: .55rem; padding-bottom: .55rem; }
+        .breb-approval-input { max-width: 155px; }
+        .breb-empty { padding: 3rem 1rem; text-align: center; color: var(--text-secondary); }
+        .breb-file-actions { display: flex; justify-content: flex-end; gap: .4rem; margin-top: .55rem; flex-wrap: wrap; }
+        .breb-obligation-details { border-top: 1px solid rgba(15, 23, 42, .08); padding-top: .65rem; }
+        .breb-obligation-details summary { color: var(--primary); font-size: .8rem; font-weight: 600; cursor: pointer; list-style: none; }
+        .breb-obligation-details summary::-webkit-details-marker { display: none; }
+        .breb-obligation-details summary i { transition: transform .18s ease; }
+        .breb-obligation-details[open] summary i { transform: rotate(90deg); }
+        .breb-rejection-note { display: flex; align-items: flex-start; gap: .55rem; max-width: 720px; margin-top: .7rem; padding: .65rem .75rem; color: #8d251d; background: #fff5f4; border: 1px solid #ffd5d1; border-radius: 7px; font-size: .8rem; }
+        .breb-rejection-note strong { display: block; margin-bottom: .1rem; }
+        .breb-toast-stack { position: fixed; z-index: 1090; top: 5rem; right: 1rem; width: min(390px, calc(100vw - 2rem)); display: grid; gap: .6rem; }
+        .breb-toast { display: grid; grid-template-columns: 2rem minmax(0, 1fr) 1.6rem; align-items: start; gap: .65rem; padding: .8rem; background: #fff; border: 1px solid #dbe4ea; border-left: 4px solid #0ea5e9; border-radius: 8px; box-shadow: 0 16px 40px rgba(15, 23, 42, .18); }
+        .breb-toast.success { border-left-color: #10b981; }
+        .breb-toast.error { border-left-color: #ef4444; }
+        .breb-toast.warning { border-left-color: #f59e0b; }
+        .breb-toast-icon { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%; color: #0369a1; background: #e0f2fe; }
+        .breb-toast.success .breb-toast-icon { color: #047857; background: #d1fae5; }
+        .breb-toast.error .breb-toast-icon { color: #b91c1c; background: #fee2e2; }
+        .breb-toast.warning .breb-toast-icon { color: #a16207; background: #fef3c7; }
+        .breb-toast-copy { color: var(--text-primary); font-size: .82rem; line-height: 1.4; padding-top: .35rem; }
+        .breb-toast-close { border: 0; background: transparent; color: var(--text-secondary); padding: .2rem; line-height: 1; }
+        .breb-preview-stage { min-height: 360px; display: grid; place-items: center; background: #f1f5f9; border-radius: 7px; overflow: hidden; }
+        .breb-preview-stage img { display: none; max-width: 100%; max-height: 70vh; object-fit: contain; }
+        .breb-preview-stage iframe { display: none; width: 100%; height: min(70vh, 720px); border: 0; background: #fff; }
+        @media (max-width: 991px) {
+            .breb-filter-actions { justify-content: start; }
+            .breb-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 575px) {
+            .breb-title-group { align-items: flex-start; }
+            .breb-logo-crop { width: 78px; height: 30px; }
+            .breb-facts { grid-template-columns: 1fr; }
+            .breb-review-head { flex-direction: column; }
+            .breb-review-head .text-end { text-align: left !important; }
+            .breb-file-actions { justify-content: flex-start; }
+            .breb-toast-stack { top: 4.5rem; right: .65rem; width: calc(100vw - 1.3rem); }
+            .breb-preview-stage { min-height: 260px; }
+        }
+    </style>
+</head>
+<body class="theme-gestion theme-dashboard">
+{% include 'base/loader_global.html' %}
+<header class="page-header">
+    <div class="container-fluid" style="max-width: 1400px;">
+        <div class="d-flex align-items-center justify-content-between">
+            <a href="{% url 'gestion:dashboard' %}" class="logo"><img src="{% static 'images/logo-dark.png' %}" alt="Aprobado" style="height: 40px;"></a>
+            <div class="user-info">
+                <div class="user-avatar">{{ request.user.username|slice:':1'|upper }}</div>
+                <div class="user-details d-none d-md-block"><h6>{{ request.user.get_full_name|default:request.user.username }}</h6><small>Revisión interna</small></div>
+            </div>
+        </div>
     </div>
-    {% if messages %}{% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>{% endfor %}{% endif %}
+</header>
 
-    <form method="get" class="card card-body mb-4">
-        <div class="row g-3 align-items-end">
-            <div class="col-md-4"><label class="form-label" for="estado">Estado</label><select class="form-select" id="estado" name="estado"><option value="">Todos</option>{% for value,label in estados_breb %}<option value="{{ value }}" {% if estado_actual == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-            <div class="col-md-4"><label class="form-label" for="empresa">Empresa</label><select class="form-select" id="empresa" name="empresa"><option value="">Todas</option>{% for empresa in empresas_breb %}<option value="{{ empresa.id }}" {% if empresa_actual == empresa.id|stringformat:'s' %}selected{% endif %}>{{ empresa.nombre }}</option>{% endfor %}</select></div>
-            <div class="col-md-4 d-flex gap-2"><button class="btn btn-primary" type="submit">Filtrar</button><a href="{% url 'gestion:pagos_breb' %}" class="btn btn-outline-secondary">Limpiar</a></div>
+{% if messages %}
+<div class="breb-toast-stack" aria-live="polite" aria-atomic="true">
+    {% for message in messages %}
+    <div class="breb-toast {% if 'error' in message.tags %}error{% elif 'warning' in message.tags %}warning{% elif 'success' in message.tags %}success{% endif %}" role="status" data-breb-toast>
+        <span class="breb-toast-icon"><i class="bi {% if 'error' in message.tags %}bi-exclamation-triangle{% elif 'warning' in message.tags %}bi-exclamation-circle{% elif 'success' in message.tags %}bi-check2{% else %}bi-info-circle{% endif %}"></i></span>
+        <div class="breb-toast-copy">{{ message }}</div>
+        <button type="button" class="breb-toast-close" aria-label="Cerrar notificación" data-breb-toast-close><i class="bi bi-x-lg"></i></button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<main class="container-fluid py-4" style="max-width: 1400px;">
+    <div class="breb-page-heading">
+        <div>
+            <div class="breb-title-group">
+                <span class="breb-logo-crop"><img src="{% static 'images/logo-breb.png' %}" alt="BRE-B"></span>
+                <div><h1 class="page-title mb-1">Pagos BRE-B por verificar</h1><p class="text-muted mb-0">Revisión interna de transferencias agrupadas reportadas por pagadores.</p></div>
+            </div>
+            <nav aria-label="breadcrumb" class="mt-2"><ol class="breadcrumb mb-0"><li class="breadcrumb-item"><a href="{% url 'gestion:dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li><li class="breadcrumb-item active" aria-current="page">Pagos BRE-B</li></ol></nav>
+        </div>
+        <a href="{% url 'gestion:dashboard' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Volver</a>
+    </div>
+
+    <form method="get" class="breb-filter-shell">
+        <div class="row g-2 align-items-end">
+            <div class="col-sm-6 col-lg-2"><label class="form-label small" for="estado">Estado</label><select class="form-select form-select-sm" id="estado" name="estado"><option value="">Todos</option>{% for value, label in estados_breb %}<option value="{{ value }}" {% if estado_actual == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+            <div class="col-sm-6 col-lg-2"><label class="form-label small" for="empresa">Empresa</label><select class="form-select form-select-sm" id="empresa" name="empresa"><option value="">Todas</option>{% for empresa in empresas_breb %}<option value="{{ empresa.id }}" {% if empresa_actual == empresa.id|stringformat:'s' %}selected{% endif %}>{{ empresa.nombre }}</option>{% endfor %}</select></div>
+            <div class="col-sm-6 col-lg-2"><label class="form-label small" for="referencia">Referencia</label><input class="form-control form-control-sm" id="referencia" name="referencia" value="{{ referencia_actual }}"></div>
+            <div class="col-sm-6 col-lg-2"><label class="form-label small" for="reportado_por">Reportado por</label><input class="form-control form-control-sm" id="reportado_por" name="reportado_por" value="{{ reportado_por_actual }}" placeholder="Nombre o correo"></div>
+            <div class="col-sm-6 col-lg-1"><label class="form-label small" for="fecha_desde">Desde</label><input class="form-control form-control-sm" id="fecha_desde" name="fecha_desde" type="date" value="{{ fecha_desde_actual }}"></div>
+            <div class="col-sm-6 col-lg-1"><label class="form-label small" for="fecha_hasta">Hasta</label><input class="form-control form-control-sm" id="fecha_hasta" name="fecha_hasta" type="date" value="{{ fecha_hasta_actual }}"></div>
+            <div class="col-sm-12 col-lg-2 breb-filter-actions"><button class="btn btn-sm btn-primary" type="submit" title="Aplicar filtros"><i class="bi bi-funnel"></i><span class="visually-hidden">Filtrar</span></button><a href="{% url 'gestion:pagos_breb' %}" class="btn btn-sm btn-outline-secondary" title="Limpiar filtros"><i class="bi bi-x-lg"></i><span class="visually-hidden">Limpiar</span></a></div>
         </div>
     </form>
 
-    <div class="card"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
-        <thead><tr><th>Crédito / cliente</th><th>Empresa</th><th>Valor</th><th>Fechas</th><th>Estado</th><th>Comprobante</th><th style="min-width:330px">Decisión</th></tr></thead>
-        <tbody>
+    <div class="d-grid gap-3">
         {% for pago in pagos_breb %}
-        <tr>
-            <td><strong>{{ pago.credito.numero_credito }}</strong><br><span class="small text-muted">{{ pago.credito.nombre_cliente }}</span></td>
-            <td>{{ pago.empresa.nombre|default:'-' }}</td>
-            <td>Reportado: ${{ pago.valor_reportado|floatformat:2|intcomma }}{% if pago.valor_aprobado %}<br><strong>Aplicado: ${{ pago.valor_aprobado|floatformat:2|intcomma }}</strong>{% endif %}</td>
-            <td>Pago: {{ pago.fecha_pago_reportada|date:"d/m/Y" }}<br><span class="small text-muted">Recibido: {{ pago.creado_en|date:"d/m/Y H:i" }}</span></td>
-            <td><span class="badge {% if pago.estado == 'APROBADO' %}text-bg-success{% elif pago.estado == 'RECHAZADO' %}text-bg-danger{% else %}text-bg-warning{% endif %}">{{ pago.get_estado_display }}</span></td>
-            <td><a href="{% url 'gestion:pago_breb_comprobante' pago.id %}" class="btn btn-sm btn-outline-secondary">Ver comprobante</a></td>
-            <td>
-            {% if pago.estado == 'PENDIENTE_VERIFICACION' %}
-                <form method="post" action="{% url 'gestion:pago_breb_decidir' pago.id %}" class="d-flex flex-column gap-2">{% csrf_token %}
-                    <label class="small fw-semibold" for="valor-{{ pago.id }}">Valor reconocido</label>
-                    <input class="form-control form-control-sm" id="valor-{{ pago.id }}" type="number" step="0.01" min="0.01" name="valor_aprobado" value="{{ pago.valor_reportado|unlocalize }}" required>
-                    <textarea class="form-control form-control-sm" name="motivo_rechazo" rows="2" placeholder="Motivo obligatorio al rechazar"></textarea>
-                    <div class="d-flex gap-2"><button class="btn btn-sm btn-success" type="submit" name="accion" value="aprobar">Aprobar y aplicar</button><button class="btn btn-sm btn-outline-danger" type="submit" name="accion" value="rechazar">Rechazar</button></div>
-                </form>
-            {% elif pago.motivo_rechazo %}<span class="small text-danger">{{ pago.motivo_rechazo }}</span>{% else %}<span class="small text-muted">Revisado por {{ pago.revisado_por|default:'-' }}</span>{% endif %}
-            </td>
-        </tr>
-        {% empty %}<tr><td colspan="7" class="text-center text-muted py-5">No hay pagos BRE-B con estos filtros.</td></tr>{% endfor %}
-        </tbody>
-    </table></div></div>
+        <article class="breb-review-card {% if pago.estado != 'PENDIENTE_VERIFICACION' %}is-resolved{% endif %}">
+            <div class="breb-review-head">
+                <div><div class="breb-report-kicker">Reporte #{{ pago.id }}</div><h2 class="breb-report-title">{{ pago.empresa.nombre|default:'Empresa no informada' }}</h2><div class="small text-muted">{{ pago.usuario.get_full_name|default:pago.usuario.username }} &middot; {{ pago.creado_en|date:'d/m/Y H:i' }}</div></div>
+                <div class="text-end">
+                    <span class="breb-state {% if pago.estado == 'APROBADO' %}approved{% elif pago.estado == 'RECHAZADO' %}rejected{% else %}pending{% endif %}"><i class="bi {% if pago.estado == 'APROBADO' %}bi-check-circle{% elif pago.estado == 'RECHAZADO' %}bi-x-circle{% else %}bi-clock{% endif %}"></i>{{ pago.get_estado_display }}</span>
+                    <div class="breb-file-actions">
+                        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#brebPreviewModal" data-preview-url="{% url 'gestion:pago_breb_comprobante_preview' pago.id %}" data-preview-kind="{{ pago.comprobante_tipo_ui }}" data-preview-label="Reporte #{{ pago.id }} · {{ pago.referencia_reportada|default:'Sin referencia' }}"><i class="bi bi-eye me-1"></i>Ver comprobante</button>
+                        <a href="{% url 'gestion:pago_breb_comprobante' pago.id %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i>Descargar</a>
+                    </div>
+                </div>
+            </div>
+            <div class="breb-review-body">
+                <div class="breb-facts">
+                    <div class="breb-fact"><span>Fecha transferencia</span><strong>{{ pago.fecha_pago_reportada|date:'d/m/Y' }}</strong></div>
+                    <div class="breb-fact"><span>Referencia</span><strong>{{ pago.referencia_reportada|default:'-' }}</strong></div>
+                    <div class="breb-fact"><span>Valor reportado</span><strong>${{ pago.valor_reportado|floatformat:2|intcomma }}</strong></div>
+                    <div class="breb-fact"><span>Valor aplicado</span><strong>{% if pago.valor_aprobado %}${{ pago.valor_aprobado|floatformat:2|intcomma }}{% else %}-{% endif %}</strong></div>
+                </div>
 
-    {% if pagos_breb.has_other_pages %}<nav class="mt-3"><ul class="pagination justify-content-end">{% if pagos_breb.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ pagos_breb.previous_page_number }}&estado={{ estado_actual }}&empresa={{ empresa_actual }}">Anterior</a></li>{% endif %}<li class="page-item disabled"><span class="page-link">{{ pagos_breb.number }} de {{ pagos_breb.paginator.num_pages }}</span></li>{% if pagos_breb.has_next %}<li class="page-item"><a class="page-link" href="?page={{ pagos_breb.next_page_number }}&estado={{ estado_actual }}&empresa={{ empresa_actual }}">Siguiente</a></li>{% endif %}</ul></nav>{% endif %}
+                {% if pago.estado == 'PENDIENTE_VERIFICACION' %}
+                <form method="post" action="{% url 'gestion:pago_breb_decidir' pago.id %}">
+                    {% csrf_token %}
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle breb-details-table">
+                            <thead><tr><th>Crédito</th><th>Colaborador</th><th>Cuota</th><th>Vencimiento</th><th class="text-end">Reportado</th><th class="text-end">Valor a aplicar</th></tr></thead>
+                            <tbody>
+                            {% for detalle in pago.detalles.all %}
+                                <tr><td class="fw-semibold">{{ detalle.credito.numero_credito }}</td><td>{{ detalle.credito.nombre_cliente }}</td><td>{{ detalle.numero_cuota_snapshot|default:'Legacy' }}</td><td>{{ detalle.fecha_vencimiento_snapshot|date:'d/m/Y'|default:'-' }}</td><td class="text-end">${{ detalle.valor_reportado|floatformat:2|intcomma }}</td><td class="text-end"><input class="form-control form-control-sm text-end ms-auto breb-approval-input" type="number" step="0.01" min="0.01" name="valor_detalle_{{ detalle.id }}" value="{{ detalle.valor_reportado|unlocalize }}" required></td></tr>
+                            {% empty %}<tr><td colspan="6" class="text-muted text-center py-3">El reporte histórico no tiene detalles migrados.</td></tr>{% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="row g-2 align-items-end mt-1">
+                        <div class="col-lg-8"><label class="form-label small" for="motivo-{{ pago.id }}">Motivo de rechazo</label><textarea class="form-control form-control-sm" id="motivo-{{ pago.id }}" name="motivo_rechazo" rows="2" placeholder="Obligatorio al rechazar"></textarea></div>
+                        <div class="col-lg-4 d-flex justify-content-lg-end gap-2"><button class="btn btn-sm btn-success" type="submit" name="accion" value="aprobar"><i class="bi bi-check2-circle me-1"></i>Aprobar y aplicar todo</button><button class="btn btn-sm btn-outline-danger" type="submit" name="accion" value="rechazar"><i class="bi bi-x-circle me-1"></i>Rechazar</button></div>
+                    </div>
+                </form>
+                {% else %}
+                <details class="breb-obligation-details">
+                    <summary><i class="bi bi-chevron-right me-1"></i>Ver {{ pago.detalles.all|length }} obligación{{ pago.detalles.all|length|pluralize:"es" }}</summary>
+                    <div class="table-responsive mt-2">
+                        <table class="table table-sm align-middle breb-details-table">
+                            <thead><tr><th>Crédito</th><th>Colaborador</th><th>Cuota</th><th>Vencimiento</th><th class="text-end">Reportado</th><th class="text-end">Aplicado</th></tr></thead>
+                            <tbody>{% for detalle in pago.detalles.all %}<tr><td class="fw-semibold">{{ detalle.credito.numero_credito }}</td><td>{{ detalle.credito.nombre_cliente }}</td><td>{{ detalle.numero_cuota_snapshot|default:'Legacy' }}</td><td>{{ detalle.fecha_vencimiento_snapshot|date:'d/m/Y'|default:'-' }}</td><td class="text-end">${{ detalle.valor_reportado|floatformat:2|intcomma }}</td><td class="text-end">{% if detalle.valor_aprobado %}${{ detalle.valor_aprobado|floatformat:2|intcomma }}{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="6" class="text-muted text-center py-3">El reporte histórico no tiene detalles migrados.</td></tr>{% endfor %}</tbody>
+                        </table>
+                    </div>
+                </details>
+                {% if pago.estado == 'RECHAZADO' and pago.motivo_rechazo %}<div class="breb-rejection-note"><i class="bi bi-info-circle mt-1"></i><div><strong>Motivo de rechazo</strong>{{ pago.motivo_rechazo }}</div></div>{% else %}<div class="small text-muted mt-2">Revisado por {{ pago.revisado_por|default:'-' }}.</div>{% endif %}
+                {% endif %}
+            </div>
+        </article>
+        {% empty %}<div class="breb-review-card breb-empty"><i class="bi bi-inbox fs-3 d-block mb-2"></i>No hay pagos BRE-B con estos filtros.</div>{% endfor %}
+    </div>
+
+    {% if pagos_breb.has_other_pages %}
+    <nav class="mt-3" aria-label="Paginación de pagos BRE-B"><ul class="pagination pagination-sm justify-content-end">
+        {% if pagos_breb.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ pagos_breb.previous_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">Anterior</a></li>{% endif %}
+        <li class="page-item disabled"><span class="page-link">Página {{ pagos_breb.number }} de {{ pagos_breb.paginator.num_pages }}</span></li>
+        {% if pagos_breb.has_next %}<li class="page-item"><a class="page-link" href="?page={{ pagos_breb.next_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">Siguiente</a></li>{% endif %}
+    </ul></nav>
+    {% endif %}
 </main>
-{% endblock %}
+
+<div class="modal fade" id="brebPreviewModal" tabindex="-1" aria-labelledby="brebPreviewTitle" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header"><div><h2 class="modal-title fs-5" id="brebPreviewTitle">Comprobante BRE-B</h2><div class="small text-muted" id="brebPreviewLabel"></div></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+            <div class="modal-body"><div class="breb-preview-stage"><img id="brebPreviewImage" alt="Comprobante BRE-B"><iframe id="brebPreviewPdf" title="Comprobante BRE-B en PDF"></iframe></div></div>
+            <div class="modal-footer"><a class="btn btn-sm btn-outline-secondary" id="brebPreviewDownload" href="#"><i class="bi bi-download me-1"></i>Descargar</a><button type="button" class="btn btn-sm btn-primary" data-bs-dismiss="modal">Cerrar</button></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script src="{% static 'js/global_loader.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('[data-breb-toast]').forEach(function (toast) {
+        var closeButton = toast.querySelector('[data-breb-toast-close]');
+        var dismiss = function () { toast.remove(); };
+        if (closeButton) closeButton.addEventListener('click', dismiss);
+        window.setTimeout(dismiss, 6500);
+    });
+
+    var modal = document.getElementById('brebPreviewModal');
+    var image = document.getElementById('brebPreviewImage');
+    var pdf = document.getElementById('brebPreviewPdf');
+    var label = document.getElementById('brebPreviewLabel');
+    var download = document.getElementById('brebPreviewDownload');
+    if (modal) {
+        modal.addEventListener('show.bs.modal', function (event) {
+            var trigger = event.relatedTarget;
+            var previewUrl = trigger.getAttribute('data-preview-url');
+            var downloadUrl = previewUrl.replace('/ver/', '/');
+            var kind = trigger.getAttribute('data-preview-kind');
+            label.textContent = trigger.getAttribute('data-preview-label') || '';
+            download.href = downloadUrl;
+            image.style.display = 'none';
+            pdf.style.display = 'none';
+            if (kind === 'pdf') {
+                pdf.src = previewUrl;
+                pdf.style.display = 'block';
+            } else {
+                image.src = previewUrl;
+                image.style.display = 'block';
+            }
+        });
+        modal.addEventListener('hidden.bs.modal', function () {
+            image.removeAttribute('src');
+            pdf.removeAttribute('src');
+        });
+    }
+});
+</script>
+</body>
+</html>

@@ -413,6 +413,7 @@ WOMPI_PRIVATE_KEY = os.environ.get('WOMPI_PRIVATE_KEY', 'priv_test_xxxxx')
 WOMPI_INTEGRITY_KEY = os.environ.get('WOMPI_INTEGRITY_KEY', 'int_test_xxxxx')
 WOMPI_EVENTS_SECRET = os.environ.get('WOMPI_EVENTS_SECRET', 'evt_test_xxxxx')
 WOMPI_ENVIRONMENT = os.environ.get('WOMPI_ENVIRONMENT', 'sandbox')  # 'sandbox' o 'production'
+WOMPI_PAYMENTS_ENABLED = env_bool('WOMPI_PAYMENTS_ENABLED', False)
 
 # URL base se calcula automáticamente según el ambiente
 WOMPI_API_BASE_URL = (

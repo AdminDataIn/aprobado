@@ -885,17 +885,19 @@ def _enviar_notificacion_pago_breb(pago, *, asunto, titulo, mensaje):
         logger.warning('No se envió notificación BRE-B para reporte %s: usuario sin correo.', pago.pk)
         return False
     try:
+        detalles = list(pago.detalles.select_related('credito').all())
         html = render_to_string('emails/usuarios/notificacion_pago_breb.html', {
             'titulo': titulo,
             'mensaje': mensaje,
             'pago_breb': pago,
-            'credito': pago.credito,
+            'detalles_breb': detalles,
         })
         email = EmailMultiAlternatives(
             subject=asunto,
             body=(
                 f'{titulo}\n{mensaje}\n'
-                f'Crédito: {pago.credito.numero_credito}\n'
+                f'Empresa: {pago.empresa.nombre if pago.empresa_id else "No informada"}\n'
+                f'Obligaciones: {len(detalles)}\n'
                 f'Valor reportado: ${pago.valor_reportado:,.2f}\n'
                 f'Estado: {pago.get_estado_display()}\n'
             ),
@@ -913,25 +915,25 @@ def _enviar_notificacion_pago_breb(pago, *, asunto, titulo, mensaje):
 def enviar_pago_breb_reportado(pago):
     return _enviar_notificacion_pago_breb(
         pago,
-        asunto=f'Pago BRE-B recibido - {pago.credito.numero_credito}',
+        asunto=f'Pago BRE-B recibido - reporte #{pago.pk}',
         titulo='Pago pendiente de verificación',
-        mensaje='Recibimos tu comprobante. Aún no se ha aplicado a tu crédito.',
+        mensaje='Recibimos el comprobante agrupado. Las obligaciones aún no han sido aplicadas.',
     )
 
 
 def enviar_pago_breb_aprobado(pago):
     return _enviar_notificacion_pago_breb(
         pago,
-        asunto=f'Pago BRE-B aplicado - {pago.credito.numero_credito}',
+        asunto=f'Pago BRE-B aplicado - reporte #{pago.pk}',
         titulo='Pago validado y aplicado',
-        mensaje=f'Validamos y aplicamos ${pago.valor_aprobado:,.2f} a tu crédito.',
+        mensaje=f'Validamos y aplicamos ${pago.valor_aprobado:,.2f} a las obligaciones reportadas.',
     )
 
 
 def enviar_pago_breb_rechazado(pago):
     return _enviar_notificacion_pago_breb(
         pago,
-        asunto=f'Reporte BRE-B rechazado - {pago.credito.numero_credito}',
+        asunto=f'Reporte BRE-B rechazado - #{pago.pk}',
         titulo='El comprobante no pudo ser validado',
         mensaje=f'Motivo: {pago.motivo_rechazo}',
     )

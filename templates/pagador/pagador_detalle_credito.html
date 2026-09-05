@@ -467,11 +467,11 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="mt-4">
+                        {% if wompi_payments_enabled %}<div class="mt-4">
                             <a href="{% url 'pagador:pagar_wompi' credito.id %}" class="btn btn-pagar w-100">
                                 <i class="bi bi-credit-card me-2"></i>Pagar Cuota con WOMPI (${{ credito.valor_cuota|intcomma }})
                             </a>
-                        </div>
+                        </div>{% endif %}
                         {% endif %}
                     </div>
                 </div>

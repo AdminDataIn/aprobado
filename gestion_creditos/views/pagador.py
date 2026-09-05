@@ -2,6 +2,7 @@ from .common import *
 from .common import _build_capacidad_descuento_context, _obtener_decision_pagador
 from ..models import CuotaAmortizacion
 from django.core.exceptions import PermissionDenied
+from django.utils.formats import number_format
 from ..services.aprobacion_pagador_libranza import (
     decidir_solicitud_libranza_por_pagador,
     puede_decidir_solicitud_libranza_por_pagador,
@@ -323,15 +324,52 @@ def _build_pagador_dashboard_context(request, *, forced_linea=None):
     query_params.pop('page', None)
     errores_pago_masivo = request.session.pop('errores_pago_masivo', None)
     solicitudes_pendientes = creditos_base.filter(estado=Credito.EstadoCredito.EN_REVISION)
+    from gestion_creditos.models import PagoBREB
+    from gestion_creditos.services.breb_payments import obtener_configuracion_breb_activa
+
+    configuracion_breb = obtener_configuracion_breb_activa()
+    breb_disponible = bool(
+        configuracion_breb
+        and forced_linea != Credito.LineaCredito.ADELANTO_NOMINA
+    )
+    reportes_breb = list(
+        PagoBREB.objects.filter(empresa=empresa, usuario=request.user)
+        .annotate(cantidad_detalles=Count('detalles'))
+        .order_by('-creado_en')[:8]
+    )
 
     return {
         'empresa': empresa,
         'creditos': creditos_page,
         'errores_pago_masivo': errores_pago_masivo,
         'pago_masivo_form': PagoMasivoEmpresaUploadForm(),
-        'pago_obligaciones_form': PagoObligacionesSeleccionadasForm(initial={
-            'nota': 'Pago agrupado registrado por la empresa para las obligaciones seleccionadas.',
-        }),
+        'pago_obligaciones_form': PagoObligacionesSeleccionadasForm(
+            breb_disponible=breb_disponible,
+            initial={
+                'nota': 'Pago agrupado registrado por la empresa para las obligaciones seleccionadas.',
+            },
+        ),
+        'configuracion_breb': configuracion_breb if breb_disponible else None,
+        'breb_ui': ({
+            'receptor': configuracion_breb.nombre_receptor,
+            'entidad': configuracion_breb.entidad_financiera,
+            'tipo_llave': configuracion_breb.get_tipo_llave_display(),
+            'llave': configuracion_breb.llave_mostrable,
+            'instrucciones': configuracion_breb.instrucciones,
+            'qr_url': reverse('pagador:pago_breb_qr'),
+            'fecha': timezone.localdate().isoformat(),
+        } if breb_disponible else None),
+        'reportes_breb_ui': [
+            {
+                'id': pago.pk,
+                'fecha': pago.fecha_pago_reportada.strftime('%d/%m/%Y'),
+                'obligaciones': pago.cantidad_detalles,
+                'total': format(pago.valor_reportado, '.2f'),
+                'estado': pago.get_estado_display(),
+                'comprobante_url': reverse('pagador:pago_breb_comprobante', args=[pago.pk]),
+            }
+            for pago in reportes_breb
+        ],
         'solicitudes_pendientes_count': solicitudes_pendientes.values('id').distinct().count(),
         'search_query': search_query,
         'estado_filter': estado_filter,
@@ -547,6 +585,7 @@ def pagador_detalle_credito_view(request, credito_id):
             'nota': 'Pago registrado por la empresa para esta cuota.',
         }),
         'monto_sugerido_pago': monto_sugerido,
+        'wompi_payments_enabled': getattr(settings, 'WOMPI_PAYMENTS_ENABLED', False),
     }
     
     return render(request, 'pagador/pagador_detalle_credito.html', context)
@@ -711,7 +750,14 @@ def pagador_pagar_obligaciones_seleccionadas_view(request):
 def pagador_pagar_obligaciones_seleccionadas_view(request):
     redirect_target = _pagador_redirect_target(request)
     empresa = request.empresa
-    form = PagoObligacionesSeleccionadasForm(request.POST, request.FILES)
+    from gestion_creditos.services.breb_payments import obtener_configuracion_breb_activa
+
+    configuracion_breb = obtener_configuracion_breb_activa()
+    form = PagoObligacionesSeleccionadasForm(
+        request.POST,
+        request.FILES,
+        breb_disponible=bool(configuracion_breb),
+    )
     if not form.is_valid():
         for field_errors in form.errors.values():
             for error in field_errors:
@@ -721,6 +767,44 @@ def pagador_pagar_obligaciones_seleccionadas_view(request):
     selected_ids = request.POST.getlist('obligaciones')
     if not selected_ids:
         messages.error(request, 'Debes seleccionar al menos una obligación para aplicar el pago.')
+        return redirect(redirect_target)
+
+    if form.cleaned_data['metodo_pago'] == HistorialPago.MetodoPago.BREB:
+        obligaciones_breb = [
+            {
+                'credito_id': credito_id,
+                'valor_reportado': request.POST.get(f'monto_{credito_id}'),
+            }
+            for credito_id in selected_ids
+        ]
+        try:
+            from gestion_creditos import email_service
+            from gestion_creditos.services.breb_payments import reportar_pago_breb
+
+            pago = reportar_pago_breb(
+                empresa=empresa,
+                usuario=request.user,
+                configuracion=configuracion_breb,
+                obligaciones=obligaciones_breb,
+                fecha_pago_reportada=form.cleaned_data['fecha_pago_reportada'],
+                comprobante=form.cleaned_data['comprobante'],
+                referencia_reportada=form.cleaned_data.get('referencia_reportada') or '',
+                notas=form.cleaned_data.get('nota') or '',
+            )
+            transaction.on_commit(lambda: email_service.enviar_pago_breb_reportado(pago))
+            messages.success(
+                request,
+                f'Pago BRE-B reportado por ${number_format(pago.valor_reportado, decimal_pos=2, use_l10n=True, force_grouping=True)}. '
+                'Quedó pendiente de verificación.',
+                extra_tags='breb-toast',
+            )
+        except (PermissionDenied, ValidationError) as exc:
+            errores = exc.messages if isinstance(exc, ValidationError) else [str(exc)]
+            for error in errores:
+                messages.error(request, error)
+        except Exception:
+            logger.exception('Error al reportar BRE-B agrupado para empresa %s', empresa.nombre)
+            messages.error(request, 'No fue posible reportar el pago BRE-B.')
         return redirect(redirect_target)
 
     base_qs = Credito.objects.filter(
@@ -1441,6 +1525,10 @@ def iniciar_pago_wompi_view(request, credito_id):
     """
     Muestra el formulario de selección de m?todo de pago con WOMPI
     """
+    if not getattr(settings, 'WOMPI_PAYMENTS_ENABLED', False):
+        messages.info(request, 'Los pagos por Wompi no estan disponibles en este momento.')
+        return redirect('pagador:dashboard')
+
     from ..services.wompi_client import WompiClient, WompiAPIException
 
     credito = get_object_or_404(Credito, id=credito_id, linea=Credito.LineaCredito.LIBRANZA)
@@ -1496,6 +1584,12 @@ def procesar_pago_wompi_view(request):
     """
     Procesa el pago con WOMPI segun el metodo seleccionado.
     """
+    if not getattr(settings, 'WOMPI_PAYMENTS_ENABLED', False):
+        if 'application/json' in (request.content_type or ''):
+            return JsonResponse({'error': 'Wompi payments are disabled'}, status=503)
+        messages.info(request, 'Los pagos por Wompi no estan disponibles en este momento.')
+        return redirect('pagador:dashboard')
+
     from ..services.wompi_client import WompiClient, WompiAPIException
 
     intent = None
@@ -2071,6 +2165,10 @@ def iniciar_pago_masivo_wompi_view(request):
     """
     Muestra el formulario de selección de m?todo de pago con WOMPI para pagos masivos
     """
+    if not getattr(settings, 'WOMPI_PAYMENTS_ENABLED', False):
+        messages.info(request, 'Los pagos por Wompi no estan disponibles en este momento.')
+        return redirect('pagador:dashboard')
+
     from ..services.wompi_client import WompiClient, WompiAPIException
 
     if request.method != 'POST':

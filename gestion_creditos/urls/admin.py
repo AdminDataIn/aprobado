@@ -23,7 +23,16 @@ urlpatterns = [
     path('exportar-reporte/', views.admin_dashboard_export_view, name='dashboard_export'),
     path('pagos-breb/', views.admin_pagos_breb_view, name='pagos_breb'),
     path('pagos-breb/<int:pago_id>/decidir/', views.admin_decidir_pago_breb_view, name='pago_breb_decidir'),
-    path('pagos-breb/<int:pago_id>/comprobante/', views.comprobante_pago_breb_view, name='pago_breb_comprobante'),
+    path(
+        'pagos-breb/<int:pago_id>/comprobante/',
+        views.admin_comprobante_pago_breb_view,
+        name='pago_breb_comprobante',
+    ),
+    path(
+        'pagos-breb/<int:pago_id>/comprobante/ver/',
+        views.admin_previsualizar_comprobante_pago_breb_view,
+        name='pago_breb_comprobante_preview',
+    ),
     path('ejecutivos/', views.admin_asesores_dashboard_view, name='ejecutivos'),
     path('asesores/', RedirectView.as_view(pattern_name='gestion:ejecutivos', permanent=False), name='asesores'),
     path('solicitudes/', views.admin_solicitudes_view, name='solicitudes'),

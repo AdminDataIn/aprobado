@@ -1848,7 +1848,10 @@ class PagoBREB(models.Model):
     credito = models.ForeignKey(
         Credito,
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         related_name='pagos_breb',
+        help_text='Credito individual legado. Los reportes agrupados usan sus detalles.',
     )
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -1881,6 +1884,7 @@ class PagoBREB(models.Model):
     )
     fecha_pago_reportada = models.DateField()
     referencia_reportada = models.CharField(max_length=120, blank=True)
+    notas = models.TextField(blank=True)
     comprobante = models.FileField(
         upload_to=ruta_archivo_breb,
         storage=private_document_storage,
@@ -1895,6 +1899,14 @@ class PagoBREB(models.Model):
         default=Estado.PENDIENTE_VERIFICACION,
     )
     hash_comprobante = models.CharField(max_length=64, editable=False, db_index=True)
+    fingerprint_reporte = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        unique=True,
+        editable=False,
+        help_text='Huella idempotente del reporte agrupado y sus obligaciones.',
+    )
     clave_idempotencia = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     creado_en = models.DateTimeField(auto_now_add=True)
     revisado_en = models.DateTimeField(null=True, blank=True)
@@ -1929,17 +1941,91 @@ class PagoBREB(models.Model):
             models.CheckConstraint(
                 condition=(
                     ~models.Q(estado='APROBADO')
-                    | (
-                        models.Q(historial_pago__isnull=False)
-                        & models.Q(valor_aprobado__isnull=False)
-                    )
+                    | models.Q(valor_aprobado__isnull=False)
                 ),
                 name='pago_breb_aprobado_con_aplicacion',
             ),
         ]
 
     def __str__(self):
-        return f'BRE-B {self.credito.numero_credito} - {self.get_estado_display()}'
+        referencia = self.credito.numero_credito if self.credito_id else f'agrupado #{self.pk}'
+        return f'BRE-B {referencia} - {self.get_estado_display()}'
+
+
+class PagoBREBDetalle(models.Model):
+    pago_breb = models.ForeignKey(
+        PagoBREB,
+        on_delete=models.CASCADE,
+        related_name='detalles',
+    )
+    credito = models.ForeignKey(
+        Credito,
+        on_delete=models.PROTECT,
+        related_name='detalles_pago_breb',
+    )
+    cuota = models.ForeignKey(
+        'CuotaAmortizacion',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='detalles_pago_breb',
+    )
+    numero_cuota_snapshot = models.PositiveIntegerField(null=True, blank=True)
+    fecha_vencimiento_snapshot = models.DateField(null=True, blank=True)
+    valor_cuota_snapshot = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    valor_reportado = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    valor_aprobado = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    historial_pago = models.OneToOneField(
+        HistorialPago,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='detalle_breb',
+    )
+    aplicado_en = models.DateTimeField(null=True, blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['pago_breb_id', 'credito_id', 'numero_cuota_snapshot', 'id']
+        verbose_name = 'Detalle de pago BRE-B'
+        verbose_name_plural = 'Detalles de pagos BRE-B'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['pago_breb', 'cuota'],
+                condition=models.Q(cuota__isnull=False),
+                name='uniq_pago_breb_obligacion_cuota',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(valor_reportado__gt=Decimal('0.00')),
+                name='pago_breb_detalle_reportado_positivo',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(valor_aprobado__isnull=True, historial_pago__isnull=True, aplicado_en__isnull=True)
+                    | models.Q(valor_aprobado__isnull=False, historial_pago__isnull=False, aplicado_en__isnull=False)
+                ),
+                name='pago_breb_detalle_aplicacion_completa',
+            ),
+        ]
+
+    def __str__(self):
+        cuota = self.numero_cuota_snapshot or 'legacy'
+        return f'BRE-B #{self.pago_breb_id} - {self.credito.numero_credito} - cuota {cuota}'
 
 
 #? ----- Modelo de intentos de pago WOMPI -----

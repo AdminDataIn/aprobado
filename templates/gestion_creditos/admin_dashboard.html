@@ -138,6 +138,16 @@
             height: 2.4rem;
             margin-bottom: 0.65rem;
         }
+        .compact-actions .breb-action-logo {
+            height: 34px;
+            margin: 10px;
+        }
+        .compact-actions .breb-action-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
         .compact-actions h3 {
             font-size: 0.92rem !important;
             margin-bottom: 0.2rem !important;
@@ -401,7 +411,7 @@
             </a>
             {% if perms.gestion_creditos.review_pagobreb %}
             <a href="{% url 'gestion:pagos_breb' %}" class="action-card">
-                <div class="action-icon"><i class="bi bi-qr-code-scan"></i></div>
+                <div class="breb-action-logo"><img src="{% static 'images/logo-breb.png' %}" alt="BRE-B"></div>
                 <div><h3>Pagos BRE-B</h3><p>Verificar comprobantes antes de aplicar pagos.</p></div>
             </a>
             {% endif %}
