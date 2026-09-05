@@ -114,25 +114,7 @@ class PagoBREBBaseMixin:
         datos.update(kwargs)
         return reportar_pago_breb(**datos)
 
-
-class PagoBREBAgrupadoTest(PagoBREBBaseMixin, TestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.private_root = tempfile.mkdtemp(prefix='aprobado-breb-private-')
-        cls.override = override_settings(
-            PRIVATE_DOCUMENTS_ROOT=cls.private_root,
-            EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
-        )
-        cls.override.enable()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.override.disable()
-        shutil.rmtree(cls.private_root, ignore_errors=True)
-        super().tearDownClass()
-
-    def setUp(self):
+    def _crear_escenario_base(self):
         self.empresa = Empresa.objects.create(nombre='EMPRESA BREB', convenio_activo=True)
         self.pagador = User.objects.create_user(
             'pagador-breb', email='pagador@aprobado.test', password='test1234'
@@ -152,6 +134,27 @@ class PagoBREBAgrupadoTest(PagoBREBBaseMixin, TestCase):
             monto_minimo=Decimal('1000.00'),
         )
         self.credito, self.cuota = self._crear_credito('CR-BREB-0001')
+
+
+class PagoBREBAgrupadoTest(PagoBREBBaseMixin, TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.private_root = tempfile.mkdtemp(prefix='aprobado-breb-private-')
+        cls.override = override_settings(
+            PRIVATE_DOCUMENTS_ROOT=cls.private_root,
+            EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        )
+        cls.override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.override.disable()
+        shutil.rmtree(cls.private_root, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self._crear_escenario_base()
 
     def test_reporte_agrupado_crea_cabecera_y_detalles_sin_afectar_cartera(self):
         segundo, segunda_cuota = self._crear_credito('CR-BREB-0002', cuota='90000.00')
@@ -463,19 +466,6 @@ class PagoBREBAgrupadoTest(PagoBREBBaseMixin, TestCase):
         self.assertRedirects(response, reverse('pagador:dashboard'), fetch_redirect_response=False)
         self.assertFalse(PagoBREB.objects.exists())
 
-    def test_pagador_consulta_solo_comprobante_propio(self):
-        pago = self._reportar()
-        self.client.force_login(self.pagador)
-        response = self.client.get(reverse('pagador:pago_breb_comprobante', args=[pago.pk]))
-        self.assertEqual(response.status_code, 200)
-        otro = User.objects.create_user('otro-pagador')
-        PerfilPagador.objects.create(usuario=otro, empresa=self.empresa)
-        self.client.force_login(otro)
-        self.assertEqual(
-            self.client.get(reverse('pagador:pago_breb_comprobante', args=[pago.pk])).status_code,
-            403,
-        )
-
     def test_colaborador_no_tiene_cta_ni_rutas_breb(self):
         self.client.force_login(self.credito.usuario)
         response = self.client.get(reverse('libranza:mi_credito_detalle', args=[self.credito.pk]))
@@ -500,51 +490,6 @@ class PagoBREBAgrupadoTest(PagoBREBBaseMixin, TestCase):
         self.assertContains(dashboard, 'Pagos BRE-B')
         self.assertContains(dashboard, '/static/images/logo-breb.png')
         self.assertContains(dashboard, 'breb-action-logo')
-
-    def test_comprobante_admin_tiene_vista_inline_y_descarga_protegidas(self):
-        pago = self._reportar()
-        self.client.force_login(self.revisor)
-
-        preview = self.client.get(
-            reverse('gestion:pago_breb_comprobante_preview', args=[pago.pk])
-        )
-        self.assertEqual(preview.status_code, 200)
-        self.assertEqual(preview['Content-Type'], 'application/pdf')
-        self.assertIn('inline;', preview['Content-Disposition'])
-        preview.close()
-
-        download = self.client.get(reverse('gestion:pago_breb_comprobante', args=[pago.pk]))
-        self.assertEqual(download.status_code, 200)
-        self.assertIn('attachment;', download['Content-Disposition'])
-        download.close()
-
-        self.client.force_login(self.pagador)
-        self.assertEqual(
-            self.client.get(
-                reverse('gestion:pago_breb_comprobante_preview', args=[pago.pk])
-            ).status_code,
-            403,
-        )
-
-    def test_previsualizacion_admin_identifica_imagen_sin_url_publica(self):
-        credito, _ = self._crear_credito('CR-BREB-IMG-01')
-        pago = self._reportar(
-            obligaciones=[{'credito_id': credito.pk, 'valor_reportado': '110000.00'}],
-            comprobante=self._imagen('comprobante.png'),
-            referencia_reportada='IMAGEN-001',
-        )
-        self.client.force_login(self.revisor)
-
-        bandeja = self.client.get(reverse('gestion:pagos_breb'))
-        self.assertContains(bandeja, 'data-preview-kind="image"')
-        preview = self.client.get(
-            reverse('gestion:pago_breb_comprobante_preview', args=[pago.pk])
-        )
-        self.assertEqual(preview.status_code, 200)
-        self.assertEqual(preview['Content-Type'], 'image/png')
-        self.assertIn('inline;', preview['Content-Disposition'])
-        self.assertNotIn('/private_documents/', bandeja.content.decode())
-        preview.close()
 
     def test_rechazo_admin_usa_toast_y_tarjeta_resuelta_sin_acciones(self):
         pago = self._reportar()
@@ -689,6 +634,86 @@ class PagoBREBAgrupadoTest(PagoBREBBaseMixin, TestCase):
             bancos.return_value = []
             inicio = self.client.get(reverse('pagador:pagar_wompi', args=[self.credito.pk]))
         self.assertEqual(inicio.status_code, 200)
+
+
+# Closing a FileResponse emits request_finished; PostgreSQL must be free to
+# close and reopen its connection outside TestCase's class-level transaction.
+class PagoBREBArchivosPrivadosTest(PagoBREBBaseMixin, TransactionTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.private_root = tempfile.mkdtemp(prefix='aprobado-breb-archivos-')
+        cls.override = override_settings(PRIVATE_DOCUMENTS_ROOT=cls.private_root)
+        cls.override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.override.disable()
+        shutil.rmtree(cls.private_root, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self._crear_escenario_base()
+
+    def test_pagador_consulta_solo_comprobante_propio(self):
+        pago = self._reportar()
+        self.client.force_login(self.pagador)
+        response = self.client.get(reverse('pagador:pago_breb_comprobante', args=[pago.pk]))
+        self.assertEqual(response.status_code, 200)
+        response.close()
+
+        otro = User.objects.create_user('otro-pagador')
+        PerfilPagador.objects.create(usuario=otro, empresa=self.empresa)
+        self.client.force_login(otro)
+        self.assertEqual(
+            self.client.get(reverse('pagador:pago_breb_comprobante', args=[pago.pk])).status_code,
+            403,
+        )
+
+    def test_comprobante_admin_tiene_vista_inline_y_descarga_protegidas(self):
+        pago = self._reportar()
+        self.client.force_login(self.revisor)
+
+        preview = self.client.get(
+            reverse('gestion:pago_breb_comprobante_preview', args=[pago.pk])
+        )
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview['Content-Type'], 'application/pdf')
+        self.assertIn('inline;', preview['Content-Disposition'])
+        preview.close()
+
+        download = self.client.get(reverse('gestion:pago_breb_comprobante', args=[pago.pk]))
+        self.assertEqual(download.status_code, 200)
+        self.assertIn('attachment;', download['Content-Disposition'])
+        download.close()
+
+        self.client.force_login(self.pagador)
+        self.assertEqual(
+            self.client.get(
+                reverse('gestion:pago_breb_comprobante_preview', args=[pago.pk])
+            ).status_code,
+            403,
+        )
+
+    def test_previsualizacion_admin_identifica_imagen_sin_url_publica(self):
+        credito, _ = self._crear_credito('CR-BREB-IMG-01')
+        pago = self._reportar(
+            obligaciones=[{'credito_id': credito.pk, 'valor_reportado': '110000.00'}],
+            comprobante=self._imagen('comprobante.png'),
+            referencia_reportada='IMAGEN-001',
+        )
+        self.client.force_login(self.revisor)
+
+        bandeja = self.client.get(reverse('gestion:pagos_breb'))
+        self.assertContains(bandeja, 'data-preview-kind="image"')
+        preview = self.client.get(
+            reverse('gestion:pago_breb_comprobante_preview', args=[pago.pk])
+        )
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview['Content-Type'], 'image/png')
+        self.assertIn('inline;', preview['Content-Disposition'])
+        self.assertNotIn('/private_documents/', bandeja.content.decode())
+        preview.close()
 
 
 @skipIf(connection.vendor != 'postgresql', 'Requiere PostgreSQL real.')
