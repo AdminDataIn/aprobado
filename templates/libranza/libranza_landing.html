@@ -777,7 +777,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         width: 100%;
         min-height: 500px;
         background: transparent;
-        overflow: hidden;
+        overflow: visible;
     }
 
     .libranza-map-loading {
@@ -817,11 +817,28 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         stroke: #ffffff;
         stroke-width: 2;
         filter: drop-shadow(0 8px 16px rgba(6, 119, 163, 0.26));
+        pointer-events: none;
     }
 
-    .libranza-map-point-group:hover .libranza-map-point,
+    .libranza-map-hit-area {
+        fill: transparent;
+        stroke: none;
+        pointer-events: all;
+        cursor: pointer;
+    }
+
+    .libranza-map-point-group.is-active .libranza-map-point,
     .libranza-map-point-group:focus .libranza-map-point {
         fill: #0a192f;
+    }
+
+    .libranza-map-point-group:focus {
+        outline: none;
+    }
+
+    .libranza-map-point-group:focus-visible .libranza-map-point {
+        stroke: #22d3ee;
+        stroke-width: 3;
     }
 
     .libranza-map-label {
@@ -849,6 +866,8 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         z-index: 5;
         min-width: 150px;
         max-width: 220px;
+        box-sizing: border-box;
+        overflow-wrap: anywhere;
         padding: 0.7rem 0.85rem;
         border-radius: 0.85rem;
         background: rgba(10, 25, 47, 0.96);
@@ -858,7 +877,6 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         line-height: 1.35;
         pointer-events: none;
         opacity: 0;
-        transform: translate(-50%, calc(-100% - 18px));
         transition: opacity 0.15s ease;
     }
 
@@ -1798,60 +1816,98 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                 });
 
                 const puntosMapa = [];
+                const radioInteraccion = 22;
+                let puntoActivo = null;
+                const posicionarTooltip = () => {
+                    if (!tooltip || !puntoActivo) return;
+                    const matriz = svg.getScreenCTM();
+                    if (!matriz) return;
+                    const origen = new DOMPoint(puntoActivo.punto.x, puntoActivo.punto.y).matrixTransform(matriz);
+                    const marco = mapFrame.getBoundingClientRect();
+                    const margen = 8;
+                    tooltip.style.maxWidth = `${Math.min(220, mapFrame.clientWidth - margen * 2)}px`;
+                    tooltip.style.minWidth = '0';
+                    const ancho = tooltip.offsetWidth;
+                    const alto = tooltip.offsetHeight;
+                    const x = origen.x - marco.left - mapFrame.clientLeft;
+                    const y = origen.y - marco.top - mapFrame.clientTop;
+                    const arriba = y - alto - 12;
+                    const top = arriba >= margen ? arriba : y + 12;
+                    tooltip.style.left = `${Math.max(margen, Math.min(x - ancho / 2, mapFrame.clientWidth - ancho - margen))}px`;
+                    tooltip.style.top = `${Math.max(margen, Math.min(top, mapFrame.clientHeight - alto - margen))}px`;
+                };
+                const ocultarTooltip = () => {
+                    if (puntoActivo) puntoActivo.grupo.classList.remove('is-active');
+                    puntoActivo = null;
+                    if (tooltip) tooltip.style.opacity = '0';
+                };
+                const mostrarTooltip = (entrada) => {
+                    if (puntoActivo !== entrada) {
+                        ocultarTooltip();
+                        puntoActivo = entrada;
+                        entrada.grupo.classList.add('is-active');
+                        if (entrada.etiqueta) etiquetasGrupo.appendChild(entrada.etiqueta);
+                    }
+                    if (!tooltip) return;
+                    const { ubicacion } = entrada;
+                    const total = Number(ubicacion.empresas || 1);
+                    const titulo = document.createElement('strong');
+                    titulo.textContent = ubicacion.municipio || ubicacion.departamento;
+                    const nombres = Array.isArray(ubicacion.nombres_empresas)
+                        ? ubicacion.nombres_empresas.filter(Boolean)
+                        : [];
+                    const detalleEmpresas = nombres.length
+                        ? nombres.slice(0, 3).join(', ') + (nombres.length > 3 ? ` y ${nombres.length - 3} más` : '')
+                        : `${total} empresa${total === 1 ? '' : 's'}`;
+                    tooltip.replaceChildren(
+                        titulo,
+                        document.createTextNode(`${ubicacion.departamento || 'Colombia'} · ${detalleEmpresas}`),
+                    );
+                    posicionarTooltip();
+                    tooltip.style.opacity = '1';
+                };
                 ubicacionesUnicas.forEach((ubicacion) => {
                     const punto = proyectar(ubicacion.longitud, ubicacion.latitud);
                     const total = Number(ubicacion.empresas || 1);
-                    const radio = 9;
+                    const radio = 6.3;
                     const grupo = crearSvg('g', {
                         class: 'libranza-map-point-group',
                         tabindex: '0',
                         role: 'button',
                         'aria-label': `${ubicacion.municipio || ubicacion.departamento}, ${ubicacion.departamento || 'Colombia'}: ${total} empresa${total === 1 ? '' : 's'}`,
                     });
-                    grupo.appendChild(crearSvg('circle', { class: 'libranza-map-point', cx: punto.x, cy: punto.y, r: radio }));
-
-                    const mostrarTooltip = () => {
-                        if (!tooltip) return;
-                        const titulo = document.createElement('strong');
-                        titulo.textContent = ubicacion.municipio || ubicacion.departamento;
-                        const nombres = Array.isArray(ubicacion.nombres_empresas)
-                            ? ubicacion.nombres_empresas.filter(Boolean)
-                            : [];
-                        const detalleEmpresas = nombres.length
-                            ? nombres.slice(0, 3).join(', ') + (nombres.length > 3 ? ` y ${nombres.length - 3} más` : '')
-                            : `${total} empresa${total === 1 ? '' : 's'}`;
-                        tooltip.replaceChildren(
-                            titulo,
-                            document.createTextNode(
-                                `${ubicacion.departamento || 'Colombia'} · ${detalleEmpresas}`
-                            ),
-                        );
-                        tooltip.style.left = `${(punto.x / width) * 100}%`;
-                        tooltip.style.top = `${(punto.y / height) * 100}%`;
-                        tooltip.style.opacity = '1';
-                    };
-                    const ocultarTooltip = () => {
-                        if (tooltip) tooltip.style.opacity = '0';
-                    };
-                    grupo.addEventListener('mouseenter', mostrarTooltip);
-                    grupo.addEventListener('focus', mostrarTooltip);
-                    grupo.addEventListener('mouseleave', ocultarTooltip);
-                    grupo.addEventListener('blur', ocultarTooltip);
-                    grupo.addEventListener('click', (event) => {
-                        event.stopPropagation();
-                        mostrarTooltip();
+                    const hitArea = crearSvg('circle', {
+                        class: 'libranza-map-hit-area', cx: punto.x, cy: punto.y,
+                        r: radioInteraccion, 'aria-hidden': 'true',
                     });
+                    grupo.appendChild(hitArea);
+                    grupo.appendChild(crearSvg('circle', { class: 'libranza-map-point', cx: punto.x, cy: punto.y, r: radio }));
                     marcadoresGrupo.appendChild(grupo);
-                    puntosMapa.push({
+                    const entrada = {
                         ubicacion,
                         punto,
                         radio,
+                        grupo,
+                        hitArea,
                         cajaPunto: {
                             x: punto.x - radio - 3,
                             y: punto.y - radio - 3,
                             width: (radio + 3) * 2,
                             height: (radio + 3) * 2,
                         },
+                    };
+                    puntosMapa.push(entrada);
+                    grupo.addEventListener('focus', () => mostrarTooltip(entrada));
+                    grupo.addEventListener('blur', () => {
+                        if (puntoActivo === entrada) ocultarTooltip();
+                    });
+                    grupo.addEventListener('keydown', (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            mostrarTooltip(entrada);
+                        } else if (event.key === 'Escape') {
+                            ocultarTooltip();
+                        }
                     });
                 });
 
@@ -1889,12 +1945,16 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                 puntosMapa
                     .slice()
                     .sort((a, b) => a.punto.y - b.punto.y || a.punto.x - b.punto.x)
-                    .forEach(({ ubicacion, punto, cajaPunto }) => {
+                    .forEach((entrada) => {
+                        const { ubicacion, punto, cajaPunto } = entrada;
                         const texto = crearSvg('text', {
                             class: 'libranza-map-label',
                             'dominant-baseline': 'middle',
                         });
                         texto.textContent = ubicacion.municipio || ubicacion.departamento;
+                        entrada.etiqueta = texto;
+                        // Measure even when the mobile stylesheet hides labels.
+                        texto.style.display = 'inline';
                         etiquetasGrupo.appendChild(texto);
 
                         const candidatos = [];
@@ -1935,6 +1995,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                         texto.dataset.posicion = posicion.direccion;
                         const cajaFinal = expandirCaja(texto.getBBox(), 4);
                         cajasEtiquetas.push(cajaFinal);
+                        texto.style.removeProperty('display');
 
                         const distancia = Math.hypot(posicion.dx, posicion.dy);
                         if (distancia > 30) {
@@ -1950,9 +2011,52 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                         }
                     });
 
-                svg.addEventListener('click', () => {
-                    if (tooltip) tooltip.style.opacity = '0';
+                // Resolve overlapping hit areas by distance, never by SVG paint order.
+                const puntoCercano = (event) => {
+                    const matriz = svg.getScreenCTM();
+                    if (!matriz) return null;
+                    let cercano = null;
+                    let distanciaMinima = radioInteraccion;
+                    puntosMapa.forEach((entrada) => {
+                        const pantalla = new DOMPoint(entrada.punto.x, entrada.punto.y).matrixTransform(matriz);
+                        const distancia = Math.hypot(event.clientX - pantalla.x, event.clientY - pantalla.y);
+                        if (distancia <= distanciaMinima) {
+                            cercano = entrada;
+                            distanciaMinima = distancia;
+                        }
+                    });
+                    return cercano;
+                };
+                svg.addEventListener('pointermove', (event) => {
+                    if (event.pointerType !== 'mouse') return;
+                    const entrada = puntoCercano(event);
+                    if (entrada) {
+                        if (entrada !== puntoActivo) mostrarTooltip(entrada);
+                    } else if (!puntoActivo || document.activeElement !== puntoActivo.grupo) {
+                        ocultarTooltip();
+                    }
                 });
+                svg.addEventListener('pointerleave', (event) => {
+                    if (event.pointerType === 'mouse' && document.activeElement !== puntoActivo?.grupo) ocultarTooltip();
+                });
+                svg.addEventListener('click', (event) => {
+                    const entrada = puntoCercano(event);
+                    if (entrada) {
+                        entrada.grupo.focus({ preventScroll: true });
+                        mostrarTooltip(entrada);
+                    } else {
+                        ocultarTooltip();
+                    }
+                });
+                const actualizarGeometriaVisual = () => {
+                    const matriz = svg.getScreenCTM();
+                    if (!matriz) return;
+                    const escala = Math.hypot(matriz.a, matriz.b) || 1;
+                    puntosMapa.forEach(({ hitArea }) => hitArea.setAttribute('r', radioInteraccion / escala));
+                    posicionarTooltip();
+                };
+                actualizarGeometriaVisual();
+                new ResizeObserver(actualizarGeometriaVisual).observe(mapFrame);
 
                 if (loading) loading.remove();
             })
