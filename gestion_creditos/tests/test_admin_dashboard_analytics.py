@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timedelta
 from decimal import Decimal
+from urllib.parse import parse_qs
 
 from django.contrib.auth import get_user_model
 from django.db import connection
@@ -145,6 +146,131 @@ class AdminDashboardAnalyticsTests(TestCase):
             comision_aplicada=Decimal('40.00'),
             iva_aplicado=Decimal('10.00'),
         )
+
+    def _context_empresas(self, **params):
+        return get_admin_obligaciones_context(self.factory.get(
+            '/gestion/obligaciones-pendientes/', {'vista': 'empresa', **params},
+        ))
+
+    def test_por_empresa_agrega_todas_las_impagas_sin_duplicar_creditos(self):
+        hoy = timezone.localdate()
+        credito = self._crear_credito()
+        for numero, dias, pagado in ((1, -32, '100'), (2, -15, '0'), (3, 0, '0'), (4, 15, '0'), (5, 16, '0')):
+            self._crear_cuota(credito, numero=numero, vencimiento=hoy + timedelta(days=dias), pagado=Decimal(pagado))
+        self._crear_cuota(credito, numero=6, vencimiento=hoy - timedelta(days=60), pagada=True)
+        segundo = self._crear_credito()
+        self._crear_cuota(segundo, numero=1, vencimiento=hoy + timedelta(days=5), pagado=None)
+        pagado = self._crear_credito(estado=Credito.EstadoCredito.PAGADO)
+        self._crear_cuota(pagado, numero=1, vencimiento=hoy - timedelta(days=90))
+        proximas = self._crear_credito(empresa=self.empresa_b)
+        self._crear_cuota(proximas, numero=1, vencimiento=hoy + timedelta(days=1))
+
+        context = self._context_empresas()
+
+        empresas = context['empresas_obligaciones']
+        self.assertEqual(len(empresas), 2)
+        a, b = empresas
+        self.assertEqual(a['empresa_id_reporte'], self.empresa_a.pk)
+        self.assertEqual((a['creditos'], a['vencidas'], a['vencen_hoy'], a['proximas']), (2, 2, 1, 2))
+        self.assertEqual(a['total_pendiente'], Decimal('2300'))
+        self.assertEqual(a['total_vencido'], Decimal('700'))
+        self.assertEqual(a['mora_maxima'], 32)
+        self.assertEqual((b['creditos'], b['vencidas'], b['proximas']), (1, 0, 1))
+        self.assertEqual(b['total_pendiente'], Decimal('400'))
+        self.assertEqual(b['mora_maxima'], 0)
+        self.assertEqual(context['resumen_empresas'], {
+            'empresas_con_mora': 1, 'cartera_vencida': Decimal('700'), 'mora_maxima': 32,
+        })
+        detalle = get_admin_obligaciones_context(self.factory.get('/gestion/obligaciones-pendientes/'))
+        self.assertEqual(context['obligaciones_distribucion'], detalle['obligaciones_distribucion'])
+        self.assertEqual(len(detalle['obligaciones']), 3)
+
+    def test_por_empresa_ordena_por_exposicion_y_luego_mora(self):
+        hoy = timezone.localdate()
+        tercera = Empresa.objects.create(nombre='Empresa menor exposicion')
+        for empresa, dias, valor in ((self.empresa_a, 10, '800'), (self.empresa_b, 30, '800'), (tercera, 90, '400')):
+            credito = self._crear_credito(empresa=empresa)
+            self._crear_cuota(credito, numero=1, vencimiento=hoy - timedelta(days=dias), valor=Decimal(valor))
+
+        context = self._context_empresas()
+
+        self.assertEqual([row['empresa_id_reporte'] for row in context['empresas_obligaciones']],
+                         [self.empresa_b.pk, self.empresa_a.pk, tercera.pk])
+        self.assertEqual(context['resumen_empresas']['cartera_vencida'], Decimal('2000'))
+        self.assertEqual(context['resumen_empresas']['mora_maxima'], 90)
+
+    def test_por_empresa_accion_reutiliza_filtros_y_detalle_existente(self):
+        hoy = timezone.localdate()
+        credito = self._crear_credito()
+        self._crear_cuota(credito, numero=1, vencimiento=hoy - timedelta(days=2))
+        self._crear_cuota(credito, numero=2, vencimiento=hoy + timedelta(days=3))
+        otro = self._crear_credito(empresa=self.empresa_b)
+        self._crear_cuota(otro, numero=1, vencimiento=hoy - timedelta(days=2))
+        self.client.force_login(self.staff)
+        url = reverse('gestion:obligaciones_pendientes')
+        params = {'vista': 'empresa', 'obligacion': 'VENCIDA', 'fecha_desde': (hoy - timedelta(days=5)).isoformat(),
+                  'fecha_hasta': hoy.isoformat(), 'linea': 'LIBRANZA', 'credito': credito.numero_credito, 'page': '1'}
+        response = self.client.get(url, params)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Ver obligaciones')
+        self.assertContains(response, 'name="vista" value="empresa"')
+        empresa = response.context['empresas_obligaciones'][0]
+        self.assertEqual(empresa['vencidas'], 1)
+        self.assertEqual(empresa['proximas'], 0)
+        self.assertEqual(empresa['total_pendiente'], Decimal('400'))
+        query = parse_qs(empresa['detalle_query'])
+        self.assertEqual(query['empresa'], [str(self.empresa_a.pk)])
+        self.assertEqual(query['vista'], ['detalle'])
+        self.assertEqual(query['obligacion'], ['VENCIDA'])
+        self.assertEqual(query['fecha_desde'], [params['fecha_desde']])
+        self.assertNotIn('page', query)
+        detalle = self.client.get(f"{url}?{empresa['detalle_query']}")
+        self.assertEqual(detalle.status_code, 200)
+        self.assertEqual([row['credito_id'] for row in detalle.context['obligaciones']], [credito.pk])
+        self.assertContains(detalle, reverse('gestion:credito_detalle', args=[credito.pk]))
+        for link in response.context['vista_links']:
+            self.assertNotIn('page', parse_qs(link['query']))
+
+    def test_por_empresa_pagina_empresas_e_indicadores_no_solo_pagina(self):
+        hoy = timezone.localdate()
+        for numero in range(21):
+            empresa = Empresa.objects.create(nombre=f'Empresa agrupada {numero:02d}')
+            credito = self._crear_credito(empresa=empresa)
+            self._crear_cuota(credito, numero=1, vencimiento=hoy - timedelta(days=1))
+        context = self._context_empresas(page='2')
+        self.assertEqual(context['pagina_obligaciones'].paginator.count, 21)
+        self.assertEqual(len(context['empresas_obligaciones']), 1)
+        self.assertEqual(context['resumen_empresas']['empresas_con_mora'], 21)
+        self.assertEqual(context['resumen_empresas']['cartera_vencida'], Decimal('8400'))
+        self.assertIn('vista=empresa', context['obligaciones_querystring'])
+
+    def test_por_empresa_sin_resultados_y_permisos_staff(self):
+        url = reverse('gestion:obligaciones_pendientes')
+        self.assertEqual(self.client.get(url, {'vista': 'empresa'}).status_code, 302)
+        self.client.force_login(self.cliente)
+        self.assertEqual(self.client.get(url, {'vista': 'empresa'}).status_code, 302)
+        self.client.force_login(self.staff)
+        response = self.client.get(url, {'vista': 'empresa'})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'No hay empresas con obligaciones')
+        self.assertEqual(response.context['resumen_empresas']['mora_maxima'], 0)
+        self.assertEqual(self.client.get(url, {'vista': 'invalida'}).context['vista_obligaciones'], 'detalle')
+
+    def test_por_empresa_no_introduce_consultas_por_fila(self):
+        hoy = timezone.localdate()
+        credito = self._crear_credito()
+        self._crear_cuota(credito, numero=1, vencimiento=hoy)
+        with CaptureQueriesContext(connection) as inicial:
+            self._context_empresas()
+        for numero in range(5):
+            empresa = Empresa.objects.create(nombre=f'Empresa consultas {numero}')
+            credito = self._crear_credito(empresa=empresa)
+            for cuota in range(1, 4):
+                self._crear_cuota(credito, numero=cuota, vencimiento=hoy + timedelta(days=cuota))
+        with CaptureQueriesContext(connection) as final:
+            context = self._context_empresas()
+        self.assertEqual(len(context['empresas_obligaciones']), 6)
+        self.assertEqual(len(final), len(inicial))
 
     def test_kpi_capital_excluye_null_y_respeta_empresa_estado_y_linea(self):
         self._crear_credito(empresa=self.empresa_a, capital=Decimal('600.00'))

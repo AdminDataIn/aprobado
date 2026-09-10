@@ -54,6 +54,12 @@
         .obligation-status.VENCE_PRONTO { background: #fef3c7; color: #92400e; }
         .obligation-status.AL_DIA { background: #dcfce7; color: #166534; }
         .table-dashboard td { vertical-align: middle; }
+        .obligations-view-toggle.btn-group { display: inline-flex; flex-direction: row; gap: 0; margin-top: 0; }
+        .company-indicators { display: flex; flex-wrap: wrap; gap: .75rem 1.5rem; margin: 1rem 0; font-size: .85rem; }
+        .company-indicators dt { font-weight: 400; color: var(--text-secondary); }
+        .company-indicators dd { margin: .15rem 0 0; font-weight: 600; }
+        .company-obligations { min-width: 900px; }
+        .company-obligations td:first-child { min-width: 160px; max-width: 260px; overflow-wrap: anywhere; }
         @media (max-width: 991px) {
             .filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .obligations-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -111,6 +117,7 @@
         </div>
         <form method="get" class="filter-grid">
             <input type="hidden" name="obligacion" value="{{ obligacion_filter }}">
+            <input type="hidden" name="vista" value="{{ vista_obligaciones }}">
             <div>
                 <label for="creditoFilter" class="form-label small fw-semibold">Número de crédito</label>
                 <input id="creditoFilter" name="credito" class="form-control form-control-sm" value="{{ credito_filter }}" placeholder="Ej. CR-2026-00042">
@@ -141,13 +148,56 @@
     <div class="alert alert-warning" role="alert"><ul class="mb-0">{% for error in filtros_errores %}<li>{{ error }}</li>{% endfor %}</ul></div>
     {% endif %}
 
+    <nav class="mb-3" aria-label="Vista de obligaciones">
+        <div class="btn-group btn-group-sm obligations-view-toggle">
+            {% for vista in vista_links %}
+            <a href="?{{ vista.query }}" class="btn {% if vista_obligaciones == vista.value %}btn-primary{% else %}btn-outline-primary{% endif %}" {% if vista_obligaciones == vista.value %}aria-current="page"{% endif %}>{{ vista.label }}</a>
+            {% endfor %}
+        </div>
+    </nav>
+    {% if vista_obligaciones == 'empresa' %}
+    <dl class="company-indicators" aria-label="Indicadores por empresa">
+        <div><dt>Empresas con mora</dt><dd>{{ resumen_empresas.empresas_con_mora }}</dd></div>
+        <div><dt>Cartera vencida total</dt><dd>${{ resumen_empresas.cartera_vencida|floatformat:2|intcomma }}</dd></div>
+        <div><dt>Mayor mora registrada</dt><dd>{{ resumen_empresas.mora_maxima }} días</dd></div>
+    </dl>
+    {% endif %}
+
     <section class="table-container" aria-labelledby="tableTitle">
         <div class="table-header d-flex justify-content-between align-items-center gap-3 flex-wrap">
             <div>
-                <h2 id="tableTitle" class="table-title">Detalle operativo</h2>
+                <h2 id="tableTitle" class="table-title">{% if vista_obligaciones == 'empresa' %}Por empresa{% else %}Detalle operativo{% endif %}</h2>
                 <p class="chart-description mb-0">{{ pagina_obligaciones.paginator.count }} resultado{{ pagina_obligaciones.paginator.count|pluralize }} para los filtros seleccionados.</p>
             </div>
         </div>
+        {% if vista_obligaciones == 'empresa' %}
+        <div class="table-responsive" tabindex="0" role="region" aria-label="Obligaciones por empresa">
+            <table class="table table-dashboard company-obligations mb-0">
+                <thead><tr>
+                    <th scope="col">Empresa</th><th scope="col" class="text-end">Créditos</th>
+                    <th scope="col" class="text-end">Cuotas vencidas</th><th scope="col" class="text-end">Vencen hoy</th>
+                    <th scope="col" class="text-end">Próximas 15 días</th><th scope="col" class="text-end">Total pendiente</th>
+                    <th scope="col" class="text-end">Mora máxima</th><th scope="col">Acción</th>
+                </tr></thead>
+                <tbody>
+                {% for empresa in empresas_obligaciones %}
+                    <tr>
+                        <td class="fw-semibold">{{ empresa.empresa_nombre_reporte }}</td>
+                        <td class="text-end">{{ empresa.creditos }}</td>
+                        <td class="text-end">{{ empresa.vencidas }}</td>
+                        <td class="text-end">{{ empresa.vencen_hoy }}</td>
+                        <td class="text-end">{{ empresa.proximas }}</td>
+                        <td class="text-end text-nowrap">${{ empresa.total_pendiente|floatformat:2|intcomma }}</td>
+                        <td class="text-end text-nowrap">{{ empresa.mora_maxima }} días</td>
+                        <td><a href="?{{ empresa.detalle_query }}" class="btn btn-sm btn-outline-primary text-nowrap">Ver obligaciones</a></td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="8" class="text-center text-muted py-5">No hay empresas con obligaciones para los filtros seleccionados.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
         <div class="table-responsive">
             <table class="table table-dashboard mb-0">
                 <thead><tr>
@@ -174,6 +224,7 @@
                 </tbody>
             </table>
         </div>
+        {% endif %}
         {% if pagina_obligaciones.paginator.num_pages > 1 %}
         <nav class="p-3" aria-label="Paginación de obligaciones">
             <ul class="pagination pagination-sm justify-content-center mb-0">

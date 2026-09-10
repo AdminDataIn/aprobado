@@ -11,6 +11,7 @@ from django.db.models import (
     Count,
     DecimalField,
     F,
+    Min,
     OuterRef,
     Q,
     Subquery,
@@ -132,6 +133,58 @@ def _obligaciones_queryset(creditos_cartera, filtros):
         ),
     ).filter(cuota_id__isnull=False)
     return filtros.aplicar_fecha_vencimiento(queryset, 'cuota_fecha_vencimiento')
+
+
+def _obligaciones_por_empresa(creditos, filtros, request):
+    hoy = timezone.localdate()
+    cuotas = CuotaAmortizacion.objects.filter(pagada=False, credito__in=creditos)
+    cuotas = filtros.aplicar_fecha_vencimiento(cuotas).annotate(
+        cuota_fecha_vencimiento=F('fecha_vencimiento'),
+        empresa_id_reporte=Case(
+            When(credito__linea=Credito.LineaCredito.LIBRANZA,
+                 then=F('credito__detalle_libranza__empresa_id')),
+            When(credito__linea=Credito.LineaCredito.ADELANTO_NOMINA,
+                 then=F('credito__detalle_adelanto_nomina__vinculo_laboral__empresa_id')),
+        ),
+        empresa_nombre_reporte=Subquery(
+            _base_admin_queryset().filter(pk=OuterRef('credito_id')).values('empresa_nombre')[:1]
+        ),
+    )
+    cuotas = _filtrar_estado_obligacion(cuotas, filtros.obligacion_estado)
+    pendiente = Greatest(
+        Coalesce(F('valor_cuota'), CERO) - Coalesce(F('monto_pagado'), CERO), CERO,
+    )
+    vencidas = Q(fecha_vencimiento__lt=hoy)
+    empresas = list(
+        cuotas.exclude(empresa_id_reporte__isnull=True).order_by()
+        .values('empresa_id_reporte', 'empresa_nombre_reporte')
+        .annotate(
+            creditos=Count('credito_id', distinct=True),
+            vencidas=Count('pk', filter=vencidas),
+            vencen_hoy=Count('pk', filter=Q(fecha_vencimiento=hoy)),
+            proximas=Count('pk', filter=Q(
+                fecha_vencimiento__gt=hoy, fecha_vencimiento__lte=hoy + timedelta(days=15),
+            )),
+            total_pendiente=Coalesce(Sum(pendiente), CERO, output_field=DINERO),
+            total_vencido=Coalesce(Sum(pendiente, filter=vencidas), CERO, output_field=DINERO),
+            primer_vencimiento=Min('fecha_vencimiento', filter=vencidas),
+        )
+        .order_by('-total_vencido', F('primer_vencimiento').asc(nulls_last=True),
+                  'empresa_nombre_reporte', 'empresa_id_reporte')
+    )
+    for empresa in empresas:
+        fecha = empresa['primer_vencimiento']
+        empresa['mora_maxima'] = (hoy - fecha).days if fecha else 0
+        params = request.GET.copy()
+        params.pop('page', None)
+        params['vista'] = 'detalle'
+        params['empresa'] = str(empresa['empresa_id_reporte'])
+        empresa['detalle_query'] = params.urlencode()
+    return empresas, {
+        'empresas_con_mora': sum(empresa['vencidas'] > 0 for empresa in empresas),
+        'cartera_vencida': sum((empresa['total_vencido'] for empresa in empresas), Decimal('0.00')),
+        'mora_maxima': max((empresa['mora_maxima'] for empresa in empresas), default=0),
+    }
 
 
 def _clasificar_obligacion(fecha_vencimiento, hoy):
@@ -471,8 +524,14 @@ def get_admin_obligaciones_context(request):
         'cuota_fecha_vencimiento', 'cuota_numero', 'numero_credito'
     )
 
-    pagina = Paginator(filtradas, 20).get_page(request.GET.get('page'))
-    pagina.object_list = [_serializar_obligacion(credito) for credito in pagina.object_list]
+    vista = 'empresa' if request.GET.get('vista') == 'empresa' else 'detalle'
+    resumen_empresas = None
+    if vista == 'empresa':
+        empresas, resumen_empresas = _obligaciones_por_empresa(filtradas, filtros, request)
+        pagina = Paginator(empresas, 20).get_page(request.GET.get('page'))
+    else:
+        pagina = Paginator(filtradas, 20).get_page(request.GET.get('page'))
+        pagina.object_list = [_serializar_obligacion(credito) for credito in pagina.object_list]
     query_params = request.GET.copy()
     query_params.pop('page', None)
 
@@ -485,7 +544,11 @@ def get_admin_obligaciones_context(request):
     )
     return {
         'pagina_obligaciones': pagina,
-        'obligaciones': pagina.object_list,
+        'obligaciones': pagina.object_list if vista == 'detalle' else [],
+        'empresas_obligaciones': pagina.object_list if vista == 'empresa' else [],
+        'resumen_empresas': resumen_empresas,
+        'vista_obligaciones': vista,
+        'vista_links': _build_query_links(request, 'vista', (('detalle', 'Detalle'), ('empresa', 'Por empresa'))),
         'obligaciones_distribucion': distribucion,
         'obligaciones_total': sum(distribucion.values()),
         'filtros': filtros,
