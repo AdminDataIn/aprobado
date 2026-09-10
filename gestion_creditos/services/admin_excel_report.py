@@ -1,3 +1,4 @@
+from dataclasses import replace
 from decimal import Decimal
 
 from django.db.models import Count, DecimalField, OuterRef, Subquery, Sum, Value
@@ -116,15 +117,20 @@ def build_admin_excel_report(request):
         )
     ).order_by('fecha_aplicacion', 'pk')
 
+    # El estado actual no determina si una aplicacion historica fue recaudo.
+    creditos_recaudo = replace(filtros, estado='').aplicar_dimensiones_credito(_base_admin_queryset())
     detalles = filtros.aplicar_fecha_recaudo(
-        DetalleContablePago.objects.filter(credito__in=base_creditos).select_related(
+        DetalleContablePago.objects.filter(
+            credito__in=creditos_recaudo,
+            pago__estado=HistorialPago.EstadoPago.EXITOSO,
+        ).select_related(
             'credito',
             'credito__detalle_libranza__empresa',
             'credito__detalle_adelanto_nomina__vinculo_laboral__empresa',
             'pago',
             'cuota',
         )
-    ).order_by('credito__numero_credito', 'fecha_aplicacion', 'secuencia_aplicacion')
+    ).order_by('credito__numero_credito', 'fecha_aplicacion', 'secuencia_aplicacion', 'pk')
 
     workbook = Workbook()
     workbook.remove(workbook.active)
@@ -222,8 +228,12 @@ def _write_resumen(
         ('Saldo capital pendiente - corte actual', cartera_actual['capital']),
         ('Semántica solicitudes', 'Filtradas por fecha de solicitud.'),
         ('Semántica créditos', 'Desembolsos filtrados por fecha de desembolso; saldos al corte actual.'),
-        ('Semántica pagos', 'Pagos y recaudo filtrados por fecha de aplicación.'),
-        ('Semántica cuotas', 'Cuotas filtradas por fecha de vencimiento.'),
+        ('Semántica pagos', 'Historial de pagos exitosos por fecha de aplicación del pago; no equivale al recaudo contable aplicado.'),
+        ('Semántica cuotas', 'Cronograma por fecha de vencimiento. Monto pagado y estado son acumulados actuales, no recaudo del período.'),
+        ('Semántica recaudo', 'Recaudo contable y Detalle contable usan exclusivamente fecha_aplicacion e importes de DetalleContablePago asociado a pagos exitosos.'),
+        ('Estado en recaudo', 'No se filtra por estado actual del crédito. Se conservan empresa, línea y ejecutivo.'),
+        ('Detalle de recaudo', 'Una fila por aplicación, incluidos parciales, abonos a capital y aplicaciones cuya cuota ya no existe. Sin inferencias para históricos sin detalle contable.'),
+        ('Zona horaria del período', timezone.get_current_timezone_name()),
     ]
     sheet = workbook.create_sheet('Resumen')
     _write_table(sheet, ['Concepto', 'Valor'], rows)
