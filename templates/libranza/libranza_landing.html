@@ -337,12 +337,12 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
                             <span>empresas sin ubicación</span>
                         </div>
                     </div>
-                    {% if landing_presencia.top_zonas %}
+                    {% if landing_presencia.municipios_con_presencia %}
                     <div class="libranza-active-cities">
                         <p>Municipios activos</p>
                         <div>
-                            {% for zona in landing_presencia.top_zonas|slice:":8" %}
-                            <span>{{ zona.municipio|default:zona.departamento }}</span>
+                            {% for municipio in landing_presencia.municipios_con_presencia %}
+                            <span>{{ municipio }}</span>
                             {% endfor %}
                         </div>
                     </div>

@@ -98,3 +98,30 @@ class LibranzaLandingMarketingTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'marketplace.svg')
         self.assertContains(response, 'libranza-company-logo')
+
+    def test_municipios_activos_renderiza_los_once_sin_limite_visual(self):
+        ubicaciones = [
+            ('Meta', 'Villavicencio'), ('Antioquia', 'Medellín'),
+            ('Antioquia', 'Bello'), ('Antioquia', 'Sabaneta'),
+            ('Risaralda', 'Pereira'), ('Risaralda', 'Dosquebradas'),
+            ('Santander', 'Barrancabermeja'), ('Santander', 'Bucaramanga'),
+            ('Casanare', 'Yopal'), ('Tolima', 'Ibagué'), ('Tolima', 'Saldaña'),
+        ]
+        for index, (departamento, municipio) in enumerate(ubicaciones):
+            Empresa.objects.create(
+                nombre=f'Empresa territorial {index}', convenio_activo=True,
+                departamento=departamento, municipio=municipio,
+            )
+
+        response = self.client.get(reverse('libranza:landing'))
+
+        self.assertEqual(response.status_code, 200)
+        presencia = response.context['landing_presencia']
+        self.assertEqual(len(presencia['top_zonas']), 8)
+        self.assertEqual(len(presencia['municipios_con_presencia']), 11)
+        chips = response.content.decode().split(
+            '<div class="libranza-active-cities">', 1,
+        )[1].split('</div>', 1)[0]
+        self.assertEqual(chips.count('<span>'), 11)
+        for municipio in presencia['municipios_con_presencia']:
+            self.assertInHTML(f'<span>{municipio}</span>', chips)
