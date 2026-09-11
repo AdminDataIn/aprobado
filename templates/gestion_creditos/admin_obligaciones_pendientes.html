@@ -26,6 +26,10 @@
         }
         .summary-item strong { display: block; font-size: 1.35rem; color: var(--text-primary); }
         .summary-item span { color: var(--text-secondary); font-size: .78rem; }
+        .management-summary .summary-item { border-radius: 8px; min-width: 0; }
+        .management-summary strong { font-size: 1.15rem; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+        .management-summary .summary-overdue strong { color: #b91c1c; }
+        .management-summary .summary-collected strong { color: #166534; }
         .filter-panel {
             background: #fff;
             border: 1px solid rgba(15, 23, 42, .08);
@@ -55,9 +59,6 @@
         .obligation-status.AL_DIA { background: #dcfce7; color: #166534; }
         .table-dashboard td { vertical-align: middle; }
         .obligations-view-toggle.btn-group { display: inline-flex; flex-direction: row; gap: 0; margin-top: 0; }
-        .company-indicators { display: flex; flex-wrap: wrap; gap: .75rem 1.5rem; margin: 1rem 0; font-size: .85rem; }
-        .company-indicators dt { font-weight: 400; color: var(--text-secondary); }
-        .company-indicators dd { margin: .15rem 0 0; font-weight: 600; }
         .company-obligations { min-width: 900px; }
         .company-obligations td:first-child { min-width: 160px; max-width: 260px; overflow-wrap: anywhere; }
         @media (max-width: 991px) {
@@ -101,13 +102,6 @@
         </a>
     </div>
 
-    <section class="obligations-summary" aria-label="Resumen de obligaciones">
-        <div class="summary-item"><strong>{{ obligaciones_distribucion.VENCIDA }}</strong><span>Vencidas</span></div>
-        <div class="summary-item"><strong>{{ obligaciones_distribucion.VENCE_HOY }}</strong><span>Vencen hoy</span></div>
-        <div class="summary-item"><strong>{{ obligaciones_distribucion.VENCE_PRONTO }}</strong><span>Próximas 15 días</span></div>
-        <div class="summary-item"><strong>{{ obligaciones_distribucion.AL_DIA }}</strong><span>Posteriores / al día</span></div>
-    </section>
-
     <section class="filter-panel" aria-labelledby="filtersTitle">
         <h2 id="filtersTitle" class="section-title mb-3">Filtros</h2>
         <div class="filter-shortcuts" aria-label="Estado operativo">
@@ -148,6 +142,17 @@
     <div class="alert alert-warning" role="alert"><ul class="mb-0">{% for error in filtros_errores %}<li>{{ error }}</li>{% endfor %}</ul></div>
     {% endif %}
 
+    <section class="obligations-summary management-summary" aria-label="Resumen gerencial del universo filtrado">
+        <div class="summary-item"><strong>${{ resumen_gerencial.obligacion_periodo|floatformat:2|intcomma }}</strong><span>Obligación del período</span></div>
+        <div class="summary-item summary-collected"><strong>${{ resumen_gerencial.recaudo_periodo|floatformat:2|intcomma }}</strong><span>Recaudo del período</span></div>
+        <div class="summary-item"><strong>${{ resumen_gerencial.total_pendiente|floatformat:2|intcomma }}</strong><span>Pendiente actual</span></div>
+        <div class="summary-item summary-overdue"><strong>${{ resumen_gerencial.total_vencido|floatformat:2|intcomma }}</strong><span>Vencido actual</span></div>
+        <div class="summary-item"><strong>{{ resumen_gerencial.empresas_con_mora }}</strong><span>Empresas con mora</span></div>
+        <div class="summary-item"><strong>{{ resumen_gerencial.creditos_con_mora }}</strong><span>Créditos con mora</span></div>
+        <div class="summary-item summary-overdue"><strong>${{ resumen_gerencial.vencido_mas_30|floatformat:2|intcomma }}</strong><span>Cartera vencida &gt;30 días</span></div>
+        <div class="summary-item"><strong>{{ resumen_gerencial.mora_maxima }} días</strong><span>Mayor mora</span></div>
+    </section>
+
     <nav class="mb-3" aria-label="Vista de obligaciones">
         <div class="btn-group btn-group-sm obligations-view-toggle">
             {% for vista in vista_links %}
@@ -155,13 +160,6 @@
             {% endfor %}
         </div>
     </nav>
-    {% if vista_obligaciones == 'empresa' %}
-    <dl class="company-indicators" aria-label="Indicadores por empresa">
-        <div><dt>Empresas con mora</dt><dd>{{ resumen_empresas.empresas_con_mora }}</dd></div>
-        <div><dt>Cartera vencida total</dt><dd>${{ resumen_empresas.cartera_vencida|floatformat:2|intcomma }}</dd></div>
-        <div><dt>Mayor mora registrada</dt><dd>{{ resumen_empresas.mora_maxima }} días</dd></div>
-    </dl>
-    {% endif %}
 
     <section class="table-container" aria-labelledby="tableTitle">
         <div class="table-header d-flex justify-content-between align-items-center gap-3 flex-wrap">
@@ -174,22 +172,22 @@
         <div class="table-responsive" tabindex="0" role="region" aria-label="Obligaciones por empresa">
             <table class="table table-dashboard company-obligations mb-0">
                 <thead><tr>
-                    <th scope="col">Empresa</th><th scope="col" class="text-end">Créditos</th>
-                    <th scope="col" class="text-end">Cuotas vencidas</th><th scope="col" class="text-end">Vencen hoy</th>
-                    <th scope="col" class="text-end">Próximas 15 días</th><th scope="col" class="text-end">Total pendiente</th>
+                    <th scope="col">Empresa</th><th scope="col" class="text-end" title="Créditos y clientes con cuotas en el período">Créditos / clientes</th>
+                    <th scope="col" class="text-end">Obligación período</th><th scope="col" class="text-end">Recaudo período</th>
+                    <th scope="col" class="text-end">Pendiente actual</th><th scope="col" class="text-end">Vencido</th>
                     <th scope="col" class="text-end">Mora máxima</th><th scope="col">Acción</th>
                 </tr></thead>
                 <tbody>
                 {% for empresa in empresas_obligaciones %}
                     <tr>
                         <td class="fw-semibold">{{ empresa.empresa_nombre_reporte }}</td>
-                        <td class="text-end">{{ empresa.creditos }}</td>
-                        <td class="text-end">{{ empresa.vencidas }}</td>
-                        <td class="text-end">{{ empresa.vencen_hoy }}</td>
-                        <td class="text-end">{{ empresa.proximas }}</td>
+                        <td class="text-end text-nowrap">{{ empresa.creditos }} / {{ empresa.clientes }}</td>
+                        <td class="text-end text-nowrap">${{ empresa.obligacion_periodo|floatformat:2|intcomma }}</td>
+                        <td class="text-end text-nowrap">${{ empresa.recaudo_periodo|floatformat:2|intcomma }}</td>
                         <td class="text-end text-nowrap">${{ empresa.total_pendiente|floatformat:2|intcomma }}</td>
+                        <td class="text-end text-nowrap">${{ empresa.total_vencido|floatformat:2|intcomma }}</td>
                         <td class="text-end text-nowrap">{{ empresa.mora_maxima }} días</td>
-                        <td><a href="?{{ empresa.detalle_query }}" class="btn btn-sm btn-outline-primary text-nowrap">Ver obligaciones</a></td>
+                        <td>{% if empresa.detalle_query %}<a href="?{{ empresa.detalle_query }}" class="btn btn-sm btn-outline-primary text-nowrap">Ver obligaciones</a>{% else %}<span class="text-muted">Sin empresa asignada</span>{% endif %}</td>
                     </tr>
                 {% empty %}
                     <tr><td colspan="8" class="text-center text-muted py-5">No hay empresas con obligaciones para los filtros seleccionados.</td></tr>

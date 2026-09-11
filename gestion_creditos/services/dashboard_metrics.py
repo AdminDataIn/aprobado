@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from datetime import timedelta
 from decimal import Decimal
 
@@ -27,6 +28,7 @@ from gestion_creditos.models import (
     Credito,
     CuotaAmortizacion,
     DetalleContablePago,
+    HistorialPago,
 )
 from gestion_creditos.services.accounting import get_platform_disbursed_creditos_queryset
 from gestion_creditos.services.admin_dashboard_filters import parse_admin_dashboard_filters
@@ -135,11 +137,8 @@ def _obligaciones_queryset(creditos_cartera, filtros):
     return filtros.aplicar_fecha_vencimiento(queryset, 'cuota_fecha_vencimiento')
 
 
-def _obligaciones_por_empresa(creditos, filtros, request):
-    hoy = timezone.localdate()
-    cuotas = CuotaAmortizacion.objects.filter(pagada=False, credito__in=creditos)
-    cuotas = filtros.aplicar_fecha_vencimiento(cuotas).annotate(
-        cuota_fecha_vencimiento=F('fecha_vencimiento'),
+def _con_empresa_contable(queryset):
+    return queryset.annotate(
         empresa_id_reporte=Case(
             When(credito__linea=Credito.LineaCredito.LIBRANZA,
                  then=F('credito__detalle_libranza__empresa_id')),
@@ -150,41 +149,81 @@ def _obligaciones_por_empresa(creditos, filtros, request):
             _base_admin_queryset().filter(pk=OuterRef('credito_id')).values('empresa_nombre')[:1]
         ),
     )
-    cuotas = _filtrar_estado_obligacion(cuotas, filtros.obligacion_estado)
-    pendiente = Greatest(
-        Coalesce(F('valor_cuota'), CERO) - Coalesce(F('monto_pagado'), CERO), CERO,
+
+
+def _obligaciones_por_empresa(creditos, creditos_recaudo, filtros, request):
+    hoy = timezone.localdate()
+    cuotas = filtros.aplicar_fecha_vencimiento(
+        CuotaAmortizacion.objects.filter(credito__in=creditos)
+    ).annotate(
+        cuota_fecha_vencimiento=F('fecha_vencimiento'),
+        residuo=Greatest(
+            Coalesce(F('valor_cuota'), CERO) - Coalesce(F('monto_pagado'), CERO), CERO,
+        ),
     )
-    vencidas = Q(fecha_vencimiento__lt=hoy)
-    empresas = list(
-        cuotas.exclude(empresa_id_reporte__isnull=True).order_by()
-        .values('empresa_id_reporte', 'empresa_nombre_reporte')
-        .annotate(
+    cuotas = _con_empresa_contable(_filtrar_estado_obligacion(cuotas, filtros.obligacion_estado))
+    pendientes = Q(pagada=False, residuo__gt=0, credito__estado__in=ESTADOS_CARTERA)
+    vencidas = pendientes & Q(fecha_vencimiento__lt=hoy)
+    empresas = {
+        row['empresa_id_reporte']: row
+        for row in cuotas.order_by().values('empresa_id_reporte', 'empresa_nombre_reporte').annotate(
             creditos=Count('credito_id', distinct=True),
+            clientes=Count('credito__usuario_id', distinct=True),
+            obligacion_periodo=Coalesce(Sum('valor_cuota'), CERO, output_field=DINERO),
             vencidas=Count('pk', filter=vencidas),
-            vencen_hoy=Count('pk', filter=Q(fecha_vencimiento=hoy)),
-            proximas=Count('pk', filter=Q(
+            vencen_hoy=Count('pk', filter=pendientes & Q(fecha_vencimiento=hoy)),
+            proximas=Count('pk', filter=pendientes & Q(
                 fecha_vencimiento__gt=hoy, fecha_vencimiento__lte=hoy + timedelta(days=15),
             )),
-            total_pendiente=Coalesce(Sum(pendiente), CERO, output_field=DINERO),
-            total_vencido=Coalesce(Sum(pendiente, filter=vencidas), CERO, output_field=DINERO),
+            total_pendiente=Coalesce(Sum('residuo', filter=pendientes), CERO, output_field=DINERO),
+            total_vencido=Coalesce(Sum('residuo', filter=vencidas), CERO, output_field=DINERO),
+            vencido_mas_30=Coalesce(Sum('residuo', filter=pendientes & Q(
+                fecha_vencimiento__lt=hoy - timedelta(days=30),
+            )), CERO, output_field=DINERO),
+            creditos_con_mora=Count('credito_id', distinct=True, filter=vencidas),
             primer_vencimiento=Min('fecha_vencimiento', filter=vencidas),
         )
-        .order_by('-total_vencido', F('primer_vencimiento').asc(nulls_last=True),
-                  'empresa_nombre_reporte', 'empresa_id_reporte')
-    )
+    }
+    # Agregar por separado: un JOIN de aplicaciones con cuotas multiplicaria importes.
+    detalles = filtros.aplicar_fecha_recaudo(DetalleContablePago.objects.filter(
+        credito__in=creditos_recaudo, pago__estado=HistorialPago.EstadoPago.EXITOSO,
+    ))
+    for row in _con_empresa_contable(detalles).order_by().values(
+        'empresa_id_reporte', 'empresa_nombre_reporte',
+    ).annotate(recaudo_periodo=Coalesce(Sum('monto_total_aplicado'), CERO, output_field=DINERO)):
+        empresa = empresas.setdefault(row['empresa_id_reporte'], {
+            'empresa_id_reporte': row['empresa_id_reporte'],
+            'empresa_nombre_reporte': row['empresa_nombre_reporte'],
+            'creditos': 0, 'clientes': 0, 'obligacion_periodo': Decimal('0.00'),
+            'total_pendiente': Decimal('0.00'), 'total_vencido': Decimal('0.00'),
+            'vencido_mas_30': Decimal('0.00'), 'creditos_con_mora': 0,
+            'vencidas': 0, 'vencen_hoy': 0, 'proximas': 0, 'primer_vencimiento': None,
+        })
+        empresa['recaudo_periodo'] = row['recaudo_periodo']
+    empresas = list(empresas.values())
     for empresa in empresas:
+        empresa.setdefault('recaudo_periodo', Decimal('0.00'))
         fecha = empresa['primer_vencimiento']
         empresa['mora_maxima'] = (hoy - fecha).days if fecha else 0
         params = request.GET.copy()
         params.pop('page', None)
         params['vista'] = 'detalle'
         params['empresa'] = str(empresa['empresa_id_reporte'])
-        empresa['detalle_query'] = params.urlencode()
-    return empresas, {
-        'empresas_con_mora': sum(empresa['vencidas'] > 0 for empresa in empresas),
-        'cartera_vencida': sum((empresa['total_vencido'] for empresa in empresas), Decimal('0.00')),
-        'mora_maxima': max((empresa['mora_maxima'] for empresa in empresas), default=0),
+        empresa['detalle_query'] = params.urlencode() if empresa['empresa_id_reporte'] else None
+    empresas.sort(key=lambda row: (
+        -row['total_vencido'], -row['mora_maxima'], row['empresa_nombre_reporte'],
+        row['empresa_id_reporte'] or 0,
+    ))
+    resumen = {
+        key: sum((empresa[key] for empresa in empresas), Decimal('0.00'))
+        for key in ('obligacion_periodo', 'recaudo_periodo', 'total_pendiente', 'total_vencido', 'vencido_mas_30')
     }
+    resumen.update(
+        empresas_con_mora=sum(bool(e['empresa_id_reporte']) and e['vencidas'] > 0 for e in empresas),
+        creditos_con_mora=sum(e['creditos_con_mora'] for e in empresas),
+        mora_maxima=max((e['mora_maxima'] for e in empresas), default=0),
+    )
+    return empresas, resumen
 
 
 def _clasificar_obligacion(fecha_vencimiento, hoy):
@@ -525,9 +564,20 @@ def get_admin_obligaciones_context(request):
     )
 
     vista = 'empresa' if request.GET.get('vista') == 'empresa' else 'detalle'
-    resumen_empresas = None
+    creditos_periodo = filtros.aplicar_dimensiones_credito(_base_admin_queryset())
+    creditos_recaudo = replace(filtros, estado='').aplicar_dimensiones_credito(_base_admin_queryset())
+    if busqueda:
+        creditos_periodo = creditos_periodo.filter(numero_credito__icontains=busqueda)
+        creditos_recaudo = creditos_recaudo.filter(numero_credito__icontains=busqueda)
+    empresas, resumen_gerencial = _obligaciones_por_empresa(
+        creditos_periodo, creditos_recaudo, filtros, request,
+    )
+    resumen_empresas = {
+        'empresas_con_mora': resumen_gerencial['empresas_con_mora'],
+        'cartera_vencida': resumen_gerencial['total_vencido'],
+        'mora_maxima': resumen_gerencial['mora_maxima'],
+    }
     if vista == 'empresa':
-        empresas, resumen_empresas = _obligaciones_por_empresa(filtradas, filtros, request)
         pagina = Paginator(empresas, 20).get_page(request.GET.get('page'))
     else:
         pagina = Paginator(filtradas, 20).get_page(request.GET.get('page'))
@@ -547,6 +597,7 @@ def get_admin_obligaciones_context(request):
         'obligaciones': pagina.object_list if vista == 'detalle' else [],
         'empresas_obligaciones': pagina.object_list if vista == 'empresa' else [],
         'resumen_empresas': resumen_empresas,
+        'resumen_gerencial': resumen_gerencial,
         'vista_obligaciones': vista,
         'vista_links': _build_query_links(request, 'vista', (('detalle', 'Detalle'), ('empresa', 'Por empresa'))),
         'obligaciones_distribucion': distribucion,

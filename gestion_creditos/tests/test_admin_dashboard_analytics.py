@@ -1,7 +1,9 @@
 import json
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from urllib.parse import parse_qs
+from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.db import connection
@@ -171,7 +173,7 @@ class AdminDashboardAnalyticsTests(TestCase):
         self.assertEqual(len(empresas), 2)
         a, b = empresas
         self.assertEqual(a['empresa_id_reporte'], self.empresa_a.pk)
-        self.assertEqual((a['creditos'], a['vencidas'], a['vencen_hoy'], a['proximas']), (2, 2, 1, 2))
+        self.assertEqual((a['creditos'], a['vencidas'], a['vencen_hoy'], a['proximas']), (3, 2, 1, 2))
         self.assertEqual(a['total_pendiente'], Decimal('2300'))
         self.assertEqual(a['total_vencido'], Decimal('700'))
         self.assertEqual(a['mora_maxima'], 32)
@@ -242,6 +244,9 @@ class AdminDashboardAnalyticsTests(TestCase):
         self.assertEqual(len(context['empresas_obligaciones']), 1)
         self.assertEqual(context['resumen_empresas']['empresas_con_mora'], 21)
         self.assertEqual(context['resumen_empresas']['cartera_vencida'], Decimal('8400'))
+        self.assertEqual(context['resumen_gerencial']['obligacion_periodo'], Decimal('8400'))
+        self.assertEqual(context['resumen_gerencial']['total_pendiente'], Decimal('8400'))
+        self.assertEqual(context['resumen_gerencial']['creditos_con_mora'], 21)
         self.assertIn('vista=empresa', context['obligaciones_querystring'])
 
     def test_por_empresa_sin_resultados_y_permisos_staff(self):
@@ -259,7 +264,8 @@ class AdminDashboardAnalyticsTests(TestCase):
     def test_por_empresa_no_introduce_consultas_por_fila(self):
         hoy = timezone.localdate()
         credito = self._crear_credito()
-        self._crear_cuota(credito, numero=1, vencimiento=hoy)
+        cuota = self._crear_cuota(credito, numero=1, vencimiento=hoy)
+        self._crear_detalle_contable(credito, cuota, timezone.now())
         with CaptureQueriesContext(connection) as inicial:
             self._context_empresas()
         for numero in range(5):
@@ -267,10 +273,154 @@ class AdminDashboardAnalyticsTests(TestCase):
             credito = self._crear_credito(empresa=empresa)
             for cuota in range(1, 4):
                 self._crear_cuota(credito, numero=cuota, vencimiento=hoy + timedelta(days=cuota))
+            self._crear_detalle_contable(credito, None, timezone.now())
         with CaptureQueriesContext(connection) as final:
             context = self._context_empresas()
         self.assertEqual(len(context['empresas_obligaciones']), 6)
         self.assertEqual(len(final), len(inicial))
+
+    def _aplicacion_gerencial(self, credito, cuota, fecha, monto):
+        monto = Decimal(monto)
+        pago = HistorialPago.objects.create(
+            credito=credito, monto=monto, estado=HistorialPago.EstadoPago.EXITOSO,
+            referencia_pago=f'REF-GER-{HistorialPago.objects.count() + 1}',
+            fecha_aplicacion=timezone.make_aware(datetime(2026, 7, 1)),
+        )
+        return DetalleContablePago.objects.create(
+            credito=credito, cuota=cuota, pago=pago, fecha_aplicacion=fecha,
+            monto_total_aplicado=monto, capital_aplicado=monto, capital_principal_aplicado=monto,
+        )
+
+    @patch('django.utils.timezone.localdate', return_value=date(2026, 10, 2))
+    def test_gerencial_obligacion_recaudo_y_residuo_son_universos_independientes(self, _hoy):
+        credito = self._crear_credito()
+        anterior = self._crear_cuota(credito, numero=1, vencimiento=date(2026, 8, 1))
+        cuota = self._crear_cuota(credito, numero=2, vencimiento=date(2026, 9, 1),
+                                  valor=Decimal('1000'), pagado=Decimal('400'))
+        parcial = self._crear_cuota(credito, numero=3, vencimiento=date(2026, 9, 2),
+                                    valor=Decimal('500'), pagado=Decimal('100'))
+        satisfecha = self._crear_cuota(credito, numero=4, vencimiento=date(2026, 9, 30),
+                                       valor=Decimal('300'), pagado=Decimal('300'), pagada=True)
+        cerrado = self._crear_credito(empresa=self.empresa_b, estado=Credito.EstadoCredito.PAGADO)
+        ultima = self._crear_cuota(cerrado, numero=1, vencimiento=date(2026, 9, 10),
+                                  valor=Decimal('700'), pagado=Decimal('700'), pagada=True)
+        solo_recaudo = self._crear_credito(empresa=Empresa.objects.create(nombre='Empresa solo recaudo'))
+        fecha = timezone.make_aware(datetime(2026, 9, 15, 10))
+        self._aplicacion_gerencial(credito, cuota, timezone.make_aware(datetime(2026, 7, 1)), '400')
+        self._aplicacion_gerencial(credito, parcial, fecha, '100')
+        self._aplicacion_gerencial(credito, satisfecha, fecha, '300')
+        self._aplicacion_gerencial(cerrado, ultima, fecha, '700')
+        self._aplicacion_gerencial(solo_recaudo, None, fecha, '50')
+
+        params = {'fecha_desde': '2026-09-01', 'fecha_hasta': '2026-09-30'}
+        context = self._context_empresas(**params)
+        resumen = context['resumen_gerencial']
+        self.assertEqual(resumen, {
+            'obligacion_periodo': Decimal('2500'), 'recaudo_periodo': Decimal('1150'),
+            'total_pendiente': Decimal('1000'), 'total_vencido': Decimal('1000'),
+            'vencido_mas_30': Decimal('600'), 'empresas_con_mora': 1,
+            'creditos_con_mora': 1, 'mora_maxima': 31,
+        })
+        self.assertNotEqual(resumen['total_pendiente'], resumen['obligacion_periodo'] - resumen['recaudo_periodo'])
+        rows = context['empresas_obligaciones']
+        self.assertEqual(len(rows), 3)
+        self.assertEqual((rows[0]['creditos'], rows[0]['clientes']), (1, 1))
+        self.assertEqual(rows[0]['obligacion_periodo'], Decimal('1800'))
+        self.assertEqual(rows[0]['recaudo_periodo'], Decimal('400'))
+        for key in ('obligacion_periodo', 'recaudo_periodo', 'total_pendiente', 'total_vencido', 'vencido_mas_30', 'creditos_con_mora'):
+            self.assertEqual(resumen[key], sum(row[key] for row in rows))
+        detalle = get_admin_obligaciones_context(self.factory.get('/gestion/obligaciones-pendientes/', params))
+        self.assertEqual(detalle['resumen_gerencial'], resumen)
+        # El detalle conserva la primera pendiente, aunque sea anterior al rango.
+        self.assertEqual(detalle['obligaciones'], [])
+        anterior.refresh_from_db()
+        self.assertFalse(anterior.pagada)
+
+    def test_gerencial_no_multiplica_recaudo_por_cuotas_y_conserva_abonos_sin_cuota(self):
+        credito = self._crear_credito()
+        for numero in range(1, 4):
+            cuota = self._crear_cuota(credito, numero=numero, vencimiento=date(2026, 9, numero))
+        fecha = timezone.make_aware(datetime(2026, 9, 15))
+        self._aplicacion_gerencial(credito, cuota, fecha, '100')
+        self._aplicacion_gerencial(credito, cuota, fecha, '200')
+        self._aplicacion_gerencial(credito, None, fecha, '50')
+        context = self._context_empresas(fecha_desde='2026-09-01', fecha_hasta='2026-09-30')
+        self.assertEqual(context['resumen_gerencial']['obligacion_periodo'], Decimal('1200'))
+        self.assertEqual(context['resumen_gerencial']['recaudo_periodo'], Decimal('350'))
+        self.assertEqual(context['empresas_obligaciones'][0]['recaudo_periodo'], Decimal('350'))
+        self.assertEqual(context['empresas_obligaciones'][0]['creditos'], 1)
+
+    @patch('django.utils.timezone.localdate', return_value=date(2026, 10, 2))
+    def test_gerencial_filtros_empresa_fecha_y_estado_no_excluyen_recaudo_pagado(self, _hoy):
+        activo = self._crear_credito()
+        cerrado = self._crear_credito(estado=Credito.EstadoCredito.PAGADO)
+        otro = self._crear_credito(empresa=self.empresa_b)
+        for credito in (activo, cerrado, otro):
+            cuota = self._crear_cuota(credito, numero=1, vencimiento=date(2026, 9, 1))
+            self._aplicacion_gerencial(credito, cuota, timezone.make_aware(datetime(2026, 9, 15)), '100')
+            self._aplicacion_gerencial(credito, cuota, timezone.make_aware(datetime(2026, 8, 15)), '200')
+        context = self._context_empresas(
+            empresa=str(self.empresa_a.pk), fecha_desde='2026-09-01', fecha_hasta='2026-09-30',
+            estado='ACTIVO', obligacion='VENCE_HOY',
+        )
+        self.assertEqual(context['resumen_gerencial']['recaudo_periodo'], Decimal('200'))
+        self.assertEqual(context['resumen_gerencial']['obligacion_periodo'], Decimal('0'))
+        self.assertEqual(len(context['empresas_obligaciones']), 1)
+        busqueda = self._context_empresas(credito=cerrado.numero_credito, fecha_desde='2026-09-01', fecha_hasta='2026-09-30')
+        self.assertEqual(busqueda['resumen_gerencial']['recaudo_periodo'], Decimal('100'))
+        self.assertEqual(busqueda['resumen_gerencial']['obligacion_periodo'], Decimal('400'))
+
+    def test_gerencial_mora_mayor_30_excluye_satisfechas_y_residuos_no_positivos(self):
+        hoy = timezone.localdate()
+        credito = self._crear_credito()
+        for numero, dias, pagado, pagada in (
+            (1, 31, '100', False), (2, 30, '0', False),
+            (3, 90, '400', True), (4, 100, '400', False), (5, 101, '500', False),
+        ):
+            self._crear_cuota(credito, numero=numero, vencimiento=hoy - timedelta(days=dias),
+                              pagado=Decimal(pagado), pagada=pagada)
+        resumen = self._context_empresas()['resumen_gerencial']
+        self.assertEqual(resumen['total_pendiente'], Decimal('700'))
+        self.assertEqual(resumen['total_vencido'], Decimal('700'))
+        self.assertEqual(resumen['vencido_mas_30'], Decimal('300'))
+        self.assertEqual(resumen['mora_maxima'], 31)
+        self.assertEqual(resumen['creditos_con_mora'], 1)
+
+    def test_gerencial_recaudo_limites_bogota_y_no_infiere_historicos(self):
+        with timezone.override(ZoneInfo('America/Bogota')):
+            credito = self._crear_credito()
+            cuota = self._crear_cuota(credito, numero=1, vencimiento=date(2026, 9, 1), pagada=True, pagado=Decimal('400'))
+            params = {'fecha_desde': '2026-09-01', 'fecha_hasta': '2026-09-30'}
+            self.assertEqual(self._context_empresas(**params)['resumen_gerencial']['recaudo_periodo'], 0)
+            inicio = datetime(2026, 9, 1, tzinfo=ZoneInfo('America/Bogota'))
+            fin = datetime(2026, 10, 1, tzinfo=ZoneInfo('America/Bogota'))
+            for fecha in (inicio - timedelta(seconds=1), inicio, fin - timedelta(seconds=1), fin):
+                self._aplicacion_gerencial(credito, cuota, fecha.astimezone(ZoneInfo('UTC')), '10')
+            fallido = self._aplicacion_gerencial(credito, cuota, inicio, '100')
+            fallido.pago.estado = HistorialPago.EstadoPago.FALLIDO
+            fallido.pago.save(update_fields=['estado'])
+            resumen = self._context_empresas(**params)['resumen_gerencial']
+            self.assertEqual(resumen['recaudo_periodo'], Decimal('20'))
+            self.assertEqual(resumen['total_pendiente'], Decimal('0'))
+
+    def test_gerencial_sin_empresa_no_pierde_importes_y_vista_renderiza_cards(self):
+        credito = self._crear_credito(linea=Credito.LineaCredito.EMPRENDIMIENTO)
+        cuota = self._crear_cuota(credito, numero=1, vencimiento=timezone.localdate() - timedelta(days=2))
+        self._crear_detalle_contable(credito, cuota, timezone.now())
+        self.client.force_login(self.staff)
+        for vista in ('empresa', 'detalle'):
+            response = self.client.get(reverse('gestion:obligaciones_pendientes'), {'vista': vista})
+            self.assertEqual(response.status_code, 200)
+            resumen = response.context['resumen_gerencial']
+            self.assertEqual(resumen['recaudo_periodo'], Decimal('400'))
+            self.assertEqual(resumen['total_vencido'], Decimal('400'))
+            self.assertEqual(resumen['empresas_con_mora'], 0)
+            self.assertEqual(resumen['creditos_con_mora'], 1)
+            for label in ('Obligación del período', 'Recaudo del período', 'Pendiente actual', 'Vencido actual',
+                          'Empresas con mora', 'Créditos con mora', 'Cartera vencida &gt;30 días', 'Mayor mora'):
+                self.assertContains(response, label)
+            if vista == 'empresa':
+                self.assertIsNone(response.context['empresas_obligaciones'][0]['detalle_query'])
 
     def test_kpi_capital_excluye_null_y_respeta_empresa_estado_y_linea(self):
         self._crear_credito(empresa=self.empresa_a, capital=Decimal('600.00'))
