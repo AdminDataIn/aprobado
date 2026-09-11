@@ -1,7 +1,7 @@
 from dataclasses import replace
 from decimal import Decimal
 
-from django.db.models import Count, DecimalField, OuterRef, Subquery, Sum, Value
+from django.db.models import Count, DecimalField, Exists, Max, Min, OuterRef, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from openpyxl import Workbook
@@ -31,7 +31,8 @@ CURRENCY_HEADERS = {
     'Monto aprobado',
     'Monto desembolsado',
     'Valor cuota',
-    'Monto pagado',
+    'Pagado acumulado actual',
+    'Recaudado en el período',
     'Saldo pendiente cuota',
     'Valor total',
     'Capital',
@@ -54,6 +55,10 @@ DATE_HEADERS = {
     'Próxima fecha pago',
     'Vencimiento',
     'Fecha aplicación',
+}
+APPLICATION_DATE_HEADERS = {
+    'Primera aplicación en el período',
+    'Última aplicación en el período',
 }
 
 
@@ -145,7 +150,7 @@ def build_admin_excel_report(request):
     )
     _write_solicitudes(workbook, solicitudes)
     _write_creditos(workbook, desembolsos)
-    _write_cuotas(workbook, cuotas)
+    _write_cuotas(workbook, cuotas, detalles)
     _write_pagos(workbook, pagos)
     _write_secondary_sheets(workbook, base_creditos, detalles)
 
@@ -229,7 +234,8 @@ def _write_resumen(
         ('Semántica solicitudes', 'Filtradas por fecha de solicitud.'),
         ('Semántica créditos', 'Desembolsos filtrados por fecha de desembolso; saldos al corte actual.'),
         ('Semántica pagos', 'Historial de pagos exitosos por fecha de aplicación del pago; no equivale al recaudo contable aplicado.'),
-        ('Semántica cuotas', 'Cronograma por fecha de vencimiento. Monto pagado y estado son acumulados actuales, no recaudo del período.'),
+        ('Semántica cuotas', 'Cronograma por fecha de vencimiento. Pagado acumulado actual y Estado actual son el corte actual, no recaudo del período. Las columnas de aplicaciones usan exclusivamente DetalleContablePago.fecha_aplicacion del período consultado; sin rango incluyen todo el historial contable.'),
+        ('Trazabilidad cuotas', 'Indica si existe al menos una aplicación contable de pago exitoso vinculada a la cuota, en cualquier fecha; no certifica que todo el acumulado tenga detalle. Sin aplicaciones en el período, el recaudo y la cantidad son cero y las fechas quedan vacías. Abonos sin cuota e históricos desvinculados solo figuran en las hojas contables.'),
         ('Semántica recaudo', 'Recaudo contable y Detalle contable usan exclusivamente fecha_aplicacion e importes de DetalleContablePago asociado a pagos exitosos.'),
         ('Estado en recaudo', 'No se filtra por estado actual del crédito. Se conservan empresa, línea y ejecutivo.'),
         ('Detalle de recaudo', 'Una fila por aplicación, incluidos parciales, abonos a capital y aplicaciones cuya cuota ya no existe. Sin inferencias para históricos sin detalle contable.'),
@@ -336,7 +342,23 @@ def _write_creditos(workbook, queryset):
     _write_table(workbook.create_sheet('Creditos'), headers, rows, percent_headers={'Tasa'})
 
 
-def _write_cuotas(workbook, queryset):
+def _write_cuotas(workbook, queryset, detalles):
+    # Agrupar aplicaciones, nunca acumulados de cuota; conservar el cronograma.
+    aplicaciones = {
+        item['cuota_id']: item
+        for item in detalles.filter(cuota__in=queryset).order_by().values('cuota_id').annotate(
+            total=Sum('monto_total_aplicado'),
+            cantidad=Count('pk'),
+            primera=Min('fecha_aplicacion'),
+            ultima=Max('fecha_aplicacion'),
+        )
+    }
+    queryset = queryset.annotate(tiene_trazabilidad=Exists(
+        DetalleContablePago.objects.filter(
+            cuota_id=OuterRef('pk'),
+            pago__estado=HistorialPago.EstadoPago.EXITOSO,
+        )
+    ))
     headers = [
         'Número crédito',
         'Empresa',
@@ -344,17 +366,23 @@ def _write_cuotas(workbook, queryset):
         'Número cuota',
         'Vencimiento',
         'Valor cuota',
-        'Monto pagado',
+        'Pagado acumulado actual',
         'Saldo pendiente cuota',
-        'Pagada',
+        'Estado actual',
         'Estado operativo',
         'Días vencida',
         'Días para vencer',
+        'Recaudado en el período',
+        'Cantidad de aplicaciones en el período',
+        'Primera aplicación en el período',
+        'Última aplicación en el período',
+        'Trazabilidad contable',
     ]
     rows = []
     for cuota in queryset:
         estado, dias_vencida, dias_para_vencer = _installment_status(cuota)
         monto_pagado = cuota.monto_pagado or Decimal('0.00')
+        aplicacion = aplicaciones.get(cuota.pk, {})
         rows.append((
             cuota.credito.numero_credito,
             _company_name(cuota.credito),
@@ -364,10 +392,15 @@ def _write_cuotas(workbook, queryset):
             cuota.valor_cuota,
             monto_pagado,
             max((cuota.valor_cuota or Decimal('0.00')) - monto_pagado, Decimal('0.00')),
-            'Sí' if cuota.pagada else 'No',
+            'PAGADA' if cuota.pagada else 'PENDIENTE',
             estado,
             dias_vencida,
             dias_para_vencer,
+            aplicacion.get('total', Decimal('0.00')),
+            aplicacion.get('cantidad', 0),
+            _excel_datetime(aplicacion.get('primera')),
+            _excel_datetime(aplicacion.get('ultima')),
+            'Con trazabilidad contable' if cuota.tiene_trazabilidad else 'Sin trazabilidad contable',
         ))
     _write_table(workbook.create_sheet('Cuotas'), headers, rows)
 
@@ -547,6 +580,8 @@ def _write_table(
             number_format = MONEY_FORMAT
         elif header in percent_headers:
             number_format = PERCENT_FORMAT
+        elif header in APPLICATION_DATE_HEADERS:
+            number_format = DATETIME_FORMAT
         elif header in DATE_HEADERS:
             number_format = DATETIME_FORMAT if 'Fecha ' in header and header != 'Fecha desembolso' else DATE_FORMAT
         if number_format:

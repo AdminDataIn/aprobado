@@ -71,11 +71,12 @@ class AdminExcelReportTests(TestCase):
         fecha_solicitud=None,
         fecha_desembolso=None,
         usuario=None,
+        numero_credito=None,
     ):
         self._sequence += 1
         credito = Credito.objects.create(
             usuario=usuario or self.cliente,
-            numero_credito=f'CR-EX-{self._sequence:04d}',
+            numero_credito=numero_credito or f'CR-EX-{self._sequence:04d}',
             linea=linea,
             estado=estado,
             monto_solicitado=Decimal('1000000.00'),
@@ -211,8 +212,61 @@ class AdminExcelReportTests(TestCase):
         self.assertEqual(detalles, [])
         cronograma = self._sheet_rows(workbook['Cuotas'])
         self.assertEqual(len(cronograma), 1)
-        self.assertEqual(cronograma[0]['Monto pagado'], 170000)
-        self.assertEqual(cronograma[0]['Pagada'], 'Sí')
+        self.assertEqual(cronograma[0]['Pagado acumulado actual'], 170000)
+        self.assertEqual(cronograma[0]['Estado actual'], 'PAGADA')
+        self.assertEqual(cronograma[0]['Recaudado en el período'], 0)
+        self.assertEqual(cronograma[0]['Cantidad de aplicaciones en el período'], 0)
+        self.assertEqual(cronograma[0]['Trazabilidad contable'], 'Con trazabilidad contable')
+        self.assertIsNone(cronograma[0]['Primera aplicación en el período'])
+        self.assertIsNone(cronograma[0]['Última aplicación en el período'])
+
+    def test_cr_2026_00053_cuota_septiembre_pagada_en_julio_recauda_cero(self):
+        credito = self._crear_credito(
+            estado=Credito.EstadoCredito.PAGADO, numero_credito='CR-2026-00053',
+        )
+        for numero in (1, 2):
+            cuota = self._crear_cuota(credito, datetime(2026, 7 + numero, 1).date(), numero)
+            cuota.valor_cuota = Decimal('597290.20')
+            cuota.capital_a_pagar = Decimal('577290.20')
+            cuota.pagada = True
+            cuota.monto_pagado = cuota.valor_cuota
+            cuota.fecha_pago = self._aware(2026, 7, numero)
+            cuota.save()
+            self._crear_aplicacion(credito, cuota, cuota.fecha_pago, '597290.20')
+
+        workbook, _detalles = self._recaudo_septiembre('0')
+
+        rows = self._sheet_rows(workbook['Cuotas'])
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual(row['Número crédito'], 'CR-2026-00053')
+        self.assertEqual(row['Número cuota'], 2)
+        self.assertEqual(row['Vencimiento'], datetime(2026, 9, 1))
+        self.assertEqual(row['Estado actual'], 'PAGADA')
+        self.assertEqual(Decimal(str(row['Pagado acumulado actual'])), Decimal('597290.20'))
+        self.assertEqual(row['Recaudado en el período'], 0)
+        self.assertEqual(row['Cantidad de aplicaciones en el período'], 0)
+        self.assertIsNone(row['Primera aplicación en el período'])
+        self.assertIsNone(row['Última aplicación en el período'])
+        self.assertEqual(row['Trazabilidad contable'], 'Con trazabilidad contable')
+
+    def test_cuota_septiembre_pagada_recauda_aunque_credito_este_pagado(self):
+        credito = self._crear_credito(estado=Credito.EstadoCredito.PAGADO)
+        cuota = self._crear_cuota(credito, datetime(2026, 9, 1).date())
+        cuota.pagada = True
+        cuota.monto_pagado = cuota.valor_cuota
+        cuota.fecha_pago = self._aware(2026, 9, 10)
+        cuota.save()
+        self._crear_pago(credito, cuota, cuota.fecha_pago, 'REF-ULTIMA-SEPT')
+
+        workbook, _detalles = self._recaudo_septiembre('170000')
+
+        row = self._sheet_rows(workbook['Cuotas'])[0]
+        self.assertEqual(row['Estado actual'], 'PAGADA')
+        self.assertEqual(row['Recaudado en el período'], 170000)
+        self.assertEqual(row['Cantidad de aplicaciones en el período'], 1)
+        self.assertEqual(row['Primera aplicación en el período'], datetime(2026, 9, 10, 10))
+        self.assertEqual(row['Última aplicación en el período'], datetime(2026, 9, 10, 10))
 
     def test_ultima_cuota_septiembre_incluye_credito_pagado_incluso_filtro_activo(self):
         credito = self._crear_credito(estado=Credito.EstadoCredito.PAGADO)
@@ -232,19 +286,24 @@ class AdminExcelReportTests(TestCase):
 
     def test_parcial_septiembre_no_incluye_acumulado_anterior(self):
         credito = self._crear_credito(estado=Credito.EstadoCredito.ACTIVO)
-        cuota = self._crear_cuota(credito, datetime(2026, 10, 15).date())
+        cuota = self._crear_cuota(credito, datetime(2026, 9, 15).date())
         cuota.monto_pagado = Decimal('50000')
         cuota.save()
         self._crear_aplicacion(credito, cuota, self._aware(2026, 8, 15), '20000')
         self._crear_aplicacion(credito, cuota, self._aware(2026, 9, 15), '30000')
 
-        _workbook, detalles = self._recaudo_septiembre('30000')
+        workbook, detalles = self._recaudo_septiembre('30000')
 
         self.assertEqual(len(detalles), 1)
         self.assertEqual(detalles[0]['Valor total'], 30000)
         cuota.refresh_from_db()
         self.assertFalse(cuota.pagada)
         self.assertIsNone(cuota.fecha_pago)
+        row = self._sheet_rows(workbook['Cuotas'])[0]
+        self.assertEqual(row['Estado actual'], 'PENDIENTE')
+        self.assertEqual(row['Pagado acumulado actual'], 50000)
+        self.assertEqual(row['Recaudado en el período'], 30000)
+        self.assertEqual(row['Cantidad de aplicaciones en el período'], 1)
 
     def test_varios_pagos_y_detalles_misma_cuota_sin_doble_conteo(self):
         credito = self._crear_credito()
@@ -261,6 +320,35 @@ class AdminExcelReportTests(TestCase):
         self.assertEqual(len(detalles), 3)
         self.assertEqual({row['Número cuota'] for row in detalles}, {1})
         self.assertEqual(len(self._sheet_rows(workbook['Recaudo contable'])), 1)
+        rows = self._sheet_rows(workbook['Cuotas'])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['Recaudado en el período'], 30000)
+        self.assertEqual(rows[0]['Cantidad de aplicaciones en el período'], 3)
+        self.assertEqual(rows[0]['Primera aplicación en el período'], datetime(2026, 9, 1, 10))
+        self.assertEqual(rows[0]['Última aplicación en el período'], datetime(2026, 9, 20, 10))
+
+    def test_dos_parciales_del_mes_y_sin_rango_acumulan_aplicaciones(self):
+        credito = self._crear_credito()
+        cuota = self._crear_cuota(credito, datetime(2026, 9, 15).date())
+        self._crear_aplicacion(credito, cuota, self._aware(2026, 9, 5), '10000')
+        self._crear_aplicacion(credito, cuota, self._aware(2026, 9, 20), '15000')
+        for params in ({}, {'fecha_desde': '2026-09-01', 'fecha_hasta': '2026-09-30'}):
+            with self.subTest(params=params):
+                response, workbook = self._download(params)
+                self.assertEqual(response.status_code, 200)
+                row = self._sheet_rows(workbook['Cuotas'])[0]
+                self.assertEqual(row['Recaudado en el período'], 25000)
+                self.assertEqual(row['Cantidad de aplicaciones en el período'], 2)
+                self.assertEqual(row['Primera aplicación en el período'], datetime(2026, 9, 5, 10))
+                self.assertEqual(row['Última aplicación en el período'], datetime(2026, 9, 20, 10))
+                headers = {cell.value: cell.column for cell in workbook['Cuotas'][1]}
+                for header, formato in (
+                    ('Pagado acumulado actual', '$#,##0.00'),
+                    ('Recaudado en el período', '$#,##0.00'),
+                    ('Primera aplicación en el período', 'dd/mm/yyyy hh:mm'),
+                    ('Última aplicación en el período', 'dd/mm/yyyy hh:mm'),
+                ):
+                    self.assertEqual(workbook['Cuotas'].cell(2, headers[header]).number_format, formato)
 
     def test_abono_capital_sin_cuota_conserva_importes_persistidos(self):
         credito = self._crear_credito()
@@ -285,14 +373,18 @@ class AdminExcelReportTests(TestCase):
         detalle = self._crear_aplicacion(credito, cuota, self._aware(2026, 9, 10), '20000')
         # Reproduce el SET_NULL de las cuotas pendientes eliminadas al reestructurar.
         cuota.delete()
-        self._crear_cuota(credito, datetime(2026, 10, 15).date())
+        self._crear_cuota(credito, datetime(2026, 9, 15).date())
         detalle.refresh_from_db()
         self.assertIsNone(detalle.cuota_id)
 
-        _workbook, detalles = self._recaudo_septiembre('20000')
+        workbook, detalles = self._recaudo_septiembre('20000')
 
         self.assertEqual(len(detalles), 1)
         self.assertIsNone(detalles[0]['Número cuota'])
+        row = self._sheet_rows(workbook['Cuotas'])[0]
+        self.assertEqual(row['Recaudado en el período'], 0)
+        self.assertEqual(row['Cantidad de aplicaciones en el período'], 0)
+        self.assertEqual(row['Trazabilidad contable'], 'Sin trazabilidad contable')
 
     def test_historico_sin_detalle_no_infiere_recaudo(self):
         credito = self._crear_credito(estado=Credito.EstadoCredito.PAGADO)
@@ -312,10 +404,16 @@ class AdminExcelReportTests(TestCase):
         self.assertEqual(detalles, [])
         self.assertEqual(len(self._sheet_rows(workbook['Pagos'])), 1)
         self.assertEqual(len(self._sheet_rows(workbook['Cuotas'])), 1)
+        row = self._sheet_rows(workbook['Cuotas'])[0]
+        self.assertEqual(row['Recaudado en el período'], 0)
+        self.assertEqual(row['Cantidad de aplicaciones en el período'], 0)
+        self.assertIsNone(row['Primera aplicación en el período'])
+        self.assertIsNone(row['Última aplicación en el período'])
+        self.assertEqual(row['Trazabilidad contable'], 'Sin trazabilidad contable')
 
     def test_recaudo_usa_fecha_del_detalle_no_fechas_del_pago(self):
         credito = self._crear_credito()
-        cuota = self._crear_cuota(credito, datetime(2026, 7, 15).date())
+        cuota = self._crear_cuota(credito, datetime(2026, 9, 15).date())
         pago = self._crear_pago(credito, cuota, self._aware(2026, 7, 15), 'REF-FECHA')
         HistorialPago.objects.filter(pk=pago.pk).update(fecha_pago=self._aware(2026, 7, 15))
         self._crear_aplicacion(credito, cuota, self._aware(2026, 9, 15), '12000', pago=pago)
@@ -324,10 +422,30 @@ class AdminExcelReportTests(TestCase):
             fecha_aplicacion=self._aware(2026, 9, 15), fecha_pago=self._aware(2026, 9, 15),
         )
 
-        _workbook, detalles = self._recaudo_septiembre('12000')
+        workbook, detalles = self._recaudo_septiembre('12000')
 
         self.assertEqual(len(detalles), 1)
         self.assertEqual(detalles[0]['Fecha aplicación'], datetime(2026, 9, 15, 10))
+        row = self._sheet_rows(workbook['Cuotas'])[0]
+        self.assertEqual(row['Recaudado en el período'], 12000)
+        self.assertEqual(row['Cantidad de aplicaciones en el período'], 1)
+
+    def test_aplicaciones_cuota_respetan_limites_y_fechas_locales_bogota(self):
+        with timezone.override(ZoneInfo('America/Bogota')):
+            credito = self._crear_credito()
+            cuota = self._crear_cuota(credito, datetime(2026, 9, 1).date())
+            inicio = datetime(2026, 9, 1, tzinfo=ZoneInfo('America/Bogota'))
+            fin = datetime(2026, 10, 1, tzinfo=ZoneInfo('America/Bogota'))
+            for fecha in (inicio - timedelta(seconds=1), inicio, fin - timedelta(seconds=1), fin):
+                self._crear_aplicacion(credito, cuota, fecha.astimezone(ZoneInfo('UTC')), '10')
+
+            workbook, _detalles = self._recaudo_septiembre('20')
+
+            row = self._sheet_rows(workbook['Cuotas'])[0]
+            self.assertEqual(row['Recaudado en el período'], 20)
+            self.assertEqual(row['Cantidad de aplicaciones en el período'], 2)
+            self.assertEqual(row['Primera aplicación en el período'], datetime(2026, 9, 1))
+            self.assertEqual(row['Última aplicación en el período'], datetime(2026, 9, 30, 23, 59, 59))
 
     def test_limites_del_periodo_en_fecha_local_bogota(self):
         with timezone.override(ZoneInfo('America/Bogota')):
