@@ -46,6 +46,9 @@ class AnulacionCreditoPorErrorDatosTest(TestCase):
             nombre='Empresa Anulacion',
             convenio_activo=True,
         )
+        self.actor.user_permissions.add(Permission.objects.get(
+            content_type__app_label='gestion_creditos', codename='change_credito',
+        ))
         self._secuencia = 0
 
     def _crear_credito(self, estado=Credito.EstadoCredito.PENDIENTE_FIRMA, cedula=None):
@@ -196,7 +199,6 @@ class AnulacionCreditoPorErrorDatosTest(TestCase):
     def test_servicio_bloquea_estados_financieros_y_postfirma(self):
         estados_bloqueados = (
             Credito.EstadoCredito.FIRMADO,
-            Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA,
             Credito.EstadoCredito.ACTIVO,
             Credito.EstadoCredito.EN_MORA,
             Credito.EstadoCredito.PAGADO,
@@ -301,6 +303,7 @@ class AnulacionCreditoPorErrorDatosTest(TestCase):
             'anular_credito_por_error_datos',
             '--numero-credito', credito.numero_credito,
             '--motivo', 'Correo mal digitado. Se requiere nueva solicitud.',
+            '--actor-id', str(self.actor.pk),
             '--apply',
             stdout=stdout,
         )
@@ -319,6 +322,7 @@ class AnulacionCreditoPorErrorDatosTest(TestCase):
             'anular_credito_por_error_datos',
             '--numero-credito', credito.numero_credito,
             '--motivo', 'Reintento operativo controlado.',
+            '--actor-id', str(self.actor.pk),
             '--apply',
             stdout=stdout,
         )

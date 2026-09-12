@@ -59,6 +59,8 @@ def _nivel_requerido_para_estado(credito):
 
 
 def puede_decidir_solicitud_libranza_por_pagador(credito, usuario):
+    if credito.usuario_id == usuario.pk:
+        return False
     if credito.linea != Credito.LineaCredito.LIBRANZA:
         return False
     if credito.estado not in ESTADOS_DECIDIBLES_PAGADOR_LIBRANZA:
@@ -204,6 +206,9 @@ def decidir_solicitud_libranza_por_pagador(credito, usuario, accion, observacion
 
     if credito.estado not in ESTADOS_DECIDIBLES_PAGADOR_LIBRANZA:
         raise ValidationError('Esta solicitud ya no admite decisiones del pagador.')
+
+    if credito.usuario_id == usuario.pk:
+        raise PermissionDenied('El solicitante no puede aprobar ni decidir su propio credito.')
 
     empresa = _obtener_empresa_credito(credito)
     perfil = _obtener_perfil_pagador(usuario, empresa)

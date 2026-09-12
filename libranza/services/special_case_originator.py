@@ -115,6 +115,8 @@ def _get_or_create_user(applicant_data):
     email = str(applicant_data['correo']).strip().lower()
     user = User.objects.filter(email__iexact=email).first()
     if user:
+        if hasattr(user, 'perfil_pagador'):
+            raise SpecialCaseOriginationError('El solicitante no puede ser una cuenta de pagador.')
         updates = []
         if not user.first_name:
             user.first_name = normalize_name_upper(applicant_data['nombres'])[:150]

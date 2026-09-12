@@ -1,5 +1,6 @@
 ﻿from django.contrib import admin, messages
 from django import forms
+from django.contrib.admin.helpers import ActionForm
 from django.conf import settings
 from django.urls import path, reverse
 from django.shortcuts import redirect, get_object_or_404
@@ -117,6 +118,13 @@ class CreditoAdelantoNominaInline(admin.StackedInline):
     verbose_name_plural = 'Detalle de Adelanto de Nomina'
     fk_name = 'credito'
 
+class AnulacionCreditoActionForm(ActionForm):
+    motivo_anulacion = forms.CharField(
+        required=False, label='Motivo de anulacion',
+        widget=forms.TextInput(attrs={'size': 65}),
+    )
+
+
 @admin.register(Credito)
 class CreditoAdmin(admin.ModelAdmin):
     list_display = ('numero_credito', 'usuario', 'linea', 'estado', 'fecha_solicitud')
@@ -124,6 +132,7 @@ class CreditoAdmin(admin.ModelAdmin):
     search_fields = ('usuario__username', 'numero_credito')
     readonly_fields = ('numero_credito', 'fecha_solicitud', 'fecha_actualizacion', 'linea', 'usuario')
     actions = ('anular_por_error_datos',)
+    action_form = AnulacionCreditoActionForm
     inlines = [] #! Inlines se determinan dinámicamente
 
     @admin.action(description='Anular por error de datos', permissions=['change'])
@@ -134,17 +143,21 @@ class CreditoAdmin(admin.ModelAdmin):
 
         for credito in queryset.iterator():
             try:
+                motivo = (request.POST.get('motivo_anulacion') or '').strip()
+                if credito.estado == Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA and not motivo:
+                    raise ValidationError('La anulacion postfirma requiere un motivo operativo explicito.')
                 resultado = anular_credito_por_error_datos(
                     credito=credito,
                     actor=request.user,
-                    motivo=MOTIVO_ANULACION_ERROR_DATOS,
+                    motivo=motivo or MOTIVO_ANULACION_ERROR_DATOS,
                 )
                 if resultado.ya_estaba_anulado:
                     ya_anulados += 1
                 else:
                     anulados += 1
-            except ValidationError as exc:
-                errores.append(f'{credito.numero_credito}: {" ".join(exc.messages)}')
+            except (ValidationError, PermissionDenied) as exc:
+                detalle_error = ' '.join(exc.messages) if isinstance(exc, ValidationError) else str(exc)
+                errores.append(f'{credito.numero_credito}: {detalle_error}')
 
         if anulados:
             self.message_user(
@@ -165,9 +178,18 @@ class CreditoAdmin(admin.ModelAdmin):
         # Inicia con los campos de solo lectura definidos en la clase
         readonly_fields = list(super().get_readonly_fields(request, obj))
         # Si el objeto existe y su estado es ACTIVO, aÃ±ade 'estado' a la lista
-        if obj and obj.estado == Credito.EstadoCredito.ACTIVO:
+        if obj and obj.estado in {
+            Credito.EstadoCredito.PENDIENTE_FIRMA, Credito.EstadoCredito.FIRMADO,
+            Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA, Credito.EstadoCredito.ACTIVO,
+            Credito.EstadoCredito.EN_MORA, Credito.EstadoCredito.PAGADO, Credito.EstadoCredito.ANULADO,
+        }:
             readonly_fields.append('estado')
         return readonly_fields
+
+    def formfield_for_choice_field(self, db_field, request, **kwargs):
+        if db_field.name == 'estado':
+            kwargs['choices'] = [c for c in Credito.EstadoCredito.choices if c[0] != Credito.EstadoCredito.ANULADO]
+        return super().formfield_for_choice_field(db_field, request, **kwargs)
 
     def get_inlines(self, request, obj=None):
         if obj:

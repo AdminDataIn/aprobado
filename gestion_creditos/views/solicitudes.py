@@ -1,5 +1,6 @@
 from .common import *
 from .common import _rate_limit_simple
+from usuarios.product_flow import solicitante_credito_required
 from gestion_creditos.services.libranza_rules import LIBRANZA_MONTO_MAXIMO
 from gestion_creditos.services.costo_originacion_libranza import (
     CostoOriginacionLibranzaError,
@@ -9,6 +10,7 @@ from gestion_creditos.services.costo_originacion_libranza import (
 
 
 @login_required(login_url='/libranza/login/')
+@solicitante_credito_required
 def solicitud_credito_libranza_view(request):
     current_flow = get_user_flow(request.user)
     if current_flow and current_flow != ProductAccessProfile.ProductFlow.LIBRANZA:
@@ -236,6 +238,7 @@ def simular_adelanto_nomina_view(request):
 
 
 @login_required(login_url='/libranza/login/')
+@solicitante_credito_required
 @require_http_methods(["GET", "POST"])
 def solicitud_adelanto_nomina_view(request):
     current_flow = get_user_flow(request.user)
@@ -341,6 +344,7 @@ def solicitud_adelanto_nomina_view(request):
 
 
 @login_required(login_url='/emprendimiento/login/')
+@solicitante_credito_required
 def solicitud_credito_emprendimiento_view(request):
     current_flow = get_user_flow(request.user)
     if current_flow and current_flow != ProductAccessProfile.ProductFlow.EMPRENDIMIENTO:

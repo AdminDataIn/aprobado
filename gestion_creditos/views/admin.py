@@ -641,25 +641,10 @@ def confirmar_desembolso_view(request, credito_id):
     credito = get_object_or_404(Credito, id=credito_id)
     comprobante = request.FILES.get('comprobante_pago')
 
-    # 1. Validar estado actual
-    if credito.estado != Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA:
-        messages.error(request, f"El crédito no está en estado 'Pendiente de Transferencia'. Estado actual: {credito.get_estado_display()}.")
-        return redirect('gestion:credito_detalle', credito_id=credito.id)
+    from gestion_creditos.services.desembolso_credito import confirmar_desembolso_credito
 
-    # 2. Validar que se haya subido el comprobante
-    if not comprobante:
-        messages.error(request, "Es obligatorio adjuntar el comprobante de desembolso.")
-        return redirect('gestion:credito_detalle', credito_id=credito.id)
-
-    # 3. Ejecutar el cambio de estado a ACTIVO
     try:
-        credit_services.gestionar_cambio_estado_credito(
-            credito=credito,
-            nuevo_estado=Credito.EstadoCredito.ACTIVO,
-            motivo="Desembolso confirmado y comprobante adjuntado por el equipo de finanzas.",
-            comprobante=comprobante,
-            usuario_modificacion=request.user
-        )
+        confirmar_desembolso_credito(credito=credito, actor=request.user, comprobante=comprobante)
         messages.success(request, f"Crédito {credito.numero_credito} activado exitosamente.")
     except Exception as e:
         messages.error(request, f"Ocurrió un error inesperado al activar el crédito: {e}")

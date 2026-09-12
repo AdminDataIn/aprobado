@@ -1,10 +1,12 @@
-from django.core.exceptions import ValidationError
+from django.contrib.auth import get_user_model
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.management.base import BaseCommand, CommandError
 
 from gestion_creditos.models import Credito
 from gestion_creditos.services.anulacion_credito import (
     ESTADOS_ANULABLES_POR_ERROR_DATOS,
     anular_credito_por_error_datos,
+    validar_ausencia_movimientos,
 )
 
 
@@ -14,6 +16,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--numero-credito', required=True)
         parser.add_argument('--motivo', required=True)
+        parser.add_argument('--actor-id', type=int, help='Staff autorizado responsable; obligatorio con --apply.')
         parser.add_argument(
             '--apply',
             action='store_true',
@@ -76,24 +79,33 @@ class Command(BaseCommand):
                     'Dry-run: anulacion bloqueada por linea o estado actual.'
                 ))
                 return
+            try:
+                validar_ausencia_movimientos(credito)
+            except ValidationError as exc:
+                self.stdout.write(self.style.ERROR('Dry-run: ' + ' '.join(exc.messages)))
+                return
             self.stdout.write(self.style.WARNING(
-                'Dry-run: se cambiaria el credito a ANULADO y el pagare CREATED/SENT a CANCELLED.'
+                'Dry-run: credito a ANULADO; pagare SIGNED intacto, CREATED/SENT a CANCELLED. '
+                'La elegibilidad se revalidara bajo lock al aplicar.'
             ))
             self.stdout.write('No se aplicaron cambios. Usa --apply para confirmar.')
             return
 
-        if credito.estado == Credito.EstadoCredito.ANULADO:
-            self.stdout.write(self.style.WARNING('El credito ya esta ANULADO. No se realizaron cambios.'))
-            return
-
         try:
+            if not options['actor_id']:
+                raise CommandError('--apply requiere --actor-id de un staff autorizado.')
+            actor = get_user_model().objects.filter(pk=options['actor_id']).first()
             resultado = anular_credito_por_error_datos(
                 credito=credito,
-                actor=None,
+                actor=actor,
                 motivo=motivo,
             )
-        except ValidationError as exc:
-            raise CommandError(' '.join(exc.messages)) from exc
+        except (ValidationError, PermissionDenied) as exc:
+            raise CommandError(' '.join(exc.messages) if isinstance(exc, ValidationError) else str(exc)) from exc
+
+        if resultado.ya_estaba_anulado:
+            self.stdout.write(self.style.WARNING('El credito ya esta ANULADO. No se realizaron cambios.'))
+            return
 
         self.stdout.write(self.style.SUCCESS(
             f'{resultado.numero_credito}: {resultado.estado_anterior} -> {resultado.estado_nuevo}.'

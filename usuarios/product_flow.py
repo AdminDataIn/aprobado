@@ -71,12 +71,25 @@ def get_user_flow(user):
 
     inferred = _infer_flow_from_existing_data(user)
     if inferred:
+        if hasattr(user, 'perfil_pagador'):
+            return inferred
         ProductAccessProfile.objects.get_or_create(
             usuario=user,
             defaults={'flow': inferred},
         )
         return inferred
     return None
+
+
+def solicitante_credito_required(view_func):
+    @wraps(view_func)
+    def wrapped(request, *args, **kwargs):
+        if hasattr(request.user, 'perfil_pagador'):
+            messages.error(request, 'La cuenta de pagador no puede solicitar creditos. '
+                           'Cada colaborador debe ingresar con su propia cuenta.')
+            return redirect('pagador:dashboard')
+        return view_func(request, *args, **kwargs)
+    return wrapped
 
 
 def assign_user_flow(user, flow):

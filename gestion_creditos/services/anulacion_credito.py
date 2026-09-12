@@ -1,11 +1,12 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
-from gestion_creditos.models import Credito, HistorialEstado, Pagare
+from gestion_creditos.models import Credito, DetalleContablePago, HistorialEstado, HistorialPago, Pagare
 
 
 MOTIVO_ANULACION_ERROR_DATOS = (
@@ -20,6 +21,7 @@ ESTADOS_ANULABLES_POR_ERROR_DATOS = frozenset(
         Credito.EstadoCredito.APROBADO_PAGADOR,
         Credito.EstadoCredito.APROBADO,
         Credito.EstadoCredito.PENDIENTE_FIRMA,
+        Credito.EstadoCredito.PENDIENTE_TRANSFERENCIA,
     }
 )
 
@@ -53,6 +55,7 @@ def _resultado(credito, pagare, estado_anterior, pagare_estado_anterior, motivo,
 
 @transaction.atomic
 def anular_credito_por_error_datos(*, credito, actor, motivo, cancelar_pagare=True):
+    exigir_actor_anulacion(actor)
     if not getattr(credito, 'pk', None):
         raise ValidationError('El credito debe existir antes de ser anulado.')
 
@@ -92,6 +95,8 @@ def anular_credito_por_error_datos(*, credito, actor, motivo, cancelar_pagare=Tr
             f'No se puede anular un credito en estado {credito_bloqueado.get_estado_display()}.'
         )
 
+    validar_ausencia_movimientos(credito_bloqueado)
+
     if cancelar_pagare and pagare and pagare.estado in {
         Pagare.EstadoPagare.CREATED,
         Pagare.EstadoPagare.SENT,
@@ -125,3 +130,30 @@ def anular_credito_por_error_datos(*, credito, actor, motivo, cancelar_pagare=Tr
         pagare_estado_anterior,
         motivo,
     )
+
+
+def exigir_actor_anulacion(actor):
+    if not (actor is not None and actor.is_authenticated and actor.is_active
+            and actor.is_staff and not hasattr(actor, 'perfil_pagador')
+            and actor.has_perm('gestion_creditos.change_credito')):
+        raise PermissionDenied('Se requiere staff autorizado con permiso change_credito y sin PerfilPagador.')
+
+
+def validar_ausencia_movimientos(credito):
+    # Conservador: cualquier pago registrado requiere revision antes de anular.
+    if credito.fecha_desembolso is not None:
+        raise ValidationError('El credito tiene un desembolso registrado.')
+    if HistorialPago.objects.filter(credito=credito).exists():
+        raise ValidationError('El credito tiene pagos registrados; no puede anularse por este flujo.')
+    if DetalleContablePago.objects.filter(
+        Q(credito=credito) | Q(pago__credito=credito) | Q(cuota__credito=credito)
+    ).exists():
+        raise ValidationError('El credito tiene contabilidad aplicada; no puede anularse por este flujo.')
+    if credito.tabla_amortizacion.filter(Q(pagada=True) | Q(monto_pagado__gt=0)).exists():
+        raise ValidationError('El credito tiene una cuota pagada o con pagos parciales.')
+    if credito.historial_estados.filter(
+        Q(estado_nuevo__in=[Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA,
+                           Credito.EstadoCredito.PAGADO])
+        | (Q(comprobante_pago__isnull=False) & ~Q(comprobante_pago=''))
+    ).exists():
+        raise ValidationError('Existe evidencia interna de desembolso o activacion previa.')
