@@ -1,6 +1,7 @@
 from .common import *
 from .common import _build_capacidad_descuento_context
-from gestion_creditos.models import DetalleContablePago, ReestructuracionCredito
+from django.http import QueryDict
+from gestion_creditos.models import CuotaAmortizacion, DetalleContablePago, ReestructuracionCredito
 from gestion_creditos.forms import ComprobantePagoExistenteForm
 from gestion_creditos.services.admin_dashboard_filters import parse_admin_dashboard_filters
 from gestion_creditos.services.admin_excel_report import (
@@ -783,27 +784,36 @@ def actualizar_comprobante_pago_manual_view(request, pago_id):
 @staff_member_required
 @require_POST
 def reconciliar_pago_manual_view(request, pago_id):
+    credit_services.exigir_permiso_reconciliacion_redondeo(request.user)
     pago = get_object_or_404(HistorialPago, pk=pago_id)
-    auth_key = request.POST.get('auth_key')
-    if auth_key != getattr(settings, 'MANUAL_PAYMENT_AUTH_KEY', None):
-        messages.error(request, 'Clave de autorización no válida.')
-        return redirect('gestion:credito_detalle', credito_id=pago.credito_id)
+    filtros = QueryDict(request.POST.get('filtros', ''))
+    retorno = reverse('gestion:obligaciones_pendientes')
+    if filtros:
+        retorno += '?' + filtros.urlencode()
+    if request.POST.get('confirmar') != 'si':
+        messages.error(request, 'Debe confirmar la reconciliacion de la cuota seleccionada.')
+        return redirect(retorno)
+    cuota_id = request.POST.get('cuota_id', '')
+    if not cuota_id.isdigit():
+        messages.error(request, 'Debe seleccionar una cuota individual valida.')
+        return redirect(retorno)
+    cuota = get_object_or_404(CuotaAmortizacion, pk=cuota_id, credito_id=pago.credito_id)
 
     try:
-        cuotas, resumen = credit_services.reconciliar_pago_manual_por_tolerancia(
+        cuotas, _resumen = credit_services.reconciliar_pago_manual_por_tolerancia(
             pago,
+            cuota=cuota,
             usuario=request.user,
         )
-        numeros = ', '.join(str(cuota.numero_cuota) for cuota in cuotas)
-        messages.success(
-            request,
-            f'Pago reconciliado. Cuota(s) cerrada(s) por tolerancia: {numeros}. '
-            f'Próximo vencimiento: {resumen["fecha_proximo_pago"] or "sin cuotas pendientes"}.',
-        )
+        if cuotas:
+            messages.success(request, f'Redondeo reconciliado en la cuota {cuota.numero_cuota}. '
+                             'El valor recibido y el recaudo contable no cambiaron.')
+        else:
+            messages.info(request, 'Esta reconciliacion ya estaba registrada. No se aplicaron cambios.')
     except ValidationError as exc:
         messages.error(request, ' '.join(exc.messages))
 
-    return redirect('gestion:credito_detalle', credito_id=pago.credito_id)
+    return redirect(retorno)
 
 
 @staff_member_required

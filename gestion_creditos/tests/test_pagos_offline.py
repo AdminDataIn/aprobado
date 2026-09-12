@@ -4,6 +4,7 @@ import io
 import re
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.core import mail
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -269,6 +270,11 @@ class PagosOfflineServiceTest(TestCase):
         self.assertEqual(cuota.monto_pagado, Decimal('730000.00'))
 
     def test_reconciliar_pago_legacy_cierra_cuota_y_corrige_proxima_fecha(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=['is_staff'])
+        self.user.user_permissions.add(Permission.objects.get(
+            content_type__app_label='gestion_creditos', codename='reconcile_manual_payment_rounding',
+        ))
         credito = self._crear_credito_libranza(
             numero='CR-LEG-REDONDEO',
             saldo='1460132.42',
@@ -294,6 +300,7 @@ class PagosOfflineServiceTest(TestCase):
 
         reconciliadas, resumen = credit_services.reconciliar_pago_manual_por_tolerancia(
             pago,
+            cuota=cuotas[0],
             usuario=self.user,
         )
 

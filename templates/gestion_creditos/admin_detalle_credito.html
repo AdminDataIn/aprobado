@@ -487,20 +487,6 @@
                                                       </button>
                                                   </form>
                                               </details>
-                                              {% if pago.origen_registro == 'LEGACY' or pago.origen_registro == 'REGISTRO_MANUAL_ADMIN' %}
-                                                  {% if credito.estado == 'ACTIVO' or credito.estado == 'EN_MORA' %}
-                                                  <details class="mt-2 text-start">
-                                                      <summary class="small text-warning" style="cursor: pointer;">Reconciliar redondeo</summary>
-                                                      <form method="post" action="{% url 'gestion:pago_reconciliar_redondeo' pago.id %}" class="mt-2">
-                                                          {% csrf_token %}
-                                                          <input type="password" name="auth_key" class="form-control form-control-sm mb-2" placeholder="Clave de autorización" required>
-                                                          <button type="submit" class="btn btn-outline-warning btn-sm w-100">
-                                                              Aplicar tolerancia controlada
-                                                          </button>
-                                                      </form>
-                                                  </details>
-                                                  {% endif %}
-                                              {% endif %}
                                           </td>
                                       </tr>
                                 {% endfor %}

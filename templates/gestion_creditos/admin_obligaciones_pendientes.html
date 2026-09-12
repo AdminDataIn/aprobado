@@ -102,6 +102,10 @@
         </a>
     </div>
 
+    {% for message in messages %}
+    <div class="alert {% if message.tags == 'error' %}alert-danger{% elif message.tags == 'success' %}alert-success{% else %}alert-info{% endif %}" role="status">{{ message }}</div>
+    {% endfor %}
+
     <section class="filter-panel" aria-labelledby="filtersTitle">
         <h2 id="filtersTitle" class="section-title mb-3">Filtros</h2>
         <div class="filter-shortcuts" aria-label="Estado operativo">
@@ -214,7 +218,12 @@
                         <td class="text-end">${{ obligacion.monto_pagado|floatformat:2|intcomma }}</td>
                         <td class="text-end"><strong>${{ obligacion.valor_pendiente|floatformat:2|intcomma }}</strong></td>
                         <td><span class="obligation-status {{ obligacion.estado_codigo }}">{{ obligacion.estado_label }}</span><br><small>{{ obligacion.dias_label }}</small></td>
-                        <td class="text-end"><a href="{% url 'gestion:credito_detalle' obligacion.credito_id %}" class="btn btn-sm btn-outline-primary">Ver crédito</a></td>
+                        <td class="text-end">
+                            <a href="{% url 'gestion:credito_detalle' obligacion.credito_id %}" class="btn btn-sm btn-outline-primary">Ver crédito</a>
+                            {% if obligacion.reconciliacion %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary mt-1" data-bs-toggle="modal" data-bs-target="#redondeo{{ obligacion.cuota_id }}">Reconciliar redondeo</button>
+                            {% endif %}
+                        </td>
                     </tr>
                 {% empty %}
                     <tr><td colspan="9" class="text-center text-muted py-5">No hay obligaciones para los filtros seleccionados.</td></tr>
@@ -234,6 +243,43 @@
         {% endif %}
     </section>
 </main>
+{% for obligacion in obligaciones %}
+{% if obligacion.reconciliacion %}
+<div class="modal fade" id="redondeo{{ obligacion.cuota_id }}" tabindex="-1" aria-labelledby="redondeoTitulo{{ obligacion.cuota_id }}" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="{% url 'gestion:pago_reconciliar_redondeo' obligacion.reconciliacion.pago_id %}">
+                {% csrf_token %}
+                <input type="hidden" name="cuota_id" value="{{ obligacion.cuota_id }}">
+                <input type="hidden" name="filtros" value="{{ reconciliacion_querystring }}">
+                <div class="modal-header">
+                    <h2 class="modal-title fs-5" id="redondeoTitulo{{ obligacion.cuota_id }}">Reconciliar redondeo</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="fw-semibold text-break mb-1">{{ obligacion.empresa }}</p>
+                    <p class="text-break">{{ obligacion.numero_credito }} · Cuota {{ obligacion.numero_cuota }}</p>
+                    <dl class="row mb-2 text-break">
+                        <dt class="col-7">Valor cuota</dt><dd class="col-5 text-end">${{ obligacion.valor_cuota|floatformat:2|intcomma }}</dd>
+                        <dt class="col-7">Monto pagado</dt><dd class="col-5 text-end">${{ obligacion.monto_pagado|floatformat:2|intcomma }}</dd>
+                        <dt class="col-7">Diferencia</dt><dd class="col-5 text-end">${{ obligacion.reconciliacion.diferencia|floatformat:2|intcomma }}</dd>
+                        <dt class="col-7">Tolerancia configurada</dt><dd class="col-5 text-end">${{ obligacion.reconciliacion.tolerancia|floatformat:2|intcomma }}</dd>
+                    </dl>
+                    <div class="form-check">
+                        <input class="form-check-input" id="confirmarRedondeo{{ obligacion.cuota_id }}" type="checkbox" name="confirmar" value="si" required>
+                        <label class="form-check-label" for="confirmarRedondeo{{ obligacion.cuota_id }}">Confirmo el cierre de esta cuota por la diferencia indicada, sin registrar un ingreso adicional.</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Confirmar reconciliación</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="{% static 'js/global_loader.js' %}"></script>
 </body>

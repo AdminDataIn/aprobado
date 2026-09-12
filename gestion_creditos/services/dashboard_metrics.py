@@ -282,6 +282,7 @@ def _serializar_obligacion(credito):
     )
     return {
         'credito_id': credito.pk,
+        'cuota_id': credito.cuota_id,
         'numero_credito': credito.numero_credito,
         'cliente': credito.nombre_cliente,
         'empresa': credito.empresa_nombre,
@@ -582,6 +583,13 @@ def get_admin_obligaciones_context(request):
     else:
         pagina = Paginator(filtradas, 20).get_page(request.GET.get('page'))
         pagina.object_list = [_serializar_obligacion(credito) for credito in pagina.object_list]
+        from gestion_creditos.credit_services import obtener_opciones_reconciliacion_redondeo
+
+        opciones = obtener_opciones_reconciliacion_redondeo(
+            getattr(request, 'user', None), [item['cuota_id'] for item in pagina.object_list],
+        )
+        for item in pagina.object_list:
+            item['reconciliacion'] = opciones.get(item['cuota_id'])
     query_params = request.GET.copy()
     query_params.pop('page', None)
 
@@ -598,6 +606,7 @@ def get_admin_obligaciones_context(request):
         'empresas_obligaciones': pagina.object_list if vista == 'empresa' else [],
         'resumen_empresas': resumen_empresas,
         'resumen_gerencial': resumen_gerencial,
+        'reconciliacion_querystring': request.GET.urlencode(),
         'vista_obligaciones': vista,
         'vista_links': _build_query_links(request, 'vista', (('detalle', 'Detalle'), ('empresa', 'Por empresa'))),
         'obligaciones_distribucion': distribucion,

@@ -1771,6 +1771,9 @@ class HistorialPago(models.Model):
         ordering = ['-fecha_aplicacion', '-fecha_pago']
         verbose_name = 'Historial de Pago'
         verbose_name_plural = 'Historial de Pagos'
+        permissions = [
+            ('reconcile_manual_payment_rounding', 'Puede reconciliar redondeos de pagos manuales'),
+        ]
 
     def __str__(self):
         return f"Pago {self.referencia_pago} - ${self.monto} ({self.get_estado_display()})"

@@ -3,7 +3,7 @@ import logging
 import uuid
 import hashlib
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
@@ -593,59 +593,101 @@ def _aplicar_pago_a_cuotas(credito, monto_pagado, pago=None):
         registrar_detalle_contable_pago(pago=pago, aplicaciones=aplicaciones_contables)
 
 
-@transaction.atomic
-def reconciliar_pago_manual_por_tolerancia(pago, *, usuario=None):
-    pago = (
-        HistorialPago.objects.select_for_update()
-        .select_related('credito')
-        .get(pk=pago.pk)
-    )
-    credito = Credito.objects.select_for_update().get(pk=pago.credito_id)
+ORIGENES_RECONCILIACION_EXPLICITA = {
+    HistorialPago.OrigenRegistro.REGISTRO_MANUAL_ADMIN,
+    HistorialPago.OrigenRegistro.LEGACY,
+    HistorialPago.OrigenRegistro.REGISTRO_MANUAL_PAGADOR,
+}
 
+
+def puede_reconciliar_redondeo(usuario):
+    return bool(
+        usuario is not None and usuario.is_authenticated and usuario.is_staff
+        and not hasattr(usuario, 'perfil_pagador')
+        and usuario.has_perm('gestion_creditos.reconcile_manual_payment_rounding')
+    )
+
+
+def exigir_permiso_reconciliacion_redondeo(usuario):
+    if not puede_reconciliar_redondeo(usuario):
+        raise PermissionDenied('No tiene permiso para reconciliar redondeos.')
+
+
+def _validar_reconciliacion_cuota(pago, credito, cuota, detalle, tolerancia):
     if pago.estado != HistorialPago.EstadoPago.EXITOSO:
         raise ValidationError('Solo se pueden reconciliar pagos exitosos.')
-    if not _pago_admite_tolerancia_redondeo(pago, incluir_legacy=True):
-        raise ValidationError('Este pago no corresponde a un registro manual o legacy.')
+    if (pago.origen_registro not in ORIGENES_RECONCILIACION_EXPLICITA
+            or pago.metodo_pago == HistorialPago.MetodoPago.BREB):
+        raise ValidationError('El origen o medio de pago no permite reconciliacion manual.')
+    if (cuota.credito_id != credito.pk or pago.credito_id != credito.pk
+            or detalle is None or detalle.credito_id != credito.pk
+            or detalle.cuota_id != cuota.pk or detalle.pago_id != pago.pk):
+        raise ValidationError('La cuota no tiene detalle contable valido asociado a este pago.')
     if credito.estado not in [Credito.EstadoCredito.ACTIVO, Credito.EstadoCredito.EN_MORA]:
         raise ValidationError('Solo se pueden reconciliar créditos activos o en mora.')
+    if cuota.pagada:
+        raise ValidationError('La cuota ya esta satisfecha.')
+    diferencia = (cuota.valor_cuota or Decimal('0.00')) - (cuota.monto_pagado or Decimal('0.00'))
+    if diferencia <= 0 or diferencia > tolerancia:
+        raise ValidationError('La diferencia debe ser positiva y estar dentro de la tolerancia configurada.')
+    return diferencia
 
-    cuotas = []
-    cuotas_vistas = set()
-    for detalle in pago.detalles_contables.select_related('cuota').order_by('secuencia_aplicacion'):
-        cuota = detalle.cuota
-        if cuota and cuota.pk not in cuotas_vistas:
-            cuotas.append(cuota)
-            cuotas_vistas.add(cuota.pk)
 
-    if not cuotas:
-        raise ValidationError('El pago no tiene una cuota asociada para reconciliar de forma segura.')
+def obtener_opciones_reconciliacion_redondeo(usuario, cuota_ids):
+    from .models import DetalleContablePago
 
-    tolerancia_redondeo = obtener_tolerancia_redondeo_pago_manual()
-    cuotas_reconciliadas = []
-    for cuota in cuotas:
-        if cuota.pagada:
+    if not puede_reconciliar_redondeo(usuario) or not cuota_ids:
+        return {}
+    tolerancia = obtener_tolerancia_redondeo_pago_manual()
+    opciones = {}
+    detalles = DetalleContablePago.objects.filter(
+        cuota_id__in=cuota_ids, pago__estado=HistorialPago.EstadoPago.EXITOSO,
+        pago__origen_registro__in=ORIGENES_RECONCILIACION_EXPLICITA,
+    ).exclude(pago__metodo_pago=HistorialPago.MetodoPago.BREB).select_related(
+        'pago', 'cuota__credito',
+    ).order_by('-fecha_aplicacion', '-pk')
+    for detalle in detalles:
+        if detalle.cuota_id in opciones:
             continue
-        monto_real = cuota.monto_pagado or Decimal('0.00')
-        diferencia = (cuota.valor_cuota or Decimal('0.00')) - monto_real
-        if diferencia <= Decimal('0.00') or diferencia > tolerancia_redondeo:
+        try:
+            diferencia = _validar_reconciliacion_cuota(
+                detalle.pago, detalle.cuota.credito, detalle.cuota, detalle, tolerancia,
+            )
+        except ValidationError:
             continue
+        opciones[detalle.cuota_id] = {
+            'pago_id': detalle.pago_id, 'diferencia': diferencia, 'tolerancia': tolerancia,
+        }
+    return opciones
 
-        cuota.pagada = True
-        cuota.fecha_pago = _fecha_aplicacion_pago(pago)
-        cuota.save(update_fields=['pagada', 'fecha_pago'])
-        _registrar_nota_cierre_por_tolerancia(
-            pago,
-            cuota,
-            diferencia,
-            usuario=usuario,
-        )
-        cuotas_reconciliadas.append(cuota)
 
-    if not cuotas_reconciliadas:
-        raise ValidationError(
-            f'No hay diferencias pendientes dentro de la tolerancia de '
-            f'${tolerancia_redondeo} COP.'
-        )
+@transaction.atomic
+def reconciliar_pago_manual_por_tolerancia(pago, *, cuota=None, usuario=None):
+    from .models import DetalleContablePago
+
+    exigir_permiso_reconciliacion_redondeo(usuario)
+    if cuota is None:
+        raise ValidationError('Debe seleccionar una cuota individual.')
+    # Sin joins: orden de locks explicito pago -> credito -> cuota.
+    pago = HistorialPago.objects.select_for_update().get(pk=pago.pk)
+    credito = Credito.objects.select_for_update().get(pk=pago.credito_id)
+    cuota = CuotaAmortizacion.objects.select_for_update().get(pk=cuota.pk)
+    clave = f'reconciliacion-redondeo:cuota:{cuota.pk}'
+    anterior = HistorialEstado.objects.filter(clave_idempotencia=clave).first()
+    if anterior is not None:
+        datos = json.loads(anterior.motivo)
+        if (datos['pago_id'] == pago.pk and anterior.credito_id == credito.pk
+                and cuota.credito_id == credito.pk and cuota.pagada):
+            return [], obtener_resumen_pagos_credito(credito)
+        raise ValidationError('La cuota ya tiene una reconciliacion registrada.')
+    detalle = DetalleContablePago.objects.filter(pago=pago, cuota=cuota, credito=credito).first()
+    tolerancia = obtener_tolerancia_redondeo_pago_manual()
+    diferencia = _validar_reconciliacion_cuota(pago, credito, cuota, detalle, tolerancia)
+
+    cuota.pagada = True
+    cuota.fecha_pago = _fecha_aplicacion_pago(pago)
+    cuota.save(update_fields=['pagada', 'fecha_pago'])
+    _registrar_nota_cierre_por_tolerancia(pago, cuota, diferencia, usuario=usuario)
 
     resumen = obtener_resumen_pagos_credito(credito)
     credito.saldo_pendiente = resumen['saldo_pendiente']
@@ -653,6 +695,18 @@ def reconciliar_pago_manual_por_tolerancia(pago, *, usuario=None):
     credito.fecha_proximo_pago = resumen['fecha_proximo_pago']
     credito.save(update_fields=['saldo_pendiente', 'capital_pendiente', 'fecha_proximo_pago'])
 
+    HistorialEstado.objects.create(
+        credito=credito, estado_anterior=credito.estado,
+        estado_nuevo=Credito.EstadoCredito.PAGADO if resumen['cuotas_restantes'] == 0 else credito.estado,
+        usuario_modificacion=usuario, clave_idempotencia=clave,
+        motivo=json.dumps({
+            'evento': 'RECONCILIACION_REDONDEO', 'resultado': 'RECONCILIADA',
+            'pago_id': pago.pk, 'credito_id': credito.pk, 'cuota_id': cuota.pk,
+            'numero_cuota': cuota.numero_cuota, 'diferencia': str(diferencia),
+            'tolerancia': str(tolerancia), 'monto_pagado_real': str(cuota.monto_pagado),
+            'actor_id': usuario.pk, 'timestamp': timezone.now().isoformat(),
+        }, sort_keys=True),
+    )
     if resumen['cuotas_restantes'] == 0:
         gestionar_cambio_estado_credito(
             credito=credito,
@@ -661,7 +715,7 @@ def reconciliar_pago_manual_por_tolerancia(pago, *, usuario=None):
             usuario_modificacion=usuario,
         )
 
-    return cuotas_reconciliadas, resumen
+    return [cuota], resumen
 
 
 def evaluar_motivacion_credito(texto: str) -> int:
