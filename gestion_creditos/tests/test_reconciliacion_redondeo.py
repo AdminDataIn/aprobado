@@ -1,6 +1,7 @@
 import json
 from datetime import date
 from decimal import Decimal
+from html.parser import HTMLParser
 from queue import Queue
 from threading import Barrier, Thread
 from unittest import skipUnless
@@ -13,7 +14,7 @@ from django.db import close_old_connections, connection, connections
 from django.test import Client, RequestFactory, TestCase, TransactionTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
-from django.utils import timezone
+from django.utils import timezone, translation
 
 from gestion_creditos import credit_services
 from gestion_creditos.models import (
@@ -305,6 +306,92 @@ class ReconciliacionRedondeoTests(ReconciliacionFixture, TestCase):
         self.pago.origen_registro = HistorialPago.OrigenRegistro.REPORTE_BREB
         self.pago.save(update_fields=['origen_registro'])
         self.assertNotContains(self.client.get(url), 'Reconciliar redondeo')
+
+    @override_settings(USE_THOUSAND_SEPARATOR=True, LANGUAGE_CODE='es-CO')
+    def _verificar_ids_renderizados_y_post(self, numero_cuota):
+        class Formularios(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.elementos = []
+                self.forms = []
+                self.actual = None
+
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                self.elementos.append((tag, attrs))
+                if tag == 'form' and attrs.get('method') == 'post':
+                    self.actual = {'action': attrs['action'], 'inputs': {}}
+                    self.forms.append(self.actual)
+                if tag == 'input' and self.actual is not None and attrs.get('name'):
+                    self.actual['inputs'][attrs['name']] = attrs.get('value', '')
+
+            def handle_endtag(self, tag):
+                if tag == 'form':
+                    self.actual = None
+
+        self.cuota.pagada = True
+        self.cuota.save(update_fields=['pagada'])
+        casos = [self.crear_caso() for _ in range(3)]
+        esperadas = {}
+        # PK altos explicitos sin depender de las secuencias SQLite/PostgreSQL.
+        for pk, (_credito, cuota, siguiente, pago) in zip((999, 1000, 1234), casos):
+            siguiente.numero_cuota = 3
+            siguiente.save(update_fields=['numero_cuota'])
+            anterior_pk = cuota.pk
+            CuotaAmortizacion.objects.filter(pk=anterior_pk).update(numero_cuota=4)
+            cuota.pk = pk
+            cuota.numero_cuota = numero_cuota
+            cuota.save(force_insert=True)
+            DetalleContablePago.objects.filter(cuota_id=anterior_pk).update(cuota_id=pk)
+            CuotaAmortizacion.objects.filter(pk=anterior_pk).delete()
+            esperadas[str(pk)] = pago.pk
+
+        self.client.force_login(self.staff)
+        with translation.override('es-co'):
+            response = self.client.get(reverse('gestion:obligaciones_pendientes'))
+            self.assertEqual(response.status_code, 200)
+            html = Formularios()
+            html.feed(response.content.decode())
+            self.assertCountEqual([f['inputs']['cuota_id'] for f in html.forms], esperadas)
+            ids = [a['id'] for _, a in html.elementos if 'id' in a]
+            self.assertEqual(len(ids), len(set(ids)))
+            for valor in esperadas:
+                modal_id = 'redondeo' + valor
+                self.assertIn(modal_id, ids)
+                self.assertIn(('button', modal_id), [
+                    (tag, a.get('data-bs-target', '').removeprefix('#'))
+                    for tag, a in html.elementos
+                ])
+                modal = next(a for _, a in html.elementos if a.get('id') == modal_id)
+                self.assertEqual(modal['aria-labelledby'], 'redondeoTitulo' + valor)
+                self.assertIn(modal['aria-labelledby'], ids)
+                self.assertIn('confirmarRedondeo' + valor, ids)
+                self.assertTrue(any(a.get('for') == 'confirmarRedondeo' + valor
+                                    for _, a in html.elementos))
+            for identificador in ids:
+                if identificador.startswith(('redondeo', 'confirmarRedondeo')):
+                    self.assertNotIn('.', identificador)
+                    self.assertNotIn(',', identificador)
+
+            completadas = set()
+            for form in html.forms:
+                valor = form['inputs']['cuota_id']
+                self.assertEqual(form['action'], reverse(
+                    'gestion:pago_reconciliar_redondeo', args=[esperadas[valor]],
+                ))
+                result = self.client.post(form['action'], form['inputs'])
+                self.assertEqual(result.status_code, 302)
+                completadas.add(int(valor))
+                self.assertSetEqual(set(CuotaAmortizacion.objects.filter(
+                    pk__in=esperadas, pagada=True,
+                ).values_list('pk', flat=True)), completadas)
+                self.assertEqual(self.eventos().count(), len(completadas))
+
+    def test_ids_no_localizados_en_primera_cuota(self):
+        self._verificar_ids_renderizados_y_post(numero_cuota=1)
+
+    def test_ids_no_localizados_en_segunda_cuota(self):
+        self._verificar_ids_renderizados_y_post(numero_cuota=2)
 
     def test_csrf_y_revalidacion_no_confian_en_preview(self):
         client = Client(enforce_csrf_checks=True)

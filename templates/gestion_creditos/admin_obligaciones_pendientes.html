@@ -6,6 +6,7 @@
     <title>Obligaciones pendientes - Aprobado</title>
     {% load static %}
     {% load humanize %}
+    {% load l10n %}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
@@ -221,7 +222,7 @@
                         <td class="text-end">
                             <a href="{% url 'gestion:credito_detalle' obligacion.credito_id %}" class="btn btn-sm btn-outline-primary">Ver crédito</a>
                             {% if obligacion.reconciliacion %}
-                            <button type="button" class="btn btn-sm btn-outline-secondary mt-1" data-bs-toggle="modal" data-bs-target="#redondeo{{ obligacion.cuota_id }}">Reconciliar redondeo</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary mt-1" data-bs-toggle="modal" data-bs-target="#redondeo{{ obligacion.cuota_id|unlocalize }}">Reconciliar redondeo</button>
                             {% endif %}
                         </td>
                     </tr>
@@ -245,15 +246,15 @@
 </main>
 {% for obligacion in obligaciones %}
 {% if obligacion.reconciliacion %}
-<div class="modal fade" id="redondeo{{ obligacion.cuota_id }}" tabindex="-1" aria-labelledby="redondeoTitulo{{ obligacion.cuota_id }}" aria-hidden="true">
+<div class="modal fade" id="redondeo{{ obligacion.cuota_id|unlocalize }}" tabindex="-1" aria-labelledby="redondeoTitulo{{ obligacion.cuota_id|unlocalize }}" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <form method="post" action="{% url 'gestion:pago_reconciliar_redondeo' obligacion.reconciliacion.pago_id %}">
                 {% csrf_token %}
-                <input type="hidden" name="cuota_id" value="{{ obligacion.cuota_id }}">
+                <input type="hidden" name="cuota_id" value="{{ obligacion.cuota_id|unlocalize }}">
                 <input type="hidden" name="filtros" value="{{ reconciliacion_querystring }}">
                 <div class="modal-header">
-                    <h2 class="modal-title fs-5" id="redondeoTitulo{{ obligacion.cuota_id }}">Reconciliar redondeo</h2>
+                    <h2 class="modal-title fs-5" id="redondeoTitulo{{ obligacion.cuota_id|unlocalize }}">Reconciliar redondeo</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
                 <div class="modal-body">
@@ -266,8 +267,8 @@
                         <dt class="col-7">Tolerancia configurada</dt><dd class="col-5 text-end">${{ obligacion.reconciliacion.tolerancia|floatformat:2|intcomma }}</dd>
                     </dl>
                     <div class="form-check">
-                        <input class="form-check-input" id="confirmarRedondeo{{ obligacion.cuota_id }}" type="checkbox" name="confirmar" value="si" required>
-                        <label class="form-check-label" for="confirmarRedondeo{{ obligacion.cuota_id }}">Confirmo el cierre de esta cuota por la diferencia indicada, sin registrar un ingreso adicional.</label>
+                        <input class="form-check-input" id="confirmarRedondeo{{ obligacion.cuota_id|unlocalize }}" type="checkbox" name="confirmar" value="si" required>
+                        <label class="form-check-label" for="confirmarRedondeo{{ obligacion.cuota_id|unlocalize }}">Confirmo el cierre de esta cuota por la diferencia indicada, sin registrar un ingreso adicional.</label>
                     </div>
                 </div>
                 <div class="modal-footer">
