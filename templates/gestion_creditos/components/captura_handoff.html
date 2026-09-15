@@ -1,13 +1,36 @@
 {% load static l10n %}
-<link rel="stylesheet" href="{% static 'css/captura_documental.css' %}">
+<link rel="stylesheet" href="{% static 'css/captura_documental.css' %}?v=id01b-camera">
 <section class="capture-handoff" data-capture-handoff data-producto="{{ producto }}" data-contexto="{{ solicitud.id|unlocalize|default:'' }}"
          data-crear="{% url 'captura:crear' producto %}">
-  <h3>Documento de identidad</h3>
-  <p>Continúa desde tu celular</p>
-  <button type="button" class="document-action-button" data-crear-enlace>Generar enlace seguro</button>
-  <a data-enlace-captura hidden target="_blank" rel="noreferrer noopener">Abrir captura</a>
-  <button type="button" data-copiar-enlace hidden>Copiar enlace</button>
+  <div class="capture-heading">
+    <span class="capture-eyebrow">Captura segura</span>
+  </div>
+  <h3 data-capture-title>Documento de identidad</h3>
+  <p class="capture-description" data-capture-description>Para proteger tu información, la captura de tu documento se realiza desde tu celular. No perderás la información que ya diligenciaste.</p>
+  <div class="capture-transfer" data-handoff-result hidden>
+    <div class="capture-qr" data-qr-block>
+      <canvas data-capture-qr role="img" aria-label="Código QR para abrir la captura segura"></canvas>
+      <p data-qr-help>Escanea este código con la cámara de tu celular</p>
+    </div>
+    <div class="capture-transfer-info">
+      <p class="capture-account">Continúa con la misma cuenta de Aprobado.</p>
+      <p class="capture-expiry" data-capture-expiry></p>
+      <div class="capture-actions">
+        <a class="capture-button capture-button-primary" data-enlace-captura target="_blank" rel="noreferrer noopener">Abrir captura</a>
+        <button type="button" class="capture-button" data-copiar-enlace>Copiar enlace</button>
+      </div>
+    </div>
+  </div>
+  <div class="capture-status" role="status" aria-live="polite" aria-atomic="true">
+    <span class="capture-status-icon" data-status-icon aria-hidden="true"></span>
+    <p data-capture-status>Tu formulario permanecerá abierto mientras realizas la captura.</p>
+  </div>
+  <div class="capture-actions">
+    <button type="button" class="capture-button capture-button-primary" data-crear-enlace>Continuar desde mi celular</button>
+    <button type="button" class="capture-button" data-reintentar-estado hidden>Consultar estado</button>
+  </div>
   <input type="hidden" name="sesion_documental_id" value="{{ request.POST.sesion_documental_id|default:'' }}" data-sesion-documental>
-  <p data-capture-status role="status" aria-live="polite"></p>
+  <noscript><p>Activa JavaScript para continuar con la captura segura.</p></noscript>
 </section>
-<script src="{% static 'js/captura_documental.js' %}" defer></script>
+<script src="{% static 'js/vendor/qrcode-generator-1.4.4.js' %}" defer></script>
+<script src="{% static 'js/captura_documental.js' %}?v=id01b-camera" defer></script>

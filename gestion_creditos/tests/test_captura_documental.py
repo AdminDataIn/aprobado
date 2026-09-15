@@ -5,6 +5,7 @@ from queue import Queue
 from threading import Barrier, Thread
 from unittest import skipUnless
 from unittest.mock import patch
+from urllib.parse import urlsplit
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
@@ -63,6 +64,83 @@ class CapturaFixture:
 
 @override_settings(ALLOWED_HOSTS=['testserver', 'localhost', 'contratistas.localhost'])
 class CapturaDocumentalTest(CapturaFixture, TestCase):
+    def test_continuacion_compartida_camara_sin_selector_archivo(self):
+        self.client.force_login(self.usuario)
+        for producto in ('LIBRANZA', 'PRESTADORES'):
+            with self.subTest(producto=producto):
+                sesion, _ = servicio.crear_sesion(actor=self.usuario, producto=producto)
+                response = self.client.get(reverse('captura:continuar', args=[producto, sesion.pk]))
+                self.assertEqual(response.status_code, 200)
+                self.assertTemplateUsed(response, 'gestion_creditos/captura_continuacion.html')
+                for atributo in ('data-camera-video', 'playsinline', 'data-tomar-foto', 'data-repetir',
+                                 'data-usar-foto', 'data-finalizar', 'csrfmiddlewaretoken'):
+                    self.assertContains(response, atributo)
+                self.assertNotContains(response, 'type="file"')
+                self.assertContains(response, 'captura_documental.js?v=id01b-camera')
+                self.assertFalse(Credito.objects.exists())
+                self.assertFalse(CreditoLibranza.objects.exists())
+
+    def test_handoff_libranza_crear_csrf_sin_originacion(self):
+        cliente = Client(enforce_csrf_checks=True)
+        cliente.force_login(self.usuario)
+        pagina = cliente.get(reverse('libranza:solicitar'))
+        self.assertEqual(pagina.status_code, 200)
+        for elemento in ('data-capture-qr', 'data-handoff-result', 'data-reintentar-estado',
+                         'qrcode-generator-1.4.4.js', 'captura_documental.js?v=id01b'):
+            self.assertContains(pagina, elemento)
+        url = reverse('captura:crear', args=['LIBRANZA'])
+        cantidad = Sesion.objects.count()
+        self.assertEqual(cliente.post(url).status_code, 403)
+        self.assertEqual(Sesion.objects.count(), cantidad)
+        respuesta = cliente.post(url, HTTP_X_CSRFTOKEN=cliente.cookies['csrftoken'].value)
+        self.assertEqual(respuesta.status_code, 201)
+        datos = respuesta.json()
+        self.assertEqual(set(datos), {'id', 'enlace', 'expira_en'})
+        nueva = Sesion.objects.get(pk=datos['id'])
+        self.assertEqual(nueva.estado, 'ABIERTA')
+        self.assertIsNone(nueva.credito_id)
+        self.assertIsNone(nueva.solicitud_id)
+        token = urlsplit(datos['enlace']).fragment
+        self.assertTrue(token)
+        self.assertNotEqual(nueva.token_hash, token)
+        self.assertNotIn(token, str(list(Evento.objects.values())))
+        self.assertFalse(Credito.objects.exists())
+        self.assertFalse(CreditoLibranza.objects.exists())
+        self.assertFalse(ContractorApplication.objects.exists())
+
+    def test_handoff_prestadores_crear_con_y_sin_contexto(self):
+        self.client.force_login(self.usuario)
+        solicitud = self.solicitud()
+        url = reverse('captura:crear', args=['PRESTADORES'])
+        for contexto in (None, solicitud.pk):
+            with self.subTest(contexto=contexto):
+                respuesta = self.client.post(url, {'solicitud_id': contexto} if contexto else {},
+                                            HTTP_HOST='contratistas.localhost')
+                self.assertEqual(respuesta.status_code, 201)
+                nueva = Sesion.objects.get(pk=respuesta.json()['id'])
+                self.assertEqual(nueva.estado, 'ABIERTA')
+                self.assertEqual(nueva.solicitud_id, contexto)
+                self.assertEqual(nueva.usuario_id, self.usuario.pk)
+                self.assertEqual(ContractorApplication.objects.count(), 1)
+                self.assertFalse(Credito.objects.exists())
+                self.assertFalse(CreditoLibranza.objects.exists())
+
+    def test_handoff_regenera_solo_por_post_explicito(self):
+        self.client.force_login(self.usuario)
+        url = reverse('captura:operar', args=['LIBRANZA', self.sesion.pk, 'regenerar'])
+        anterior = self.sesion.token_hash
+        self.assertEqual(self.client.get(url).status_code, 405)
+        self.sesion.refresh_from_db()
+        self.assertEqual(self.sesion.token_hash, anterior)
+        respuesta = self.client.post(url)
+        self.assertEqual(respuesta.status_code, 200)
+        self.sesion.refresh_from_db()
+        self.assertNotEqual(self.sesion.token_hash, anterior)
+        self.assertEqual(respuesta.json()['id'], str(self.sesion.pk))
+        self.assertEqual(self.sesion.estado, 'ABIERTA')
+        self.assertEqual(Sesion.objects.count(), 1)
+        self.assertFalse(Credito.objects.exists())
+
     def test_borrador_no_crea_credito_y_token_solo_hash(self):
         self.assertFalse(Credito.objects.exists())
         self.assertFalse(CreditoLibranza.objects.exists())

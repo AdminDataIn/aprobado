@@ -1,12 +1,44 @@
-.capture-handoff { padding: 16px 0; min-width: 0; }
-.capture-handoff h3 { margin: 0 0 8px; }
-.capture-handoff p { margin: 8px 0; }
-.capture-handoff button { padding: 10px 14px; border: 1px solid #087e9a; border-radius: 6px; background: #fff; color: #087e9a; cursor: pointer; }
-.capture-handoff [data-crear-enlace] { background: #087e9a; color: #fff; }
-.capture-handoff button:disabled { opacity: .6; cursor: wait; }
-.capture-handoff button:focus-visible, .capture-page button:focus-visible { outline: 2px solid #18283c; outline-offset: 3px; }
-.capture-handoff a { display: inline-block; margin: 8px; overflow-wrap: anywhere; }
+.capture-handoff { box-sizing: border-box; container-type: inline-size; grid-column: 1 / -1; width: 100%; min-width: 0; padding: 22px; border: 1px solid #cddfe5; border-radius: 8px; background: #fff; color: #18283c; font: 15px/1.5 system-ui, sans-serif; letter-spacing: 0; }
+.capture-handoff * { box-sizing: border-box; }
+.capture-handoff h3 { margin: 14px 0 8px; font-size: 20px; line-height: 1.3; }
+.capture-handoff p { margin: 0; }
+.capture-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.capture-eyebrow { color: #087e9a; font-size: 12px; font-weight: 700; }
+.capture-handoff .capture-description { color: #526273; max-width: 65ch; }
+.capture-transfer { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 24px; align-items: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e1e8ed; }
+.capture-qr { text-align: center; min-width: 0; }
+.capture-qr canvas { display: block; width: 100%; max-width: 220px; height: auto; aspect-ratio: 1; margin: 0 auto 8px; image-rendering: pixelated; }
+.capture-handoff [data-qr-help] { font-size: 13px; color: #526273; }
+.capture-account { font-weight: 600; }
+.capture-handoff .capture-expiry { margin: 8px 0 14px; color: #526273; font-size: 13px; }
+.capture-actions { display: flex; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.capture-handoff .capture-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; max-width: 100%; padding: 10px 14px; border: 1px solid #c6d4dc; border-radius: 6px; background: #fff; color: #18283c; cursor: pointer; text-decoration: none; font: 600 14px/1.4 system-ui, sans-serif; text-align: center; overflow-wrap: anywhere; }
+.capture-handoff .capture-button-primary { background: #087e9a; border-color: #087e9a; color: #fff; }
+.capture-handoff .capture-button:hover { border-color: #087e9a; box-shadow: 0 0 0 1px #087e9a; }
+.capture-handoff button:disabled { opacity: .65; cursor: wait; }
+.capture-handoff .capture-button:focus-visible, .capture-page button:focus-visible { outline: 2px solid #18283c; outline-offset: 3px; }
+.capture-status { display: flex; align-items: flex-start; gap: 10px; margin: 16px 0; color: #526273; font-size: 14px; }
+.capture-status-icon { flex: 0 0 18px; width: 18px; height: 18px; margin-top: 2px; border: 2px solid currentColor; border-radius: 50%; }
+.capture-handoff[data-state="loading"] .capture-status-icon,
+.capture-handoff[data-state="waiting"] .capture-status-icon { border-right-color: transparent; animation: capture-spin 1s linear infinite; }
+.capture-handoff[data-state="success"] .capture-status { color: #167148; font-weight: 600; }
+.capture-handoff[data-state="success"] .capture-status-icon { border-radius: 0; border-width: 0 2px 2px 0; width: 9px; height: 14px; flex-basis: 9px; margin: 1px 5px 0 3px; transform: rotate(45deg); }
+.capture-handoff[data-state="error"] .capture-status, .capture-handoff[data-state="expired"] .capture-status { color: #9b442b; }
+.capture-handoff[data-mobile="true"] .capture-qr { display: none; }
+.capture-handoff[data-mobile="true"] .capture-transfer { grid-template-columns: minmax(0, 1fr); }
 .capture-handoff [hidden], .capture-page [hidden] { display: none !important; }
+@keyframes capture-spin { to { transform: rotate(360deg); } }
+@container (max-width: 460px) {
+  .capture-transfer { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .capture-qr canvas { max-width: 196px; }
+}
+@media (prefers-reduced-motion: reduce) { .capture-handoff .capture-status-icon { animation: none !important; } }
+@media (max-width: 640px) {
+  .capture-handoff { padding: 18px; }
+  .capture-transfer { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .capture-handoff .capture-actions { flex-direction: column; }
+  .capture-handoff .capture-button { width: 100%; }
+}
 .capture-page { margin: 0; background: #f4f6f8; color: #18283c; font: 16px/1.5 system-ui, sans-serif; }
 .capture-page main { max-width: 520px; margin: 24px auto; padding: 24px; box-sizing: border-box; }
 .capture-page h1 { font-size: 24px; margin: 20px 0 12px; }
@@ -15,4 +47,17 @@
 .capture-page button { padding: 12px 18px; border: 0; border-radius: 6px; color: #fff; background: #087e9a; cursor: pointer; }
 .capture-page button:disabled { opacity: .6; cursor: wait; }
 .capture-page img { max-width: 100%; height: auto; }
+.capture-page * { box-sizing: border-box; }
+.capture-page h2 { font-size: 20px; margin: 8px 0; }
+.capture-page .camera-step { color: #087e9a; font-size: 14px; font-weight: 700; margin: 24px 0 4px; }
+.camera-hint, .camera-status { color: #526273; font-size: 14px; }
+.camera-viewfinder { position: relative; width: 100%; aspect-ratio: 4 / 3; background: #18283c; border-radius: 8px; overflow: hidden; }
+.camera-viewfinder video { display: block; width: 100%; height: 100%; object-fit: contain; }
+.camera-guide { position: absolute; width: 86%; aspect-ratio: 1.586; max-height: 88%; border: 2px solid #fff; border-radius: 8px; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+.capture-page .camera-preview { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #18283c; border-radius: 8px; }
+.camera-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+.camera-actions button { min-height: 44px; flex: 1 1 140px; font: 600 15px/1.4 system-ui, sans-serif; }
+.capture-page .camera-secondary { background: #fff; color: #18283c; border: 1px solid #c6d4dc; }
+.capture-page [data-state="error"] .camera-status { color: #9b442b; }
+.capture-page [data-state="done"] .camera-status { color: #167148; font-weight: 600; }
 @media (max-width: 540px) { .capture-page main { margin: 0 auto; padding: 20px; } }

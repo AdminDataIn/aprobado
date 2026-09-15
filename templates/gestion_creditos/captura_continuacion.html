@@ -5,24 +5,34 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <title>Documento de identidad | Aprobado</title>
-  <link rel="stylesheet" href="{% static 'css/captura_documental.css' %}">
+  <link rel="stylesheet" href="{% static 'css/captura_documental.css' %}?v=id01b-camera">
 </head>
 <body class="capture-page">
 <main data-capture-mobile data-base="{% url 'captura:continuar' producto sesion.id %}" data-contexto="{{ solicitud_id }}">
-  <img src="{% static 'images/logo.png' %}" width="160" alt="Aprobado">
+  <img src="{% static 'images/logo-dark.png' %}" width="160" alt="Aprobado">
   <h1>Documento de identidad</h1>
-  <p data-desktop-message>Continúa desde tu celular</p>
-  <div data-mobile-controls hidden>
+  <p>Captura ambas caras de tu documento. Las fotos se envían de forma privada a tu solicitud.</p>
+  <div data-mobile-controls>
     {% csrf_token %}
-    <button type="button" data-canjear>Continuar captura</button>
-    <div data-lados hidden>
-      <label>Frontal <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-lado="FRONTAL"></label>
-      <label>Posterior <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-lado="TRASERA"></label>
-      <button type="button" data-finalizar>Finalizar</button>
+    <p class="camera-step" data-camera-step>1 de 2 · Frontal</p>
+    <h2 data-camera-title>Frente del documento</h2>
+    <p class="camera-hint" data-camera-hint>Usa buena luz y evita reflejos. Mantén visibles las cuatro esquinas.</p>
+    <div class="camera-viewfinder" data-viewfinder hidden>
+      <video data-camera-video autoplay muted playsinline aria-label="Vista de la cámara"></video>
+      <div class="camera-guide" aria-hidden="true"></div>
+    </div>
+    <img class="camera-preview" data-camera-preview alt="Foto del documento para revisar" hidden>
+    <div class="camera-actions">
+      <button type="button" data-canjear>Abrir cámara</button>
+      <button type="button" data-tomar-foto hidden>Tomar foto</button>
+      <button type="button" class="camera-secondary" data-repetir hidden>Repetir</button>
+      <button type="button" data-usar-foto hidden>Usar esta foto</button>
+      <button type="button" data-finalizar hidden>Finalizar captura</button>
     </div>
   </div>
-  <p role="status" aria-live="polite" data-capture-status></p>
+  <p class="camera-status" role="status" aria-live="polite" aria-atomic="true" data-capture-status></p>
+  <noscript>Activa JavaScript y abre este enlace en un navegador compatible con cámara.</noscript>
 </main>
-<script src="{% static 'js/captura_documental.js' %}" defer></script>
+<script src="{% static 'js/captura_documental.js' %}?v=id01b-camera" defer></script>
 </body>
 </html>
