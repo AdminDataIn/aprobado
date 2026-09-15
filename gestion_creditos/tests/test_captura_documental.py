@@ -61,6 +61,7 @@ class CapturaFixture:
             tipo_contrato='PRESTACION_SERVICIOS', estado='DOCUMENTOS_PENDIENTES')
 
 
+@override_settings(ALLOWED_HOSTS=['testserver', 'localhost', 'contratistas.localhost'])
 class CapturaDocumentalTest(CapturaFixture, TestCase):
     def test_borrador_no_crea_credito_y_token_solo_hash(self):
         self.assertFalse(Credito.objects.exists())
@@ -269,11 +270,7 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
             servicio.consumir_documentos(sesion=sesion, actor=self.usuario, solicitud=solicitud)
         self.assertFalse(Credito.objects.exists())
 
-    @override_settings(
-        USE_THOUSAND_SEPARATOR=True,
-        LANGUAGE_CODE='es-co',
-        ALLOWED_HOSTS=['contratistas.localhost', 'testserver'],
-    )
+    @override_settings(USE_THOUSAND_SEPARATOR=True, LANGUAGE_CODE='es-co')
     def test_contexto_documental_prestador_no_localiza_identificadores(self):
         solicitud = self.solicitud(pk=1234)
         self.client.force_login(self.usuario)
