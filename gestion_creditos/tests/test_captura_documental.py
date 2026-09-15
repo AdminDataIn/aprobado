@@ -11,7 +11,7 @@ from django.contrib.auth.models import Permission
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import connection, connections, transaction
+from django.db import close_old_connections, connection, transaction
 from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -24,6 +24,7 @@ from gestion_creditos.models import (
 from gestion_creditos.services import captura_documental as servicio
 from gestion_creditos.storage import documentos_solicitud_storage
 from gestion_creditos.tests.captura_fixtures import imagen_documental, sesion_finalizada
+from gestion_creditos.tests.response_helpers import finalizar_respuesta_cliente
 from usuarios.models import PerfilPagador
 
 
@@ -167,15 +168,17 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
         for usuario, esperado in ((self.usuario, 200), (self.otro, 404), (self.staff, 404)):
             self.client.force_login(usuario)
             response = self.client.get(url)
+            self.addCleanup(finalizar_respuesta_cliente, response)
             self.assertEqual(response.status_code, esperado)
-            response.close()
+            finalizar_respuesta_cliente(response)
         self.staff.user_permissions.add(Permission.objects.get(codename='view_identity_documents'))
         self.client.force_login(self.staff)
         response = self.client.get(url)
+        self.addCleanup(finalizar_respuesta_cliente, response)
         self.assertEqual(response.status_code, 200)
         self.assertIn('cedula-frontal.jpg', response['Content-Disposition'])
         self.assertEqual(response['Cache-Control'], 'no-store, private')
-        response.close()
+        finalizar_respuesta_cliente(response)
 
     def test_historicos_se_leen_sin_mover_y_nuevos_privados(self):
         nombre = default_storage.save('credito_libranza/cedulas/legacy.jpg', imagen_documental())
@@ -192,8 +195,9 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
         self.client.force_login(self.usuario)
         for lado in ('FRONTAL', 'TRASERA'):
             response = self.client.get(reverse('captura:cedula_credito', args=[credito.pk, lado]))
+            self.addCleanup(finalizar_respuesta_cliente, response)
             self.assertEqual(response.status_code, 200)
-            response.close()
+            finalizar_respuesta_cliente(response)
 
     def test_get_no_consume_y_csrf_para_canje(self):
         self.client.force_login(self.usuario)
@@ -312,7 +316,9 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
 class CapturaConcurrenciaPostgresTest(CapturaFixture, TransactionTestCase):
     def competir(self, funcion):
         barrera, resultados = Barrier(2), Queue()
+        conexion_principal = connection.connection
         def worker(n):
+            close_old_connections()
             try:
                 with connection.cursor() as cursor:
                     cursor.execute("SET lock_timeout = '10s'")
@@ -324,13 +330,15 @@ class CapturaConcurrenciaPostgresTest(CapturaFixture, TransactionTestCase):
             except Exception as exc:
                 resultados.put(type(exc).__name__)
             finally:
-                connections.close_all()
+                connection.close()
         hilos = [Thread(target=worker, args=(n,)) for n in (0, 1)]
         for hilo in hilos:
             hilo.start()
         for hilo in hilos:
             hilo.join(30)
         self.assertTrue(all(not hilo.is_alive() for hilo in hilos))
+        self.assertIs(connection.connection, conexion_principal)
+        self.assertTrue(connection.is_usable())
         return list(resultados.queue)
 
     def test_canje_unico(self):

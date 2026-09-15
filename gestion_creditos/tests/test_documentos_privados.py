@@ -2,6 +2,7 @@ import logging
 import tempfile
 from io import BytesIO
 from pathlib import Path
+from unittest import TestCase as CleanupCase
 from unittest.mock import patch
 
 from django.contrib import admin
@@ -10,6 +11,8 @@ from django.contrib.auth.models import Permission
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.signing import TimestampSigner
+from django.db import connection
+from django.http import FileResponse
 from django.test import TestCase, override_settings
 from django.template import Context, Template
 from django.urls import reverse
@@ -21,6 +24,7 @@ from gestion_creditos.models import (
     CreditoEmprendimiento, ImagenNegocio, HistorialPago, HistorialEstado,
 )
 from gestion_creditos.services.documentos_privados import url_documento
+from gestion_creditos.tests.response_helpers import finalizar_respuesta_cliente
 from usuarios.models import PerfilPagador
 
 
@@ -53,10 +57,46 @@ class DocumentosPrivadosTest(TestCase):
         if usuario:
             self.client.force_login(usuario)
         response = self.client.get(url or self.url)
-        self.addCleanup(response.close)
+        self.addCleanup(finalizar_respuesta_cliente, response)
         self.assertEqual(response.status_code, status)
         self.assertIn('no-store', response.get('Cache-Control', ''))
         return response
+
+    def test_cierre_streaming_y_cleanup_conservan_conexion_del_testcase(self):
+        conexion_original = connection.connection
+        for consumir in (False, True):
+            with patch('gestion_creditos.services.documentos_privados.FileResponse', wraps=FileResponse) as respuesta_archivo:
+                response = self.get(self.owner)
+                archivo = respuesta_archivo.call_args.args[0]
+            with patch.object(connection, 'close', wraps=connection.close) as cierre:
+                if consumir:
+                    self.assertTrue(b''.join(response.streaming_content))
+                finalizar_respuesta_cliente(response)
+                finalizar_respuesta_cliente(response)
+                cierre.assert_not_called()
+            self.assertTrue(response.closed)
+            self.assertTrue(archivo.closed)
+            self.assertIs(connection.connection, conexion_original)
+            self.assertFalse(connection.closed_in_transaction)
+            self.assertTrue(connection.is_usable())
+            self.assertTrue(Credito.objects.filter(pk=self.credito.pk).exists())
+            self.client.logout()
+            self.client.force_login(self.owner)
+
+        # Ejecutar un cleanup real sin adelantar la limpieza del storage/fixtures.
+        with patch('gestion_creditos.services.documentos_privados.FileResponse', wraps=FileResponse) as respuesta_archivo:
+            response = self.client.get(self.url)
+            archivo = respuesta_archivo.call_args.args[0]
+        cleanup_case = CleanupCase()
+        cleanup_case.addCleanup(finalizar_respuesta_cliente, response)
+        with patch.object(connection, 'close', wraps=connection.close) as cierre:
+            self.assertTrue(cleanup_case.doCleanups())
+            cierre.assert_not_called()
+        self.assertTrue(archivo.closed)
+        self.assertIs(connection.connection, conexion_original)
+        self.assertTrue(connection.is_usable())
+        self.client.logout()
+        self.client.force_login(self.owner)
 
     def test_propietario_anonimo_y_ajeno(self):
         self.get(None, status=404)

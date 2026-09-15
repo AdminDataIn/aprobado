@@ -13,7 +13,7 @@ from django.contrib.auth.models import Permission
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command, CommandError
-from django.db import connection, connections, transaction, close_old_connections
+from django.db import connection, transaction, close_old_connections
 from django.test import TestCase, TransactionTestCase, RequestFactory, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -329,7 +329,7 @@ class AnulacionDesembolsoConcurrenciaTests(IntegridadFixture, TransactionTestCas
             except Exception as exc:
                 errores.put(repr(exc))
             finally:
-                connections.close_all()
+                connection.close()
 
         perdedor = 'desembolsar' if ganador == 'anular' else 'anular'
         hilos = [Thread(target=ejecutar, args=(ganador, True)), Thread(target=ejecutar, args=(perdedor, False))]
