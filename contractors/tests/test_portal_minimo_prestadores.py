@@ -38,7 +38,11 @@ from gestion_creditos.models import Credito, CreditoLibranza, Empresa
 from gestion_creditos.tests.captura_fixtures import sesion_finalizada
 
 
-@override_settings(CONTRACTORS_CONTRACT_AI_ENABLED=False, OPENAI_API_KEY='')
+@override_settings(
+    CONTRACTORS_CONTRACT_AI_ENABLED=False,
+    OPENAI_API_KEY='',
+    ALLOWED_HOSTS=['testserver', 'localhost', 'contratistas.localhost'],
+)
 class PortalMinimoPrestadoresTest(TestCase):
     host = 'contratistas.localhost'
 
