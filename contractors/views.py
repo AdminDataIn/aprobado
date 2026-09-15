@@ -278,30 +278,15 @@ def _aplicar_evidencia_analisis(solicitud, evidencia):
     )
 
 
-def _validar_origenes_cedula(request, form):
-    valido = True
-    for campo in ('documento_identidad_frontal', 'documento_identidad_reverso'):
-        if not form.cleaned_data.get(campo):
-            continue
-        origen = request.POST.get(f'origen_{campo}', '')
-        if origen not in {'camera', 'capture', 'upload_fallback'}:
-            form.add_error(campo, 'Captura la cédula desde la cámara del dispositivo.')
-            valido = False
-        elif origen == 'upload_fallback' and not settings.CONTRACTORS_ALLOW_ID_UPLOAD_FALLBACK:
-            form.add_error(campo, 'La carga manual de cédula no está habilitada.')
-            valido = False
-    return valido
-
-
-def _metadata_documentos_desde_request(request):
+def _metadata_documentos_desde_sesion(sesion):
     ahora = timezone.now().isoformat()
-    user_agent = request.META.get('HTTP_USER_AGENT', '')[:255]
     metadata = {}
     for campo in ('documento_identidad_frontal', 'documento_identidad_reverso'):
         metadata[campo] = {
-            'source': request.POST.get(f'origen_{campo}', ''),
+            'source': 'sesion_documental',
             'captured_at': ahora,
-            'user_agent': user_agent,
+            'sesion_id': str(sesion.pk) if sesion else '',
+            'identidad': 'IDENTIDAD_NO_VERIFICADA',
         }
     for campo in ('certificado_bancario', 'contrato_actual'):
         metadata[campo] = {'source': 'upload', 'captured_at': ahora}
@@ -309,6 +294,7 @@ def _metadata_documentos_desde_request(request):
 
 
 @login_required
+@transaction.atomic
 def solicitar_prestador_view(request):
     solicitud_id = request.POST.get('solicitud_id') or request.GET.get('solicitud_id')
     solicitud_existente = None
@@ -320,13 +306,24 @@ def solicitar_prestador_view(request):
     )
 
     if request.method == 'POST':
+        from gestion_creditos.services.captura_documental import preparar_identidad_formulario, consumir_documentos
+        from django.core.exceptions import PermissionDenied, ValidationError
+        error_captura = None
+        try:
+            sesion_documental, archivos = preparar_identidad_formulario(
+                request, producto='PRESTADORES', solicitud=solicitud_existente)
+        except (ValidationError, PermissionDenied):
+            sesion_documental, archivos = None, request.FILES
+            error_captura = 'Completa la sesion documental de tu cuenta antes de continuar.'
         form = SolicitudPrestadorForm(
             request.POST,
-            request.FILES,
+            archivos,
             instance=solicitud_existente,
         )
-        if form.is_valid():
-            origenes_validos = _validar_origenes_cedula(request, form)
+        valido = form.is_valid()
+        if error_captura:
+            form.add_error(None, error_captura)
+        if valido and not error_captura:
             evidencia, error_analisis = _validar_evidencia_analisis(
                 request=request,
                 form=form,
@@ -334,7 +331,7 @@ def solicitar_prestador_view(request):
             )
             if error_analisis:
                 form.add_error(None, error_analisis)
-            if origenes_validos and not error_analisis:
+            if not error_analisis:
                 with transaction.atomic():
                     solicitud = form.save(commit=False)
                     es_nueva = not solicitud.pk
@@ -347,8 +344,10 @@ def solicitar_prestador_view(request):
                         solicitud=solicitud,
                         cleaned_data=form.cleaned_data,
                         usuario=request.user,
-                        metadata_documentos=_metadata_documentos_desde_request(request),
+                        metadata_documentos=_metadata_documentos_desde_sesion(sesion_documental),
                     )
+                    if sesion_documental:
+                        consumir_documentos(sesion=sesion_documental, actor=request.user, solicitud=solicitud)
                     actualizar_estado_documental(solicitud)
                     registrar_autorizacion_datacredito_desde_solicitud(
                         solicitud,
@@ -441,7 +440,11 @@ def documentos_prestador_view(request, solicitud_id):
 
     if request.method == 'POST':
         form = DocumentoPrestadorForm(request.POST, request.FILES)
-        if form.is_valid():
+        valido = form.is_valid()
+        if request.POST.get('tipo_documento') in {'CEDULA_FRONTAL', 'CEDULA_TRASERA'}:
+            form.add_error(None, 'Reemplaza la cedula desde la sesion documental de la solicitud.')
+            valido = False
+        if valido:
             guardar_documento_prestador(
                 solicitud=solicitud,
                 tipo_documento=form.cleaned_data['tipo_documento'],
@@ -509,19 +512,10 @@ def descargar_documento_prestador_view(request, solicitud_id, documento_id):
     except ContractorApplicationDocument.DoesNotExist as exc:
         raise Http404('Documento no encontrado.') from exc
 
-    detalle_publico = construir_detalle_documento_publico(documento)
-    extension = Path(documento.archivo.name).suffix.lower()
-    if extension not in {'.jpg', '.jpeg', '.png', '.pdf'}:
-        extension = '.jpg' if documento.tipo_documento in {
-            ContractorApplicationDocument.TipoDocumento.CEDULA_FRONTAL,
-            ContractorApplicationDocument.TipoDocumento.CEDULA_TRASERA,
-        } else '.pdf'
-
-    return FileResponse(
-        documento.archivo.open('rb'),
-        as_attachment=False,
-        filename=f"{detalle_publico['nombre_descarga']}{extension}",
-    )
+    from gestion_creditos.services.documentos_privados import exigir_acceso, respuesta_documental
+    exigir_acceso(request.user, propietario_id=solicitud.usuario_id)
+    return respuesta_documental(documento.archivo,
+        nombre_base=construir_detalle_documento_publico(documento)['nombre_descarga'])
 
 
 @login_required

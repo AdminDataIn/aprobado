@@ -264,7 +264,8 @@ class SnapshotOriginacionLibranzaConcurrenciaPostgresTests(TransactionTestCase):
 class SimuladorYSolicitudLibranzaTests(TestCase):
     def setUp(self):
         self.media = tempfile.TemporaryDirectory()
-        self.settings_override = override_settings(MEDIA_ROOT=self.media.name)
+        self.settings_override = override_settings(MEDIA_ROOT=self.media.name + '/media',
+                                                   PRIVATE_DOCUMENTS_ROOT=self.media.name + '/privado')
         self.settings_override.enable()
         self.addCleanup(self.settings_override.disable)
         self.addCleanup(self.media.cleanup)
@@ -304,8 +305,6 @@ class SimuladorYSolicitudLibranzaTests(TestCase):
     def test_solicitud_recalcula_y_persiste_snapshot_sin_confiar_en_frontend(self, procesar):
         self.client.force_login(self.usuario)
         archivos = {
-            'cedula_frontal': SimpleUploadedFile('frontal.png', b'frontal', content_type='image/png'),
-            'cedula_trasera': SimpleUploadedFile('trasera.png', b'trasera', content_type='image/png'),
             'certificado_bancario': SimpleUploadedFile(
                 'certificado.pdf',
                 b'%PDF-1.4 certificado',
@@ -329,6 +328,8 @@ class SimuladorYSolicitudLibranzaTests(TestCase):
         }
 
         with patch('django.utils.timezone.now', return_value=fecha_referencia(2026, 9, 1)):
+            from gestion_creditos.tests.captura_fixtures import sesion_finalizada
+            datos['sesion_documental_id'] = str(sesion_finalizada(self.usuario).pk)
             response = self.client.post(reverse('libranza:solicitar'), datos)
 
         self.assertEqual(response.status_code, 302)

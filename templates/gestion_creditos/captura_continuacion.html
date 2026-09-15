@@ -1,0 +1,28 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Documento de identidad | Aprobado</title>
+  <link rel="stylesheet" href="{% static 'css/captura_documental.css' %}">
+</head>
+<body class="capture-page">
+<main data-capture-mobile data-base="{% url 'captura:continuar' producto sesion.id %}" data-contexto="{{ solicitud_id }}">
+  <img src="{% static 'images/logo.png' %}" width="160" alt="Aprobado">
+  <h1>Documento de identidad</h1>
+  <p data-desktop-message>Continúa desde tu celular</p>
+  <div data-mobile-controls hidden>
+    {% csrf_token %}
+    <button type="button" data-canjear>Continuar captura</button>
+    <div data-lados hidden>
+      <label>Frontal <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-lado="FRONTAL"></label>
+      <label>Posterior <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-lado="TRASERA"></label>
+      <button type="button" data-finalizar>Finalizar</button>
+    </div>
+  </div>
+  <p role="status" aria-live="polite" data-capture-status></p>
+</main>
+<script src="{% static 'js/captura_documental.js' %}" defer></script>
+</body>
+</html>

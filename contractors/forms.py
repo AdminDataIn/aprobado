@@ -2,6 +2,7 @@ from decimal import Decimal, InvalidOperation
 import re
 
 from django import forms
+from gestion_creditos.document_widgets import DocumentoPrivadoInput
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 
@@ -425,7 +426,7 @@ class DocumentoPrestadorForm(forms.ModelForm):
         fields = ['tipo_documento', 'archivo']
         widgets = {
             'tipo_documento': forms.Select(attrs={'class': 'campo'}),
-            'archivo': forms.ClearableFileInput(attrs={'class': 'campo'}),
+            'archivo': DocumentoPrivadoInput(attrs={'class': 'campo'}),
         }
         labels = {
             'tipo_documento': 'Documento',
@@ -612,17 +613,7 @@ class AtenderSubsanacionPrestadorForm(forms.Form):
             )
 
         elif tipo == RequerimientoSubsanacionPrestador.Tipo.DOCUMENTO_IDENTIDAD:
-            self.fields['tipo_documento_carga'] = forms.ChoiceField(
-                label='Cara del documento',
-                choices=(
-                    (ContractorApplicationDocument.TipoDocumento.CEDULA_FRONTAL, 'Cedula frontal'),
-                    (ContractorApplicationDocument.TipoDocumento.CEDULA_TRASERA, 'Cedula trasera'),
-                ),
-            )
-            self.fields['archivo'] = forms.FileField(
-                label='Imagen del documento',
-                widget=forms.FileInput(attrs={'accept': 'image/jpeg,image/png'}),
-            )
+            self.fields['sesion_documental_id'] = forms.UUIDField(widget=forms.HiddenInput)
         elif tipo == RequerimientoSubsanacionPrestador.Tipo.CERTIFICACION_BANCARIA:
             self.fields['archivo'] = forms.FileField(
                 label='Certificacion bancaria en PDF',

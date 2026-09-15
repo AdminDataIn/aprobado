@@ -40,7 +40,8 @@ class IntegridadFixture:
     def setUp(self):
         self.media = tempfile.TemporaryDirectory()
         self.addCleanup(self.media.cleanup)
-        self.override = override_settings(MEDIA_ROOT=self.media.name)
+        self.override = override_settings(MEDIA_ROOT=self.media.name + '/media',
+                                          PRIVATE_DOCUMENTS_ROOT=self.media.name + '/privado')
         self.override.enable()
         self.addCleanup(self.override.disable)
         self.actor = User.objects.create_user('staff-incidente', is_staff=True)
@@ -253,6 +254,7 @@ class IntegridadOriginacionAnulacionTests(IntegridadFixture, TestCase):
 
     @patch('gestion_creditos.views.solicitudes.procesar_certificado_bancario')
     def test_usuario_normal_y_staff_sin_perfil_pueden_originar(self, procesar):
+        from gestion_creditos.tests.captura_fixtures import sesion_finalizada
         for numero, usuario in enumerate((self.usuario, self.actor), start=2):
             self.client.force_login(usuario)
             response = self.client.post(reverse('libranza:solicitar'), {
@@ -260,8 +262,7 @@ class IntegridadOriginacionAnulacionTests(IntegridadFixture, TestCase):
                 'nombres': 'Cliente', 'apellidos': 'Individual', 'cedula': f'1000000{numero}',
                 'direccion': 'Calle Principal 123', 'telefono': '3001234567',
                 'correo_electronico': f'individual{numero}@example.test', 'empresa': self.empresa.pk,
-                'cedula_frontal': SimpleUploadedFile('frente.png', b'frente', content_type='image/png'),
-                'cedula_trasera': SimpleUploadedFile('reverso.png', b'reverso', content_type='image/png'),
+                'sesion_documental_id': str(sesion_finalizada(usuario).pk),
                 'certificado_bancario': SimpleUploadedFile('banco.pdf', b'%PDF-banco', content_type='application/pdf'),
             })
             self.assertRedirects(response, reverse('libranza:mi_credito'), fetch_redirect_response=False)

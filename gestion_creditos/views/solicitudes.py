@@ -1,6 +1,8 @@
 from .common import *
 from .common import _rate_limit_simple
 from usuarios.product_flow import solicitante_credito_required
+from django.core.exceptions import PermissionDenied
+from gestion_creditos.services.captura_documental import preparar_identidad_formulario, consumir_documentos
 from gestion_creditos.services.libranza_rules import LIBRANZA_MONTO_MAXIMO
 from gestion_creditos.services.costo_originacion_libranza import (
     CostoOriginacionLibranzaError,
@@ -11,6 +13,7 @@ from gestion_creditos.services.costo_originacion_libranza import (
 
 @login_required(login_url='/libranza/login/')
 @solicitante_credito_required
+@transaction.atomic
 def solicitud_credito_libranza_view(request):
     current_flow = get_user_flow(request.user)
     if current_flow and current_flow != ProductAccessProfile.ProductFlow.LIBRANZA:
@@ -33,8 +36,17 @@ def solicitud_credito_libranza_view(request):
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     vinculo_laboral = obtener_vinculo_laboral_activo(request.user)
     if request.method == 'POST':
-        form = CreditoLibranzaForm(request.POST, request.FILES, vinculo_laboral=vinculo_laboral)
-        if form.is_valid():
+        error_captura = None
+        try:
+            sesion_documental, archivos = preparar_identidad_formulario(request, producto='LIBRANZA')
+        except (ValidationError, PermissionDenied) as exc:
+            sesion_documental, archivos = None, request.FILES
+            error_captura = 'Completa la sesion documental de tu cuenta antes de enviar la solicitud.'
+        form = CreditoLibranzaForm(request.POST, archivos, vinculo_laboral=vinculo_laboral)
+        valido = form.is_valid()
+        if error_captura:
+            form.add_error(None, error_captura)
+        if valido and not error_captura:
             try:
                 with transaction.atomic():
                     credito_principal = Credito.objects.create(
@@ -48,6 +60,7 @@ def solicitud_credito_libranza_view(request):
                     credito_libranza_detalle = form.save(commit=False)
                     credito_libranza_detalle.credito = credito_principal
                     credito_libranza_detalle.save()
+                    consumir_documentos(sesion=sesion_documental, actor=request.user, credito=credito_principal)
                     # El parsing de certificado se ejecuta después del save para reutilizar
                     # el FileField persistido y dejar trazabilidad para una futura fase OCR.
                     procesar_certificado_bancario(credito_libranza_detalle)

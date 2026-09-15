@@ -6,6 +6,8 @@ Necesario para que ZapSign pueda descargar el PDF.
 from django.core.signing import TimestampSigner, SignatureExpired, BadSignature
 from django.http import FileResponse, JsonResponse, HttpRequest
 from django.conf import settings
+from django.views.decorators.cache import never_cache
+from gestion_creditos.services.documentos_privados import respuesta_documental
 from gestion_creditos.models import Pagare
 import logging
 
@@ -43,6 +45,7 @@ def generar_url_publica_temporal(pagare: Pagare, max_age: int = 86400) -> str:
     return url
 
 
+@never_cache
 def descargar_pagare_publico(request: HttpRequest, token: str) -> FileResponse:
     """
     Vista para descargar un pagaré usando un token firmado temporal.
@@ -86,12 +89,7 @@ def descargar_pagare_publico(request: HttpRequest, token: str) -> FileResponse:
         )
 
         # Retornar archivo PDF
-        return FileResponse(
-            pagare.archivo_pdf,
-            content_type='application/pdf',
-            as_attachment=False,  # Mostrar en navegador, no forzar descarga
-            filename=f"{pagare.numero_pagare}.pdf"
-        )
+        return respuesta_documental(pagare.archivo_pdf)
 
     except SignatureExpired:
         logger.warning(f"Token expirado para descarga de pagaré desde {request.META.get('REMOTE_ADDR')}")
@@ -108,14 +106,14 @@ def descargar_pagare_publico(request: HttpRequest, token: str) -> FileResponse:
         )
 
     except Pagare.DoesNotExist:
-        logger.error(f"Pagaré no encontrado para token válido: {token}")
+        logger.warning('Pagare temporal no encontrado.')
         return JsonResponse(
             {'error': 'Pagaré no encontrado.'},
             status=404
         )
 
-    except Exception as e:
-        logger.error(f"Error al descargar pagaré: {str(e)}")
+    except Exception:
+        logger.error('Error en descarga temporal de pagare.')
         return JsonResponse(
             {'error': 'Error al descargar el pagaré.'},
             status=500
@@ -138,6 +136,6 @@ def validar_url_accesible(url: str) -> bool:
     try:
         response = requests.head(url, timeout=10, allow_redirects=True)
         return response.status_code == 200
-    except Exception as e:
-        logger.warning(f"URL no accesible: {url} - {str(e)}")
+    except Exception:
+        logger.warning('Descarga temporal no accesible.')
         return False

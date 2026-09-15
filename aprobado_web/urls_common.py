@@ -11,6 +11,8 @@ from usuarios import views as usuarios_views
 
 
 common_urlpatterns = [
+    path('documentos/', include('gestion_creditos.urls_documentos')),
+    path('captura-documental/', include('gestion_creditos.urls_captura')),
     # Admin Django
     path("admin/", admin.site.urls),
 

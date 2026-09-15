@@ -1,4 +1,5 @@
 {% load static %}
+{% load documentos_privados %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -89,7 +90,7 @@
                             {% if form.instance.video %}
                             <div class="mp-current-video">
                                 <video controls preload="metadata">
-                                    <source src="{{ form.instance.video.url }}" type="video/mp4">
+                                    <source src="{% documento_url form.instance.video %}" type="video/mp4">
                                     Tu navegador no soporta video HTML5.
                                 </video>
                                 <span>Video actual</span>
@@ -294,7 +295,7 @@
         }
 
         {% if form.instance.video %}
-        setVideoPreview('{{ form.instance.video.url|escapejs }}');
+        setVideoPreview('{% documento_url form.instance.video %}');
         {% elif form.instance.imagen %}
         setImagePreview('{{ form.instance.imagen.url|escapejs }}');
         {% else %}

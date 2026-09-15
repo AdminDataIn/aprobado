@@ -1,0 +1,18 @@
+.capture-handoff { padding: 16px 0; min-width: 0; }
+.capture-handoff h3 { margin: 0 0 8px; }
+.capture-handoff p { margin: 8px 0; }
+.capture-handoff button { padding: 10px 14px; border: 1px solid #087e9a; border-radius: 6px; background: #fff; color: #087e9a; cursor: pointer; }
+.capture-handoff [data-crear-enlace] { background: #087e9a; color: #fff; }
+.capture-handoff button:disabled { opacity: .6; cursor: wait; }
+.capture-handoff button:focus-visible, .capture-page button:focus-visible { outline: 2px solid #18283c; outline-offset: 3px; }
+.capture-handoff a { display: inline-block; margin: 8px; overflow-wrap: anywhere; }
+.capture-handoff [hidden], .capture-page [hidden] { display: none !important; }
+.capture-page { margin: 0; background: #f4f6f8; color: #18283c; font: 16px/1.5 system-ui, sans-serif; }
+.capture-page main { max-width: 520px; margin: 24px auto; padding: 24px; box-sizing: border-box; }
+.capture-page h1 { font-size: 24px; margin: 20px 0 12px; }
+.capture-page label { display: block; margin: 16px 0; }
+.capture-page input { display: block; width: 100%; min-width: 0; margin-top: 8px; }
+.capture-page button { padding: 12px 18px; border: 0; border-radius: 6px; color: #fff; background: #087e9a; cursor: pointer; }
+.capture-page button:disabled { opacity: .6; cursor: wait; }
+.capture-page img { max-width: 100%; height: auto; }
+@media (max-width: 540px) { .capture-page main { margin: 0 auto; padding: 20px; } }

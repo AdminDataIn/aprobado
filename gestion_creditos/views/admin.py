@@ -1,4 +1,5 @@
 from .common import *
+from gestion_creditos.services.documentos_privados import exigir_acceso_credito, url_documento
 from .common import _build_capacidad_descuento_context
 from django.http import QueryDict
 from gestion_creditos.models import CuotaAmortizacion, DetalleContablePago, ReestructuracionCredito
@@ -720,22 +721,8 @@ def agregar_pago_manual_view(request, credito_id):
 
 @staff_member_required
 def comprobante_pago_manual_view(request, pago_id):
-    pago = get_object_or_404(HistorialPago, pk=pago_id)
-    if not pago.comprobante:
-        raise Http404('El pago no tiene comprobante registrado.')
-
-    try:
-        archivo = pago.comprobante.open('rb')
-    except (FileNotFoundError, OSError):
-        raise Http404('El archivo del comprobante no está disponible.')
-
-    content_type, _ = mimetypes.guess_type(pago.comprobante.name)
-    return FileResponse(
-        archivo,
-        content_type=content_type or 'application/octet-stream',
-        as_attachment=False,
-        filename=os.path.basename(pago.comprobante.name),
-    )
+    from gestion_creditos.views.documentos_privados import descargar_documento
+    return descargar_documento(request, 'pago', pago_id, 'comprobante')
 
 
 @staff_member_required
@@ -844,6 +831,13 @@ def saldar_credito_formalmente_view(request, credito_id):
 @staff_member_required
 def descargar_documentos_view(request, credito_id):
     credito = get_object_or_404(Credito, id=credito_id) #! Obtener el crédito
+    exigir_acceso_credito(request.user, credito)
+    if credito.linea == Credito.LineaCredito.LIBRANZA and (
+        hasattr(request.user, 'perfil_pagador')
+        or not request.user.has_perm('gestion_creditos.view_identity_documents')
+    ):
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied
     buffer = io.BytesIO() #! Crear un buffer en memoria para el ZIP
 
     with zipfile.ZipFile(buffer, 'w') as zip_file:
@@ -862,15 +856,19 @@ def descargar_documentos_view(request, credito_id):
         if detalle:
             for field_name in document_fields:
                 file_field = getattr(detalle, field_name, None)
-                if file_field and hasattr(file_field, 'path'):
+                if file_field:
                     try:
-                        zip_file.write(file_field.path, file_field.name)
-                    except FileNotFoundError:
-                        logger.warning(f"Archivo no encontrado para el crédito {credito.id}: {file_field.path}")
+                        from pathlib import Path
+                        from gestion_creditos.services.documentos_privados import ruta_documental
+                        with ruta_documental(file_field).open('rb') as archivo:
+                            zip_file.writestr(field_name + Path(file_field.name).suffix, archivo.read())
+                    except (FileNotFoundError, Http404):
+                        logger.warning('Documento no disponible en exportacion autorizada; credito_id=%s', credito.id)
 
     buffer.seek(0)
     response = HttpResponse(buffer, content_type='application/zip')
     response['Content-Disposition'] = f'attachment; filename="documentos_credito_{credito.id}.zip"'
+    response['Cache-Control'] = 'no-store, private'
     return response
 
 
@@ -881,6 +879,7 @@ def documentacion_credito_view(request, credito_id):
         id=credito_id
     )
 
+    exigir_acceso_credito(request.user, credito)
     documentos = []
 
     def infer_kind(url_value, filename=None):
@@ -900,18 +899,11 @@ def documentacion_credito_view(request, credito_id):
         return 'file'
 
     def build_url(file_field):
-        if not file_field or not getattr(file_field, 'name', None):
-            return ''
-        try:
-            return request.build_absolute_uri(file_field.url)
-        except Exception:
-            return file_field.name
+        url = url_documento(file_field)
+        return request.build_absolute_uri(url) if url else ''
 
     def build_preview_url(file_field):
-        if not file_field or not getattr(file_field, 'name', None):
-            return ''
-        preview_path = reverse('gestion:documento_preview')
-        return request.build_absolute_uri(f"{preview_path}?path={quote(file_field.name)}")
+        return build_url(file_field)
 
     def add_doc(title, file_field=None, url=None, source='', status='', created_at=None, signed_at=None, description=''):
         doc_url = ''
@@ -971,7 +963,7 @@ def documentacion_credito_view(request, credito_id):
             status=pagare.get_estado_display(),
             created_at=pagare.fecha_creacion
         )
-        signed_url = build_url(pagare.archivo_pdf_firmado) or (pagare.zapsign_signed_file_url or '')
+        signed_url = build_url(pagare.archivo_pdf_firmado)
         add_doc(
             'Pagaré firmado',
             url=signed_url,
@@ -1018,21 +1010,8 @@ def documentacion_credito_view(request, credito_id):
 
 
 @staff_member_required
-@xframe_options_exempt
 def documento_preview_view(request):
-    path = (request.GET.get('path') or '').strip()
-    if not path:
-        raise Http404("Documento no encontrado.")
-
-    try:
-        full_path = safe_join(settings.MEDIA_ROOT, path)
-    except SuspiciousFileOperation:
-        raise Http404("Documento no encontrado.")
-
-    if not os.path.exists(full_path):
-        raise Http404("Documento no encontrado.")
-
-    content_type, _ = mimetypes.guess_type(full_path)
-    response = FileResponse(open(full_path, 'rb'), content_type=content_type or 'application/octet-stream')
-    response['Content-Disposition'] = f'inline; filename="{os.path.basename(full_path)}"'
+    # Las vistas actuales enlazan objetos autorizados; no resolver paths legacy del cliente.
+    response = HttpResponse(status=404)
+    response['Cache-Control'] = 'private, no-store'
     return response

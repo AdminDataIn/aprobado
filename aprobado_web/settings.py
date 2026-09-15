@@ -1,4 +1,6 @@
 from pathlib import Path
+from copy import deepcopy
+from django.utils.log import DEFAULT_LOGGING
 import importlib.util
 import os
 import socket
@@ -376,6 +378,12 @@ if WHITENOISE_AVAILABLE:
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.environ.get('MEDIA_ROOT', os.path.join(BASE_DIR, 'media'))
+# Activar solo despues de configurar el location internal documentado en ID-00.
+PROTECTED_LEGACY_X_ACCEL = os.environ.get('PROTECTED_LEGACY_X_ACCEL', 'False').lower() == 'true'
+LOGGING = deepcopy(DEFAULT_LOGGING)
+LOGGING['filters']['token_pagare'] = {'()': 'gestion_creditos.document_logging.OcultarTokenPagare'}
+for logger_name in ('django.request', 'django.server', 'zapsign'):
+    LOGGING['loggers'].setdefault(logger_name, {}).setdefault('filters', []).append('token_pagare')
 PRIVATE_DOCUMENTS_ROOT = os.environ.get(
     'PRIVATE_DOCUMENTS_ROOT',
     os.path.join(BASE_DIR, 'private_documents'),

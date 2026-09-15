@@ -663,14 +663,11 @@ def pagador_comprobante_pago_view(request, pago_id):
     if not archivo:
         raise Http404("Comprobante no encontrado.")
 
-    content_type = mimetypes.guess_type(archivo.name)[0] or 'application/octet-stream'
-    filename = os.path.basename(archivo.name)
-    return FileResponse(
-        archivo.open('rb'),
-        as_attachment=False,
-        filename=filename,
-        content_type=content_type,
-    )
+    from gestion_creditos.services.documentos_privados import exigir_acceso_credito, exigir_acceso, respuesta_documental
+    exigir_acceso_credito(request.user, pago.credito)
+    if not pago.comprobante:
+        exigir_acceso(request.user, empresa_id=pago.lote_pago.empresa_id)
+    return respuesta_documental(archivo)
 
 
 @login_required(login_url='/pagador/login/')
@@ -1089,12 +1086,9 @@ def _pagador_report_rows(request, creditos, empresa, report_type):
         return f'{value}' if value is not None else ''
 
     def _file_url(file_field):
-        if not file_field:
-            return ''
-        try:
-            return request.build_absolute_uri(file_field.url)
-        except (ValueError, AttributeError):
-            return file_field.name
+        from gestion_creditos.services.documentos_privados import url_documento
+        url = url_documento(file_field)
+        return request.build_absolute_uri(url) if url else ''
 
     headers_completo = [
         'Empresa', 'Numero credito', 'Estado', 'Linea', 'Fecha solicitud', 'Fecha actualizacion',
@@ -1358,6 +1352,7 @@ def descargar_reporte_pagador_view(request):
     for row in rows:
         sheet.append(row)
     workbook.save(response)
+    response['Cache-Control'] = 'private, no-store'
     return response
 
 

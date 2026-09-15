@@ -1,5 +1,7 @@
 ﻿from django.contrib import admin, messages
 from django import forms
+from gestion_creditos.document_widgets import DocumentosPrivadosAdminMixin
+from gestion_creditos.services.documentos_privados import url_documento
 from django.contrib.admin.helpers import ActionForm
 from django.conf import settings
 from django.urls import path, reverse
@@ -44,7 +46,7 @@ Pagare._meta.verbose_name = 'Pagaré'
 Pagare._meta.verbose_name_plural = 'Pagarés'
 
 #? --------- INLINE PARA IMÃGENES DEL NEGOCIO ------------
-class ImagenNegocioInline(admin.TabularInline):
+class ImagenNegocioInline(DocumentosPrivadosAdminMixin, admin.TabularInline):
     model = ImagenNegocio
     extra = 0
     readonly_fields = ['fecha_subida', 'imagen_preview']
@@ -52,13 +54,13 @@ class ImagenNegocioInline(admin.TabularInline):
 
     def imagen_preview(self, obj):
         if obj.imagen:
-            return f'<img src="{obj.imagen.url}" style="max-height: 100px; max-width: 100px;" />'
+            return format_html('<img src="{}" style="max-height: 100px; max-width: 100px;" />', url_documento(obj.imagen))
         return "Sin imagen"
     imagen_preview.allow_tags = True
     imagen_preview.short_description = "Vista previa"
 
 #? --------- ADMINISTRACION DE CREDITOS ------------
-class CreditoEmprendimientoInline(admin.StackedInline):
+class CreditoEmprendimientoInline(DocumentosPrivadosAdminMixin, admin.StackedInline):
     model = CreditoEmprendimiento
     can_delete = False
     verbose_name_plural = 'Detalle de Emprendimiento'
@@ -69,11 +71,16 @@ class CreditoEmprendimientoInline(admin.StackedInline):
     inlines = [ImagenNegocioInline]
 
 #? --------- ADMINISTRACION DE CREDITOS ------------
-class CreditoLibranzaInline(admin.StackedInline):
+class CreditoLibranzaInline(DocumentosPrivadosAdminMixin, admin.StackedInline):
     model = CreditoLibranza
     can_delete = False
     verbose_name_plural = 'Detalle de Libranza'
     fk_name = 'credito'
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name in {'cedula_frontal', 'cedula_trasera'}:
+            kwargs['widget'] = forms.FileInput
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
 
 
 @admin.register(OrigenCreditoPrestador)
@@ -235,7 +242,7 @@ class CreditoAdmin(admin.ModelAdmin):
                 detalle.save()
 
 @admin.register(CreditoEmprendimiento)
-class CreditoEmprendimientoAdmin(admin.ModelAdmin):
+class CreditoEmprendimientoAdmin(DocumentosPrivadosAdminMixin, admin.ModelAdmin):
     """
     Admin dedicado para corregir datos erróneos en CreditoEmprendimiento.
     Permite modificar campos como numero_cedula y celular_wh directamente.
@@ -754,7 +761,7 @@ class AsesorComercialAdmin(admin.ModelAdmin):
 
 
 @admin.register(PagoComisionEjecutivo)
-class PagoComisionEjecutivoAdmin(admin.ModelAdmin):
+class PagoComisionEjecutivoAdmin(DocumentosPrivadosAdminMixin, admin.ModelAdmin):
     list_display = ('asesor', 'monto', 'fecha_pago', 'referencia', 'creado_por', 'creado_en')
     list_filter = ('fecha_pago', 'asesor')
     search_fields = ('asesor__nombre', 'asesor__cedula', 'referencia', 'observacion')
@@ -824,7 +831,7 @@ class MarketplaceItemAdminForm(forms.ModelForm):
 
 
 @admin.register(MarketplaceItem)
-class MarketplaceItemAdmin(admin.ModelAdmin):
+class MarketplaceItemAdmin(DocumentosPrivadosAdminMixin, admin.ModelAdmin):
     form = MarketplaceItemAdminForm
     list_display = ('titulo', 'empresa', 'tipo', 'estado', 'fecha_creacion', 'acciones_estado')
     list_filter = ('tipo', 'estado', 'empresa')
@@ -989,7 +996,7 @@ class MarketplaceLiquidacionEmpresaAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at', 'updated_at')
 
 @admin.register(HistorialPago)
-class HistorialPagoAdmin(admin.ModelAdmin):
+class HistorialPagoAdmin(DocumentosPrivadosAdminMixin, admin.ModelAdmin):
     list_display = ('credito', 'fecha_aplicacion', 'monto', 'estado', 'metodo_pago', 'origen_registro', 'referencia_pago', 'soporte_pago')
     list_filter = ('estado', 'metodo_pago', 'origen_registro', 'fecha_aplicacion')
     search_fields = ('credito__numero_credito', 'referencia_pago')
@@ -997,9 +1004,9 @@ class HistorialPagoAdmin(admin.ModelAdmin):
     @admin.display(description='Soporte')
     def soporte_pago(self, obj):
         if obj.comprobante:
-            return format_html('<a href="{}" target="_blank" rel="noopener">Ver soporte</a>', obj.comprobante.url)
+            return format_html('<a href="{}" target="_blank" rel="noopener">Ver soporte</a>', url_documento(obj.comprobante))
         if obj.lote_pago_id and obj.lote_pago.comprobante:
-            return format_html('<a href="{}" target="_blank" rel="noopener">Ver lote</a>', obj.lote_pago.comprobante.url)
+            return format_html('<a href="{}" target="_blank" rel="noopener">Ver lote</a>', url_documento(obj.lote_pago.comprobante))
         return '-'
 
 
@@ -1100,7 +1107,7 @@ class PagoBREBAdmin(admin.ModelAdmin):
 
 
 @admin.register(LotePagoEmpresa)
-class LotePagoEmpresaAdmin(admin.ModelAdmin):
+class LotePagoEmpresaAdmin(DocumentosPrivadosAdminMixin, admin.ModelAdmin):
     list_display = ('id', 'empresa', 'nombre_original', 'estado', 'pagos_aplicados', 'errores_count', 'creado_en')
     list_filter = ('estado', 'creado_en', 'empresa')
     search_fields = ('nombre_original', 'checksum', 'empresa__nombre')
@@ -1121,7 +1128,7 @@ class CuentaAhorroAdmin(admin.ModelAdmin):
     readonly_fields = ('fecha_apertura', 'fecha_actualizacion')
 
 @admin.register(MovimientoAhorro)
-class MovimientoAhorroAdmin(admin.ModelAdmin):
+class MovimientoAhorroAdmin(DocumentosPrivadosAdminMixin, admin.ModelAdmin):
     list_display = ('referencia', 'cuenta', 'tipo', 'monto', 'estado', 'fecha_creacion', 'procesado_por')
     list_filter = ('tipo', 'estado', 'fecha_creacion')
     search_fields = ('referencia', 'cuenta__usuario__username', 'descripcion')
@@ -1251,13 +1258,13 @@ class CondicionOriginacionLibranzaAdmin(admin.ModelAdmin):
 
 #? ----- ADMINISTRACIÃ“N DE PAGARÃ‰S (ZapSign) -----
 @admin.register(Pagare)
-class PagareAdmin(admin.ModelAdmin):
+class PagareAdmin(DocumentosPrivadosAdminMixin, admin.ModelAdmin):
     list_display = ('numero_pagare', 'credito', 'estado', 'fecha_creacion', 'fecha_firma', 'creado_por')
     list_filter = ('estado', 'fecha_creacion', 'fecha_firma')
     search_fields = ('numero_pagare', 'credito__numero_credito', 'zapsign_doc_token')
     readonly_fields = (
         'numero_pagare', 'fecha_creacion', 'fecha_envio', 'fecha_firma', 'fecha_rechazo',
-        'zapsign_doc_token', 'zapsign_sign_url', 'zapsign_signed_file_url', 'hash_pdf',
+        'zapsign_doc_token', 'zapsign_sign_url', 'archivo_firmado_protegido', 'hash_pdf',
         'ip_firmante', 'evidencias', 'creado_por'
     )
 
@@ -1269,7 +1276,7 @@ class PagareAdmin(admin.ModelAdmin):
             'fields': ('archivo_pdf', 'archivo_pdf_firmado', 'hash_pdf')
         }),
         ('Integración ZapSign', {
-            'fields': ('zapsign_doc_token', 'zapsign_sign_url', 'zapsign_signed_file_url', 'zapsign_status'),
+            'fields': ('zapsign_doc_token', 'zapsign_sign_url', 'archivo_firmado_protegido', 'zapsign_status'),
             'classes': ('collapse',)
         }),
         ('Fechas y Auditoría', {
@@ -1281,6 +1288,11 @@ class PagareAdmin(admin.ModelAdmin):
             'description': 'Datos de trazabilidad legal para disputas'
         }),
     )
+
+    @admin.display(description='PDF firmado')
+    def archivo_firmado_protegido(self, obj):
+        url = url_documento(obj.archivo_pdf_firmado)
+        return format_html('<a href="{}">Documento protegido</a>', url) if url else 'Sin archivo local'
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('credito', 'creado_por')

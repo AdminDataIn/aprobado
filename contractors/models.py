@@ -8,6 +8,7 @@ from django.db import models
 from django.db.models import Q
 
 from gestion_creditos.models import Empresa
+from gestion_creditos.storage import documentos_solicitud_storage
 
 
 class ContractorApplication(models.Model):
@@ -1792,7 +1793,7 @@ class ContractorApplicationDocument(models.Model):
         related_name='documentos',
     )
     tipo_documento = models.CharField(max_length=32, choices=TipoDocumento.choices)
-    archivo = models.FileField(upload_to=ruta_documento_prestador)
+    archivo = models.FileField(upload_to=ruta_documento_prestador, storage=documentos_solicitud_storage)
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,

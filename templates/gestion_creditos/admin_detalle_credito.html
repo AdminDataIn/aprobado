@@ -11,6 +11,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Detalle de Crédito - Fintech Pro</title>
     {% load static %}
+{% load documentos_privados %}
     {% load humanize %}
     {% load l10n %}
     {% load creditos_extras %}
@@ -471,7 +472,7 @@
                                               {% if pago.comprobante %}
                                               <a href="{% url 'gestion:pago_comprobante' pago.id %}" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm">Ver comprobante</a>
                                               {% elif pago.lote_pago and pago.lote_pago.comprobante %}
-                                              <a href="{{ pago.lote_pago.comprobante.url }}" target="_blank" class="btn btn-outline-primary btn-sm">Lote</a>
+                                              <a href="{% documento_url pago.lote_pago.comprobante %}" target="_blank" class="btn btn-outline-primary btn-sm">Lote</a>
                                               {% else %}
                                               <span class="text-muted d-block mb-2">Sin comprobante registrado</span>
                                               {% endif %}
@@ -526,7 +527,7 @@
                                     <small class="text-muted">Usuario: {{ historial.usuario_modificacion.username|default:'Sistema' }}</small>
                                     {% if historial.comprobante_pago %}
                                         <div class="mt-2">
-                                            <a href="{{ historial.comprobante_pago.url }}" target="_blank" class="btn btn-outline-primary btn-sm">
+                                            <a href="{% documento_url historial.comprobante_pago %}" target="_blank" class="btn btn-outline-primary btn-sm">
                                                 <i class="bi bi-file-earmark-down"></i> Ver Comprobante
                                             </a>
                                         </div>

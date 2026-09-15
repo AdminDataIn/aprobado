@@ -13,12 +13,19 @@
     <form method="post" enctype="multipart/form-data" class="formulario-compacto">
       {% csrf_token %}
       {{ form.non_field_errors }}
+      {% if requerimiento.tipo == 'DOCUMENTO_IDENTIDAD' %}
+        {% include 'gestion_creditos/components/captura_handoff.html' with producto='PRESTADORES' %}
+      {% endif %}
       {% for field in form %}
+        {% if field.name != 'sesion_documental_id' %}
         <div class="campo-grupo">
           <label for="{{ field.id_for_label }}">{{ field.label }}</label>
           {{ field }}
           {% for error in field.errors %}<p class="error-campo">{{ error }}</p>{% endfor %}
         </div>
+        {% else %}
+          {% for error in field.errors %}<p class="error-campo">{{ error }}</p>{% endfor %}
+        {% endif %}
       {% endfor %}
       <div class="acciones">
         <button type="submit" class="boton">Confirmar envío</button>

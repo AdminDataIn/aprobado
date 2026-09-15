@@ -851,11 +851,14 @@ def descargar_documento_prestador_staff_view(request, documento_id):
     documento = get_object_or_404(ContractorApplicationDocument, id=documento_id)
     if not documento.archivo:
         raise Http404('Documento no encontrado.')
-    return FileResponse(
-        documento.archivo.open('rb'),
-        as_attachment=False,
-        filename=documento.archivo.name.split('/')[-1],
-    )
+    if documento.tipo_documento in {'CEDULA_FRONTAL', 'CEDULA_TRASERA'}:
+        from gestion_creditos.views.captura_documental import respuesta_archivo
+        response = respuesta_archivo(documento.archivo, documento.tipo_documento.removeprefix('CEDULA_'))
+        response['Cache-Control'] = 'no-store, private'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
+    from gestion_creditos.services.documentos_privados import respuesta_documental
+    return respuesta_documental(documento.archivo)
 
 
 def _obtener_solicitud_staff(solicitud_id):

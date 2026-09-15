@@ -1,0 +1,13 @@
+{% load static l10n %}
+<link rel="stylesheet" href="{% static 'css/captura_documental.css' %}">
+<section class="capture-handoff" data-capture-handoff data-producto="{{ producto }}" data-contexto="{{ solicitud.id|unlocalize|default:'' }}"
+         data-crear="{% url 'captura:crear' producto %}">
+  <h3>Documento de identidad</h3>
+  <p>Continúa desde tu celular</p>
+  <button type="button" class="document-action-button" data-crear-enlace>Generar enlace seguro</button>
+  <a data-enlace-captura hidden target="_blank" rel="noreferrer noopener">Abrir captura</a>
+  <button type="button" data-copiar-enlace hidden>Copiar enlace</button>
+  <input type="hidden" name="sesion_documental_id" value="{{ request.POST.sesion_documental_id|default:'' }}" data-sesion-documental>
+  <p data-capture-status role="status" aria-live="polite"></p>
+</section>
+<script src="{% static 'js/captura_documental.js' %}" defer></script>

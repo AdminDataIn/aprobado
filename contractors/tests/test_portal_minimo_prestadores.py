@@ -5,6 +5,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
 from datetime import timedelta
+import tempfile
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -34,6 +35,7 @@ from contractors.services.predecision import (
     evaluar_predecision_prestador,
 )
 from gestion_creditos.models import Credito, CreditoLibranza, Empresa
+from gestion_creditos.tests.captura_fixtures import sesion_finalizada
 
 
 @override_settings(CONTRACTORS_CONTRACT_AI_ENABLED=False, OPENAI_API_KEY='')
@@ -41,6 +43,12 @@ class PortalMinimoPrestadoresTest(TestCase):
     host = 'contratistas.localhost'
 
     def setUp(self):
+        temporal = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(temporal.cleanup)
+        storage = override_settings(MEDIA_ROOT=temporal.name + '/media',
+                                    PRIVATE_DOCUMENTS_ROOT=temporal.name + '/privado')
+        storage.enable()
+        self.addCleanup(storage.disable)
         self.usuario = get_user_model().objects.create_user(
             username='prestador',
             email='prestador@example.com',
@@ -148,7 +156,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         cedula_frontal = solicitud.documentos.get(
             tipo_documento=ContractorApplicationDocument.TipoDocumento.CEDULA_FRONTAL,
         )
-        self.assertEqual(cedula_frontal.metadata_captura['source'], 'capture')
+        self.assertEqual(cedula_frontal.metadata_captura['source'], 'sesion_documental')
         self.assertIn('captured_at', cedula_frontal.metadata_captura)
         self.assertNotIn('base64', cedula_frontal.metadata_captura)
         self.assertEqual(response['Location'], f'/simular/?solicitud_id={solicitud.id}')
@@ -284,10 +292,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.client.force_login(self.usuario)
         payload = self._payload_solicitud()
         payload.update({
-            'origen_documento_identidad_frontal': 'capture',
-            'origen_documento_identidad_reverso': 'capture',
-            'documento_identidad_frontal': SimpleUploadedFile('frontal.jpg', b'imagen', content_type='image/jpeg'),
-            'documento_identidad_reverso': SimpleUploadedFile('trasera.jpg', b'imagen', content_type='image/jpeg'),
+            'sesion_documental_id': str(sesion_finalizada(self.usuario, 'PRESTADORES').pk),
             'certificado_bancario': SimpleUploadedFile('certificado.pdf', b'%PDF-1.4', content_type='application/pdf'),
             'contrato_actual': SimpleUploadedFile('contrato.pdf', b'%PDF-1.4 sin analizar', content_type='application/pdf'),
         })
@@ -315,11 +320,12 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.client.force_login(self.usuario)
         payload = self._payload_solicitud_con_documentos()
         payload['origen_documento_identidad_frontal'] = 'upload_fallback'
+        payload.pop('sesion_documental_id')
 
         response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'La carga manual de cédula no está habilitada.')
+        self.assertContains(response, 'Completa la sesion documental de tu cuenta antes de continuar.')
         self.assertEqual(ContractorApplication.objects.count(), 0)
 
     def test_usuario_actualiza_solicitud_y_reemplaza_documento_sin_duplicar(self):
@@ -335,7 +341,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         )
         contrato_id = contrato.id
 
-        payload = self._payload_solicitud_con_documentos()
+        payload = self._payload_solicitud_con_documentos(solicitud)
         payload['solicitud_id'] = str(solicitud.id)
         payload['cargo'] = 'Consultora senior'
         payload['contrato_actual'] = SimpleUploadedFile(
@@ -524,8 +530,10 @@ class PortalMinimoPrestadoresTest(TestCase):
         solicitud = self._crear_solicitud(self.usuario)
         self.client.force_login(self.usuario)
 
-        self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CEDULA_FRONTAL, 'frontal.jpg', b'imagen')
-        self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CEDULA_TRASERA, 'trasera.jpg', b'imagen')
+        # Documentos historicos; la ruta publica ya no admite carga libre de cedula.
+        for tipo in ('CEDULA_FRONTAL', 'CEDULA_TRASERA'):
+            ContractorApplicationDocument.objects.create(
+                solicitud=solicitud, tipo_documento=tipo, archivo='historico.jpg', uploaded_by=self.usuario)
         self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CONTRATO, 'contrato.pdf')
         self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CERTIFICADO_BANCARIO, 'certificado.pdf')
 
@@ -1796,15 +1804,12 @@ class PortalMinimoPrestadoresTest(TestCase):
             'autoriza_consulta_centrales': 'on',
         }
 
-    def _payload_solicitud_con_documentos(self):
+    def _payload_solicitud_con_documentos(self, solicitud=None):
         contenido_contrato = b'%PDF-1.4 contrato'
         self._analizar_contrato_transitorio(contenido_contrato)
         payload = self._payload_solicitud()
         payload.update({
-            'origen_documento_identidad_frontal': 'capture',
-            'origen_documento_identidad_reverso': 'capture',
-            'documento_identidad_frontal': SimpleUploadedFile('cedula-frontal.jpg', b'imagen-frontal', content_type='image/jpeg'),
-            'documento_identidad_reverso': SimpleUploadedFile('cedula-trasera.jpg', b'imagen-trasera', content_type='image/jpeg'),
+            'sesion_documental_id': str(sesion_finalizada(self.usuario, 'PRESTADORES', solicitud).pk),
             'certificado_bancario': SimpleUploadedFile('certificado.pdf', b'%PDF-1.4 certificado', content_type='application/pdf'),
             'contrato_actual': SimpleUploadedFile('contrato.pdf', contenido_contrato, content_type='application/pdf'),
         })
@@ -1870,8 +1875,18 @@ class PortalMinimoPrestadoresTest(TestCase):
         )
 
     def _cargar_documentos_obligatorios(self, solicitud):
-        self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CEDULA_FRONTAL, 'frontal.jpg', b'imagen')
-        self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CEDULA_TRASERA, 'trasera.jpg', b'imagen')
+        from django.db import transaction
+        from gestion_creditos.services import captura_documental as captura
+        from contractors.services.solicitud import guardar_documento_prestador
+        sesion = sesion_finalizada(solicitud.usuario, 'PRESTADORES', solicitud)
+        with transaction.atomic():
+            _, lados = captura.obtener_documentos_finalizados(
+                sesion_id=sesion.pk, actor=solicitud.usuario, producto='PRESTADORES', solicitud_id=solicitud.pk)
+            archivos = captura.archivos_para_formulario(lados, {'FRONTAL': 'CEDULA_FRONTAL', 'TRASERA': 'CEDULA_TRASERA'})
+            for tipo, archivo in archivos.items():
+                guardar_documento_prestador(solicitud=solicitud, tipo_documento=tipo,
+                    archivo=archivo, usuario=solicitud.usuario, invalidar_evaluacion=False)
+            captura.consumir_documentos(sesion=sesion, actor=solicitud.usuario, solicitud=solicitud)
         self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CONTRATO, 'contrato.pdf')
         self._cargar_documento(solicitud, ContractorApplicationDocument.TipoDocumento.CERTIFICADO_BANCARIO, 'certificado.pdf')
 

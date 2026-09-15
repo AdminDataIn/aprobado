@@ -70,7 +70,12 @@ def guardar_documento_prestador(
             motivo='documento_reemplazado',
         )
 
-    if archivo_anterior and archivo_anterior != documento.archivo.name:
+    identidad_legacy = (
+        tipo_documento in {'CEDULA_FRONTAL', 'CEDULA_TRASERA'}
+        and archivo_anterior and not archivo_anterior.startswith('identidad/')
+    )
+    # La adopcion del storage privado no elimina evidencia de identidad legacy.
+    if archivo_anterior and archivo_anterior != documento.archivo.name and not identidad_legacy:
         transaction.on_commit(lambda: storage.delete(archivo_anterior))
     return documento
 

@@ -608,10 +608,12 @@ MODIFICAR:
                                 <input type="text" id="ingresos_mensuales" name="ingresos_mensuales" class="form-input" required>
                             </div>
                             <!-- Adjuntar la cédula por ambas caras -->
+                            {% include 'gestion_creditos/components/captura_handoff.html' with producto='LIBRANZA' %}
+                            <div hidden>
                             <div class="form-field">
                                 <label for="cedula_frontal" class="form-label required">Cedula (frontal):</label>
                                 <div class="document-upload-card">
-                                    <input type="file" id="cedula_frontal" name="cedula_frontal" class="form-input document-input" accept="image/*" required hidden>
+                                    <input type="file" id="cedula_frontal" class="form-input document-input" accept="image/*" hidden disabled>
                                     <div class="document-upload-actions">
                                         <button type="button" class="document-action-button primary open-camera-btn" data-target="cedula_frontal" data-label="Cedula frontal">Tomar foto</button>
                                     </div>
@@ -628,7 +630,7 @@ MODIFICAR:
                             <div class="form-field">
                                 <label for="cedula_trasera" class="form-label required">Cedula (trasera):</label>
                                 <div class="document-upload-card">
-                                    <input type="file" id="cedula_trasera" name="cedula_trasera" class="form-input document-input" accept="image/*" required hidden>
+                                    <input type="file" id="cedula_trasera" class="form-input document-input" accept="image/*" hidden disabled>
                                     <div class="document-upload-actions">
                                         <button type="button" class="document-action-button primary open-camera-btn" data-target="cedula_trasera" data-label="Cedula trasera">Tomar foto</button>
                                     </div>
@@ -643,6 +645,7 @@ MODIFICAR:
                                 </div>
                             </div>
                             <!-- El certificado bancario se restringe a PDF para facilitar el OCR y evitar fotos borrosas. -->
+                            </div>
                             <div class="form-field">
                                 <label for="certificado_bancario" class="form-label required">Certificado Bancario:</label>
                                 <div class="document-upload-card">

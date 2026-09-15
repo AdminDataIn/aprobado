@@ -3,6 +3,7 @@ from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.core.exceptions import PermissionDenied, ValidationError
 from django import forms
 from django.forms.models import BaseInlineFormSet
+from gestion_creditos.document_widgets import DocumentosPrivadosAdminMixin
 from django.template.response import TemplateResponse
 
 from contractors.models import (
@@ -28,10 +29,15 @@ from contractors.services.politica_score import (
 )
 
 
-class ContractorApplicationDocumentInline(admin.TabularInline):
+class ContractorApplicationDocumentInline(DocumentosPrivadosAdminMixin, admin.TabularInline):
     model = ContractorApplicationDocument
     extra = 0
     readonly_fields = ['uploaded_by', 'created_at', 'updated_at']
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name == 'archivo':
+            kwargs['widget'] = forms.FileInput
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
 
 
 @admin.register(ContractorApplication)
@@ -109,11 +115,16 @@ class ContractorApplicationAdmin(admin.ModelAdmin):
 
 
 @admin.register(ContractorApplicationDocument)
-class ContractorApplicationDocumentAdmin(admin.ModelAdmin):
+class ContractorApplicationDocumentAdmin(DocumentosPrivadosAdminMixin, admin.ModelAdmin):
     list_display = ['id', 'solicitud', 'tipo_documento', 'uploaded_by', 'created_at']
     list_filter = ['tipo_documento', 'created_at']
     search_fields = ['solicitud__numero_documento', 'solicitud__nombres', 'solicitud__apellidos']
     readonly_fields = ['created_at', 'updated_at']
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name == 'archivo':
+            kwargs['widget'] = forms.FileInput
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
 
 
 @admin.register(ConfiguracionSimuladorPrestador)

@@ -10,7 +10,7 @@ import hashlib
 import uuid
 
 from gestion_creditos.services.name_normalization import build_full_name_upper, normalize_name_upper
-from gestion_creditos.storage import private_document_storage
+from gestion_creditos.storage import private_document_storage, documentos_solicitud_storage
 
 
 DOCUMENTO_EMPRESA_EXTENSIONS = ('pdf', 'jpg', 'jpeg', 'png', 'webp')
@@ -1232,10 +1232,12 @@ class CreditoLibranza(models.Model):
     #? Archivos adjuntos
     cedula_frontal = models.FileField(
         upload_to='credito_libranza/cedulas/',
+        storage=documentos_solicitud_storage,
         verbose_name="Cédula (frontal)"
     )
     cedula_trasera = models.FileField(
         upload_to='credito_libranza/cedulas/',
+        storage=documentos_solicitud_storage,
         verbose_name="Cédula (trasera)"
     )
     certificado_laboral = models.FileField(
@@ -3087,4 +3089,80 @@ class CondicionOriginacionLibranza(models.Model):
 
     def __str__(self):
         return f'{self.credito.numero_credito} - {self.codigo_politica} v{self.version_politica}'
+
+
+class SesionCapturaDocumental(models.Model):
+    class Producto(models.TextChoices):
+        LIBRANZA = 'LIBRANZA', 'Libranza'
+        PRESTADORES = 'PRESTADORES', 'Prestadores'
+
+    class Estado(models.TextChoices):
+        ABIERTA = 'ABIERTA', 'Abierta'
+        CANJEADA = 'CANJEADA', 'Canjeada'
+        FINALIZADA = 'FINALIZADA', 'Finalizada'
+        UTILIZADA = 'UTILIZADA', 'Utilizada'
+        REVOCADA = 'REVOCADA', 'Revocada'
+        EXPIRADA = 'EXPIRADA', 'Expirada'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    producto = models.CharField(max_length=16, choices=Producto.choices)
+    proposito = models.CharField(max_length=16, default='CEDULA', editable=False)
+    solicitud = models.ForeignKey('contractors.ContractorApplication', null=True, blank=True, on_delete=models.PROTECT)
+    credito = models.ForeignKey('Credito', null=True, blank=True, on_delete=models.PROTECT)
+    estado = models.CharField(max_length=16, choices=Estado.choices, default=Estado.ABIERTA)
+    token_hash = models.CharField(max_length=64, unique=True, editable=False)
+    vinculo_hash = models.CharField(max_length=64, blank=True, editable=False)
+    expira_en = models.DateTimeField(db_index=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+    canjeado_en = models.DateTimeField(null=True, blank=True)
+    finalizado_en = models.DateTimeField(null=True, blank=True)
+    utilizado_en = models.DateTimeField(null=True, blank=True)
+    revocado_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        permissions = [('view_identity_documents', 'Puede consultar documentos privados de identidad')]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(proposito='CEDULA'), name='captura_proposito_cedula'),
+            models.CheckConstraint(
+                condition=(models.Q(producto='LIBRANZA', solicitud__isnull=True)
+                           | models.Q(producto='PRESTADORES', credito__isnull=True)),
+                name='captura_contexto_producto',
+            ),
+        ]
+
+
+def ruta_captura_documental(instance, filename):
+    return f'identidad/{uuid.uuid4().hex}{Path(filename).suffix.lower()}'
+
+
+class CapturaDocumentoIdentidad(models.Model):
+    class Lado(models.TextChoices):
+        FRONTAL = 'FRONTAL', 'Frontal'
+        TRASERA = 'TRASERA', 'Trasera'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sesion = models.ForeignKey(SesionCapturaDocumental, on_delete=models.PROTECT, related_name='capturas')
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    lado = models.CharField(max_length=8, choices=Lado.choices)
+    archivo = models.FileField(upload_to=ruta_captura_documental, storage=private_document_storage)
+    hash_archivo = models.CharField(max_length=64, editable=False)
+    estado_tecnico = models.CharField(max_length=24, default='VALIDO_TECNICAMENTE', editable=False)
+    identidad = models.CharField(max_length=24, default='IDENTIDAD_NO_VERIFICADA', editable=False)
+    metadata = models.JSONField(default=dict, blank=True)
+    activo = models.BooleanField(default=True)
+    recibido_en = models.DateTimeField(auto_now_add=True)
+    purgado_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['sesion', 'lado'], condition=models.Q(activo=True),
+                                               name='captura_lado_activo_unico')]
+
+
+class EventoCapturaDocumental(models.Model):
+    sesion = models.ForeignKey(SesionCapturaDocumental, null=True, on_delete=models.PROTECT, related_name='eventos')
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.PROTECT)
+    evento = models.CharField(max_length=32)
+    creado_en = models.DateTimeField(auto_now_add=True)
 

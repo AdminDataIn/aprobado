@@ -1,6 +1,7 @@
 import re
 
 from django import forms
+from gestion_creditos.document_widgets import DocumentoPrivadoInput
 from django.contrib.auth import get_user_model
 from django.forms import HiddenInput
 from .models import (
@@ -533,7 +534,7 @@ class MarketplaceItemForm(forms.ModelForm):
             'tipo': forms.Select(attrs={'class': 'form-select'}),
             'precio': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: $120.000 o Consultivo'}),
             'imagen': forms.ClearableFileInput(attrs={'class': 'form-control'}),
-            'video': forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.mp4,.webm,video/mp4,video/webm'}),
+            'video': DocumentoPrivadoInput(attrs={'class': 'form-control', 'accept': '.mp4,.webm,video/mp4,video/webm'}),
             'whatsapp_contacto': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: 573001112233'}),
         }
 

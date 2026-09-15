@@ -1,4 +1,5 @@
 {% extends "contractors/base.html" %}
+{% load l10n %}
 {% block title %}Solicita tu Crédito | Prestadores de Servicios{% endblock %}
 {% block content %}
 <main class="form-container">
@@ -53,7 +54,7 @@
         novalidate
       >
         {% csrf_token %}
-        {% if solicitud %}<input type="hidden" name="solicitud_id" value="{{ solicitud.id }}">{% endif %}
+        {% if solicitud %}<input type="hidden" name="solicitud_id" value="{{ solicitud.id|unlocalize }}">{% endif %}
         {% if form.non_field_errors %}
           <div class="alerta">{{ form.non_field_errors }}</div>
         {% endif %}
@@ -109,6 +110,8 @@
           <p class="form-helper-text">Captura tu cédula y carga los documentos requeridos para validar tu solicitud.</p>
           <div class="document-flow">
             <section class="document-section identity-document-section">
+              {% include 'gestion_creditos/components/captura_handoff.html' with producto='PRESTADORES' %}
+              <div hidden>
               <h3>Cédula</h3>
               <div class="identity-document-rows">
             <div class="document-row identity-document-card">
@@ -152,6 +155,7 @@
                 <span class="status-value">Sin cargar</span>
               </div>
             </div>
+              </div>
               </div>
             </section>
 

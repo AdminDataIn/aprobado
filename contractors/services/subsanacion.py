@@ -19,7 +19,22 @@ def atender_requerimiento_subsanacion(requerimiento, *, form, usuario):
         raise ValidationError('El requerimiento ya fue atendido o cerrado.')
 
     tipo = requerimiento.tipo
-    if 'archivo' in form.cleaned_data:
+    if tipo == RequerimientoSubsanacionPrestador.Tipo.DOCUMENTO_IDENTIDAD:
+        from gestion_creditos.services.captura_documental import (
+            obtener_documentos_finalizados, archivos_para_formulario, consumir_documentos,
+        )
+        sesion, capturas = obtener_documentos_finalizados(
+            sesion_id=form.cleaned_data.get('sesion_documental_id'), actor=usuario,
+            producto='PRESTADORES', solicitud_id=requerimiento.solicitud_id)
+        archivos = archivos_para_formulario(capturas, {'FRONTAL': 'CEDULA_FRONTAL', 'TRASERA': 'CEDULA_TRASERA'})
+        for tipo_documento, archivo in archivos.items():
+            guardar_documento_prestador(
+                solicitud=requerimiento.solicitud, tipo_documento=tipo_documento,
+                archivo=archivo, usuario=usuario,
+                metadata_captura={'source': 'sesion_documental', 'sesion_id': str(sesion.pk),
+                                  'identidad': 'IDENTIDAD_NO_VERIFICADA'})
+        consumir_documentos(sesion=sesion, actor=usuario, solicitud=requerimiento.solicitud)
+    elif 'archivo' in form.cleaned_data:
         tipo_documento = _tipo_documento_para_requerimiento(tipo, form.cleaned_data)
         guardar_documento_prestador(
             solicitud=requerimiento.solicitud,
