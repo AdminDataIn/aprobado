@@ -269,7 +269,11 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
             servicio.consumir_documentos(sesion=sesion, actor=self.usuario, solicitud=solicitud)
         self.assertFalse(Credito.objects.exists())
 
-    @override_settings(USE_THOUSAND_SEPARATOR=True, LANGUAGE_CODE='es-co')
+    @override_settings(
+        USE_THOUSAND_SEPARATOR=True,
+        LANGUAGE_CODE='es-co',
+        ALLOWED_HOSTS=['contratistas.localhost', 'testserver'],
+    )
     def test_contexto_documental_prestador_no_localiza_identificadores(self):
         solicitud = self.solicitud(pk=1234)
         self.client.force_login(self.usuario)
