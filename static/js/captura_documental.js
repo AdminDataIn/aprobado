@@ -7,13 +7,14 @@
   };
   const problem = (message, retryable = false) => Object.assign(new Error(message), {retryable});
   async function requestJSON(url, body, scope) {
+    const grantScope = scope.hasAttribute && scope.hasAttribute('data-capture-grant');
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
     try {
       const endpoint = new URL(url, location.href);
       if (endpoint.origin !== location.origin) throw problem('No pudimos abrir la captura segura. Recarga la pagina.');
       const options = {credentials: 'same-origin', mode: 'same-origin', cache: 'no-store',
-        referrerPolicy: 'no-referrer', signal: controller.signal, headers: {Accept: 'application/json'}};
+        referrerPolicy: 'same-origin', signal: controller.signal, headers: {Accept: 'application/json'}};
       if (body) {
         const csrf = scope.querySelector('[name=csrfmiddlewaretoken]');
         if (!csrf || !csrf.value) throw problem('Recarga la p\u00e1gina para renovar la sesi\u00f3n e int\u00e9ntalo de nuevo.');
@@ -21,8 +22,19 @@
         options.headers['X-CSRFToken'] = csrf.value;
       }
       const response = await fetch(endpoint.href, options);
-      if (response.redirected || response.status === 401) throw problem('Tu sesi\u00f3n termin\u00f3. Inicia sesi\u00f3n de nuevo y vuelve a tu solicitud.');
-      if (response.status === 403) throw problem('No pudimos autorizar la operaci\u00f3n. Recarga la p\u00e1gina e inicia sesi\u00f3n con tu cuenta.');
+      if (response.redirected || response.status === 401) throw problem(grantScope
+        ? 'No pudimos abrir la captura segura. Vuelve a tu solicitud en el equipo de origen.'
+        : 'Tu sesi\u00f3n termin\u00f3. Inicia sesi\u00f3n de nuevo y vuelve a tu solicitud.');
+      if (response.status === 403) {
+        if (grantScope) {
+          let data;
+          try { data = await response.json(); } catch (_) { /* CSRF rejection can be HTML. */ }
+          const error = problem('No pudimos autorizar la captura. Recarga esta p\u00e1gina y vuelve a intentar.');
+          error.grantInvalid = data && data.code === 'CAPTURE_GRANT_INVALID';
+          throw error;
+        }
+        throw problem('No pudimos autorizar la operaci\u00f3n. Recarga la p\u00e1gina e inicia sesi\u00f3n con tu cuenta.');
+      }
       if (response.status === 429) throw problem('Has realizado varios intentos. Espera un momento antes de reintentar.', true);
       if (response.status >= 500) throw problem('La captura no est\u00e1 disponible por un momento. Int\u00e9ntalo de nuevo.', true);
       if (!(response.headers.get('Content-Type') || '').includes('application/json')) {
@@ -30,7 +42,9 @@
       }
       let data;
       try { data = await response.json(); } catch (_) { throw problem('No pudimos confirmar la respuesta. Intentalo de nuevo.', true); }
-      if (!response.ok) throw problem('No se pudo completar la operacion. Comprueba que el enlace siga vigente y que uses la misma cuenta.');
+      if (!response.ok) throw problem(grantScope
+        ? 'No se pudo completar la captura. Revisa la foto e intenta de nuevo.'
+        : 'No se pudo completar la operacion. Comprueba que el enlace siga vigente y que uses la misma cuenta.');
       if (!data || typeof data !== 'object') throw problem('No pudimos confirmar la respuesta. Intentalo de nuevo.', true);
       return data;
     } catch (error) {
@@ -165,7 +179,7 @@
         const url = new URL(data.enlace, location.href);
         const expires = new Date(data.expira_en);
         if (!UUID.test(data.id) || url.origin !== location.origin || !url.hash ||
-            url.pathname !== `${base}${data.id}/` || !Number.isFinite(expires.getTime())) {
+            url.pathname !== `${base}${data.id}/movil/` || !Number.isFinite(expires.getTime())) {
           throw problem('No pudimos preparar el enlace seguro. Intentalo nuevamente.');
         }
         hidden.value = data.id; storage.set(key, data.id);
@@ -206,8 +220,9 @@
   const mobile = document.querySelector('[data-capture-mobile]');
   if (!mobile || mobile.dataset.captureReady) return;
   mobile.dataset.captureReady = 'true';
+  const delegated = mobile.hasAttribute('data-capture-grant');
   let token = location.hash.slice(1);
-  history.replaceState(null, '', location.pathname + location.search);
+  if (!delegated) history.replaceState(null, '', location.pathname + location.search);
   const status = mobile.querySelector('[data-capture-status]');
   const find = name => mobile.querySelector(`[data-${name}]`);
   const video = find('camera-video'), preview = find('camera-preview');
@@ -251,7 +266,9 @@
     show(completed ? 'done' : 'error', completed
       ? 'Documento de identidad capturado correctamente. Vuelve a tu solicitud para continuar.'
       : state === 'EXPIRADA' ? 'El enlace venci\u00f3. Vuelve a tu solicitud y genera uno nuevo.'
-        : 'Este enlace fue revocado. Vuelve a tu solicitud y genera uno nuevo.');
+        : state === 'NO_DISPONIBLE'
+          ? 'La captura expir\u00f3 o ya no est\u00e1 disponible. Revisa tu solicitud en el equipo de origen.'
+          : 'Este enlace fue revocado. Vuelve a tu solicitud y genera uno nuevo.');
   }
   function checkTerminal(data) {
     if (['FINALIZADA', 'UTILIZADA', 'EXPIRADA', 'REVOCADA'].includes(data.estado)) {
@@ -267,16 +284,23 @@
   }
   async function action(name, data = new FormData()) {
     if (mobile.dataset.contexto) data.set('solicitud_id', mobile.dataset.contexto);
-    return requestJSON(mobile.dataset.base + name + '/', data, mobile);
+    return requestJSON(mobile.dataset.base + (delegated ? name.toLowerCase() : name) + '/', data, mobile);
   }
   async function readState() {
     return requestJSON(`${mobile.dataset.base}estado/?solicitud_id=${encodeURIComponent(mobile.dataset.contexto || '')}`, null, mobile);
   }
   async function monitorState() {
-    if (terminal || checking || document.hidden) return;
+    if (terminal || checking || document.hidden || (delegated && token && !redeemed)) return;
     checking = true;
-    try { checkTerminal(await readState()); }
-    catch (_) {
+    try {
+      const data = await readState();
+      if (!checkTerminal(data) && delegated && !redeemed && !busy) {
+        redeemed = true;
+        nextSide(data);
+      }
+    }
+    catch (error) {
+      if (error.grantInvalid) { end('NO_DISPONIBLE'); return; }
       if (!terminal) {
         stopCamera();
         show(blob ? 'preview' : step === 'finish' ? 'finish' : 'ready',
@@ -330,6 +354,7 @@
     try { await callback(); }
     catch (error) {
       stopCamera();
+      if (error.grantInvalid) { end('NO_DISPONIBLE'); return; }
       // A rejected upload may mean an expired/revoked session. Consult, never regenerate.
       try { if (checkTerminal(await readState())) return; } catch (_) { /* Keep a safe retry message. */ }
       if (!terminal) show(blob ? 'preview' : step === 'finish' ? 'finish' : 'ready',
@@ -341,11 +366,15 @@
     }
   }
   open.addEventListener('click', () => operation(async () => {
-    let data = await readState();
-    if (checkTerminal(data)) return;
+    let data;
+    if (!delegated || !token) {
+      data = await readState();
+      if (checkTerminal(data)) return;
+    }
     if (token) {
       const body = new FormData(); body.set('token', token);
       data = await action('canjear', body); token = '';
+      history.replaceState(null, '', location.pathname + location.search);
     }
     if (terminal || checkTerminal(data)) return;
     redeemed = true; nextSide(data);

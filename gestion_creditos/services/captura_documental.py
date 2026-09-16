@@ -9,6 +9,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
+from django.views.decorators.debug import sensitive_variables
 from PIL import Image, ImageOps
 
 from gestion_creditos.models import (
@@ -32,6 +33,7 @@ def _evento(sesion, actor, evento):
 
 def _auditada(funcion):
     @wraps(funcion)
+    @sensitive_variables()
     def ejecutar(**kwargs):
         try:
             return funcion(**kwargs)
@@ -45,11 +47,23 @@ def _auditada(funcion):
                             pk=kwargs.get('sesion_id'), usuario=actor).first()
                     except (ValidationError, ValueError):
                         pass
+                elif kwargs.get('grant'):
+                    try:
+                        sesion = Sesion.objects.select_for_update().filter(
+                            pk=kwargs.get('sesion_id'), capture_grant_hash=_hash(kwargs['grant'])).first()
+                    except (ValidationError, ValueError):
+                        pass
                 if (sesion and sesion.expira_en <= timezone.now()
                         and sesion.estado not in {Sesion.Estado.UTILIZADA, Sesion.Estado.REVOCADA, Sesion.Estado.EXPIRADA}):
                     sesion.estado = Sesion.Estado.EXPIRADA
-                    sesion.save(update_fields=['estado', 'actualizado_en'])
+                    _invalidar_grant(sesion)
+                    sesion.save()
                     _evento(sesion, actor, 'EXPIRACION')
+                elif (sesion and sesion.capture_grant_hash and sesion.capture_grant_expira_en
+                      and sesion.capture_grant_expira_en <= timezone.now()):
+                    _invalidar_grant(sesion)
+                    sesion.save(update_fields=['capture_grant_hash', 'capture_grant_revocado_en', 'actualizado_en'])
+                    _evento(sesion, None, 'GRANT_EXPIRACION')
                 _evento(sesion, actor, 'RECHAZO')
             raise
     return ejecutar
@@ -90,6 +104,65 @@ def _vigente(sesion):
 def _vinculo(sesion, vinculo):
     if not vinculo or not secrets.compare_digest(sesion.vinculo_hash, _hash(vinculo)):
         raise PermissionDenied('Esta sesion del navegador no puede cargar documentos.')
+
+
+def _invalidar_grant(sesion):
+    if sesion.capture_grant_hash:
+        sesion.capture_grant_hash = ''
+        sesion.capture_grant_revocado_en = timezone.now()
+
+
+def _sesion_delegada(sesion_id, producto, solicitud_id):
+    try:
+        sesion = Sesion.objects.select_for_update(of=('self',)).select_related('usuario').get(
+            pk=sesion_id, producto=producto, solicitud_id=solicitud_id, proposito='CEDULA')
+    except (Sesion.DoesNotExist, ValidationError, ValueError, TypeError) as exc:
+        raise PermissionDenied('Captura no disponible.') from exc
+    return sesion
+
+
+def _contexto_delegado(sesion):
+    try:
+        _vigente(sesion)
+        _contexto(sesion.usuario, sesion.producto, sesion.solicitud_id)
+    except (PermissionDenied, ValidationError) as exc:
+        raise PermissionDenied('Captura no disponible.') from exc
+
+
+@sensitive_variables('token', 'secreto')
+@_auditada
+@transaction.atomic
+def canjear_capture_grant(*, sesion_id, producto, token, solicitud_id=None):
+    sesion = _sesion_delegada(sesion_id, producto, solicitud_id)
+    if (sesion.estado != Sesion.Estado.ABIERTA or not token
+            or not secrets.compare_digest(sesion.token_hash, _hash(token))):
+        raise PermissionDenied('Captura no disponible.')
+    _contexto_delegado(sesion)
+    secreto = secrets.token_urlsafe(32)
+    sesion.estado = Sesion.Estado.CANJEADA
+    sesion.canjeado_en = timezone.now()
+    sesion.token_hash = _hash(secrets.token_urlsafe(32))
+    sesion.vinculo_hash = ''
+    sesion.capture_grant_hash = _hash(secreto)
+    sesion.capture_grant_expira_en = sesion.expira_en
+    sesion.capture_grant_revocado_en = None
+    sesion.save()
+    _evento(sesion, None, 'CANJE_DELEGADO')
+    return sesion, secreto
+
+
+@sensitive_variables('grant')
+def _autorizar_grant(*, sesion_id, producto, grant, solicitud_id=None):
+    sesion = _sesion_delegada(sesion_id, producto, solicitud_id)
+    if (not grant or not sesion.capture_grant_hash
+            or not secrets.compare_digest(sesion.capture_grant_hash, _hash(grant))
+            or sesion.capture_grant_revocado_en is not None
+            or sesion.capture_grant_expira_en is None
+            or sesion.capture_grant_expira_en <= timezone.now()
+            or sesion.estado != Sesion.Estado.CANJEADA):
+        raise PermissionDenied('Captura no disponible.')
+    _contexto_delegado(sesion)
+    return sesion
 
 
 @_auditada
@@ -133,6 +206,7 @@ def regenerar_enlace(*, sesion_id, actor, producto, solicitud_id=None):
     token = secrets.token_urlsafe(32)
     sesion.token_hash = _hash(token)
     sesion.vinculo_hash = ''
+    _invalidar_grant(sesion)
     sesion.estado = Sesion.Estado.ABIERTA
     sesion.canjeado_en = None
     sesion.save()
@@ -151,6 +225,8 @@ def revocar_sesion(*, sesion_id, actor, producto, solicitud_id=None):
         sesion.estado = Sesion.Estado.REVOCADA
         sesion.revocado_en = timezone.now()
         sesion.vinculo_hash = ''
+        sesion.token_hash = _hash(secrets.token_urlsafe(32))
+        _invalidar_grant(sesion)
         sesion.save()
         _evento(sesion, actor, 'REVOCACION')
     return sesion
@@ -182,12 +258,19 @@ def _imagen_tecnica(archivo):
 
 @_auditada
 def recibir_captura(*, sesion_id, actor, producto, vinculo, lado, archivo, solicitud_id=None):
+    def autorizar():
+        sesion = _obtener(sesion_id, actor, producto, solicitud_id)
+        _vigente(sesion)
+        _vinculo(sesion, vinculo)
+        return sesion
+    return _recibir_captura(autorizar, lado, archivo)
+
+
+def _recibir_captura(autorizar, lado, archivo, *, delegado=False):
     guardado = None
     try:
         with transaction.atomic():
-            sesion = _obtener(sesion_id, actor, producto, solicitud_id)
-            _vigente(sesion)
-            _vinculo(sesion, vinculo)
+            sesion = autorizar()
             if sesion.estado != Sesion.Estado.CANJEADA or lado not in Captura.Lado.values:
                 raise ValidationError('La sesion o el lado no admiten carga.')
             limpio, metadata = _imagen_tecnica(archivo)
@@ -197,11 +280,15 @@ def recibir_captura(*, sesion_id, actor, producto, vinculo, lado, archivo, solic
             if actual and actual.hash_archivo == digest:
                 return actual
             anteriores.update(activo=False)
-            captura = Captura(sesion=sesion, actor=actor, lado=lado, hash_archivo=digest, metadata=metadata)
+            if delegado:
+                # actor retains the responsible account; the event identifies delegation, not a login.
+                metadata['canal'] = 'CAPTURE_GRANT'
+            captura = Captura(sesion=sesion, actor_id=sesion.usuario_id, lado=lado, hash_archivo=digest, metadata=metadata)
             captura.archivo.save('captura.jpg', limpio, save=False)
             guardado = captura.archivo
             captura.save()
-            _evento(sesion, actor, 'REEMPLAZO' if actual else f'{lado}_RECIBIDO')
+            evento = 'REEMPLAZO' if actual else f'{lado}_RECIBIDO'
+            _evento(sesion, None if delegado else sesion.usuario, f'{evento}_DELEGADO' if delegado else evento)
             return captura
     except Exception:
         if guardado:
@@ -215,6 +302,10 @@ def finalizar_sesion(*, sesion_id, actor, producto, vinculo, solicitud_id=None):
     sesion = _obtener(sesion_id, actor, producto, solicitud_id)
     _vigente(sesion)
     _vinculo(sesion, vinculo)
+    return _finalizar_sesion(sesion, actor)
+
+
+def _finalizar_sesion(sesion, actor, *, delegado=False):
     if sesion.estado in {Sesion.Estado.FINALIZADA, Sesion.Estado.UTILIZADA}:
         return sesion
     if sesion.estado != Sesion.Estado.CANJEADA:
@@ -225,9 +316,27 @@ def finalizar_sesion(*, sesion_id, actor, producto, vinculo, solicitud_id=None):
         raise ValidationError('Se requieren frontal y trasera validos de esta sesion.')
     sesion.estado = Sesion.Estado.FINALIZADA
     sesion.finalizado_en = timezone.now()
+    _invalidar_grant(sesion)
     sesion.save()
-    _evento(sesion, actor, 'FINALIZACION')
+    _evento(sesion, actor, 'FINALIZACION_DELEGADA' if delegado else 'FINALIZACION')
     return sesion
+
+
+@sensitive_variables('grant')
+@_auditada
+def operar_capture_grant(*, sesion_id, producto, grant, accion, solicitud_id=None, archivo=None):
+    def autorizar():
+        return _autorizar_grant(sesion_id=sesion_id, producto=producto, grant=grant, solicitud_id=solicitud_id)
+    if accion in {'frontal', 'trasera'}:
+        captura = _recibir_captura(autorizar, accion.upper(), archivo, delegado=True)
+        return _datos_estado(captura.sesion)
+    with transaction.atomic():
+        sesion = autorizar()
+        if accion == 'finalizar':
+            _finalizar_sesion(sesion, None, delegado=True)
+        elif accion != 'estado':
+            raise PermissionDenied('Operacion no permitida.')
+        return _datos_estado(sesion)
 
 
 def obtener_documentos_finalizados(*, sesion_id, actor, producto, solicitud_id=None):
@@ -296,6 +405,10 @@ def preparar_identidad_formulario(request, *, producto, solicitud=None):
 
 def estado_publico(*, sesion_id, actor, producto, solicitud_id=None):
     sesion = _obtener(sesion_id, actor, producto, solicitud_id, lock=False)
+    return _datos_estado(sesion)
+
+
+def _datos_estado(sesion):
     estado = sesion.estado
     if estado not in {Sesion.Estado.UTILIZADA, Sesion.Estado.REVOCADA} and sesion.expira_en <= timezone.now():
         estado = Sesion.Estado.EXPIRADA
@@ -315,6 +428,7 @@ def purgar_sesiones_expiradas():
                 continue
             if sesion.estado not in {Sesion.Estado.EXPIRADA, Sesion.Estado.REVOCADA}:
                 sesion.estado = Sesion.Estado.EXPIRADA
+                _invalidar_grant(sesion)
                 sesion.save()
                 _evento(sesion, None, 'EXPIRACION')
             purgadas = 0

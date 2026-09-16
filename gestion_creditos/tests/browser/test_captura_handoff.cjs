@@ -26,7 +26,7 @@ before(async () => {
     env: {...process.env, PYTHONIOENCODING: 'utf-8'}, stdio: ['ignore', 'pipe', 'ignore']});
   cameraHTML = execFileSync(python, ['-c', render.slice(0, render.lastIndexOf('print(')) +
     "print(render_to_string('gestion_creditos/captura_continuacion.html', {'producto': 'LIBRANZA', 'sesion': {'id': '" + id +
-    "'}, 'solicitud_id': '', 'csrf_token': 'csrf-prueba'}))"], {cwd: root, encoding: 'utf8',
+    "'}, 'capture_base': '/captura-documental/LIBRANZA/" + id + "/', 'solicitud_id': '', 'csrf_token': 'csrf-prueba'}))"], {cwd: root, encoding: 'utf8',
     env: {...process.env, PYTHONIOENCODING: 'utf-8'}, stdio: ['ignore', 'pipe', 'ignore']});
   server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
@@ -86,7 +86,7 @@ async function setup(t, opts = {}) {
       await route.fulfill({status: state.postStatus, contentType: state.html ? 'text/html' : 'application/json',
         body: state.html ? '<h1>Login</h1>' : JSON.stringify(state.postStatus >= 400
           ? {error: 'Detalle tecnico privado ' + token}
-          : {id, enlace: '/captura-documental/' + producto + '/' + id + '/' +
+          : {id, enlace: '/captura-documental/' + producto + '/' + id + '/movil/' +
             (producto === 'PRESTADORES' ? '?solicitud_id=1234' : '') + '#' + token,
             expira_en: new Date(Date.now() + 600000).toISOString()})});
     } else {

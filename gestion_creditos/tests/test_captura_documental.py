@@ -76,7 +76,7 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
                                  'data-usar-foto', 'data-finalizar', 'csrfmiddlewaretoken'):
                     self.assertContains(response, atributo)
                 self.assertNotContains(response, 'type="file"')
-                self.assertContains(response, 'captura_documental.js?v=id01b-camera')
+                self.assertContains(response, 'captura_documental.js?v=id01b-grant')
                 self.assertFalse(Credito.objects.exists())
                 self.assertFalse(CreditoLibranza.objects.exists())
 
@@ -404,7 +404,7 @@ class CapturaConcurrenciaPostgresTest(CapturaFixture, TransactionTestCase):
                 barrera.wait(10)
                 funcion(n)
                 resultados.put('OK')
-            except ValidationError:
+            except (ValidationError, PermissionDenied):
                 resultados.put('RECHAZADO')
             except Exception as exc:
                 resultados.put(type(exc).__name__)
@@ -423,6 +423,14 @@ class CapturaConcurrenciaPostgresTest(CapturaFixture, TransactionTestCase):
     def test_canje_unico(self):
         self.assertCountEqual(self.competir(lambda n: self.canjear()), ['OK', 'RECHAZADO'])
         self.assertEqual(Evento.objects.filter(evento='CANJE').count(), 1)
+
+    def test_capture_grant_canje_unico(self):
+        self.assertCountEqual(self.competir(lambda n: servicio.canjear_capture_grant(
+            sesion_id=self.sesion.pk, producto='LIBRANZA', token=self.token)), ['OK', 'RECHAZADO'])
+        self.assertEqual(Evento.objects.filter(evento='CANJE_DELEGADO').count(), 1)
+        self.sesion.refresh_from_db()
+        self.assertEqual(self.sesion.estado, 'CANJEADA')
+        self.assertTrue(self.sesion.capture_grant_hash)
 
     def test_doble_finalizacion(self):
         self.canjear()

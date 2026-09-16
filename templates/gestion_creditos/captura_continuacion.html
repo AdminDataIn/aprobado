@@ -3,12 +3,12 @@
 <html lang="es">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="referrer" content="no-referrer">
+  <meta name="referrer" content="same-origin">
   <title>Documento de identidad | Aprobado</title>
   <link rel="stylesheet" href="{% static 'css/captura_documental.css' %}?v=id01b-camera">
 </head>
 <body class="capture-page">
-<main data-capture-mobile data-base="{% url 'captura:continuar' producto sesion.id %}" data-contexto="{{ solicitud_id }}">
+<main data-capture-mobile {% if capture_grant %}data-capture-grant{% endif %} data-base="{{ capture_base }}" data-contexto="{{ solicitud_id }}">
   <img src="{% static 'images/logo-dark.png' %}" width="160" alt="Aprobado">
   <h1>Documento de identidad</h1>
   <p>Captura ambas caras de tu documento. Las fotos se envían de forma privada a tu solicitud.</p>
@@ -33,6 +33,6 @@
   <p class="camera-status" role="status" aria-live="polite" aria-atomic="true" data-capture-status></p>
   <noscript>Activa JavaScript y abre este enlace en un navegador compatible con cámara.</noscript>
 </main>
-<script src="{% static 'js/captura_documental.js' %}?v=id01b-camera" defer></script>
+<script src="{% static 'js/captura_documental.js' %}?v=id01b-grant" defer></script>
 </body>
 </html>

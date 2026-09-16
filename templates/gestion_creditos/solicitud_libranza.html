@@ -861,29 +861,30 @@ MODIFICAR:
     }
     
     function saveFormData() {
-        if (typeof(Storage) !== "undefined") {
+        try {
             const formData = {};
             const form = document.getElementById('formularioLibranza');
             const inputs = form.querySelectorAll('input, select, textarea');
 
             inputs.forEach(input => {
-                if (input.type !== 'submit' && input.type !== 'button' && input.name !== 'csrfmiddlewaretoken') {
+                if (input.type !== 'submit' && input.type !== 'button' && input.name !== 'csrfmiddlewaretoken' && input.name !== 'sesion_documental_id') {
                     formData[input.name] = input.value;
                 }
             });
 
             localStorage.setItem('formularioLibranzaData', JSON.stringify(formData));
-        }
+        } catch (_) { /* El almacenamiento no debe bloquear el formulario. */ }
     }
 
     function loadFormData() {
-        if (typeof(Storage) !== "undefined") {
+        try {
             const savedData = localStorage.getItem('formularioLibranzaData');
             if (savedData) {
                 const formData = JSON.parse(savedData);
                 const form = document.getElementById('formularioLibranza');
 
                 for (const name in formData) {
+                    if (name === 'sesion_documental_id') continue;
                     const input = form.querySelector(`[name="${name}"]`);
                     if (input) {
                         // Manejar casos especiales para checkboxes y radios
@@ -895,7 +896,7 @@ MODIFICAR:
                     }
                 }
             }
-        }
+        } catch (_) { /* Un borrador inaccesible no impide continuar. */ }
     }
 
     // Cargar datos guardados al cargar la página
@@ -1797,7 +1798,7 @@ MODIFICAR:
 
                     // Limpiar el formulario después de enviar exitosamente
                     formulario.reset();
-                    localStorage.removeItem('formularioLibranzaData');
+                    try { localStorage.removeItem('formularioLibranzaData'); } catch (_) { /* Opcional. */ }
                     
                     // Reiniciar al primer paso
                     document.querySelectorAll('.form-step').forEach(step => step.classList.remove('active'));

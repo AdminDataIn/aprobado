@@ -1,7 +1,9 @@
 # ID-01B: handoff documental
 
-El componente compartido conserva endpoints, permisos, CSRF, estados, hash,
-token en fragmento y TTL de ID-01A. No crea credito al generar el enlace.
+ID-01B.1 incorpora CaptureGrant para el movil anonimo. Ver
+`handoff_documental_ID_01B_1.md` para autorizacion, endpoints y UAT actualizados.
+Se conservan endpoints del propietario, CSRF, estados, token en fragmento y TTL
+de ID-01A. No crea credito al generar el enlace.
 No envia email. No acredita identidad por disponer de una imagen o por detectar
 un dispositivo movil. La deteccion de pantalla solo adapta la presentacion.
 
@@ -44,11 +46,11 @@ Abrir captura y Copiar enlace siguen disponibles.
 `captura_continuacion.html` y el controlador movil de `captura_documental.js`
 usan el mismo flujo para ambos productos, sin bifurcar permisos ni servicios:
 
-1. Abrir camara consulta estado y canjea el token mediante el endpoint existente.
+1. Abrir camara canjea el QR por CaptureGrant; al recargar consulta estado con su cookie.
 2. getUserMedia pide solo video, facingMode environment como preferencia.
 3. Visor con guia visual -> Tomar foto -> preview -> Repetir / Usar esta foto.
 4. Canvas produce un Blob JPEG (calidad .92, lado maximo 2048 px, sin recortar).
-5. POST multipart `archivo=captura.jpg` a FRONTAL y despues TRASERA.
+5. POST multipart `archivo=captura.jpg` a `movil/frontal/` y despues `movil/trasera/`.
 6. Finalizar llama el endpoint existente. Solo la respuesta terminal confirma exito.
 
 No hay file picker, galeria ni fallback automatico. No se almacena imagen/base64
@@ -83,7 +85,7 @@ del mismo Blob: se conserva la idempotencia por hash ya existente en el servicio
 - No es prueba de vida, autenticidad del documento ni deteccion de camara virtual.
   La nitidez requiere revision del usuario; la guia no detecta bordes ni hace OCR.
 - Pendiente UAT con Safari/iPhone y Chrome/Android fisicos, permisos reales,
-  rotacion, cambio de app, conectividad y dos sesiones autenticadas.
+  rotacion, cambio de app, conectividad, PC autenticado y movil sin login.
 
 Referencia de la API y restricciones:
 https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
@@ -122,7 +124,8 @@ Los tests browser sirven el template Django y assets reales con endpoints HTTP
 simulados y un token ficticio. Validan QR mediante decodificacion independiente
 jsQR, storage denegado, CSRF, errores, reintentos, terminales, reload, responsive
 y ausencia de token en logs/storage/requests externos. No sustituyen UAT con
-dos dispositivos autenticados ni pruebas PostgreSQL de concurrencia.
+dispositivos fisicos ni pruebas PostgreSQL de concurrencia. La prueba HTTPS con
+backend real se documenta en `handoff_documental_ID_01B_1.md`.
 La camara automatizada es el dispositivo sintetico de Chromium: getUserMedia,
 MediaStream, video, canvas, JPEG y preview funcionan realmente en el browser,
 sin usar documentos ni camaras personales. Errores de permisos/dispositivo se
