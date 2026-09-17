@@ -73,10 +73,13 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertTemplateUsed(response, 'gestion_creditos/captura_continuacion.html')
                 for atributo in ('data-camera-video', 'playsinline', 'data-tomar-foto', 'data-repetir',
-                                 'data-usar-foto', 'data-finalizar', 'csrfmiddlewaretoken'):
+                                 'data-usar-foto', 'data-finalizar', 'csrfmiddlewaretoken',
+                                 'data-camera-instructions', 'data-confirm-quality', 'data-rotate'):
                     self.assertContains(response, atributo)
                 self.assertNotContains(response, 'type="file"')
-                self.assertContains(response, 'captura_documental.js?v=id01b2-1')
+                self.assertContains(response, 'captura_documental.js?v=id01cd-1')
+                self.assertContains(response, 'captura_quality.js?v=id01cd-1')
+                self.assertContains(response, 'jsfeat-0.0.8.min.js')
                 self.assertFalse(Credito.objects.exists())
                 self.assertFalse(CreditoLibranza.objects.exists())
 
@@ -86,7 +89,7 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
         pagina = cliente.get(reverse('libranza:solicitar'))
         self.assertEqual(pagina.status_code, 200)
         for elemento in ('data-capture-qr', 'data-handoff-result', 'data-reintentar-estado',
-                         'qrcode-generator-1.4.4.js', 'captura_documental.js?v=id01b'):
+                         'qrcode-generator-1.4.4.js', 'captura_documental.js?v=id01cd-1'):
             self.assertContains(pagina, elemento)
         url = reverse('captura:crear', args=['LIBRANZA'])
         cantidad = Sesion.objects.count()

@@ -233,12 +233,16 @@
   const buttons = [open, take, repeat, accept, finish];
   let stream, blob, previewURL, monitor, cameraTimer, generation = 0;
   let trackSettings = {}, trackCaps = {};
+  let quality = null, expectedFrame = null, zoomTimer, zoomPending = false;
+  const orientation = window.matchMedia('(orientation: landscape)');
+  let resumePortrait = false;
   let step = 'ready', side = 'FRONTAL', busy = false, terminal = false, redeemed = false;
   let checking = false;
 
   function stopCamera() {
     ++generation;
     clearTimeout(cameraTimer);
+    clearTimeout(zoomTimer);
     if (stream) stream.getTracks().forEach(track => track.stop());
     stream = null;
     video.srcObject = null;
@@ -248,6 +252,7 @@
   }
   function clearPhoto() {
     blob = null;
+    quality = null; find('confirm-quality').checked = false;
     if (previewURL) URL.revokeObjectURL(previewURL);
     previewURL = null;
     preview.removeAttribute('src');
@@ -255,12 +260,16 @@
   function show(next, message = '') {
     step = next; mobile.dataset.state = next;
     status.textContent = message;
-    const immersive = ['opening', 'live', 'preview'].includes(next);
+    const immersive = ['opening', 'live', 'checking', 'preview'].includes(next);
     mobile.classList.toggle('camera-immersive', immersive);
     exitCamera.hidden = !immersive;
     find('camera-media').hidden = !immersive;
     find('viewfinder').hidden = next !== 'live';
-    preview.hidden = next !== 'preview';
+    preview.hidden = !['checking', 'preview'].includes(next);
+    find('camera-instructions').hidden = next !== 'ready';
+    const example = mobile.querySelector('[data-example-side]');
+    example.dataset.exampleSide = side;
+    example.setAttribute('aria-label', side === 'FRONTAL' ? 'Ejemplo ilustrativo del frente, sin datos personales' : 'Ejemplo ilustrativo del reverso, sin datos personales');
     open.hidden = next !== 'ready'; take.hidden = next !== 'live';
     repeat.hidden = accept.hidden = next !== 'preview'; finish.hidden = next !== 'finish';
     open.textContent = redeemed ? 'Abrir c\u00e1mara de nuevo' : 'Abrir c\u00e1mara';
@@ -268,7 +277,9 @@
     find('camera-step').textContent = side === 'FRONTAL' ? '1 de 2 \u00b7 Frontal' : '2 de 2 \u00b7 Posterior';
     find('camera-title').textContent = next === 'finish' || next === 'done'
       ? 'Ambas caras recibidas' : side === 'FRONTAL' ? 'Frente del documento' : 'Reverso del documento';
-    find('camera-hint').hidden = ['finish', 'done', 'error', 'preview'].includes(next);
+    find('camera-hint').hidden = next !== 'live';
+    find('manual-review').hidden = next !== 'preview' || !quality || quality.decision !== 'review';
+    accept.disabled = !canUsePhoto();
     find('zoom-control').hidden = next !== 'live' || !zoomRange();
     if (next === 'live') requestAnimationFrame(updateGuide);
   }
@@ -281,6 +292,7 @@
     const ratio = 85.60 / 53.98;
     const frameWidth = Math.min(width * .82, height * .72 * ratio);
     const frameHeight = frameWidth / ratio;
+    expectedFrame = {x: (width - frameWidth) / (2 * width), y: (height - frameHeight) / (2 * height), w: frameWidth / width, h: frameHeight / height};
     guide.style.width = `${frameWidth}px`; guide.style.height = `${frameHeight}px`;
     guide.style.left = `${box.left - parent.left + (box.width - frameWidth) / 2}px`;
     guide.style.top = `${box.top - parent.top + (box.height - frameHeight) / 2}px`;
@@ -295,7 +307,10 @@
 
   function zoomRange() {
     const z = trackCaps.zoom;
-    return z && Number.isFinite(z.min) && Number.isFinite(z.max) && z.max > z.min && z.min > 0 ? z : null;
+    if (!z || !Number.isFinite(z.min) || !Number.isFinite(z.max) || z.min <= 0) return null;
+    const step = z.step > 0 ? z.step : .1;
+    const max = z.min + Math.floor((Math.min(z.max, 2.5) - z.min) / step + 1e-8) * step;
+    return max > z.min ? {...z, step, max} : null;
   }
   function readTrack(track) {
     try { trackSettings = track.getSettings ? track.getSettings() : {}; } catch (_) { trackSettings = {}; }
@@ -307,7 +322,7 @@
     if (range && track.applyConstraints) {
       zoom.min = range.min; zoom.max = range.max; zoom.step = range.step > 0 ? range.step : .1;
       zoom.value = Math.min(range.max, Math.max(range.min, trackSettings.zoom || range.min));
-      find('zoom-value').textContent = `${Number(zoom.value).toFixed(1)}x`;
+      find('zoom-value').textContent = `${Number(trackSettings.zoom || zoom.value).toFixed(1)}x`;
       zoom.disabled = false; find('zoom-control').hidden = false;
     } else { trackCaps.zoom = null; find('zoom-control').hidden = true; }
     if (Array.isArray(trackCaps.focusMode) && trackCaps.focusMode.includes('continuous') && track.applyConstraints) {
@@ -317,23 +332,38 @@
       }).catch(() => {});
     }
   }
-  zoom.addEventListener('change', async () => {
+  async function applyZoom() {
     const track = stream && stream.getVideoTracks()[0], range = zoomRange(), run = generation;
     if (!track || !range || busy) return;
+    if (zoomPending) { zoomTimer = setTimeout(applyZoom, 150); return; }
     const stepSize = range.step > 0 ? range.step : .1;
     const requested = Number(zoom.value);
     const value = Math.min(range.max, Math.max(range.min, range.min + Math.round((requested - range.min) / stepSize) * stepSize));
-    zoom.disabled = true;
+    zoomPending = true;
     try {
-      await track.applyConstraints({advanced: [{zoom: value}]});
+      await withTimeout(track.applyConstraints({advanced: [{zoom: value}]}), 2500);
       if (run !== generation) return;
-      readTrack(track); zoom.value = trackSettings.zoom || value;
-      find('zoom-value').textContent = `${Number(zoom.value).toFixed(1)}x`;
+      readTrack(track);
+      find('zoom-value').textContent = `${Number(trackSettings.zoom || value).toFixed(1)}x`;
       updateGuide();
     } catch (_) {
       if (run === generation) { trackCaps.zoom = null; find('zoom-control').hidden = true; status.textContent = 'Continua sin zoom y ajusta la distancia del documento.'; }
-    } finally { if (run === generation) zoom.disabled = false; }
-  });
+    } finally { zoomPending = false; }
+  }
+  zoom.addEventListener('input', () => { clearTimeout(zoomTimer); zoomTimer = setTimeout(applyZoom, 150); });
+  zoom.addEventListener('change', () => { clearTimeout(zoomTimer); applyZoom(); });
+  function canUsePhoto() { return !!blob && !!quality && (quality.decision === 'pass' || (quality.decision === 'review' && find('confirm-quality').checked)); }
+  find('confirm-quality').addEventListener('change', () => { accept.disabled = busy || !canUsePhoto(); });
+  function orientCamera() {
+    mobile.classList.toggle('camera-landscape', orientation.matches);
+    find('rotate').hidden = !orientation.matches;
+    if (orientation.matches && ['opening', 'live', 'checking'].includes(step)) {
+      resumePortrait = true; stopCamera(); clearPhoto(); show('ready');
+    } else if (!orientation.matches && resumePortrait && !terminal && !document.hidden) {
+      if (!busy) { resumePortrait = false; launchCamera(); }
+    }
+  }
+  orientation.addEventListener('change', orientCamera);
   function end(state) {
     terminal = true; clearInterval(monitor); stopCamera(); clearPhoto(); token = '';
     const completed = ['FINALIZADA', 'UTILIZADA'].includes(state);
@@ -392,6 +422,7 @@
   }
   function launchCamera() {
     stopCamera(); clearPhoto();
+    if (orientation.matches) { resumePortrait = true; show('ready'); orientCamera(); return; }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       show('ready', 'Abre el enlace seguro desde un celular o navegador compatible con c\u00e1mara.'); return;
     }
@@ -437,8 +468,10 @@
         typeof error.retryable === 'boolean' ? error.message : 'No pudimos completar la captura. Vuelve a intentar.');
     } finally {
       busy = false; buttons.forEach(button => { button.disabled = false; });
+      accept.disabled = !canUsePhoto();
       take.disabled = step !== 'live' || video.readyState < 2;
       mobile.setAttribute('aria-busy', 'false');
+      if (resumePortrait && !orientation.matches) orientCamera();
     }
   }
   open.addEventListener('click', () => operation(async () => {
@@ -458,6 +491,7 @@
   }));
   repeat.addEventListener('click', () => { if (!busy && !terminal) launchCamera(); });
   exitCamera.addEventListener('click', () => {
+    resumePortrait = false;
     stopCamera(); clearPhoto();
     if (!terminal) show('ready', 'Puedes abrir la camara de nuevo para continuar.');
   });
@@ -515,16 +549,26 @@
   take.addEventListener('click', () => operation(async () => {
     if (!stream || !video.videoWidth || !video.videoHeight) throw problem('Espera a que la c\u00e1mara muestre el documento.');
     const run = generation;
+    const geometry = {expected: expectedFrame, aspect: video.videoWidth / video.videoHeight};
     let photo, current;
     try { photo = await capturePhoto(run); }
     finally { current = run === generation; if (current) stopCamera(); }
     if (!current || terminal || document.hidden) return;
     if (!photo || !photo.size) throw problem('No pudimos tomar la foto. Abre la c\u00e1mara y repite la captura.');
     blob = photo; previewURL = URL.createObjectURL(blob); preview.src = previewURL;
-    show('preview', 'Revisa que toda la informaci\u00f3n est\u00e9 n\u00edtida y completa.');
+    const analysisRun = generation;
+    show('checking', 'Revisando la foto...');
+    try {
+      quality = await withTimeout(window.DocumentCaptureQuality.analyze(photo, geometry), 5000);
+      if (!quality || !['pass', 'reject', 'review'].includes(quality.decision)) throw new Error();
+    } catch (_) {
+      quality = {decision: 'review', message: 'No pudimos revisar la calidad. Repite o revisa la nitidez y las cuatro esquinas antes de continuar.'};
+    }
+    if (analysisRun !== generation || terminal || document.hidden) { quality = null; return; }
+    show('preview', quality.message || 'Revisa que toda la informaci\u00f3n est\u00e9 n\u00edtida y completa.');
   }));
   accept.addEventListener('click', () => operation(async () => {
-    if (!blob) return;
+    if (!canUsePhoto()) return;
     status.textContent = 'Enviando foto de forma segura...';
     const extension = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
     const body = new FormData(); body.set('archivo', blob, `captura.${extension}`);
@@ -540,6 +584,7 @@
   }));
   function suspend() {
     stopCamera();
+    if (step === 'checking') { clearPhoto(); show('ready'); }
     if (!terminal && ['live', 'opening'].includes(step)) show('ready', 'La c\u00e1mara se paus\u00f3. Abrela de nuevo para continuar.');
   }
   document.addEventListener('visibilitychange', () => { if (document.hidden) suspend(); else monitorState(); });
@@ -550,5 +595,5 @@
   window.addEventListener('pageshow', event => {
     if (event.persisted && !terminal) { monitor = setInterval(monitorState, 10000); monitorState(); }
   });
-  show('ready'); monitor = setInterval(monitorState, 10000); monitorState();
+  show('ready'); orientCamera(); monitor = setInterval(monitorState, 10000); monitorState();
 })();

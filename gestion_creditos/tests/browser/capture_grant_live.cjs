@@ -5,6 +5,7 @@ const https = require('node:https');
 const assert = require('node:assert/strict');
 const {chromium} = require('playwright');
 const jsQR = require('jsqr');
+const drawDocument = require('./document_fixture.cjs');
 
 (async () => {
   const config = JSON.parse(fs.readFileSync(0, 'utf8'));
@@ -28,6 +29,18 @@ const jsQR = require('jsqr');
     await pc.addCookies([{name: config.sessionName, value: config.pcSession, url: origin, httpOnly: true, secure: true}]);
     assert.equal((await mobile.cookies()).length, 0);
     const desktop = await pc.newPage(), phone = await mobile.newPage();
+    // A synthetic document replaces the fake device's color chart, not the real HTTP/backend.
+    await phone.addInitScript({content: `window.drawDocumentFixture = ${drawDocument.toString()};`});
+    await phone.addInitScript(() => {
+      navigator.mediaDevices.getUserMedia = async () => {
+        const canvas = document.createElement('canvas'); canvas.width = 1080; canvas.height = 1920;
+        drawDocumentFixture(canvas);
+        const timer = setInterval(() => drawDocumentFixture(canvas), 100);
+        const stream = canvas.captureStream(10), track = stream.getVideoTracks()[0], stop = track.stop.bind(track);
+        track.stop = () => { clearInterval(timer); stop(); canvas.width = canvas.height = 0; };
+        return stream;
+      };
+    });
     desktop.setDefaultTimeout(15000); phone.setDefaultTimeout(15000);
     stage = 'PC crea QR';
     await desktop.goto(origin + '/libranza/solicitar/');

@@ -40,7 +40,7 @@
   .capture-handoff .capture-button { width: 100%; }
 }
 .capture-page { margin: 0; background: #f4f6f8; color: #18283c; font: 16px/1.5 system-ui, sans-serif; }
-.capture-page main { max-width: 600px; margin: 0 auto; padding: 32px 24px; box-sizing: border-box; text-align: center; }
+.capture-page main { max-width: 600px; margin: 0 auto; padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom)); box-sizing: border-box; text-align: center; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; }
 .capture-page h1 { font-size: 24px; margin: 20px 0 12px; }
 .capture-page input { min-width: 0; }
 .capture-page button { padding: 12px 18px; border: 0; border-radius: 6px; color: #fff; background: #087e9a; cursor: pointer; }
@@ -61,7 +61,6 @@
 .capture-page .camera-secondary { background: #fff; color: #18283c; border: 1px solid #c6d4dc; }
 .capture-page [data-state="error"] .camera-status { color: #9b442b; }
 .capture-page [data-state="done"] .camera-status { color: #167148; font-weight: 600; }
-@media (max-width: 540px) { .capture-page main { margin: 0 auto; padding: 20px; } }
 .capture-page .camera-exit { background: transparent; color: inherit; padding: 8px 12px; min-height: 44px; font: inherit; }
 .camera-exit span { font-size: 26px; line-height: 1; vertical-align: -1px; }
 .camera-zoom { display: flex; align-items: center; justify-content: center; gap: 12px; max-width: 340px; width: 100%; margin: 4px auto; font-size: 13px; }
@@ -70,7 +69,7 @@
 .capture-page:has(.camera-immersive) { overflow: hidden; background: #101719; }
 .capture-page main.camera-immersive {
   display: flex; flex-direction: column; max-width: none; width: 100%; height: 100vh; height: 100dvh; margin: 0;
-  padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  padding: max(8px, env(safe-area-inset-top)) max(4px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
   background: #101719; color: #fff;
 }
 .camera-immersive .camera-intro, .camera-immersive [data-camera-title] { display: none; }
@@ -85,12 +84,23 @@
 .camera-immersive button:focus-visible { outline-color: #fff; }
 .capture-page [data-tomar-foto] { display: flex; flex-direction: column; align-items: center; gap: 4px; background: transparent; padding: 0 16px; }
 .capture-page [data-tomar-foto]::before { content: ''; width: 52px; height: 52px; border: 3px solid #fff; border-radius: 50%; background: #fff; box-shadow: inset 0 0 0 4px #101719; }
-@media (orientation: landscape) and (max-height: 540px) {
-  .camera-immersive .camera-toolbar { min-height: 40px; }
-  .camera-immersive .camera-actions { position: absolute; right: max(16px, env(safe-area-inset-right)); top: 50%; transform: translateY(-50%); width: 120px; }
-  .camera-immersive .camera-media { width: calc(100% - 140px); }
-  .camera-immersive .camera-hint { font-size: 12px; margin: 4px 140px 0 0; }
-  .camera-immersive .camera-zoom { position: absolute; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); width: 120px; flex-wrap: wrap; gap: 2px; }
-  .camera-immersive .camera-zoom input { flex-basis: 100%; }
-  .camera-immersive .camera-status { margin-right: 140px; }
-}
+.camera-instructions { margin: 12px auto; max-width: 340px; }
+.document-example { position: relative; width: 210px; aspect-ratio: 1.586; margin: 0 auto 12px; border: 2px solid #087e9a; border-radius: 8px; background: #fff; outline: 1px dashed #a2babe; outline-offset: 6px; }
+.example-portrait { position: absolute; left: 10%; top: 20%; width: 25%; height: 55%; background: #d9efed; border: 1px solid #85b6b1; border-radius: 4px; }
+.example-lines { position: absolute; left: 43%; top: 25%; width: 45%; height: 8%; background: #087e9a; box-shadow: 0 18px #b9cbd0, 0 36px #b9cbd0; }
+.example-reverse { display: none; }
+[data-example-side="TRASERA"] .example-portrait { display: none; }
+[data-example-side="TRASERA"] .example-lines { left: 10%; width: 80%; top: 15%; box-shadow: 0 16px #b9cbd0; }
+[data-example-side="TRASERA"] .example-reverse { display: block; position: absolute; left: 10%; right: 10%; bottom: 14%; height: 24%; background: repeating-linear-gradient(90deg, #45616a 0 2px, #fff 2px 5px); }
+.camera-instructions figcaption { font-size: 15px; font-weight: 600; }
+.camera-instructions ul { padding-left: 20px; text-align: left; font-size: 13px; color: #526273; margin: 8px 0; }
+.capture-page .camera-manual-review { font-size: 13px; display: flex; align-items: center; gap: 8px; padding: 8px; text-align: left; }
+.camera-manual-review input { width: 22px; height: 22px; flex-shrink: 0; }
+.camera-rotate { max-width: 420px; margin: auto; padding: 24px; color: #18283c; font-size: 20px; }
+.camera-landscape > :not(.camera-rotate) { display: none !important; }
+.capture-page main.camera-landscape { background: #f4f6f8; min-height: 100vh; min-height: 100dvh; justify-content: center; }
+.camera-immersive .camera-hint { max-width: 38ch; align-self: center; }
+.camera-immersive .camera-actions { padding: 0 8px; }
+.camera-immersive .camera-status { padding: 0 8px; }
+.capture-page main[data-state="finish"] .camera-intro p,
+.capture-page main[data-state="done"] .camera-intro p { display: none; }
