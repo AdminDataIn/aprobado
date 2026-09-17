@@ -38,7 +38,8 @@ const jsQR = require('jsqr');
       panel.closest('.form-step').classList.add('active');
     });
     await desktop.locator('[data-crear-enlace]').click();
-    await desktop.locator('[data-enlace-captura]').waitFor({state: 'visible'});
+    await desktop.locator('[data-handoff-result]').waitFor({state: 'visible'});
+    assert.equal(await desktop.locator('[data-enlace-captura]').isVisible(), false);
     const link = await desktop.locator('[data-enlace-captura]').getAttribute('href');
     const secret = new URL(link).hash.slice(1);
     const pixels = await desktop.locator('[data-capture-qr]').evaluate(canvas => ({width: canvas.width, height: canvas.height,

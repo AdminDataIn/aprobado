@@ -76,7 +76,7 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
                                  'data-usar-foto', 'data-finalizar', 'csrfmiddlewaretoken'):
                     self.assertContains(response, atributo)
                 self.assertNotContains(response, 'type="file"')
-                self.assertContains(response, 'captura_documental.js?v=id01b-grant')
+                self.assertContains(response, 'captura_documental.js?v=id01b2-1')
                 self.assertFalse(Credito.objects.exists())
                 self.assertFalse(CreditoLibranza.objects.exists())
 

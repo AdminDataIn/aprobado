@@ -71,6 +71,7 @@
     const mobile = window.matchMedia('(max-width: 640px), (pointer: coarse) and (max-width: 1024px)');
     function adaptScreen() {
       panel.dataset.mobile = String(mobile.matches);
+      link.hidden = !mobile.matches;
       field('capture-title').textContent = mobile.matches ? 'Captura tu documento de identidad' : 'Documento de identidad';
       field('capture-description').textContent = mobile.matches
         ? 'Abre la captura segura en este celular. Tu solicitud permanecer\u00e1 abierta; vuelve a esta pesta\u00f1a al terminar.'
@@ -203,7 +204,7 @@
     copy.addEventListener('click', async () => {
       if (!secureLink) return;
       try { await navigator.clipboard.writeText(secureLink); paint('waiting', 'Enlace copiado. Abrelo en tu celular.'); }
-      catch (_) { paint('waiting', 'Manten pulsado Abrir captura, o usa su menu, para copiar el enlace.'); }
+      catch (_) { paint('waiting', 'No pudimos copiar el enlace. Escanea el QR desde tu celular.'); }
     });
     retry.addEventListener('click', restartPoll);
     mobile.addEventListener('change', adaptScreen);
@@ -228,8 +229,10 @@
   const video = find('camera-video'), preview = find('camera-preview');
   const open = find('canjear'), take = find('tomar-foto'), repeat = find('repetir');
   const accept = find('usar-foto'), finish = find('finalizar');
+  const exitCamera = find('salir'), guide = find('camera-guide'), zoom = find('camera-zoom');
   const buttons = [open, take, repeat, accept, finish];
   let stream, blob, previewURL, monitor, cameraTimer, generation = 0;
+  let trackSettings = {}, trackCaps = {};
   let step = 'ready', side = 'FRONTAL', busy = false, terminal = false, redeemed = false;
   let checking = false;
 
@@ -239,6 +242,9 @@
     if (stream) stream.getTracks().forEach(track => track.stop());
     stream = null;
     video.srcObject = null;
+    trackSettings = {}; trackCaps = {};
+    find('zoom-control').hidden = true;
+    guide.hidden = true;
   }
   function clearPhoto() {
     blob = null;
@@ -249,6 +255,10 @@
   function show(next, message = '') {
     step = next; mobile.dataset.state = next;
     status.textContent = message;
+    const immersive = ['opening', 'live', 'preview'].includes(next);
+    mobile.classList.toggle('camera-immersive', immersive);
+    exitCamera.hidden = !immersive;
+    find('camera-media').hidden = !immersive;
     find('viewfinder').hidden = next !== 'live';
     preview.hidden = next !== 'preview';
     open.hidden = next !== 'ready'; take.hidden = next !== 'live';
@@ -258,8 +268,72 @@
     find('camera-step').textContent = side === 'FRONTAL' ? '1 de 2 \u00b7 Frontal' : '2 de 2 \u00b7 Posterior';
     find('camera-title').textContent = next === 'finish' || next === 'done'
       ? 'Ambas caras recibidas' : side === 'FRONTAL' ? 'Frente del documento' : 'Reverso del documento';
-    find('camera-hint').hidden = ['finish', 'done', 'error'].includes(next);
+    find('camera-hint').hidden = ['finish', 'done', 'error', 'preview'].includes(next);
+    find('zoom-control').hidden = next !== 'live' || !zoomRange();
+    if (next === 'live') requestAnimationFrame(updateGuide);
   }
+  function updateGuide() {
+    if (step !== 'live' || !video.videoWidth || !video.videoHeight) { guide.hidden = true; return; }
+    // CSS fixes object-fit: contain and object-position: center. Exclude letterboxing.
+    const box = video.getBoundingClientRect(), parent = find('viewfinder').getBoundingClientRect();
+    const scale = Math.min(box.width / video.videoWidth, box.height / video.videoHeight);
+    const width = video.videoWidth * scale, height = video.videoHeight * scale;
+    const ratio = 85.60 / 53.98;
+    const frameWidth = Math.min(width * .82, height * .72 * ratio);
+    const frameHeight = frameWidth / ratio;
+    guide.style.width = `${frameWidth}px`; guide.style.height = `${frameHeight}px`;
+    guide.style.left = `${box.left - parent.left + (box.width - frameWidth) / 2}px`;
+    guide.style.top = `${box.top - parent.top + (box.height - frameHeight) / 2}px`;
+    guide.hidden = frameWidth <= 0;
+  }
+  video.addEventListener('loadedmetadata', updateGuide);
+  video.addEventListener('resize', updateGuide);
+  window.addEventListener('resize', updateGuide);
+  window.addEventListener('orientationchange', () => requestAnimationFrame(updateGuide));
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', updateGuide);
+  if (window.ResizeObserver) new ResizeObserver(updateGuide).observe(find('viewfinder'));
+
+  function zoomRange() {
+    const z = trackCaps.zoom;
+    return z && Number.isFinite(z.min) && Number.isFinite(z.max) && z.max > z.min && z.min > 0 ? z : null;
+  }
+  function readTrack(track) {
+    try { trackSettings = track.getSettings ? track.getSettings() : {}; } catch (_) { trackSettings = {}; }
+    try { trackCaps = track.getCapabilities ? track.getCapabilities() : {}; } catch (_) { trackCaps = {}; }
+  }
+  function configureTrack(track, run) {
+    readTrack(track);
+    const range = zoomRange();
+    if (range && track.applyConstraints) {
+      zoom.min = range.min; zoom.max = range.max; zoom.step = range.step > 0 ? range.step : .1;
+      zoom.value = Math.min(range.max, Math.max(range.min, trackSettings.zoom || range.min));
+      find('zoom-value').textContent = `${Number(zoom.value).toFixed(1)}x`;
+      zoom.disabled = false; find('zoom-control').hidden = false;
+    } else { trackCaps.zoom = null; find('zoom-control').hidden = true; }
+    if (Array.isArray(trackCaps.focusMode) && trackCaps.focusMode.includes('continuous') && track.applyConstraints) {
+      // Optional device autofocus must never prevent capture or reveal device errors.
+      track.applyConstraints({advanced: [{focusMode: 'continuous'}]}).then(() => {
+        if (run === generation) readTrack(track);
+      }).catch(() => {});
+    }
+  }
+  zoom.addEventListener('change', async () => {
+    const track = stream && stream.getVideoTracks()[0], range = zoomRange(), run = generation;
+    if (!track || !range || busy) return;
+    const stepSize = range.step > 0 ? range.step : .1;
+    const requested = Number(zoom.value);
+    const value = Math.min(range.max, Math.max(range.min, range.min + Math.round((requested - range.min) / stepSize) * stepSize));
+    zoom.disabled = true;
+    try {
+      await track.applyConstraints({advanced: [{zoom: value}]});
+      if (run !== generation) return;
+      readTrack(track); zoom.value = trackSettings.zoom || value;
+      find('zoom-value').textContent = `${Number(zoom.value).toFixed(1)}x`;
+      updateGuide();
+    } catch (_) {
+      if (run === generation) { trackCaps.zoom = null; find('zoom-control').hidden = true; status.textContent = 'Continua sin zoom y ajusta la distancia del documento.'; }
+    } finally { if (run === generation) zoom.disabled = false; }
+  });
   function end(state) {
     terminal = true; clearInterval(monitor); stopCamera(); clearPhoto(); token = '';
     const completed = ['FINALIZADA', 'UTILIZADA'].includes(state);
@@ -339,6 +413,8 @@
       await video.play();
       if (run !== generation) return;
       clearTimeout(cameraTimer); take.disabled = false;
+      configureTrack(media.getVideoTracks()[0], run);
+      updateGuide();
       media.getVideoTracks().forEach(track => track.addEventListener('ended', () => {
         if (stream === media) { stopCamera(); show('ready', 'La c\u00e1mara se desconect\u00f3. Vuelve a abrirla.'); }
       }));
@@ -381,17 +457,68 @@
     if (step !== 'finish' && !document.hidden) launchCamera();
   }));
   repeat.addEventListener('click', () => { if (!busy && !terminal) launchCamera(); });
+  exitCamera.addEventListener('click', () => {
+    stopCamera(); clearPhoto();
+    if (!terminal) show('ready', 'Puedes abrir la camara de nuevo para continuar.');
+  });
+
+  const MAX_BYTES = 8 * 1024 * 1024, MAX_PIXELS = 20000000;
+  function withTimeout(promise, milliseconds) {
+    let timer;
+    return Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(problem('La camara tardo demasiado. Intenta nuevamente.')), milliseconds); })])
+      .finally(() => clearTimeout(timer));
+  }
+  async function encodePhoto(source, width, height) {
+    // Every attempt draws from the original, never from a previously compressed JPEG.
+    let scale = Math.min(1, Math.sqrt(MAX_PIXELS / (width * height)));
+    const canvas = document.createElement('canvas');
+    try {
+      for (let attempt = 0; attempt < 6; attempt++) {
+        canvas.width = Math.max(1, Math.floor(width * scale)); canvas.height = Math.max(1, Math.floor(height * scale));
+        const context = canvas.getContext('2d');
+        if (!context) throw problem('No pudimos preparar la foto. Abre la camara e intenta nuevamente.');
+        context.drawImage(source, 0, 0, canvas.width, canvas.height);
+        const photo = await withTimeout(new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .95)), 6000);
+        if (!photo || !photo.size) throw problem('No pudimos guardar la foto. Intenta nuevamente.');
+        if (photo.size <= MAX_BYTES) return photo;
+        scale *= Math.min(.85, Math.sqrt(MAX_BYTES / photo.size) * .95);
+      }
+      throw problem('La foto es demasiado grande. Repite la captura.');
+    } finally { canvas.width = canvas.height = 0; }
+  }
+  async function normalizeNative(photo) {
+    if (!photo || !photo.size) throw problem('No pudimos guardar la foto. Intenta nuevamente.');
+    const url = URL.createObjectURL(photo), image = new Image();
+    try {
+      await withTimeout(new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = url; }), 6000);
+      if (!image.naturalWidth || !image.naturalHeight) throw problem('Foto no disponible.');
+      if (['image/jpeg', 'image/png', 'image/webp'].includes(photo.type) && photo.size <= MAX_BYTES &&
+          image.naturalWidth * image.naturalHeight <= MAX_PIXELS) return photo;
+      return await encodePhoto(image, image.naturalWidth, image.naturalHeight);
+    } finally { image.onload = image.onerror = null; image.src = ''; URL.revokeObjectURL(url); }
+  }
+  async function capturePhoto(run) {
+    const track = stream.getVideoTracks()[0];
+    if (typeof window.ImageCapture === 'function') {
+      try {
+        const capture = new ImageCapture(track);
+        if (typeof capture.takePhoto === 'function') {
+          const native = await withTimeout(capture.takePhoto(), 6000);
+          if (run !== generation || terminal || document.hidden) return null;
+          return await normalizeNative(native);
+        }
+      } catch (_) { /* Unsupported/failed still capture falls back to the live frame. */ }
+    }
+    if (run !== generation || terminal || document.hidden) return null;
+    return encodePhoto(video, video.videoWidth, video.videoHeight);
+  }
   take.addEventListener('click', () => operation(async () => {
     if (!stream || !video.videoWidth || !video.videoHeight) throw problem('Espera a que la c\u00e1mara muestre el documento.');
-    const canvas = document.createElement('canvas');
-    const scale = Math.min(1, 2048 / Math.max(video.videoWidth, video.videoHeight));
-    canvas.width = Math.round(video.videoWidth * scale); canvas.height = Math.round(video.videoHeight * scale);
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-    stopCamera();
     const run = generation;
-    const photo = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .92));
-    canvas.width = canvas.height = 0;
-    if (terminal || run !== generation || document.hidden) return;
+    let photo, current;
+    try { photo = await capturePhoto(run); }
+    finally { current = run === generation; if (current) stopCamera(); }
+    if (!current || terminal || document.hidden) return;
     if (!photo || !photo.size) throw problem('No pudimos tomar la foto. Abre la c\u00e1mara y repite la captura.');
     blob = photo; previewURL = URL.createObjectURL(blob); preview.src = previewURL;
     show('preview', 'Revisa que toda la informaci\u00f3n est\u00e9 n\u00edtida y completa.');
@@ -399,7 +526,8 @@
   accept.addEventListener('click', () => operation(async () => {
     if (!blob) return;
     status.textContent = 'Enviando foto de forma segura...';
-    const body = new FormData(); body.set('archivo', blob, 'captura.jpg');
+    const extension = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
+    const body = new FormData(); body.set('archivo', blob, `captura.${extension}`);
     const data = await action(side, body);
     if (terminal || checkTerminal(data)) return;
     clearPhoto(); nextSide(data);

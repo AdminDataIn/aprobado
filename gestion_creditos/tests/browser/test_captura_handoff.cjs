@@ -32,8 +32,11 @@ before(async () => {
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname === '/camera') {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.end(url.searchParams.has('prestadores') ? cameraHTML.replaceAll('LIBRANZA', 'PRESTADORES')
-        .replace('data-contexto=""', 'data-contexto="1234"') : cameraHTML);
+      let content = url.searchParams.has('prestadores') ? cameraHTML.replaceAll('LIBRANZA', 'PRESTADORES')
+        .replace('data-contexto=""', 'data-contexto="1234"') : cameraHTML;
+      if (url.searchParams.has('grant')) content = content.replace('data-capture-mobile ', 'data-capture-mobile data-capture-grant ')
+        .replace(id + '/"', id + '/movil/"');
+      res.end(content);
       return;
     }
     if (url.pathname.startsWith('/static/')) {
@@ -224,7 +227,7 @@ test('QR no disponible conserva enlace y copiar; doble clic no duplica POST', as
   assert.equal(ui.state.posts, 1);
   assert.equal(await ui.result.isVisible(), true);
   assert.equal(await ui.page.locator('canvas').isVisible(), false);
-  assert.equal(await ui.page.locator('[data-enlace-captura]').isVisible(), true);
+  assert.equal(await ui.page.locator('[data-enlace-captura]').isVisible(), false);
   assert.equal(await ui.page.locator('[data-copiar-enlace]').isVisible(), true);
 });
 test('localStorage inaccesible o borrador antiguo no altera UUID actual de Libranza', async t => {
@@ -254,6 +257,7 @@ for (const width of [320, 768]) {
     await ui.create(); await ui.waitState('waiting');
     assert.equal(await ui.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     for (const selector of ['[data-enlace-captura]', '[data-copiar-enlace]', '[data-capture-status]']) {
+      if (!(await ui.page.locator(selector).isVisible())) continue;
       assert.equal(await ui.page.locator(selector).evaluate(element => element.scrollWidth <= element.clientWidth), true);
     }
     if (process.env.HANDOFF_SCREENSHOTS) await ui.page.screenshot({path: path.join(process.env.HANDOFF_SCREENSHOTS, 'handoff-' + width + '.png'), fullPage: true});
@@ -261,14 +265,33 @@ for (const width of [320, 768]) {
 }
 
 async function cameraSetup(t, opts = {}) {
-  const context = await browser.newContext({viewport: {width: opts.width || 390, height: 844},
+  const context = await browser.newContext({viewport: {width: opts.width || 390, height: opts.height || 844},
     permissions: ['camera'], ...(opts.touch ? {isMobile: true, hasTouch: true} : {})});
   t.after(() => context.close());
   const page = await context.newPage(), requests = [], errors = [], logs = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => logs.push(message.text()));
-  await page.addInitScript(({failure, delayed}) => {
-    window.cameraStats = {calls: [], tracks: [], stops: 0};
+  await page.addInitScript(({failure, delayed, nativeMode, photoWidth = 3200, photoHeight = 2000, caps, constraintFailure, largeBytes, portrait}) => {
+    window.cameraStats = {calls: [], tracks: [], stops: 0, constraints: [], encodes: [], nativeCalls: 0};
+    const encode = HTMLCanvasElement.prototype.toBlob;
+    HTMLCanvasElement.prototype.toBlob = function(callback, ...args) {
+      cameraStats.encodes.push([this.width, this.height, ...args]);
+      return encode.call(this, callback, ...args);
+    };
+    window.ImageCapture = nativeMode ? class {
+      async takePhoto() {
+        cameraStats.nativeCalls++;
+        if (nativeMode === 'fail') throw new Error('PRIVATE-TECHNICAL-ERROR');
+        if (nativeMode === 'delayed') await new Promise(resolve => { window.allowPhoto = resolve; });
+        const canvas = document.createElement('canvas'); canvas.width = photoWidth; canvas.height = photoHeight;
+        const ctx = canvas.getContext('2d'); ctx.fillStyle = '#08a4a4'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        let blob = await new Promise(resolve => encode.call(canvas, resolve, 'image/jpeg', .96));
+        canvas.width = canvas.height = 0;
+        if (largeBytes) blob = new Blob([blob, new Uint8Array(8 * 1024 * 1024)], {type: 'image/jpeg'});
+        cameraStats.nativeSize = blob.size;
+        return blob;
+      }
+    } : undefined;
     if (failure === 'unsupported') {
       Object.defineProperty(navigator, 'mediaDevices', {value: undefined}); return;
     }
@@ -278,12 +301,36 @@ async function cameraSetup(t, opts = {}) {
       if (failure) throw new DOMException('PRIVATE-TECHNICAL-ERROR', failure);
       if (delayed) await new Promise(resolve => { window.allowCamera = resolve; });
       let stream;
-      try { stream = await original(constraints); }
+      try {
+        if (portrait) {
+          const canvas = document.createElement('canvas'); canvas.width = 1080; canvas.height = 1920;
+          const ctx = canvas.getContext('2d');
+          window.syntheticTimer = setInterval(() => {
+            ctx.fillStyle = '#667578'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#fff'; ctx.fillRect(100, 650, 880, 555);
+            ctx.fillStyle = '#147e85'; ctx.fillRect(160, 720, 200, 250);
+            ctx.fillStyle = '#243b41'; ctx.font = '38px sans-serif'; ctx.fillText('DOCUMENTO DE PRUEBA', 390, 770);
+            ctx.fillText('CAMARA SINTETICA', 390, 835);
+          }, 50);
+          stream = canvas.captureStream(20);
+        } else stream = await original(constraints);
+      }
       catch (error) { cameraStats.failure = error.name; throw error; }
       for (const track of stream.getTracks()) {
         cameraStats.tracks.push(track);
         const stop = track.stop.bind(track);
         track.stop = () => { cameraStats.stops++; stop(); };
+        if (caps) {
+          const settings = track.getSettings.bind(track);
+          let zoom = caps.zoom ? caps.zoom.min : undefined;
+          track.getSettings = () => ({...settings(), zoom});
+          track.getCapabilities = () => caps;
+          track.applyConstraints = async value => {
+            cameraStats.constraints.push(value);
+            if (constraintFailure) throw new Error('PRIVATE-TECHNICAL-ERROR');
+            if (value.advanced[0].zoom) zoom = value.advanced[0].zoom;
+          };
+        }
       }
       return stream;
     };
@@ -292,17 +339,18 @@ async function cameraSetup(t, opts = {}) {
   await page.route('**/captura-documental/**', async route => {
     const request = route.request(), name = new URL(request.url()).pathname.split('/').filter(Boolean).at(-1);
     requests.push({name, method: request.method(), url: request.url(), body: request.postDataBuffer(), headers: request.headers()});
+    if (state.grantInvalid) { await route.fulfill({status: 403, json: {code: 'CAPTURE_GRANT_INVALID'}}); return; }
     if (request.method() === 'POST') {
       if (name === 'canjear') state.estado = 'CANJEADA';
-      if (['FRONTAL', 'TRASERA'].includes(name)) {
+      if (['FRONTAL', 'TRASERA'].includes(name.toUpperCase())) {
         if (state.uploadFail) { await route.fulfill({status: 500, body: 'PRIVATE-TECHNICAL-ERROR'}); return; }
-        state.lados = [...new Set([...state.lados, name])];
+        state.lados = [...new Set([...state.lados, name.toUpperCase()])];
       }
       if (name === 'finalizar') state.estado = 'FINALIZADA';
     }
     await route.fulfill({json: {id, estado: state.estado, lados: state.lados}});
   });
-  await page.goto(origin + '/camera' + (opts.prestadores ? '?prestadores=1' : '') + '#' + token);
+  await page.goto(origin + '/camera?' + new URLSearchParams({...(opts.prestadores ? {prestadores: '1'} : {}), ...(opts.grant ? {grant: '1'} : {})}) + '#' + token);
   const waitStep = async value => {
     try { await page.waitForFunction(value => document.querySelector('[data-capture-mobile]').dataset.state === value, value, {timeout: 5000}); }
     catch (error) {
@@ -323,6 +371,147 @@ async function cameraSetup(t, opts = {}) {
   }
   return {page, requests, state, errors, logs, waitStep, openCamera, photo, accept, stopped};
 }
+
+test('desktop dirige al celular: QR y copiar, sin CTA Abrir captura', async t => {
+  const ui = await setup(t); await ui.create(); await ui.waitState('waiting');
+  assert.equal(await ui.page.locator('[data-enlace-captura]').isVisible(), false);
+  assert.equal(await ui.page.locator('[data-qr-block]').isVisible(), true);
+  assert.equal(await ui.page.locator('[data-copiar-enlace]').isVisible(), true);
+  assert.match(await ui.status.textContent(), /Esperando captura desde tu celular/);
+});
+
+async function frameGeometry(page) {
+  await page.waitForFunction(() => !document.querySelector('[data-camera-guide]').hidden);
+  return page.evaluate(() => {
+    const video = document.querySelector('video'), box = video.getBoundingClientRect();
+    const frame = document.querySelector('[data-camera-guide]').getBoundingClientRect();
+    const scale = Math.min(box.width / video.videoWidth, box.height / video.videoHeight);
+    return {frame: {x: frame.x, y: frame.y, width: frame.width, height: frame.height},
+      visible: {x: box.x + (box.width - video.videoWidth * scale) / 2, y: box.y + (box.height - video.videoHeight * scale) / 2,
+        width: video.videoWidth * scale, height: video.videoHeight * scale}};
+  });
+}
+function assertFrame({frame: f, visible: v}) {
+  assert.ok(Math.abs(f.width / f.height - 85.60 / 53.98) < .005);
+  assert.ok(f.x >= v.x - 1 && f.y >= v.y - 1 && f.x + f.width <= v.x + v.width + 1 && f.y + f.height <= v.y + v.height + 1);
+  assert.ok(Math.abs(f.width - Math.min(v.width * .82, v.height * .72 * (85.60 / 53.98))) < 1);
+}
+test('visor dedicado y marco dentro del video real; rotacion y stream vertical', async t => {
+  const ui = await cameraSetup(t); await ui.openCamera();
+  assert.equal(await ui.page.locator('.camera-immersive').count(), 1);
+  assert.equal(await ui.page.locator('.camera-intro').isVisible(), false);
+  assertFrame(await frameGeometry(ui.page));
+  await ui.page.evaluate(() => {
+    const video = document.querySelector('video');
+    Object.defineProperty(video, 'videoWidth', {value: 1080}); Object.defineProperty(video, 'videoHeight', {value: 1920});
+    video.dispatchEvent(new Event('resize'));
+  });
+  assertFrame(await frameGeometry(ui.page));
+  await ui.page.setViewportSize({width: 844, height: 390});
+  await ui.page.evaluate(() => window.dispatchEvent(new Event('orientationchange')));
+  await ui.page.waitForTimeout(80);
+  assertFrame(await frameGeometry(ui.page));
+  assert.ok(await ui.page.locator('[data-tomar-foto]').evaluate(el => { const r = el.getBoundingClientRect(); return r.right <= innerWidth && r.bottom <= innerHeight; }));
+});
+for (const nativeMode of [undefined, 'fail', 'success']) {
+  test('captura intrinseca ImageCapture/fallback: ' + (nativeMode || 'ausente'), async t => {
+    const ui = await cameraSetup(t, {nativeMode}); await ui.openCamera();
+    const dimensions = await ui.page.locator('video').evaluate(v => [v.videoWidth, v.videoHeight]);
+    await ui.photo(); await ui.stopped();
+    const actual = await ui.page.locator('[data-camera-preview]').evaluate(img => [img.naturalWidth, img.naturalHeight]);
+    assert.deepEqual(actual, nativeMode === 'success' ? [3200, 2000] : dimensions);
+    assert.equal(await ui.page.evaluate(() => cameraStats.nativeCalls), nativeMode ? 1 : 0);
+    assert.equal(await ui.page.evaluate(() => cameraStats.encodes.length), nativeMode === 'success' ? 0 : 1);
+  });
+}
+for (const options of [{photoWidth: 5100, photoHeight: 4000}, {largeBytes: true}]) {
+  test('normalizacion solo por limites backend ' + JSON.stringify(options), async t => {
+    const ui = await cameraSetup(t, {nativeMode: 'success', ...options}); await ui.openCamera(); await ui.photo();
+    const photo = await ui.page.locator('[data-camera-preview]').evaluate(async img => ({w: img.naturalWidth, h: img.naturalHeight, size: (await (await fetch(img.src)).blob()).size}));
+    assert.ok(photo.w * photo.h <= 20000000 && photo.size <= 8 * 1024 * 1024 && photo.w > 2048);
+    assert.ok(await ui.page.evaluate(() => cameraStats.encodes.length > 0));
+    await ui.stopped();
+  });
+}
+test('zoom real y foco continuo solo con capacidades; sin escalado CSS', async t => {
+  const ui = await cameraSetup(t, {caps: {zoom: {min: 1, max: 3, step: .5}, focusMode: ['continuous']}});
+  await ui.openCamera();
+  assert.equal(await ui.page.locator('[data-zoom-control]').isVisible(), true);
+  await ui.page.locator('[data-camera-zoom]').evaluate(el => { el.value = 2.5; el.dispatchEvent(new Event('change')); });
+  await ui.page.waitForFunction(() => cameraStats.constraints.some(c => c.advanced[0].zoom === 2.5));
+  const calls = await ui.page.evaluate(() => cameraStats.constraints);
+  assert.ok(calls.some(c => c.advanced[0].focusMode === 'continuous'));
+  assert.ok(calls.every(c => !c.advanced[0].zoom || (c.advanced[0].zoom >= 1 && c.advanced[0].zoom <= 3)));
+  assert.equal(await ui.page.locator('video').evaluate(v => getComputedStyle(v).transform), 'none');
+});
+test('sin zoom/foco no se muestran controles ni se aplican constraints', async t => {
+  const ui = await cameraSetup(t, {caps: {focusMode: ['manual']}}); await ui.openCamera();
+  assert.equal(await ui.page.locator('[data-zoom-control]').isVisible(), false);
+  assert.deepEqual(await ui.page.evaluate(() => cameraStats.constraints), []);
+  await ui.photo();
+});
+test('fallo de zoom/foco es opcional y permite capturar', async t => {
+  const ui = await cameraSetup(t, {caps: {zoom: {min: 1, max: 2, step: .1}, focusMode: ['continuous']}, constraintFailure: true});
+  await ui.openCamera();
+  await ui.page.locator('[data-camera-zoom]').evaluate(el => { el.value = 1.5; el.dispatchEvent(new Event('change')); });
+  await ui.page.waitForFunction(() => document.querySelector('[data-zoom-control]').hidden);
+  await ui.photo(); assert.deepEqual(ui.errors, []);
+});
+test('ImageCapture tardio tras salir no restaura preview ni deja tracks', async t => {
+  const ui = await cameraSetup(t, {nativeMode: 'delayed'}); await ui.openCamera();
+  await ui.page.locator('[data-tomar-foto]').click();
+  await ui.page.waitForFunction(() => !!window.allowPhoto);
+  await ui.page.locator('[data-salir]').click();
+  await ui.page.evaluate(() => window.allowPhoto());
+  await ui.page.waitForFunction(() => !document.querySelector('[data-canjear]').disabled);
+  await ui.waitStep('ready'); await ui.stopped();
+  assert.equal(await ui.page.locator('[data-camera-preview]').isVisible(), false);
+});
+test('fallo canvas recuperable sin galeria', async t => {
+  const ui = await cameraSetup(t); await ui.openCamera();
+  await ui.page.evaluate(() => { window.originalEncode = HTMLCanvasElement.prototype.toBlob; HTMLCanvasElement.prototype.toBlob = callback => callback(null); });
+  await ui.page.locator('[data-tomar-foto]').click(); await ui.waitStep('ready'); await ui.stopped();
+  assert.equal(await ui.page.locator('input[type=file]').count(), 0);
+  await ui.page.evaluate(() => { HTMLCanvasElement.prototype.toBlob = originalEncode; });
+  await ui.openCamera(); await ui.photo();
+});
+
+test('CaptureGrant 403 durante visor termina stream y no pide login', async t => {
+  const ui = await cameraSetup(t, {grant: true}); await ui.openCamera();
+  ui.state.grantInvalid = true;
+  await ui.page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await ui.waitStep('error'); await ui.stopped();
+  assert.match(await ui.page.locator('[data-capture-status]').textContent(), /expir|disponible/);
+  assert.equal(await ui.page.locator('[data-canjear]').isVisible(), false);
+});
+
+for (const viewport of [{width: 390, height: 844}, {width: 844, height: 390}, {width: 360, height: 640}]) {
+  test('stream vertical mobile safe-area y controles ' + JSON.stringify(viewport), async t => {
+    const ui = await cameraSetup(t, {...viewport, portrait: true, touch: true}); await ui.openCamera();
+    assertFrame(await frameGeometry(ui.page));
+    const colors = await ui.page.locator('video').evaluate(video => {
+      const c = document.createElement('canvas'); c.width = 16; c.height = 16;
+      const ctx = c.getContext('2d'); ctx.drawImage(video, 0, 0, 16, 16);
+      return new Set(ctx.getImageData(0, 0, 16, 16).data).size;
+    });
+    assert.ok(colors > 5);
+    for (const step of ['live', 'preview']) {
+      if (step === 'preview') await ui.photo();
+      assert.ok(await ui.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight + 1));
+      for (const selector of step === 'live' ? ['[data-salir]', '[data-tomar-foto]'] : ['[data-repetir]', '[data-usar-foto]']) {
+        assert.ok(await ui.page.locator(selector).evaluate(el => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth; }));
+      }
+      if (process.env.HANDOFF_SCREENSHOTS) await ui.page.screenshot({path: path.join(process.env.HANDOFF_SCREENSHOTS, `portrait-${viewport.width}-${step}.png`)});
+    }
+  });
+}
+test('cache busting consistente entre handoff y camara', () => {
+  for (const content of [html, cameraHTML]) {
+    assert.match(content, /captura_documental\.js\?v=id01b2-1/);
+    assert.match(content, /captura_documental\.css\?v=id01b2-1/);
+  }
+  assert.match(html, /qrcode-generator-1\.4\.4\.js/);
+});
 
 for (const prestadores of [false, true]) {
   test('camara secuencial real (dispositivo sintetico) ' + (prestadores ? 'PRESTADORES' : 'LIBRANZA'), async t => {

@@ -1,5 +1,5 @@
 {% load static l10n %}
-<link rel="stylesheet" href="{% static 'css/captura_documental.css' %}?v=id01b-camera">
+<link rel="stylesheet" href="{% static 'css/captura_documental.css' %}?v=id01b2-1">
 <section class="capture-handoff" data-capture-handoff data-producto="{{ producto }}" data-contexto="{{ solicitud.id|unlocalize|default:'' }}"
          data-crear="{% url 'captura:crear' producto %}">
   <div class="capture-heading">
@@ -16,7 +16,7 @@
       <p class="capture-account">El enlace permite capturar solo este documento, sin iniciar sesión en el celular.</p>
       <p class="capture-expiry" data-capture-expiry></p>
       <div class="capture-actions">
-        <a class="capture-button capture-button-primary" data-enlace-captura target="_blank" rel="noreferrer noopener">Abrir captura</a>
+        <a class="capture-button capture-button-primary" data-enlace-captura hidden target="_blank" rel="noreferrer noopener">Abrir cámara en este celular</a>
         <button type="button" class="capture-button" data-copiar-enlace>Copiar enlace</button>
       </div>
     </div>
@@ -33,4 +33,4 @@
   <noscript><p>Activa JavaScript para continuar con la captura segura.</p></noscript>
 </section>
 <script src="{% static 'js/vendor/qrcode-generator-1.4.4.js' %}" defer></script>
-<script src="{% static 'js/captura_documental.js' %}?v=id01b-grant" defer></script>
+<script src="{% static 'js/captura_documental.js' %}?v=id01b2-1" defer></script>

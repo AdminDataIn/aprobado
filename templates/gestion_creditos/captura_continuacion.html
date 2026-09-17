@@ -2,26 +2,36 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="same-origin">
   <title>Documento de identidad | Aprobado</title>
-  <link rel="stylesheet" href="{% static 'css/captura_documental.css' %}?v=id01b-camera">
+  <link rel="stylesheet" href="{% static 'css/captura_documental.css' %}?v=id01b2-1">
 </head>
 <body class="capture-page">
 <main data-capture-mobile {% if capture_grant %}data-capture-grant{% endif %} data-base="{{ capture_base }}" data-contexto="{{ solicitud_id }}">
-  <img src="{% static 'images/logo-dark.png' %}" width="160" alt="Aprobado">
-  <h1>Documento de identidad</h1>
-  <p>Captura ambas caras de tu documento. Las fotos se envían de forma privada a tu solicitud.</p>
+  <header class="camera-intro">
+    <img src="{% static 'images/logo-dark.png' %}" width="160" alt="Aprobado">
+    <h1>Documento de identidad</h1>
+    <p>Captura ambas caras de tu documento.</p>
+  </header>
   <div data-mobile-controls>
     {% csrf_token %}
-    <p class="camera-step" data-camera-step>1 de 2 · Frontal</p>
-    <h2 data-camera-title>Frente del documento</h2>
-    <p class="camera-hint" data-camera-hint>Usa buena luz y evita reflejos. Mantén visibles las cuatro esquinas.</p>
-    <div class="camera-viewfinder" data-viewfinder hidden>
-      <video data-camera-video autoplay muted playsinline aria-label="Vista de la cámara"></video>
-      <div class="camera-guide" aria-hidden="true"></div>
+    <div class="camera-toolbar">
+      <button type="button" class="camera-exit" data-salir hidden aria-label="Salir de la cámara"><span aria-hidden="true">&#8249;</span> Salir</button>
+      <p class="camera-step" data-camera-step>1 de 2 · Frontal</p>
     </div>
-    <img class="camera-preview" data-camera-preview alt="Foto del documento para revisar" hidden>
+    <h2 data-camera-title>Frente del documento</h2>
+    <div class="camera-media" data-camera-media hidden>
+      <div class="camera-viewfinder" data-viewfinder hidden>
+        <video data-camera-video autoplay muted playsinline aria-label="Vista de la cámara"></video>
+        <div class="camera-guide" data-camera-guide hidden aria-hidden="true"></div>
+      </div>
+      <img class="camera-preview" data-camera-preview alt="Foto del documento para revisar" hidden>
+    </div>
+    <p class="camera-hint" data-camera-hint>Mantén las 4 esquinas visibles y evita reflejos.</p>
+    <label class="camera-zoom" data-zoom-control hidden>
+      <span>Zoom</span><input type="range" data-camera-zoom aria-label="Zoom de cámara"><output data-zoom-value></output>
+    </label>
     <div class="camera-actions">
       <button type="button" data-canjear>Abrir cámara</button>
       <button type="button" data-tomar-foto hidden>Tomar foto</button>
@@ -33,6 +43,6 @@
   <p class="camera-status" role="status" aria-live="polite" aria-atomic="true" data-capture-status></p>
   <noscript>Activa JavaScript y abre este enlace en un navegador compatible con cámara.</noscript>
 </main>
-<script src="{% static 'js/captura_documental.js' %}?v=id01b-grant" defer></script>
+<script src="{% static 'js/captura_documental.js' %}?v=id01b2-1" defer></script>
 </body>
 </html>
