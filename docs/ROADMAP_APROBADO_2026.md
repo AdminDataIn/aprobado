@@ -150,6 +150,7 @@ Despliegue actual relevante:
 
 **Pendiente para marcar DONE V1:**
 
+- creación de reporte nuevo → alerta interna after commit;
 - UAT financiero controlado en producción;
 - validar rechazo sin impacto de cartera;
 - volver a reportar después de rechazo;
@@ -157,6 +158,53 @@ Despliegue actual relevante:
 - comprobar `HistorialPago`;
 - comprobar `DetalleContablePago`;
 - comprobar cuota, saldo e idempotencia después de aplicar.
+
+#### BRE-B-ALERT-01 — Prioridad alta
+
+**Estado: implementar/validar.** Implementación local de alerta interna a
+`CREDIT_INTERNAL_NOTIFICATION_EMAILS`, pendiente de validación PostgreSQL/VPS y
+entrega SMTP real. No marcar cierre productivo por las pruebas locales.
+
+- Evento persistente `NotificacionPagoBREB`, único por reporte + tipo + canal;
+  solo se crea al generar una cabecera nueva, nunca al reutilizarla por retry.
+- `transaction.on_commit` encola Celery; fallos de entrega no revierten el reporte.
+- Estados `PENDIENTE`, `ENVIADA`, `FALLIDA`, `INCIERTA`, intentos, timestamps y
+  código seguro. Sin comprobantes, cédulas, tokens ni referencia bancaria completa
+  en correo/logs. Enlace HTTPS a bandeja autenticada con `review_pagobreb`.
+- SMTP no garantiza exactly-once: se persiste `INCIERTA` antes de enviar.
+  Una caída después de aceptación SMTP y antes de guardar `ENVIADA` requiere
+  revisión operativa, nunca retry ciego. También puede quedar incierta antes del
+  envío si el proceso cae justo después de reservar el evento.
+- `numero_intentos` cuenta ejecuciones de entrega, incluso fallos de preparación;
+  un fallo al publicar en el broker no constituye intento SMTP.
+- Recuperación explícita con `manage.py reintentar_alerta_breb <evento_id>`
+  (consulta) y `--confirmar` (solo `PENDIENTE`/`FALLIDA`). No reencola `INCIERTA`
+  ni `ENVIADA`. Requiere acceso operativo al servidor, no es un endpoint público.
+- No hay backfill ni avisos automáticos para reportes anteriores a la migración.
+  Si no corre el worker, la alerta permanece pendiente. Revisar la outbox/worker;
+  no se agrega un nuevo schedule de Beat ni se cambia infraestructura en este hotfix.
+- Correo de rechazo neutral: “Actualización de tu reporte de pago BRE-B”, con
+  motivo explícito. El estado financiero/documental `RECHAZADO` no cambia.
+
+#### BRE-B-CLOSE-01
+
+**Estado: roadmap.** Evaluar `CERRADO_SIN_APLICACION`, causa aplicado por otro
+canal, preservando vínculo y evidencia de pagos existentes sin generar recaudo
+nuevo. No migrar automáticamente `RECHAZADO` históricos. Hasta entonces,
+el cierre administrativo por rechazo debe explicar que no se requiere otra
+transferencia ni otro reporte cuando el pago ya fue aplicado por otro canal.
+
+#### BRE-B-GUARD-01
+
+**Estado: roadmap.** Detectar un pago manual cuando existe un reporte BRE-B
+`PENDIENTE_VERIFICACION` para la misma cuota/crédito. Definir con operación si
+será warning o bloqueo con override. No implementar bloqueo en BRE-B-ALERT-01.
+
+**UAT adicional pendiente BRE-B:** creación → recepción interna; rechazo sin
+impacto financiero; nuevo intento legítimo; aprobación real; HistorialPago;
+DetalleContablePago; cuota y saldo; idempotencia/concurrencia entre reportes y
+workers; fallo de broker/SMTP y recuperación segura; cierre de pago aplicado
+por otro canal. Verificar contenido minimizado y permisos del enlace interno.
 
 ---
 

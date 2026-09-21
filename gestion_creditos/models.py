@@ -1957,6 +1957,37 @@ class PagoBREB(models.Model):
         return f'BRE-B {referencia} - {self.get_estado_display()}'
 
 
+class NotificacionPagoBREB(models.Model):
+    class TipoEvento(models.TextChoices):
+        NUEVO_PENDIENTE = 'NUEVO_PENDIENTE', 'Nuevo reporte pendiente'
+
+    class Canal(models.TextChoices):
+        EMAIL_INTERNO = 'EMAIL_INTERNO', 'Correo interno'
+
+    class Estado(models.TextChoices):
+        PENDIENTE = 'PENDIENTE', 'Pendiente'
+        ENVIADA = 'ENVIADA', 'Enviada'
+        FALLIDA = 'FALLIDA', 'Fallida sin envio'
+        INCIERTA = 'INCIERTA', 'Resultado incierto, revisar antes de reenviar'
+
+    pago_breb = models.ForeignKey(PagoBREB, on_delete=models.PROTECT, related_name='notificaciones')
+    tipo_evento = models.CharField(max_length=30, choices=TipoEvento.choices, default=TipoEvento.NUEVO_PENDIENTE)
+    canal = models.CharField(max_length=20, choices=Canal.choices, default=Canal.EMAIL_INTERNO)
+    estado = models.CharField(max_length=12, choices=Estado.choices, default=Estado.PENDIENTE)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    ultimo_intento_en = models.DateTimeField(null=True, blank=True)
+    enviado_en = models.DateTimeField(null=True, blank=True)
+    numero_intentos = models.PositiveIntegerField(default=0)
+    codigo_error = models.CharField(max_length=64, blank=True)
+
+    class Meta:
+        ordering = ['-creado_en']
+        constraints = [
+            models.UniqueConstraint(fields=['pago_breb', 'tipo_evento', 'canal'], name='uniq_breb_evento_canal'),
+        ]
+        indexes = [models.Index(fields=['estado', 'creado_en'], name='breb_notif_estado_fecha_idx')]
+
+
 class PagoBREBDetalle(models.Model):
     pago_breb = models.ForeignKey(
         PagoBREB,

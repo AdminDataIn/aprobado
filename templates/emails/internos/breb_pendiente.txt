@@ -1,0 +1,14 @@
+Nueva transferencia BRE-B pendiente de verificacion
+
+Empresa: {{ empresa }}
+Reporte #{{ reporte_id }}
+Fecha de transferencia: {{ fecha_transferencia }}
+Valor reportado: ${{ valor_reportado }}
+Creditos: {{ creditos }}
+Cuotas: {{ cuotas }}
+
+Referencia disponible en la plataforma.
+Consulta el estado actualizado y revisa el reporte en la bandeja interna:
+{{ bandeja_url }}
+
+El reporte por si solo no aplica pagos en cartera.

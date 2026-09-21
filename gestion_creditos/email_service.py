@@ -14,7 +14,7 @@ Configuración:
 import logging
 import io
 from decimal import Decimal
-from django.core.mail import send_mail, EmailMultiAlternatives
+from django.core.mail import send_mail, EmailMultiAlternatives, get_connection
 from django.template.loader import render_to_string, get_template
 from django.conf import settings
 from django.utils import timezone
@@ -933,10 +933,40 @@ def enviar_pago_breb_aprobado(pago):
 def enviar_pago_breb_rechazado(pago):
     return _enviar_notificacion_pago_breb(
         pago,
-        asunto=f'Reporte BRE-B rechazado - #{pago.pk}',
-        titulo='El comprobante no pudo ser validado',
+        asunto=f'Actualización de tu reporte de pago BRE-B - #{pago.pk}',
+        titulo='Actualización de tu reporte de pago BRE-B',
         mensaje=f'Motivo: {pago.motivo_rechazo}',
     )
+
+
+def construir_alerta_interna_pago_breb(pago):
+    destinatarios = []
+    for email in _obtener_destinatarios_internos():
+        _agregar_destinatario(destinatarios, email)
+    if not destinatarios:
+        return None
+    from django.db.models import Count
+    from django.utils.formats import number_format
+
+    cantidades = pago.detalles.aggregate(creditos=Count('credito_id', distinct=True), cuotas=Count('pk'))
+    contexto = {
+        'reporte_id': str(pago.pk),
+        'empresa': pago.empresa.nombre if pago.empresa_id else 'No informada',
+        'fecha_transferencia': pago.fecha_pago_reportada.strftime('%d/%m/%Y'),
+        'valor_reportado': number_format(pago.valor_reportado, decimal_pos=2, force_grouping=True),
+        'creditos': cantidades['creditos'],
+        'cuotas': cantidades['cuotas'],
+        'bandeja_url': _build_absolute_url(reverse('gestion:pagos_breb')),
+    }
+    mensaje = EmailMultiAlternatives(
+        subject=f'Nueva transferencia BRE-B pendiente de verificación - Reporte #{pago.pk}',
+        body=render_to_string('emails/internos/breb_pendiente.txt', contexto),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=destinatarios,
+        connection=get_connection(timeout=20),
+    )
+    mensaje.attach_alternative(render_to_string('emails/internos/breb_pendiente.html', contexto), 'text/html')
+    return mensaje
 
 
 def generar_pdf_plan_pagos(credito):

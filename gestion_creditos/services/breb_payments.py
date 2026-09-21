@@ -304,6 +304,9 @@ def reportar_pago_breb(
         )
         for item in detalles
     ])
+    from gestion_creditos.services.breb_notifications import registrar_alerta_interna
+
+    registrar_alerta_interna(pago)
     return pago
 
 

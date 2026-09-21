@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="es"><body style="margin:0;background:#f4f7fb;font-family:Arial,sans-serif;color:#10233f">
+<main style="max-width:600px;margin:0 auto;padding:28px 20px">
+  <h1 style="font-size:22px">Transferencia BRE-B pendiente de verificaci&oacute;n</h1>
+  <p>Reporte #{{ reporte_id }}</p>
+  <table style="width:100%;border-collapse:collapse;text-align:left">
+    <tr><th>Empresa</th><td>{{ empresa }}</td></tr>
+    <tr><th>Fecha de transferencia</th><td>{{ fecha_transferencia }}</td></tr>
+    <tr><th>Valor reportado</th><td>${{ valor_reportado }}</td></tr>
+    <tr><th>Cr&eacute;ditos</th><td>{{ creditos }}</td></tr>
+    <tr><th>Cuotas</th><td>{{ cuotas }}</td></tr>
+  </table>
+  <p>Referencia disponible en la plataforma.</p>
+  <p><a href="{{ bandeja_url }}">Consultar bandeja interna BRE-B</a></p>
+  <p>Consulta el estado actualizado antes de aplicar. El reporte por s&iacute; solo no aplica pagos en cartera.</p>
+</main></body></html>

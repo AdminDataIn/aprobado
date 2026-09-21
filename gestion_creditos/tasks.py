@@ -26,6 +26,13 @@ from .services.mora_notifications import procesar_alertas_mora_colaborador
 logger = logging.getLogger(__name__)
 
 
+@shared_task(name='gestion_creditos.tasks.enviar_alerta_breb_interna_task', acks_late=True, ignore_result=True)
+def enviar_alerta_breb_interna_task(evento_id):
+    from .services.breb_notifications import enviar_alerta_interna
+
+    return enviar_alerta_interna(evento_id)
+
+
 def _debe_omitir_automatizacion_libranza(credito, setting_name):
     return (
         credito.linea == Credito.LineaCredito.LIBRANZA

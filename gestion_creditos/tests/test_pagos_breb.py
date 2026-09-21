@@ -115,6 +115,9 @@ class PagoBREBBaseMixin:
         return reportar_pago_breb(**datos)
 
     def _crear_escenario_base(self):
+        broker = patch('gestion_creditos.tasks.enviar_alerta_breb_interna_task.apply_async')
+        self.broker_breb = broker.start()
+        self.addCleanup(broker.stop)
         self.empresa = Empresa.objects.create(nombre='EMPRESA BREB', convenio_activo=True)
         self.pagador = User.objects.create_user(
             'pagador-breb', email='pagador@aprobado.test', password='test1234'
@@ -735,6 +738,9 @@ class PagoBREBConcurrenciaPostgresTest(PagoBREBBaseMixin, TransactionTestCase):
 
     def setUp(self):
         self.empresa = Empresa.objects.create(nombre='EMPRESA BREB CONCURRENTE', convenio_activo=True)
+        broker = patch('gestion_creditos.tasks.enviar_alerta_breb_interna_task.apply_async')
+        broker.start()
+        self.addCleanup(broker.stop)
         self.pagador = User.objects.create_user('pagador-breb-concurrente')
         PerfilPagador.objects.create(usuario=self.pagador, empresa=self.empresa)
         self.revisor = User.objects.create_user('revisor-breb-concurrente', is_staff=True)
