@@ -31,6 +31,9 @@ from usuarios.models import PerfilPagador
 
 class CapturaFixture:
     def setUp(self):
+        ocr_publication = patch('gestion_creditos.services.ocr_documental.encolar', return_value=True)
+        ocr_publication.start()
+        self.addCleanup(ocr_publication.stop)
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         settings = override_settings(MEDIA_ROOT=str(Path(self.temporary.name) / 'media'),

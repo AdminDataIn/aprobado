@@ -26,6 +26,16 @@ from .services.mora_notifications import procesar_alertas_mora_colaborador
 logger = logging.getLogger(__name__)
 
 
+@shared_task(name='gestion_creditos.tasks.procesar_ocr_documental_task', acks_late=True, ignore_result=True)
+def procesar_ocr_documental_task(procesamiento_ocr_id):
+    from .services.ocr_documental import procesar
+    try:
+        procesar(procesamiento_ocr_id)
+    except Exception:
+        # DB/worker failures remain recoverable; never let Celery log OCR/SQL PII.
+        logger.error('OCR_TAREA_INTERRUMPIDA procesamiento_id=%s', procesamiento_ocr_id)
+
+
 @shared_task(name='gestion_creditos.tasks.enviar_alerta_breb_interna_task', acks_late=True, ignore_result=True)
 def enviar_alerta_breb_interna_task(evento_id):
     from .services.breb_notifications import enviar_alerta_interna

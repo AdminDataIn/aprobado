@@ -1,8 +1,8 @@
 # Aprobado — Roadmap maestro de implementación y cierre operativo
 
-**Versión:** 1.1
+**Versión:** 1.2
 
-**Fecha de corte:** 2026-09-12
+**Fecha de corte:** 2026-09-21 (identidad OCR; evidencia operativa comunicada)
 
 **Estado:** Documento rector de planificación
 
@@ -161,9 +161,9 @@ Despliegue actual relevante:
 
 #### BRE-B-ALERT-01 — Prioridad alta
 
-**Estado: implementar/validar.** Implementación local de alerta interna a
-`CREDIT_INTERNAL_NOTIFICATION_EMAILS`, pendiente de validación PostgreSQL/VPS y
-entrega SMTP real. No marcar cierre productivo por las pruebas locales.
+**Estado: desplegado, según confirmación operativa.** Alerta interna a
+`CREDIT_INTERNAL_NOTIFICATION_EMAILS`; UAT operativo con el próximo reporte real
+pendiente. No marcar cierre productivo por las pruebas locales.
 
 - Evento persistente `NotificacionPagoBREB`, único por reporte + tipo + canal;
   solo se crea al generar una cabecera nueva, nunca al reutilizarla por retry.
@@ -425,9 +425,22 @@ Controles implementados en el código actual:
 
 ### 4.8 APROBADO-ID-01 — Captura documental móvil controlada
 
-**Prioridad:** P0/P1. **Estado:** PENDIENTE de implementación; auditoría y diseño registrados en sección 14.
+**Prioridad:** P0/P1. **Estado:** ID-01A e ID-01B/C/D implementados.
+UAT físico iPhone realizado según confirmación del responsable; Android pendiente.
+La sección 14 conserva el diseño histórico y sus criterios, no constituye el estado actual.
 
-Desktop: no ofrecer captura directa; mostrar "Continúa desde tu celular" mediante enlace/QR de continuación autenticada. Móvil: frontal, revisión, repetir/aceptar, posterior, revisión, repetir/aceptar. Continuar solo con ambas caras aceptadas por backend y asociadas al mismo borrador/solicitud.
+**APROBADO-ID-01E: OCR documental local — implementación / validación.**
+Extracción Tesseract asíncrona y comparación versionada, sin aprobar identidad,
+modificar datos personales, score ni decisiones. Migración aditiva 0050; sin
+backfill. Ver `docs/ID_01E_OCR_DOCUMENTAL.md` para operación, retención y límites.
+Pendientes: validación PostgreSQL/VPS, motor/modelo español fijados por versión/hash,
+calibración con layouts autorizados y UAT. La cobertura sintética no certifica
+compatibilidad general con todas las cédulas colombianas.
+
+Desktop: no ofrecer captura directa; mostrar "Continúa desde tu celular" mediante
+enlace/QR. Móvil: CaptureGrant limitado a una sesión, sin segundo login;
+frontal, revisión, repetir/aceptar, posterior, revisión, repetir/aceptar.
+Continuar solo con ambas caras aceptadas técnicamente por backend.
 
 La interfaz web actual con recuadro no demuestra identidad, legibilidad ni captura física. Presencia de archivos nunca equivale a identidad validada.
 
@@ -442,6 +455,10 @@ La interfaz web actual con recuadro no demuestra identidad, legibilidad ni captu
 3. Carrera anulación/desembolso; prueba PostgreSQL pendiente de evidencia en esta sesión.
 
 ### P0 — Controles exigidos en APROBADO-ID-01
+
+Nota de actualización ID-01E: esta lista registra los riesgos del diseño original.
+Storage privado y autorización CaptureGrant ya están implementados; no describe
+una exposición pública vigente. La calidad UX local no es una prueba de identidad.
 
 1. No continuar sin frontal y posterior aceptados técnicamente en backend.
 2. Ownership de cada captura y segregación de roles en toda entrada, incluidos reemplazos y casos especiales.
@@ -460,6 +477,10 @@ La interfaz web actual con recuadro no demuestra identidad, legibilidad ni captu
 7. Tras ID-01: cerrar E2E/UAT de Prestadores y comprobar cierre UAT BRE-B, sin adelantar esos frentes.
 
 ### P2 — Identidad avanzada / apertura posterior
+
+OCR y contraste pasan a ID-01E por solicitud explícita; no adelanta antifraude/liveness.
+Después retomar Prestadores E2E, cierre UAT BRE-B y WhatsApp tras estabilización.
+BRE-B-CLOSE-01 y BRE-B-GUARD-01 permanecen en roadmap, sin implementación en ID-01E.
 
 1. OCR de cédula y contraste de número/nombre con solicitud.
 2. Detección de documento colombiano, antifraude y biometría/liveness solo con aprobación posterior.
@@ -910,11 +931,14 @@ No modificar estos archivos todavía. Integrar por producto con pruebas; la audi
 
 | Ticket | Prioridad / estado | Alcance | Salida verificable |
 |---|---|---|---|
-| APROBADO-ID-01A: contrato seguro y handoff | P0, PENDIENTE de implementación; diseño documentado | Borrador/sesión persistente, propietario, canje único, TTL, permisos, auditoría, storage privado, cierre de endpoints alternativos. Definir qué se garantiza y qué no sobre dispositivo. | Tests Django/PostgreSQL de ownership, replay, concurrencia, rollback y privacidad; ninguna creación financiera anticipada. |
-| APROBADO-ID-01B: captura móvil y revisión | P0/P1, PENDIENTE | Híbrida nativa/web, frontal/posterior, repetir/aceptar, validación técnica y separación de identidad; conectar formularios al servicio sin duplicar reglas. | Tests de contenido y UX; desktop handoff y polling; ambos lados vinculados a una única solicitud, sin bypass de upload. |
-| APROBADO-ID-01C: UAT y cierre documental | P1, PENDIENTE | Safari iPhone/Chrome Android físicos, resoluciones distintas, formatos, fallos/red/expiración; verificar storage real y continuidad desktop. | Evidencia reproducible, riesgos aceptados por negocio, regresiones y autorización de cierre. Después retomar APROBADO-03, BRE-B pendiente y finalmente WhatsApp. |
+| APROBADO-ID-01A: base documental privada | IMPLEMENTADO | Sesiones, ownership, auditoría y storage privado. | Conservar regresiones de seguridad. |
+| APROBADO-ID-01B: handoff cross-device | IMPLEMENTADO | CaptureGrant limitado, sin segundo login móvil. | No ampliar autorización con OCR. |
+| APROBADO-ID-01C: cámara dedicada | IMPLEMENTADO | Captura y revisión frontal/reverso. | UAT iPhone realizado; Android pendiente. |
+| APROBADO-ID-01D: quality gate UX | IMPLEMENTADO | Nitidez, exposición y encuadre; revisión manual controlada. | No acredita identidad ni calidad verificada por servidor. |
+| APROBADO-ID-01E: OCR local | IMPLEMENTACIÓN / VALIDACIÓN | Extracción/comparación versionadas y tareas recuperables. | PostgreSQL, motor real, calibración y UAT pendientes. |
 
-P2 (OCR, documento colombiano, contraste de identidad, antifraude, biometría/liveness) no se implementa en estos tickets. Repriorizar únicamente por un hallazgo P0 confirmado.
+ID-01E incorpora extracción/contraste por autorización explícita. Antifraude,
+biometría/liveness requieren una decisión posterior y no forman parte de OCR.
 
 ### 14.7 APROBADO-ID-00: privacidad documental historica
 

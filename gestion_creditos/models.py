@@ -3199,4 +3199,78 @@ class EventoCapturaDocumental(models.Model):
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.PROTECT)
     evento = models.CharField(max_length=32)
     creado_en = models.DateTimeField(auto_now_add=True)
+    procesamiento_ocr = models.ForeignKey('ProcesamientoOCRDocumental', null=True, blank=True,
+                                         on_delete=models.SET_NULL, related_name='eventos')
+
+
+class ProcesamientoOCRDocumental(models.Model):
+    class Estado(models.TextChoices):
+        PENDIENTE = 'PENDIENTE', 'Pendiente'
+        PROCESANDO = 'PROCESANDO', 'Procesando'
+        COMPLETADO = 'COMPLETADO', 'Completado'
+        REQUIERE_REVISION = 'REQUIERE_REVISION', 'Requiere revision'
+        FALLIDO = 'FALLIDO', 'Fallido'
+
+    sesion = models.ForeignKey(SesionCapturaDocumental, on_delete=models.PROTECT, related_name='procesamientos_ocr')
+    captura_frontal = models.ForeignKey(CapturaDocumentoIdentidad, on_delete=models.PROTECT, related_name='+')
+    captura_trasera = models.ForeignKey(CapturaDocumentoIdentidad, on_delete=models.PROTECT, related_name='+')
+    estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.PENDIENTE)
+    motor = models.CharField(max_length=32, default='tesseract')
+    version_motor = models.CharField(max_length=80, blank=True)
+    version_parser = models.CharField(max_length=32)
+    configuracion = models.JSONField(default=dict)
+    firma_configuracion = models.CharField(max_length=64)
+    firma_inputs = models.CharField(max_length=64)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    iniciado_en = models.DateTimeField(null=True, blank=True)
+    finalizado_en = models.DateTimeField(null=True, blank=True)
+    numero_intentos = models.PositiveIntegerField(default=0)
+    reservado_hasta = models.DateTimeField(null=True, blank=True)
+    token_ejecucion = models.UUIDField(null=True, blank=True, editable=False)
+    codigo_error = models.CharField(max_length=64, blank=True)
+    vigente = models.BooleanField(default=True)
+    purgado_en = models.DateTimeField(null=True, blank=True)
+    tipo_documento_detectado = models.CharField(max_length=20, default='DESCONOCIDO')
+    lado_frontal_detectado = models.CharField(max_length=12, default='DESCONOCIDO')
+    lado_trasera_detectado = models.CharField(max_length=12, default='DESCONOCIDO')
+    numero_documento_bruto = models.CharField(max_length=80, blank=True)
+    numero_documento_normalizado = models.CharField(max_length=20, blank=True)
+    nombres_bruto = models.CharField(max_length=240, blank=True)
+    nombres_normalizado = models.CharField(max_length=240, blank=True)
+    apellidos_bruto = models.CharField(max_length=240, blank=True)
+    apellidos_normalizado = models.CharField(max_length=240, blank=True)
+    fecha_nacimiento = models.DateField(null=True, blank=True)
+    fecha_expedicion = models.DateField(null=True, blank=True)
+    lugar_expedicion_bruto = models.CharField(max_length=240, blank=True)
+    lugar_expedicion_normalizado = models.CharField(max_length=240, blank=True)
+    confianza = models.JSONField(default=dict, blank=True)
+    evidencia = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=['sesion', 'captura_frontal', 'captura_trasera', 'firma_configuracion'],
+            name='ocr_inputs_config_unicos')]
+        indexes = [models.Index(fields=['estado', 'reservado_hasta'], name='ocr_estado_reserva_idx')]
+
+
+class ComparacionOCRDocumental(models.Model):
+    procesamiento = models.ForeignKey(ProcesamientoOCRDocumental, on_delete=models.CASCADE, related_name='comparaciones')
+    libranza = models.ForeignKey('CreditoLibranza', null=True, blank=True, on_delete=models.PROTECT)
+    solicitud = models.ForeignKey('contractors.ContractorApplication', null=True, blank=True, on_delete=models.PROTECT)
+    version_datos = models.CharField(max_length=64)
+    version_comparador = models.CharField(max_length=32, default='1')
+    snapshot = models.JSONField(default=dict)
+    resultados = models.JSONField(default=dict)
+    discrepancias = models.JSONField(default=list)
+    requiere_revision = models.BooleanField(default=False)
+    vigente = models.BooleanField(default=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=(models.Q(libranza__isnull=False, solicitud__isnull=True)
+                | models.Q(libranza__isnull=True, solicitud__isnull=False)), name='ocr_comparacion_contexto'),
+            models.UniqueConstraint(fields=['procesamiento', 'version_datos', 'version_comparador'],
+                                    name='ocr_comparacion_version_unica'),
+        ]
 

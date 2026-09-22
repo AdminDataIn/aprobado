@@ -389,6 +389,12 @@ PRIVATE_DOCUMENTS_ROOT = os.environ.get(
     os.path.join(BASE_DIR, 'private_documents'),
 )
 
+# Local identity OCR pins runtime/model versions for reproducible processing.
+OCR_DOCUMENTAL_VERSION_MOTOR = os.environ.get('OCR_DOCUMENTAL_VERSION_MOTOR', '')
+OCR_DOCUMENTAL_MODELO_SHA256 = os.environ.get('OCR_DOCUMENTAL_MODELO_SHA256', '')
+OCR_DOCUMENTAL_TESSDATA_DIR = os.environ.get('OCR_DOCUMENTAL_TESSDATA_DIR', '')
+OCR_DOCUMENTAL_TIMEOUT = int(os.environ.get('OCR_DOCUMENTAL_TIMEOUT', '20'))
+
 # ========================
 # Seguridad
 # ========================

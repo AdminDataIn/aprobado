@@ -319,6 +319,8 @@ def _finalizar_sesion(sesion, actor, *, delegado=False):
     _invalidar_grant(sesion)
     sesion.save()
     _evento(sesion, actor, 'FINALIZACION_DELEGADA' if delegado else 'FINALIZACION')
+    from .ocr_documental import asegurar_procesamiento
+    asegurar_procesamiento(sesion.pk)
     return sesion
 
 
@@ -375,6 +377,8 @@ def consumir_documentos(*, sesion, actor, credito=None, solicitud=None):
     sesion.utilizado_en = timezone.now()
     sesion.save()
     _evento(sesion, actor, 'VINCULACION')
+    from .ocr_documental import sincronizar_comparacion_ocr
+    sincronizar_comparacion_ocr(sesion.pk)
 
 
 def archivos_para_formulario(capturas, campos):
@@ -432,6 +436,8 @@ def purgar_sesiones_expiradas():
                 sesion.save()
                 _evento(sesion, None, 'EXPIRACION')
             purgadas = 0
+            from .ocr_documental import purgar_resultados
+            purgar_resultados(sesion.pk)
             for captura in sesion.capturas.filter(purgado_en__isnull=True):
                 captura.archivo.delete(save=False)
                 captura.activo = False
