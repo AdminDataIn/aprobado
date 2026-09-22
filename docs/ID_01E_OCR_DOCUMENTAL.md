@@ -75,6 +75,20 @@ SIGKILL/corte electrico no ejecuta finally: el operador debe revisar temporales
 abandonados solo cuando no haya workers activos; no borrar documentos originales.
 El usuario del worker requiere lectura del storage privado y escritura de temporales.
 
+## Validacion VPS confirmada
+
+Validacion comunicada por el responsable: PostgreSQL validado, Tesseract 5.3.4,
+`pytesseract==0.3.13`, `spa.traineddata` validado y OCR sintetico real probado.
+SHA256 del modelo validado:
+
+```text
+6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464
+```
+
+Esta evidencia no equivale a calibracion fisica ni a verificacion de identidad.
+Los tests locales pueden omitir PostgreSQL/motor real si no estan disponibles;
+eso no reemplaza ni repite la validacion VPS reportada.
+
 ## Preparacion VPS (sin instalar/desplegar desde este ticket)
 
 En el entorno de pruebas autorizado, con su venv y base clon:
@@ -104,11 +118,42 @@ No modificar ni reencolar en masa filas terminales para forzar reprocesamiento.
 No se ha medido precision, latencia, CPU/RAM del VPS: usar fixtures sinteticos y
 benchmark con concurrencia inicial 1 antes de aumentar trabajadores.
 
+## Worker OCR dedicado requerido en produccion
+
+El routing centralizado en `CELERY_TASK_ROUTES` envia exclusivamente
+`gestion_creditos.tasks.procesar_ocr_documental_task` a `ocr_documental`.
+La publicacion inicial, reintentos y `reencolar_ocr_documental` usan el mismo
+publicador y routing; no se fijan colas en los servicios.
+Las demas tareas conservan la cola default actual (`celery` en esta configuracion).
+
+Comando recomendado, desde el proyecto y con el venv/configuracion productivos:
+
+```sh
+celery -A aprobado_web worker \
+  --loglevel=info \
+  -Q ocr_documental \
+  --concurrency=1 \
+  -n ocr_documental@%h
+```
+
+El worker general debe continuar consumiendo exclusivamente su cola default;
+verificar su lista de colas y usar `-Q celery` si es necesario explicitarla.
+No debe suscribirse a `ocr_documental`. El worker OCR solo consume esa cola.
+Concurrencia inicial 1; cualquier aumento requiere medicion previa de CPU, RAM
+y latencia con carga representativa. El routing por si solo no arranca workers.
+Sin worker dedicado, los mensajes OCR permanecen pendientes en su cola.
+
+Al adoptar esta configuracion, comprobar si quedan mensajes OCR antiguos en la
+cola general: el routing no mueve mensajes ya publicados. No purgar esa cola,
+pues contiene otras tareas. Coordinar su drenaje antes de declarar aislamiento.
+No se crean/modifican servicios systemd ni se reinician procesos desde este ticket.
+
 ## Recuperacion y validacion
 
 ```sh
 python manage.py reencolar_ocr_documental --limite 100
 python manage.py test gestion_creditos.tests.test_ocr_documental gestion_creditos.tests.test_ocr_tesseract --verbosity 2
+python manage.py test gestion_creditos.tests.test_ocr_routing --verbosity 2
 python manage.py test gestion_creditos.tests.test_ocr_documental.OCRConcurrenciaPostgresTest --verbosity 2
 python manage.py test gestion_creditos.tests.test_captura_documental gestion_creditos.tests.test_capture_grant gestion_creditos.tests.test_documentos_privados --verbosity 1
 ```
@@ -118,13 +163,13 @@ de 60 s para evitar inundacion por comandos concurrentes. Si broker sigue caido,
 repetir despues del lease. No instala schedule Beat.
 Pruebas deterministas usan adaptador simulado; el test real se omite si no existe
 binario/spa/ruta de modelo configurada, con motivo explicito. Solo datos sinteticos.
-Validar en PostgreSQL las reservas, doble creacion, doble tarea y recuperacion.
+Conservar las pruebas PostgreSQL de reservas, doble creacion, doble tarea y recuperacion.
 Conservar regresiones de grant/CSRF, privacidad, Libranza y Prestadores.
 
 ## Pendientes de cierre
 
-Calibracion y ampliacion aprobada de layouts, runtime/modelo real en VPS, pruebas
-PostgreSQL, UAT Android y revision operativa. iPhone fue validado por el responsable
+Calibracion fisica y ampliacion aprobada de layouts, puesta en marcha/verificacion
+del worker dedicado, UAT Android y revision operativa. iPhone fue validado por el responsable
 para captura, no constituye validacion OCR real. UX OCR futura no implementada.
 Despues retomar Prestadores E2E, BRE-B V1/UAT restante y WhatsApp tras estabilizacion.
 BRE-B-ALERT-01 desplegado segun responsable, pendiente proximo reporte real;

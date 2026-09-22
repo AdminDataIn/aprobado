@@ -514,6 +514,10 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'America/Bogota'
 CELERY_ENABLE_UTC = False
 
+CELERY_TASK_ROUTES = {
+    'gestion_creditos.tasks.procesar_ocr_documental_task': {'queue': 'ocr_documental'},
+}
+
 # Configuración de Celery Beat (tareas programadas)
 if DJANGO_CELERY_BEAT_AVAILABLE:
     CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
