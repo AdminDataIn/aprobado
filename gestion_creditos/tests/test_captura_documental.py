@@ -621,6 +621,24 @@ class CapturaRetencionTest(CapturaFixture, TestCase):
 
 @skipUnless(connection.vendor == 'postgresql', 'Requiere PostgreSQL real en VPS.')
 class CapturaConcurrenciaPostgresTest(CapturaFixture, TransactionTestCase):
+    def test_task_y_comando_purga_simultaneos(self):
+        from io import StringIO
+        from django.core.management import call_command
+        from gestion_creditos.tasks import purgar_capturas_expiradas_task
+        self.completar()
+        Sesion.objects.filter(pk=self.sesion.pk).update(finalizado_en=timezone.now() - timedelta(days=4))
+        def purgar(n):
+            if n == 0:
+                resumen = purgar_capturas_expiradas_task.run()
+                if resumen['errores']:
+                    raise RuntimeError('Purga concurrente incompleta')
+            else:
+                call_command('purgar_capturas_expiradas', stdout=StringIO())
+        self.assertEqual(self.competir(purgar), ['OK', 'OK'])
+        self.assertEqual(self.sesion.eventos.filter(evento='PURGA_TEMPORALES').count(), 1)
+        self.assertEqual(self.sesion.eventos.filter(evento='RETENCION_FINALIZADA_VENCIDA').count(), 1)
+        self.assertEqual(self.sesion.capturas.filter(purgado_en__isnull=False).count(), 2)
+
     @override_settings(CAPTURA_DOCUMENTAL_FINALIZADA_RETENTION_HOURS=72)
     def test_purga_retencion_y_consumo_serializados(self):
         self.completar()

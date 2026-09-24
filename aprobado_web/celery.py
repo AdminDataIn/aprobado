@@ -41,6 +41,10 @@ app.conf.beat_schedule = {
 }
 
 app.conf.beat_schedule.update({
+    'purgar-capturas-documentales-expiradas': {
+        'task': 'gestion_creditos.tasks.purgar_capturas_expiradas_task',
+        'schedule': crontab(hour=3, minute=0),  # America/Bogota, daily maintenance.
+    },
     'enviar-resumen-mensual-pagador': {
         'task': 'gestion_creditos.tasks.enviar_resumen_mensual_pagador_task',
         'schedule': crontab(hour=8, minute=15),

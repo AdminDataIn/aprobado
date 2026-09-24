@@ -8,6 +8,46 @@
 
 **Proyecto:** Aprobado / Project_aprobado / WhatsApp Platform
 
+### APROBADO-03 P0-2.2 — Purga documental periodica (2026-09-23)
+
+- Implementado en codigo, sin commit/push/deploy. Se reutiliza app.conf.beat_schedule
+  en aprobado_web/celery.py y DatabaseScheduler cuando django_celery_beat esta
+  instalado. Este scheduler importa la entrada al iniciar; no se agrega cron,
+  systemd timer ni un segundo programador. La auditoria del VPS comunicada por el
+  operador confirmo que el comando no estaba programado anteriormente.
+- Entrada unica `purgar-capturas-documentales-expiradas`: diariamente a las 03:00,
+  crontab(hour=3, minute=0). TIME_ZONE y CELERY_TIMEZONE son America/Bogota;
+  CELERY_ENABLE_UTC=False. Se eligio antes de los horarios existentes 06:00, 08:00,
+  08:15 y 09:00, sin afirmar medicion de trafico productivo.
+- Tarea `gestion_creditos.tasks.purgar_capturas_expiradas_task` llama directamente
+  a purgar_sesiones_expiradas(con_resumen=True), sin shell/subprocess. Cola default
+  actual `celery`; no cambia el routing exclusivo OCR hacia `ocr_documental`.
+  `python manage.py purgar_capturas_expiradas` sigue disponible y usa el mismo
+  servicio; conserva su salida numerica de archivos purgados si no hay errores.
+- Retencion FINALIZADA no consumida: 72h configurables desde finalizado_en,
+  independiente del grant. La ejecucion diaria purga en la siguiente pasada tras
+  superar el umbral, no necesariamente al minuto 72h. UTILIZADA/vinculada permanece
+  protegida. Sin nuevos modelos, migraciones, cambios de credenciales ni finanzas.
+- El servicio conserva locks/transaccion por sesion; extrae esa operacion para
+  aislar fallos y continuar otras sesiones. No hay lock global. Un fallo individual
+  revierte su transaccion DB y queda reintentable en la proxima ejecucion; el storage
+  sigue sin ser transaccional, como antes, y los borrados parciales admiten reintento.
+- Log agregado: candidatos (sesiones seleccionadas), purgados (sesiones con archivos
+  u OCR purgados), omitidos (revalidacion/no trabajo), archivos_purgados y errores.
+  candidatos = purgados + omitidos + errores. Sin UUID, nombres, rutas, tokens ni
+  mensajes originales de excepciones. Errores por registro generan WARNING agregado;
+  errores globales generan ERROR y excepcion sanitizada. El comando manual comunica
+  error agregado al terminar un lote parcial, sin silenciarlo ni exponer PII.
+- Validacion SQLite: 111 pruebas, 99 OK y 12 omitidas PostgreSQL. Suites de purga
+  periodica, routing OCR, captura, CaptureGrant y OCR. Diez pruebas nuevas incluyen
+  horario diario/zona, cola, importacion DatabaseScheduler sin duplicados, delegacion,
+  logs seguros, idempotencia, rollback/reintento individual y concurrencia task/comando
+  (esta ultima pendiente en PostgreSQL). Sin Redis ni sleeps; hasher rapido limitado
+  al proceso de tests. check, makemigrations --check --dry-run y diff --check: OK.
+- Pendiente tras despliegue autorizado: confirmar Beat unico activo, entrada habilitada,
+  worker de cola celery y primer resumen operativo. No se ejecuto purga contra datos
+  locales/productivos, salvo fixtures temporales. No declara Prestadores E2E cerrado.
+
 ### APROBADO-03 P0-2.1 — Retencion de FINALIZADA sin consumir (2026-09-23)
 
 - Implementado localmente, sin commit/push/deploy. Sustituye la decision pendiente
@@ -17,9 +57,9 @@
 - Antiguedad estrictamente mayor al umbral desde `finalizado_en`: 71h59m y 72h
   exactas se conservan. No se infiere antiguedad de expira_en/creado_en si falta
   finalizado_en; ese caso anomalo requiere revision operativa, no borrado automatico.
-- El comando existente `python manage.py purgar_capturas_expiradas` incluye esta
-  politica. Requiere ejecucion periodica operativa; no se crea ni modifica cron,
-  Celery Beat o systemd, y no se ha verificado su programacion productiva.
+- Politica 72h implementada y automatizada en codigo mediante Celery Beat en P0-2.2
+  (03:00 America/Bogota). El comando `python manage.py purgar_capturas_expiradas`
+  sigue disponible para operacion manual. Activacion productiva pendiente de deploy.
 - Revalida bajo transaction.atomic/select_for_update: estado, umbral y ausencia de
   consumo/vinculacion. UTILIZADA, utilizado_en, credito asociado, evento VINCULACION
   o documento Prestadores con metadata_captura.sesion_id impiden la purga. El

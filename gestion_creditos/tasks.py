@@ -26,6 +26,22 @@ from .services.mora_notifications import procesar_alertas_mora_colaborador
 logger = logging.getLogger(__name__)
 
 
+@shared_task(name='gestion_creditos.tasks.purgar_capturas_expiradas_task', acks_late=True, ignore_result=True)
+def purgar_capturas_expiradas_task():
+    from .services.captura_documental import purgar_sesiones_expiradas
+    try:
+        resumen = purgar_sesiones_expiradas(con_resumen=True)
+    except Exception:
+        # Do not let Celery log storage paths, SQL parameters or document identifiers.
+        logger.error('PURGA_DOCUMENTAL_INTERRUMPIDA errores=1')
+        raise RuntimeError('Purga documental interrumpida; revisar disponibilidad y configuracion.') from None
+    registrar = logger.warning if resumen['errores'] else logger.info
+    registrar('PURGA_DOCUMENTAL candidatos=%s purgados=%s omitidos=%s archivos_purgados=%s errores=%s',
+              resumen['candidatos'], resumen['purgados'], resumen['omitidos'],
+              resumen['archivos_purgados'], resumen['errores'])
+    return resumen
+
+
 @shared_task(name='gestion_creditos.tasks.procesar_ocr_documental_task', acks_late=True, ignore_result=True)
 def procesar_ocr_documental_task(procesamiento_ocr_id):
     from .services.ocr_documental import procesar

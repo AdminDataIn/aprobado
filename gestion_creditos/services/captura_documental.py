@@ -433,47 +433,64 @@ def _evidencia_vinculada(sesion):
     return ContractorApplicationDocument.objects.filter(metadata_captura__sesion_id=str(sesion.pk)).exists()
 
 
-def purgar_sesiones_expiradas():
+def _purgar_sesion_expirada(pk, ahora, limite_finalizadas):
+    with transaction.atomic():
+        sesion = Sesion.objects.select_for_update().get(pk=pk)
+        if sesion.estado == Sesion.Estado.UTILIZADA or _evidencia_vinculada(sesion):
+            return 0, False
+        por_retencion = sesion.estado == Sesion.Estado.FINALIZADA
+        if por_retencion:
+            if not sesion.finalizado_en or sesion.finalizado_en >= limite_finalizadas:
+                return 0, False
+        elif sesion.expira_en > ahora:
+            return 0, False
+        if por_retencion:
+            _evento(sesion, None, 'RETENCION_FINALIZADA_VENCIDA')
+        if sesion.estado not in {Sesion.Estado.EXPIRADA, Sesion.Estado.REVOCADA}:
+            sesion.estado = Sesion.Estado.EXPIRADA
+            _invalidar_grant(sesion)
+            sesion.save()
+            _evento(sesion, None, 'EXPIRACION')
+        purgadas = 0
+        from .ocr_documental import purgar_resultados
+        ocr_purgado = sesion.procesamientos_ocr.filter(purgado_en__isnull=True).exists()
+        if ocr_purgado:
+            purgar_resultados(sesion.pk)
+        for captura in sesion.capturas.filter(purgado_en__isnull=True):
+            captura.archivo.delete(save=False)
+            captura.activo = False
+            captura.purgado_en = ahora
+            captura.save(update_fields=['activo', 'purgado_en'])
+            purgadas += 1
+        if purgadas:
+            _evento(sesion, None, 'PURGA_TEMPORALES')
+        return purgadas, bool(purgadas or ocr_purgado)
+
+
+def purgar_sesiones_expiradas(*, con_resumen=False):
     """Purge abandoned captures and completed evidence past retention, never linked evidence."""
     horas = int(settings.CAPTURA_DOCUMENTAL_FINALIZADA_RETENTION_HOURS)
     if horas <= 0:
         raise ImproperlyConfigured('CAPTURA_DOCUMENTAL_FINALIZADA_RETENTION_HOURS debe ser positivo.')
     ahora = timezone.now()
     limite_finalizadas = ahora - timedelta(hours=horas)
-    total = 0
+    resumen = dict(candidatos=0, purgados=0, omitidos=0, archivos_purgados=0, errores=0)
     abandonadas = Q(expira_en__lte=ahora) & ~Q(estado__in=[Sesion.Estado.FINALIZADA, Sesion.Estado.UTILIZADA])
     finalizadas = Q(estado=Sesion.Estado.FINALIZADA, finalizado_en__lt=limite_finalizadas,
                    utilizado_en__isnull=True, credito__isnull=True)
     ids = Sesion.objects.filter(abandonadas | finalizadas).values_list('pk', flat=True)
     for pk in ids.iterator():
-        with transaction.atomic():
-            sesion = Sesion.objects.select_for_update().get(pk=pk)
-            if sesion.estado == Sesion.Estado.UTILIZADA or _evidencia_vinculada(sesion):
-                continue
-            por_retencion = sesion.estado == Sesion.Estado.FINALIZADA
-            if por_retencion:
-                if not sesion.finalizado_en or sesion.finalizado_en >= limite_finalizadas:
-                    continue
-            elif sesion.expira_en > ahora:
-                continue
-            if por_retencion:
-                _evento(sesion, None, 'RETENCION_FINALIZADA_VENCIDA')
-            if sesion.estado not in {Sesion.Estado.EXPIRADA, Sesion.Estado.REVOCADA}:
-                sesion.estado = Sesion.Estado.EXPIRADA
-                _invalidar_grant(sesion)
-                sesion.save()
-                _evento(sesion, None, 'EXPIRACION')
-            purgadas = 0
-            from .ocr_documental import purgar_resultados
-            if sesion.procesamientos_ocr.filter(purgado_en__isnull=True).exists():
-                purgar_resultados(sesion.pk)
-            for captura in sesion.capturas.filter(purgado_en__isnull=True):
-                captura.archivo.delete(save=False)
-                captura.activo = False
-                captura.purgado_en = ahora
-                captura.save(update_fields=['activo', 'purgado_en'])
-                total += 1
-                purgadas += 1
-            if purgadas:
-                _evento(sesion, None, 'PURGA_TEMPORALES')
-    return total
+        resumen['candidatos'] += 1
+        try:
+            archivos, purgada = _purgar_sesion_expirada(pk, ahora, limite_finalizadas)
+        except Exception:
+            # The per-session transaction has rolled back; continue without exposing its exception.
+            resumen['errores'] += 1
+            continue
+        resumen['archivos_purgados'] += archivos
+        resumen['purgados' if purgada else 'omitidos'] += 1
+    if con_resumen:
+        return resumen
+    if resumen['errores']:
+        raise RuntimeError('Purga documental incompleta: errores=%s.' % resumen['errores'])
+    return resumen['archivos_purgados']
