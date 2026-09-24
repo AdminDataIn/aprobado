@@ -210,6 +210,13 @@ def _hash_documento(numero_documento):
 
 def _validar_evidencia_analisis(*, request, form, solicitud):
     archivo = form.cleaned_data.get('contrato_actual')
+    return _evidencia_contractual_vigente(
+        request=request, archivo=archivo,
+        numero_documento=form.cleaned_data.get('numero_documento'), solicitud=solicitud,
+    )
+
+
+def _evidencia_contractual_vigente(*, request, archivo, numero_documento, solicitud):
     if archivo is None and solicitud is not None:
         contrato = solicitud.documentos.filter(
             tipo_documento=ContractorApplicationDocument.TipoDocumento.CONTRATO,
@@ -218,8 +225,11 @@ def _validar_evidencia_analisis(*, request, form, solicitud):
     if archivo is None:
         return {}, 'Carga y analiza el contrato antes de registrar la solicitud.'
 
-    hash_archivo = _hash_archivo(archivo)
-    hash_documento = _hash_documento(form.cleaned_data.get('numero_documento'))
+    try:
+        hash_archivo = _hash_archivo(archivo)
+    except OSError:
+        return {}, 'El archivo del contrato no esta disponible. Cargalo y analizalo nuevamente.'
+    hash_documento = _hash_documento(numero_documento)
     evidencia_sesion = request.session.get(CLAVE_SESION_ANALISIS_CONTRATO) or {}
     evidencia_modelo = {}
     if solicitud is not None and solicitud.metadata_analisis_contractual:
@@ -293,6 +303,57 @@ def _metadata_documentos_desde_sesion(sesion):
     return metadata
 
 
+def _contexto_continuidad_solicitud(request, form, solicitud, *, paso_error_general=4,
+                                   sesion_documental=None):
+    campos_por_paso = {
+        1: ('tipo_documento', 'numero_documento', 'nombres', 'apellidos',
+            'celular', 'correo', 'direccion'),
+        2: (*form.MAPA_DOCUMENTOS, 'autoriza_analisis_contractual_asistido'),
+        3: ('empresa', 'escenario_credito'),
+    }
+    pasos = {campo: paso for paso, campos in campos_por_paso.items() for campo in campos}
+    errores = []
+    for campo, mensajes in form.errors.items():
+        general = campo == '__all__'
+        paso = paso_error_general if general else pasos.get(campo, 4)
+        destino = 'resumen-errores-solicitud' if general else form[campo].id_for_label
+        if campo in ('documento_identidad_frontal', 'documento_identidad_reverso'):
+            destino = 'errores-captura-solicitud'
+        elif campo == 'empresa':
+            destino = 'empresa_busqueda_visual'
+        for mensaje in mensajes:
+            errores.append({'paso': paso, 'destino': destino, 'mensaje': mensaje,
+                            'campo': 'Solicitud' if general else form[campo].label})
+    errores.sort(key=lambda error: error['paso'])
+
+    existentes = set(solicitud.documentos.values_list('tipo_documento', flat=True)) if solicitud else set()
+    documentos_guardados = []
+    for campo, tipo in form.MAPA_DOCUMENTOS.items():
+        if tipo in existentes:
+            documentos_guardados.append(form[campo].label)
+    if sesion_documental:
+        for campo in ('documento_identidad_frontal', 'documento_identidad_reverso'):
+            form.fields[campo].widget.attrs['data-existing'] = 'true'
+
+    # Only a stored contract can survive a failed POST without reselecting a file.
+    analisis_vigente = False
+    if solicitud and 'contrato_actual' not in request.FILES:
+        _, error = _evidencia_contractual_vigente(
+            request=request, archivo=None, numero_documento=form['numero_documento'].value(),
+            solicitud=solicitud,
+        )
+        analisis_vigente = not error
+    return {
+        'paso_activo': errores[0]['paso'] if errores else 1,
+        'errores_solicitud': errores,
+        'documentos_guardados': documentos_guardados,
+        'captura_recuperada': bool(sesion_documental),
+        'archivos_sin_guardar': any(campo in request.FILES for campo in
+                                   ('contrato_actual', 'certificado_bancario')),
+        'analisis_contractual_vigente': analisis_vigente,
+    }
+
+
 @login_required
 @transaction.atomic
 def solicitar_prestador_view(request):
@@ -304,6 +365,8 @@ def solicitar_prestador_view(request):
         construir_version_datos(solicitud_existente)[0]
         if solicitud_existente is not None else ''
     )
+    sesion_documental = None
+    paso_error_general = 4
 
     if request.method == 'POST':
         from gestion_creditos.services.captura_documental import preparar_identidad_formulario, consumir_documentos
@@ -323,6 +386,7 @@ def solicitar_prestador_view(request):
         valido = form.is_valid()
         if error_captura:
             form.add_error(None, error_captura)
+            paso_error_general = 2
         if valido and not error_captura:
             evidencia, error_analisis = _validar_evidencia_analisis(
                 request=request,
@@ -331,6 +395,7 @@ def solicitar_prestador_view(request):
             )
             if error_analisis:
                 form.add_error(None, error_analisis)
+                paso_error_general = 2
             if not error_analisis:
                 with transaction.atomic():
                     solicitud = form.save(commit=False)
@@ -338,7 +403,6 @@ def solicitar_prestador_view(request):
                     solicitud.usuario = request.user
                     if not solicitud.pk:
                         solicitud.estado = ContractorApplication.Estado.DOCUMENTOS_PENDIENTES
-                    _aplicar_evidencia_analisis(solicitud, evidencia)
                     solicitud.save()
                     guardar_documentos_formulario(
                         solicitud=solicitud,
@@ -346,6 +410,8 @@ def solicitar_prestador_view(request):
                         usuario=request.user,
                         metadata_documentos=_metadata_documentos_desde_sesion(sesion_documental),
                     )
+                    _aplicar_evidencia_analisis(solicitud, evidencia)
+                    solicitud.save()
                     if sesion_documental:
                         consumir_documentos(sesion=sesion_documental, actor=request.user, solicitud=solicitud)
                     actualizar_estado_documental(solicitud)
@@ -377,6 +443,10 @@ def solicitar_prestador_view(request):
             'form': form,
             'solicitud': solicitud_existente,
             'allow_id_upload_fallback': settings.CONTRACTORS_ALLOW_ID_UPLOAD_FALLBACK,
+            **_contexto_continuidad_solicitud(
+                request, form, solicitud_existente, paso_error_general=paso_error_general,
+                sesion_documental=sesion_documental,
+            ),
         },
     )
 

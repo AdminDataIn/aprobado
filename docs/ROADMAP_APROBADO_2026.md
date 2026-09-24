@@ -8,6 +8,29 @@
 
 **Proyecto:** Aprobado / Project_aprobado / WhatsApp Platform
 
+### APROBADO-03 P0-1 — Continuidad del formulario (2026-09-23)
+
+- Implementado en local, sin commit ni despliegue: el servidor selecciona el primer
+  paso con error; resumen visible y enlaces a los campos, sin errores de identidad
+  dentro de bloques ocultos. Se conservan los valores POST y el ID de la solicitud.
+- Documentos persistidos se muestran como guardados. Los PDF no persistidos deben
+  seleccionarse nuevamente; no se simula su recuperacion. La captura ya recibida
+  conserva su referencia, con las reglas de vigencia actuales sin modificaciones.
+- El estado visual del analisis se hidrata desde evidencia backend contrastada con
+  el contrato guardado, documento y vigencia. El backend mantiene la validacion final.
+- Se guarda primero el documento definitivo y despues su analisis validado. Un
+  reemplazo posterior sigue invalidando el analisis anterior. El redirect exitoso
+  conserva `/simular/?solicitud_id=<id>`.
+- Validacion local SQLite: 150 tests de portal, validacion contractual, revision
+  manual y captura; 146 OK y 4 omitidos por requerir PostgreSQL. Incluye 11 nuevos
+  tests de continuidad (con subcasos), rollback y ownership. Hasher rapido usado
+  exclusivamente en el proceso de tests, sin cambiar configuracion productiva.
+- `manage.py check`, `makemigrations --check --dry-run` y `git diff --check`: OK.
+  Sin migraciones nuevas. PostgreSQL requiere validacion posterior en el clon:
+  no hay servidor PostgreSQL local ni daemon Docker operativo en este equipo.
+- No cierra Prestadores E2E: siguen pendientes TTL/retencion documental, retorno
+  movil, validaciones de datos, conexion de identidad y UAT con proveedores reales.
+
 ---
 
 ## 1. Propósito

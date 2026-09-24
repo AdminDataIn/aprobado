@@ -5,6 +5,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
 from datetime import timedelta
+import hashlib
 import tempfile
 from decimal import Decimal
 from unittest.mock import patch
@@ -406,6 +407,202 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Debes elegir una empresa valida de la lista.')
         self.assertEqual(ContractorApplication.objects.count(), 0)
+
+    def test_continuidad_abre_primer_paso_con_error_y_preserva_valores(self):
+        self.client.force_login(self.usuario)
+        casos = (
+            ('correo', 'invalido', 1),
+            ('certificado_bancario', None, 2),
+            ('empresa', '', 3),
+            ('fecha_fin_contrato', '2025-01-01', 4),
+        )
+        for campo, valor, paso in casos:
+            with self.subTest(campo=campo):
+                payload = self._payload_solicitud_con_documentos()
+                if valor is None:
+                    payload.pop(campo)
+                else:
+                    payload[campo] = valor
+                response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.context['paso_activo'], paso)
+                self.assertContains(response, f'class="form-step active" id="step-{paso}"')
+                self.assertContains(response, 'id="resumen-errores-solicitud"')
+                self.assertContains(response, f'data-error-step="{paso}"')
+                for mensaje in response.context['form'].errors[campo]:
+                    self.assertContains(response, mensaje)
+                for nombre in ('nombres', 'direccion', 'cargo'):
+                    self.assertEqual(response.context['form'][nombre].value(), payload[nombre])
+                formulario = response.context['form']
+                self.assertEqual(formulario.data['valor_total_contrato'], payload['valor_total_contrato'])
+                self.assertEqual(formulario.fields['valor_total_contrato'].clean(
+                    formulario['valor_total_contrato'].value()), Decimal(payload['valor_total_contrato']))
+                self.assertContains(response, 'Los PDF seleccionados en este intento no se guardaron.')
+                self.assertFalse(response.context['analisis_contractual_vigente'])
+                self.assertEqual(ContractorApplication.objects.count(), 0)
+
+    def test_continuidad_errores_multiples_orden_cronologico(self):
+        self.client.force_login(self.usuario)
+        payload = self._payload_solicitud_con_documentos()
+        payload.update(correo='invalido', empresa='', fecha_fin_contrato='2025-01-01')
+        payload.pop('certificado_bancario')
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.context['paso_activo'], 1)
+        pasos = [error['paso'] for error in response.context['errores_solicitud']]
+        self.assertEqual(pasos, sorted(pasos))
+        self.assertEqual(set(pasos), {1, 2, 3, 4})
+
+    def test_continuidad_captura_invalida_visible_fuera_del_bloque_hidden(self):
+        self.client.force_login(self.usuario)
+        payload = self._payload_solicitud_con_documentos()
+        payload.pop('sesion_documental_id')
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.context['paso_activo'], 2)
+        html = response.content.decode()
+        visible, oculto = html.split('<div hidden>', 1)
+        self.assertIn('id="errores-captura-solicitud"', visible)
+        for campo in ('documento_identidad_frontal', 'documento_identidad_reverso'):
+            for error in response.context['form'].errors[campo]:
+                self.assertIn(error, visible)
+                self.assertNotIn(error, oculto.split('</section>', 1)[0])
+        self.assertContains(response, 'Completa la sesion documental de tu cuenta antes de continuar.')
+
+    def test_continuidad_contrato_sin_analisis_abre_documentos(self):
+        self.client.force_login(self.usuario)
+        payload = self._payload_solicitud_con_documentos()
+        session = self.client.session
+        session.pop('contractors_analisis_contrato_v1')
+        session.save()
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.context['paso_activo'], 2)
+        self.assertTrue(response.context['form'].non_field_errors())
+        self.assertFalse(response.context['analisis_contractual_vigente'])
+
+    def _crear_solicitud_completa_continuidad(self):
+        self.client.force_login(self.usuario)
+        response = self.client.post('/solicitar/', self._payload_solicitud_con_documentos(),
+                                    HTTP_HOST=self.host)
+        solicitud = ContractorApplication.objects.get()
+        self.assertEqual(response['Location'], f'/simular/?solicitud_id={solicitud.pk}')
+        return solicitud
+
+    def test_continuidad_evidencia_guardada_get_y_post_invalido_sin_reseleccionar(self):
+        solicitud = self._crear_solicitud_completa_continuidad()
+        url = f'/solicitar/?solicitud_id={solicitud.pk}'
+        response = self.client.get(url, HTTP_HOST=self.host)
+        self.assertTrue(response.context['analisis_contractual_vigente'])
+        payload = self._payload_solicitud()
+        payload.update(solicitud_id=str(solicitud.pk), empresa='')
+        response = self.client.post(url, payload, HTTP_HOST=self.host)
+        self.assertEqual(response.context['paso_activo'], 3)
+        self.assertTrue(response.context['analisis_contractual_vigente'])
+        self.assertContains(response, 'data-analysis-valid="true"')
+        self.assertContains(response, 'El análisis del contrato guardado sigue vigente.')
+        self.assertEqual(len(response.context['documentos_guardados']), 4)
+        self.assertContains(response, 'data-documentos-guardados')
+        self.assertFalse(response.context['archivos_sin_guardar'])
+        self.assertContains(response, f'name="solicitud_id" value="{solicitud.pk}"')
+        for campo in SolicitudPrestadorForm.MAPA_DOCUMENTOS:
+            self.assertEqual(response.context['form'].fields[campo].widget.attrs['data-existing'], 'true')
+        payload['empresa'] = self.empresa.pk
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response['Location'], f'/simular/?solicitud_id={solicitud.pk}')
+        self.assertEqual(ContractorApplication.objects.count(), 1)
+        self.assertEqual(solicitud.documentos.count(), 4)
+
+    def test_continuidad_reintento_nuevo_conserva_captura_sin_crear_dos_solicitudes(self):
+        self.client.force_login(self.usuario)
+        payload = self._payload_solicitud_con_documentos()
+        sesion_id = payload['sesion_documental_id']
+        payload['empresa'] = ''
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertTrue(response.context['captura_recuperada'])
+        self.assertContains(response, f'name="sesion_documental_id" value="{sesion_id}"')
+        self.assertEqual(ContractorApplication.objects.count(), 0)
+        payload = self._payload_solicitud_con_documentos()
+        payload['sesion_documental_id'] = sesion_id
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        solicitud = ContractorApplication.objects.get()
+        self.assertEqual(response['Location'], f'/simular/?solicitud_id={solicitud.pk}')
+
+    def test_continuidad_hidratacion_rechaza_evidencia_vencida_bloqueada_o_documento_distinto(self):
+        solicitud = self._crear_solicitud_completa_continuidad()
+        for cambio in ('vencida', 'bloqueada', 'documento'):
+            with self.subTest(cambio=cambio):
+                solicitud.fecha_analisis_contractual = timezone.now()
+                solicitud.estado_analisis_contractual = 'CON_ADVERTENCIAS'
+                solicitud.numero_documento = '123456789'
+                if cambio == 'vencida':
+                    solicitud.fecha_analisis_contractual -= timedelta(hours=2)
+                elif cambio == 'bloqueada':
+                    solicitud.estado_analisis_contractual = 'BLOQUEADO'
+                else:
+                    solicitud.numero_documento = '999999999'
+                solicitud.save()
+                response = self.client.get(f'/solicitar/?solicitud_id={solicitud.pk}', HTTP_HOST=self.host)
+                self.assertFalse(response.context['analisis_contractual_vigente'])
+
+    def test_continuidad_reemplazo_y_analisis_mismo_post_conserva_hash_y_simulador(self):
+        solicitud = self._crear_solicitud_completa_continuidad()
+        contenido = b'%PDF-1.4 version nueva analizada'
+        self._analizar_contrato_transitorio(contenido)
+        payload = self._payload_solicitud()
+        payload.update(solicitud_id=str(solicitud.pk), contrato_actual=SimpleUploadedFile('nuevo.pdf', contenido))
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response['Location'], f'/simular/?solicitud_id={solicitud.pk}')
+        solicitud.refresh_from_db()
+        self.assertIn(solicitud.estado_analisis_contractual, {'COMPLETADO', 'CON_ADVERTENCIAS', 'NO_DISPONIBLE'})
+        self.assertEqual(solicitud.metadata_analisis_contractual['archivo_hash_sha256'], hashlib.sha256(contenido).hexdigest())
+        contrato = solicitud.documentos.get(tipo_documento='CONTRATO')
+        with contrato.archivo.open('rb') as archivo:
+            self.assertEqual(archivo.read(), contenido)
+        response = self.client.get(response['Location'], HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['solicitud'].pk, solicitud.pk)
+        self.assertTrue(response.context['analisis_habilita_simulacion'])
+        self.assertTrue(response.context['puede_registrar'])
+        self.assertEqual(ContractorApplication.objects.count(), 1)
+        self.client.force_login(self.otro_usuario)
+        response = self.client.get(f'/simular/?solicitud_id={solicitud.pk}', HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 404)
+
+    def test_continuidad_reemplazo_posterior_invalida_analisis_anterior(self):
+        solicitud = self._crear_solicitud_completa_continuidad()
+        response = self._cargar_documento(solicitud, 'CONTRATO', 'posterior.pdf', b'%PDF-1.4 otra version')
+        self.assertEqual(response.status_code, 302)
+        solicitud.refresh_from_db()
+        self.assertEqual(solicitud.estado_analisis_contractual, 'NO_SOLICITADO')
+        self.assertEqual(solicitud.metadata_analisis_contractual, {})
+        self.assertEqual(solicitud.estado, 'EVALUACION_PENDIENTE')
+
+    def test_continuidad_reemplazo_fallido_no_simula_persistencia_ni_analisis_vigente(self):
+        solicitud = self._crear_solicitud_completa_continuidad()
+        contrato = solicitud.documentos.get(tipo_documento='CONTRATO')
+        archivo_anterior = contrato.archivo.name
+        payload = self._payload_solicitud()
+        payload.update(solicitud_id=str(solicitud.pk), empresa='',
+                       contrato_actual=SimpleUploadedFile('nuevo.pdf', b'%PDF-1.4 pendiente'))
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertFalse(response.context['analisis_contractual_vigente'])
+        self.assertTrue(response.context['archivos_sin_guardar'])
+        contrato.refresh_from_db()
+        self.assertEqual(contrato.archivo.name, archivo_anterior)
+
+    def test_continuidad_rollback_si_falla_vinculacion_analisis_tras_documentos(self):
+        solicitud = self._crear_solicitud_completa_continuidad()
+        metadata_anterior = solicitud.metadata_analisis_contractual
+        archivo_anterior = solicitud.documentos.get(tipo_documento='CONTRATO').archivo.name
+        contenido = b'%PDF-1.4 rollback'
+        self._analizar_contrato_transitorio(contenido)
+        payload = self._payload_solicitud()
+        payload.update(solicitud_id=str(solicitud.pk), contrato_actual=SimpleUploadedFile('nuevo.pdf', contenido))
+        with patch('contractors.views._aplicar_evidencia_analisis', side_effect=RuntimeError('fallo controlado')):
+            with self.assertRaises(RuntimeError):
+                self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        solicitud.refresh_from_db()
+        self.assertEqual(solicitud.metadata_analisis_contractual, metadata_anterior)
+        self.assertEqual(solicitud.documentos.get(tipo_documento='CONTRATO').archivo.name, archivo_anterior)
+        self.assertEqual(ContractorApplication.objects.count(), 1)
 
     def test_confirmacion_compacta_empresa_conserva_select_real(self):
         self.client.force_login(self.usuario)

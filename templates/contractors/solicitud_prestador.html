@@ -22,22 +22,22 @@
         </div>
         <div class="step-item">
           <div class="step-content">
-            <div class="step-number inactive" id="step-indicator-2">2</div>
-            <div class="step-name inactive">Documentos</div>
+            <div class="step-number {% if paso_activo >= 2 %}active{% else %}inactive{% endif %}" id="step-indicator-2">2</div>
+            <div class="step-name {% if paso_activo >= 2 %}active{% else %}inactive{% endif %}">Documentos</div>
           </div>
           <div class="step-connector"></div>
         </div>
         <div class="step-item">
           <div class="step-content">
-            <div class="step-number inactive" id="step-indicator-3">3</div>
-            <div class="step-name inactive">Empresa contratante</div>
+            <div class="step-number {% if paso_activo >= 3 %}active{% else %}inactive{% endif %}" id="step-indicator-3">3</div>
+            <div class="step-name {% if paso_activo >= 3 %}active{% else %}inactive{% endif %}">Empresa contratante</div>
           </div>
           <div class="step-connector"></div>
         </div>
         <div class="step-item">
           <div class="step-content">
-            <div class="step-number inactive" id="step-indicator-4">4</div>
-            <div class="step-name inactive">Información contractual / Confirmación</div>
+            <div class="step-number {% if paso_activo >= 4 %}active{% else %}inactive{% endif %}" id="step-indicator-4">4</div>
+            <div class="step-name {% if paso_activo >= 4 %}active{% else %}inactive{% endif %}">Información contractual / Confirmación</div>
           </div>
         </div>
       </div>
@@ -49,17 +49,29 @@
         enctype="multipart/form-data"
         class="formulario-prestador"
         id="formularioPrestador"
+        data-active-step="{{ paso_activo }}"
+        data-analysis-valid="{{ analisis_contractual_vigente|yesno:'true,false' }}"
         data-analysis-url="{% url 'contractors:analizar_contrato_temporal' %}"
         data-allow-id-upload-fallback="{% if allow_id_upload_fallback %}true{% else %}false{% endif %}"
         novalidate
       >
         {% csrf_token %}
         {% if solicitud %}<input type="hidden" name="solicitud_id" value="{{ solicitud.id|unlocalize }}">{% endif %}
-        {% if form.non_field_errors %}
-          <div class="alerta">{{ form.non_field_errors }}</div>
+        {% if errores_solicitud %}
+          <div class="alerta" id="resumen-errores-solicitud" role="alert" tabindex="-1">
+            <strong>No pudimos continuar. Revisa los siguientes datos; conservamos lo que escribiste.</strong>
+            <ul>
+              {% for error in errores_solicitud %}
+                <li><a href="#{{ error.destino }}" data-error-step="{{ error.paso }}" data-error-target="{{ error.destino }}">{{ error.campo }}: {{ error.mensaje }}</a></li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+        {% if archivos_sin_guardar %}
+          <p class="alerta">Los PDF seleccionados en este intento no se guardaron. Vuelve a seleccionarlos para enviarlos; si reemplazabas un documento, la versión anterior sigue guardada.</p>
         {% endif %}
 
-        <div class="form-step active" id="step-1" data-step="1">
+        <div class="form-step{% if paso_activo == 1 %} active{% endif %}" id="step-1" data-step="1">
           <h2 class="step-title">Información personal</h2>
           <p class="form-helper-text">Usaremos estos datos para identificarte y mantener trazabilidad de tu solicitud.</p>
           <div class="form-grid">
@@ -105,12 +117,23 @@
           </div>
         </div>
 
-        <div class="form-step" id="step-2" data-step="2">
+        <div class="form-step{% if paso_activo == 2 %} active{% endif %}" id="step-2" data-step="2">
           <h2 class="step-title">Documentos obligatorios</h2>
           <p class="form-helper-text">Captura tu cédula y carga los documentos requeridos para validar tu solicitud.</p>
+          {% if documentos_guardados %}
+            <div class="alerta" data-documentos-guardados>
+              <strong>Documentos guardados. No necesitas volver a seleccionarlos:</strong>
+              <ul>{% for documento in documentos_guardados %}<li>{{ documento }}</li>{% endfor %}</ul>
+            </div>
+          {% endif %}
+          {% if captura_recuperada %}<p role="status">Ambas caras de tu cédula están recibidas y disponibles para este envío.</p>{% endif %}
           <div class="document-flow">
             <section class="document-section identity-document-section">
               {% include 'gestion_creditos/components/captura_handoff.html' with producto='PRESTADORES' %}
+              <div id="errores-captura-solicitud" tabindex="-1">
+                {{ form.documento_identidad_frontal.errors }}
+                {{ form.documento_identidad_reverso.errors }}
+              </div>
               <div hidden>
               <h3>Cédula</h3>
               <div class="identity-document-rows">
@@ -128,7 +151,6 @@
               </div>
               <input type="hidden" name="origen_documento_identidad_frontal" id="origen_documento_identidad_frontal" value="">
               {{ form.documento_identidad_frontal }}
-              {{ form.documento_identidad_frontal.errors }}
               <div class="document-compact-status" id="id_documento_identidad_frontal_status">
                 <span class="status-icon">i</span>
                 <span class="status-value">Sin cargar</span>
@@ -149,7 +171,6 @@
               </div>
               <input type="hidden" name="origen_documento_identidad_reverso" id="origen_documento_identidad_reverso" value="">
               {{ form.documento_identidad_reverso }}
-              {{ form.documento_identidad_reverso.errors }}
               <div class="document-compact-status" id="id_documento_identidad_reverso_status">
                 <span class="status-icon">i</span>
                 <span class="status-value">Sin cargar</span>
@@ -211,7 +232,7 @@
                   disabled
                 >Analizar contrato</button>
                 <span class="contract-analysis-spinner" id="contract_analysis_spinner" aria-hidden="true" hidden></span>
-                <span class="contract-ai-status" id="contract_ai_status" aria-live="polite">Carga el contrato y autoriza el análisis para continuar.</span>
+                <span class="contract-ai-status" id="contract_ai_status" aria-live="polite">{% if analisis_contractual_vigente %}El análisis del contrato guardado sigue vigente. Revisa y confirma los datos.{% else %}Carga el contrato y autoriza el análisis para continuar.{% endif %}</span>
               </div>
               <div id="contract_ai_result" class="contract-analysis-result" aria-live="polite"></div>
             </section>
@@ -222,7 +243,7 @@
           </div>
         </div>
 
-        <div class="form-step" id="step-3" data-step="3">
+        <div class="form-step{% if paso_activo == 3 %} active{% endif %}" id="step-3" data-step="3">
           <h2 class="step-title">Empresa contratante</h2>
           <p class="form-helper-text">Busca y selecciona una empresa existente en Aprobado. No se crean empresas desde este portal.</p>
           <div class="form-grid">
@@ -251,7 +272,7 @@
           </div>
         </div>
 
-        <div class="form-step" id="step-4" data-step="4">
+        <div class="form-step{% if paso_activo == 4 %} active{% endif %}" id="step-4" data-step="4">
           <h2 class="step-title">Información contractual / Confirmación</h2>
           <p class="form-helper-text">Completa o corrige la información base de tu contrato. Estos datos serán revisados antes de cualquier decisión.</p>
           <div class="form-grid">
@@ -409,7 +430,7 @@
     let archivoCapturado = null;
     let urlPreviewCamara = '';
     let datosSugeridosContrato = {};
-    let analisisContratoValido = false;
+    let analisisContratoValido = formulario.dataset.analysisValid === 'true';
     let analisisContratoEnCurso = false;
 
     function mostrarPaso(numero) {
@@ -1028,6 +1049,22 @@
       });
     });
     actualizarBotonAnalisis();
+    function enfocarError(enlace) {
+      mostrarPaso(Number(enlace.dataset.errorStep));
+      const destino = document.getElementById(enlace.dataset.errorTarget);
+      const visible = destino && destino.getClientRects().length && !destino.closest('[hidden]');
+      const objetivo = visible ? destino : document.getElementById('resumen-errores-solicitud');
+      if (objetivo) {
+        objetivo.focus({preventScroll: true});
+        objetivo.scrollIntoView({block: 'center', behavior: 'smooth'});
+      }
+    }
+    const enlacesError = Array.from(formulario.querySelectorAll('[data-error-step]'));
+    enlacesError.forEach((enlace) => enlace.addEventListener('click', function (event) {
+      event.preventDefault();
+      enfocarError(enlace);
+    }));
+    if (enlacesError.length) enfocarError(enlacesError[0]);
   });
 </script>
 {% endblock %}
