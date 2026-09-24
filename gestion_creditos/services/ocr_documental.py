@@ -81,8 +81,6 @@ def asegurar_procesamiento(sesion_id):
 def _vigente(p, sesion):
     if not p.vigente or p.purgado_en or sesion.estado not in {'FINALIZADA', 'UTILIZADA'}:
         return False
-    if sesion.estado != 'UTILIZADA' and sesion.expira_en <= timezone.now():
-        return False
     if sesion.estado == 'UTILIZADA':
         lookup = {'credito_id': sesion.credito_id} if sesion.producto == 'LIBRANZA' else {'solicitud_id': sesion.solicitud_id}
         latest = Sesion.objects.filter(**lookup, estado='UTILIZADA').order_by('-utilizado_en', '-creado_en', '-pk').first()

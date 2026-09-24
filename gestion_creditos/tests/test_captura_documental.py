@@ -67,6 +67,86 @@ class CapturaFixture:
 
 @override_settings(ALLOWED_HOSTS=['testserver', 'localhost', 'contratistas.localhost'])
 class CapturaDocumentalTest(CapturaFixture, TestCase):
+    def test_finalizada_sobrevive_ttl_lectura_consumo_y_purga(self):
+        for producto in ('LIBRANZA', 'PRESTADORES'):
+            for vencida in (False, True):
+                with self.subTest(producto=producto, vencida=vencida):
+                    sesion = sesion_finalizada(self.usuario, producto)
+                    if vencida:
+                        Sesion.objects.filter(pk=sesion.pk).update(expira_en=timezone.now() - timedelta(days=1))
+                    params = {'sesion_id': sesion.pk, 'actor': self.usuario, 'producto': producto}
+                    self.assertEqual(servicio.estado_publico(**params)['estado'], 'FINALIZADA')
+                    servicio.purgar_sesiones_expiradas()
+                    with transaction.atomic():
+                        actual, capturas = servicio.obtener_documentos_finalizados(**params)
+                        self.assertEqual(len(capturas), 2)
+                        self.assertTrue(all(c.archivo.storage.exists(c.archivo.name) for c in capturas.values()))
+                        destino = ({'credito': Credito.objects.create(usuario=self.usuario, linea='LIBRANZA',
+                                     monto_solicitado=1000000, plazo_solicitado=3)} if producto == 'LIBRANZA'
+                                   else {'solicitud': self.solicitud()})
+                        servicio.consumir_documentos(sesion=actual, actor=self.usuario, **destino)
+                    actual.refresh_from_db()
+                    with transaction.atomic(), self.assertRaises(ValidationError):
+                        servicio.consumir_documentos(sesion=actual, actor=self.usuario, **destino)
+                    servicio.purgar_sesiones_expiradas()
+                    self.assertFalse(sesion.capturas.filter(purgado_en__isnull=False).exists())
+
+    def test_rechazo_tardio_no_expira_finalizada_ni_reactiva_credenciales(self):
+        self.completar()
+        Sesion.objects.filter(pk=self.sesion.pk).update(expira_en=timezone.now() - timedelta(days=1))
+        with self.assertRaises(ValidationError):
+            servicio.regenerar_enlace(**self.params)
+        with self.assertRaises(ValidationError):
+            self.cargar()
+        self.sesion.refresh_from_db()
+        self.assertEqual(self.sesion.estado, 'FINALIZADA')
+        self.assertFalse(self.sesion.eventos.filter(evento='EXPIRACION').exists())
+        servicio.finalizar_sesion(**self.params, vinculo='browser')
+        self.assertEqual(self.sesion.eventos.filter(evento='FINALIZACION').count(), 1)
+        servicio.revocar_sesion(**self.params)
+        with transaction.atomic(), self.assertRaises(ValidationError):
+            servicio.obtener_documentos_finalizados(**self.params)
+        self.assertEqual(servicio.purgar_sesiones_expiradas(), 2)
+
+    def test_captura_en_proceso_vencida_no_admite_carga(self):
+        self.canjear()
+        Sesion.objects.filter(pk=self.sesion.pk).update(expira_en=timezone.now() - timedelta(seconds=1))
+        with self.assertRaises(ValidationError):
+            self.cargar()
+        self.assertFalse(self.sesion.capturas.exists())
+
+    def test_retorno_propietario_derivado_servidor_y_no_url_libre(self):
+        self.client.force_login(self.usuario)
+        solicitud = self.solicitud()
+        sesion, token = servicio.crear_sesion(actor=self.usuario, producto='PRESTADORES', solicitud_id=solicitud.pk)
+        base = reverse('captura:continuar', args=['PRESTADORES', sesion.pk])
+        contexto = {'solicitud_id': solicitud.pk}
+        host = {'HTTP_HOST': 'contratistas.localhost'}
+        response = self.client.get(base, contexto, **host)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['retorno_seguro'], f'/solicitar/?solicitud_id={solicitud.pk}#step-2')
+        self.assertEqual(self.client.post(base + 'canjear/', {**contexto, 'token': token}, **host).status_code, 200)
+        for lado in ('FRONTAL', 'TRASERA'):
+            self.assertEqual(self.client.post(base + lado + '/', {**contexto, 'archivo': imagen_documental()}, **host).status_code, 200)
+        response = self.client.post(base + 'finalizar/', contexto, **host)
+        self.assertEqual(response.json()['retorno'], f'/solicitar/?solicitud_id={solicitud.pk}#step-2')
+        self.assertFalse(Credito.objects.exists())
+        for destino in ('https://externo.example/', '//externo.example/', '/admin/'):
+            with self.subTest(destino=destino):
+                self.assertEqual(self.client.get(base, {**contexto, 'return_url': destino}, **host).status_code, 400)
+        otra = self.solicitud()
+        self.assertEqual(self.client.get(base, {'solicitud_id': otra.pk}, **host).status_code, 400)
+        self.client.force_login(self.otro)
+        self.assertEqual(self.client.get(base, contexto, **host).status_code, 400)
+
+    def test_polling_propietario_finalizada_despues_ttl(self):
+        self.completar()
+        self.client.force_login(self.usuario)
+        Sesion.objects.filter(pk=self.sesion.pk).update(expira_en=timezone.now() - timedelta(days=1))
+        response = self.client.get(reverse('captura:estado', args=['LIBRANZA', self.sesion.pk]))
+        self.assertEqual(response.json()['estado'], 'FINALIZADA')
+        self.assertEqual(response.json()['retorno'], '/libranza/solicitar/#step-3')
+
     def test_continuacion_compartida_camara_sin_selector_archivo(self):
         self.client.force_login(self.usuario)
         for producto in ('LIBRANZA', 'PRESTADORES'):
@@ -80,7 +160,7 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
                                  'data-camera-instructions', 'data-confirm-quality', 'data-rotate'):
                     self.assertContains(response, atributo)
                 self.assertNotContains(response, 'type="file"')
-                self.assertContains(response, 'captura_documental.js?v=id01cd-1')
+                self.assertContains(response, 'captura_documental.js?v=p03p02-1')
                 self.assertContains(response, 'captura_quality.js?v=id01cd-1')
                 self.assertContains(response, 'jsfeat-0.0.8.min.js')
                 self.assertFalse(Credito.objects.exists())
@@ -92,7 +172,7 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
         pagina = cliente.get(reverse('libranza:solicitar'))
         self.assertEqual(pagina.status_code, 200)
         for elemento in ('data-capture-qr', 'data-handoff-result', 'data-reintentar-estado',
-                         'qrcode-generator-1.4.4.js', 'captura_documental.js?v=id01cd-1'):
+                         'qrcode-generator-1.4.4.js', 'captura_documental.js?v=p03p02-1'):
             self.assertContains(pagina, elemento)
         url = reverse('captura:crear', args=['LIBRANZA'])
         cantidad = Sesion.objects.count()
@@ -101,7 +181,7 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
         respuesta = cliente.post(url, HTTP_X_CSRFTOKEN=cliente.cookies['csrftoken'].value)
         self.assertEqual(respuesta.status_code, 201)
         datos = respuesta.json()
-        self.assertEqual(set(datos), {'id', 'enlace', 'expira_en'})
+        self.assertEqual(set(datos), {'id', 'enlace', 'enlace_propio', 'expira_en'})
         nueva = Sesion.objects.get(pk=datos['id'])
         self.assertEqual(nueva.estado, 'ABIERTA')
         self.assertIsNone(nueva.credito_id)
@@ -364,7 +444,9 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
         self.assertNotContains(response, 'data-contexto="1.234"')
 
     def test_purga_borradores_no_borra_vinculados_ni_historicos(self):
-        self.completar()
+        self.canjear()
+        self.cargar('FRONTAL')
+        self.cargar('TRASERA')
         otra = sesion_finalizada(self.usuario)
         Sesion.objects.filter(pk=otra.pk).update(estado='UTILIZADA')
         Sesion.objects.all().update(expira_en=timezone.now() - timedelta(days=1))
@@ -399,6 +481,30 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
 
 @skipUnless(connection.vendor == 'postgresql', 'Requiere PostgreSQL real en VPS.')
 class CapturaConcurrenciaPostgresTest(CapturaFixture, TransactionTestCase):
+    def test_consumo_unico_finalizada_despues_ttl(self):
+        self.completar()
+        Sesion.objects.filter(pk=self.sesion.pk).update(expira_en=timezone.now() - timedelta(days=1))
+        credito = Credito.objects.create(usuario=self.usuario, linea='LIBRANZA', monto_solicitado=1000000, plazo_solicitado=3)
+        def consumir(n):
+            with transaction.atomic():
+                sesion, _ = servicio.obtener_documentos_finalizados(**self.params)
+                servicio.consumir_documentos(sesion=sesion, actor=self.usuario, credito=credito)
+        self.assertCountEqual(self.competir(consumir), ['OK', 'RECHAZADO'])
+        self.assertEqual(self.sesion.eventos.filter(evento='VINCULACION').count(), 1)
+
+    def test_regeneracion_concurrente_solo_ultimo_token_vigente(self):
+        _, grant = servicio.canjear_capture_grant(sesion_id=self.sesion.pk, producto='LIBRANZA', token=self.token)
+        tokens = Queue()
+        def regenerar(n):
+            _, token = servicio.regenerar_enlace(**self.params)
+            tokens.put(token)
+        self.assertEqual(self.competir(regenerar), ['OK', 'OK'])
+        self.sesion.refresh_from_db()
+        self.assertEqual(sum(servicio._hash(t) == self.sesion.token_hash for t in list(tokens.queue)), 1)
+        self.assertFalse(self.sesion.capture_grant_hash)
+        with self.assertRaises(PermissionDenied):
+            servicio.operar_capture_grant(sesion_id=self.sesion.pk, producto='LIBRANZA', grant=grant, accion='estado')
+
     def competir(self, funcion):
         barrera, resultados = Barrier(2), Queue()
         conexion_principal = connection.connection

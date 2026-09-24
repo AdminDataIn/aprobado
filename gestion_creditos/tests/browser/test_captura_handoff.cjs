@@ -12,6 +12,10 @@ const root = path.resolve(__dirname, '../../..');
 const id = '12345678-1234-4123-8123-123456789abc';
 const token = 'solo-token-ficticio-para-pruebas-id01b';
 let server, browser, origin, html, cameraHTML;
+function handoffHTML(url) {
+  const content = url.searchParams.has('prestadores') ? html.replaceAll('LIBRANZA', 'PRESTADORES').replace('data-contexto=""', 'data-contexto="1234"') : html;
+  return '<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Captura</title><body style="margin:0;background:#f4f6f8;padding:20px;font-family:system-ui"><form style="max-width:740px;margin:20px auto"><input type="hidden" name="csrfmiddlewaretoken" value="csrf-prueba"><label>Nombre <input name="nombre" value="Nombre diligenciado"></label>' + content + '<input type="file" id="cedula_frontal" required hidden></form></body></html>';
+}
 before(async () => {
   const python = process.env.DJANGO_PYTHON || (process.platform === 'win32'
     ? path.join(root, 'venv/Scripts/python.exe') : 'python');
@@ -48,13 +52,13 @@ before(async () => {
       res.setHeader('Content-Type', file.endsWith('.js') ? 'application/javascript' : file.endsWith('.css') ? 'text/css' : 'image/png');
       res.end(fs.readFileSync(file)); return;
     }
-    const content = url.searchParams.has('prestadores') ? html.replaceAll('LIBRANZA', 'PRESTADORES').replace('data-contexto=""', 'data-contexto="1234"') : html;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.end('<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Captura</title><body style="margin:0;background:#f4f6f8;padding:20px;font-family:system-ui"><form style="max-width:740px;margin:20px auto"><input type="hidden" name="csrfmiddlewaretoken" value="csrf-prueba"><label>Nombre <input name="nombre" value="Nombre diligenciado"></label>' + content + '<input type="file" id="cedula_frontal" required hidden></form></body></html>');
+    res.end(handoffHTML(url));
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = 'http://127.0.0.1:' + server.address().port;
-  browser = await chromium.launch({channel: 'chromium', headless: true, args: ['--use-fake-device-for-media-stream']});
+  browser = await chromium.launch({channel: process.env.CAPTURE_BROWSER_CHANNEL || 'chromium', headless: true,
+    args: ['--use-fake-device-for-media-stream']});
 });
 after(async () => {
   if (browser) await browser.close();
@@ -67,6 +71,12 @@ async function setup(t, opts = {}) {
     : {viewport: {width: 1280, height: 900}});
   t.after(() => context.close());
   const page = await context.newPage();
+  // Deliver the rendered fixture directly, excluding host antivirus HTML injection.
+  await page.route(origin + '/**', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/') await route.fulfill({contentType: 'text/html; charset=utf-8', body: handoffHTML(url)});
+    else await route.fallback();
+  });
   const logs = [], errors = [], requests = [], allRequests = [];
   page.on('console', message => logs.push(message.text()));
   page.on('pageerror', error => errors.push(error.message));
@@ -74,7 +84,7 @@ async function setup(t, opts = {}) {
   const state = {value: 'ABIERTA', gets: 0, posts: 0, postStatus: 201, html: false,
     transient: 0, abort: false, hang: false, ...opts};
   await page.addInitScript(({blocked, restored, id}) => {
-    if (restored) sessionStorage.setItem('captura:LIBRANZA:', id);
+    if (restored) sessionStorage.setItem('captura:LIBRANZA:', typeof restored === 'string' ? restored : id);
     if (blocked === 'get' || blocked === 'set') {
       Storage.prototype[blocked + 'Item'] = () => { throw new DOMException('bloqueado', 'SecurityError'); };
     }
@@ -95,6 +105,7 @@ async function setup(t, opts = {}) {
             expira_en: new Date(Date.now() + 600000).toISOString()})});
     } else {
       state.gets++;
+      if (state.invalid) { await route.fulfill({status: 400, json: {error: 'Contexto invalido'}}); return; }
       if (state.transient-- > 0) { await route.fulfill({status: 500, body: 'Error'}); return; }
       await route.fulfill({json: {id, estado: state.value, lados: []}});
     }
@@ -107,6 +118,90 @@ async function setup(t, opts = {}) {
     await page.waitForFunction(value => document.querySelector('[data-capture-handoff]').dataset.state === value, value);
   }
   return {page, state, requests, allRequests, result, status, create, waitState, logs, errors};
+}
+
+for (const value of ['UTILIZADA', 'EXPIRADA', 'REVOCADA']) {
+  test('restaurar ' + value + ' limpia UUID y crea nueva sesion, no regenera la anterior', async t => {
+    const ui = await setup(t, {restored: true, value});
+    await ui.waitState(value === 'UTILIZADA' ? 'success' : 'expired');
+    assert.equal(await ui.page.locator('[data-sesion-documental]').inputValue(), '');
+    assert.equal(await ui.page.evaluate(() => sessionStorage.getItem('captura:LIBRANZA:')), null);
+    ui.state.value = 'ABIERTA';
+    await ui.create(); await ui.waitState('waiting');
+    assert.equal(ui.requests.find(r => r.method === 'POST').url, origin + '/captura-documental/LIBRANZA/crear/');
+  });
+}
+
+test('UUID invalido o contexto ajeno no se conserva en el formulario', async t => {
+  const ui = await setup(t, {restored: true, invalid: true});
+  await ui.waitState('error');
+  assert.equal(await ui.page.locator('[data-sesion-documental]').inputValue(), '');
+  assert.equal(await ui.page.evaluate(() => sessionStorage.getItem('captura:LIBRANZA:')), null);
+});
+
+test('UUID malformado se descarta sin consultar una ruta arbitraria', async t => {
+  const ui = await setup(t, {restored: '../../ajeno'});
+  assert.equal(await ui.page.locator('[data-sesion-documental]').inputValue(), '');
+  assert.equal(await ui.page.evaluate(() => sessionStorage.getItem('captura:LIBRANZA:')), null);
+  assert.equal(ui.state.gets, 0);
+});
+
+test('temporizador del enlace consulta servidor y no expira evidencia finalizada', async t => {
+  const ui = await setup(t);
+  await ui.page.clock.install();
+  await ui.create(); await ui.waitState('waiting');
+  ui.state.value = 'FINALIZADA';
+  await ui.page.clock.runFor(600001); await ui.waitState('success');
+  assert.equal(await ui.page.locator('[data-sesion-documental]').inputValue(), id);
+  assert.equal(await ui.page.evaluate(() => sessionStorage.getItem('captura:LIBRANZA:')), id);
+});
+
+for (const prestadores of [false, true]) {
+  test('captura propia conserva formulario y PDF, valida servidor y vuelve a Documentos ' + prestadores, async t => {
+    const ui = await setup(t, {mobile: true, prestadores});
+    const producto = prestadores ? 'PRESTADORES' : 'LIBRANZA';
+    const base = '/captura-documental/' + producto + '/' + id + '/';
+    const retorno = prestadores ? '/solicitar/?solicitud_id=1234#step-2' : '/libranza/solicitar/#step-3';
+    await ui.page.route('**/captura-documental/**', async route => {
+      const req = route.request(), pathname = new URL(req.url()).pathname;
+      if (pathname.endsWith('/crear/')) {
+        await route.fulfill({json: {id, enlace: base + 'movil/#' + token, enlace_propio: base + '#' + token,
+          expira_en: new Date(Date.now() + 600000).toISOString()}});
+      } else if (pathname === base) {
+        const content = cameraHTML.replaceAll('LIBRANZA', producto)
+          .replace('data-capture-mobile', 'data-capture-mobile data-retorno-seguro="' + retorno + '"');
+        await route.fulfill({contentType: 'text/html', body: content});
+      } else await route.fulfill({json: {id, estado: ui.state.value, lados: [], retorno}});
+    });
+    await ui.page.evaluate(() => {
+      const pdf = document.createElement('input'); pdf.type = 'file'; pdf.id = 'test-contract';
+      document.querySelector('form').append(pdf);
+      document.addEventListener('captura:finalizada', () => { document.body.dataset.step = 'documentos'; });
+    });
+    await ui.page.locator('#test-contract').setInputFiles({name: 'contrato.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 fixture')});
+    await ui.page.locator('[name=nombre]').fill('Formulario conservado');
+    await ui.create();
+    await ui.page.waitForFunction(() => document.querySelector('[data-capture-dialog]').open);
+    const frame = await ui.page.locator('[data-capture-frame]').elementHandle().then(el => el.contentFrame());
+    await frame.waitForSelector('[data-canjear]');
+    if (process.env.HANDOFF_SCREENSHOTS) await ui.page.screenshot({path: path.join(process.env.HANDOFF_SCREENSHOTS, 'capture-own-' + producto + '.png')});
+    // Neither a message from the parent nor a child message alone proves completion.
+    await ui.page.evaluate(id => window.postMessage({type: 'captura-finalizada', id}, location.origin), id);
+    await frame.evaluate(id => parent.postMessage({type: 'captura-finalizada', id}, location.origin), id);
+    await ui.page.waitForTimeout(50);
+    assert.equal(await ui.page.locator('[data-capture-dialog]').evaluate(el => el.open), true);
+    ui.state.value = 'FINALIZADA';
+    // Execute the real child terminal handler, which posts its scoped session identifier.
+    await frame.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await ui.page.waitForFunction(() => !document.querySelector('[data-capture-dialog]').open);
+    assert.equal(await ui.page.locator('[name=nombre]').inputValue(), 'Formulario conservado');
+    assert.equal(await ui.page.locator('#test-contract').evaluate(el => el.files[0].name), 'contrato.pdf');
+    assert.equal(await ui.page.locator('body').getAttribute('data-step'), 'documentos');
+    assert.equal(await ui.page.locator('[data-sesion-documental]').inputValue(), id);
+    assert.match(await ui.status.textContent(), /capturada correctamente/);
+    assert.deepEqual(ui.errors, []);
+    assert.equal(await ui.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  });
 }
 
 for (const blocked of ['get', 'set']) {
@@ -131,7 +226,7 @@ test('QR decodifica el mismo enlace, sin token en storage, logs ni requests exte
   assert.equal(stored.includes(token), false);
   assert.equal(ui.logs.join().includes(token), false);
   assert.equal(ui.requests.some(r => r.url.includes(token)), false);
-  assert.equal(ui.allRequests.every(url => url.startsWith(origin + '/')), true);
+  assert.deepEqual(ui.allRequests.filter(url => !url.startsWith(origin + '/') && url !== 'about:blank'), []);
   assert.deepEqual(ui.errors, []);
   if (process.env.HANDOFF_SCREENSHOTS) await ui.page.screenshot({path: path.join(process.env.HANDOFF_SCREENSHOTS, 'handoff-desktop.png'), fullPage: true});
 });
@@ -393,6 +488,18 @@ test('desktop dirige al celular: QR y copiar, sin CTA Abrir captura', async t =>
   assert.match(await ui.status.textContent(), /Esperando captura desde tu celular/);
 });
 
+test('handoff delegado finaliza en pantalla publica sin retorno privado', async t => {
+  const ui = await cameraSetup(t, {grant: true});
+  await ui.openCamera(); await ui.photo(); await ui.accept(); await ui.waitStep('ready');
+  await ui.openCamera(); await ui.photo(); await ui.accept(); await ui.waitStep('finish');
+  await ui.page.locator('[data-finalizar]').click(); await ui.waitStep('done');
+  assert.match(await ui.page.locator('[data-capture-status]').textContent(), /Captura completada.*continuar en tu computador/);
+  assert.equal(new URL(ui.page.url()).pathname, '/camera');
+  assert.equal(await ui.page.locator('[data-capture-mobile]').getAttribute('data-retorno-seguro'), null);
+  assert.equal(await ui.page.evaluate(() => JSON.stringify({...sessionStorage, ...localStorage})), '{}');
+  await ui.stopped();
+});
+
 async function frameGeometry(page) {
   await page.waitForFunction(() => !document.querySelector('[data-camera-guide]').hidden);
   return page.evaluate(() => {
@@ -522,8 +629,8 @@ for (const viewport of [{width: 390, height: 844}, {width: 360, height: 640}]) {
 }
 test('cache busting consistente entre handoff y camara', () => {
   for (const content of [html, cameraHTML]) {
-    assert.match(content, /captura_documental\.js\?v=id01cd-1/);
-    assert.match(content, /captura_documental\.css\?v=id01cd-1/);
+    assert.match(content, /captura_documental\.js\?v=p03p02-1/);
+    assert.match(content, /captura_documental\.css\?v=p03p02-1/);
   }
   assert.match(html, /qrcode-generator-1\.4\.4\.js/);
 });

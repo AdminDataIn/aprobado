@@ -1,5 +1,5 @@
 {% load static l10n %}
-<link rel="stylesheet" href="{% static 'css/captura_documental.css' %}?v=id01cd-1">
+<link rel="stylesheet" href="{% static 'css/captura_documental.css' %}?v=p03p02-1">
 <section class="capture-handoff" data-capture-handoff data-producto="{{ producto }}" data-contexto="{{ solicitud.id|unlocalize|default:'' }}"
          data-crear="{% url 'captura:crear' producto %}">
   <div class="capture-heading">
@@ -13,10 +13,10 @@
       <p data-qr-help>Escanea este código con la cámara de tu celular</p>
     </div>
     <div class="capture-transfer-info">
-      <p class="capture-account">El enlace permite capturar solo este documento, sin iniciar sesión en el celular.</p>
+      <p class="capture-account">El enlace solo permite esta captura documental.</p>
       <p class="capture-expiry" data-capture-expiry></p>
       <div class="capture-actions">
-        <a class="capture-button capture-button-primary" data-enlace-captura hidden target="_blank" rel="noreferrer noopener">Abrir cámara en este celular</a>
+        <a class="capture-button capture-button-primary" data-enlace-captura hidden target="_blank" rel="noreferrer noopener">Tomar fotos de mi cédula</a>
         <button type="button" class="capture-button" data-copiar-enlace>Copiar enlace</button>
       </div>
     </div>
@@ -30,7 +30,11 @@
     <button type="button" class="capture-button" data-reintentar-estado hidden>Consultar estado</button>
   </div>
   <input type="hidden" name="sesion_documental_id" value="{{ request.POST.sesion_documental_id|default:'' }}" data-sesion-documental>
+  <dialog class="capture-own-dialog" data-capture-dialog aria-label="Captura de cédula">
+    <button type="button" class="capture-own-close" data-capture-close aria-label="Volver a mi solicitud" title="Volver a mi solicitud">&times;</button>
+    <iframe data-capture-frame title="Captura segura de cédula" allow="camera 'self'" referrerpolicy="same-origin"></iframe>
+  </dialog>
   <noscript><p>Activa JavaScript para continuar con la captura segura.</p></noscript>
 </section>
 <script src="{% static 'js/vendor/qrcode-generator-1.4.4.js' %}" defer></script>
-<script src="{% static 'js/captura_documental.js' %}?v=id01cd-1" defer></script>
+<script src="{% static 'js/captura_documental.js' %}?v=p03p02-1" defer></script>

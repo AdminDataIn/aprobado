@@ -37,6 +37,8 @@ def _parametros(request, producto, sesion_id=None):
 
 
 def _contexto_id(request):
+    if 'return_url' in request.GET or 'return_url' in request.POST:
+        raise ValidationError('El retorno documental no admite destinos del cliente.')
     contexto = request.POST.get('solicitud_id') or request.GET.get('solicitud_id') or None
     if contexto:
         try:
@@ -50,7 +52,29 @@ def _enlace(sesion, token):
     url = reverse('captura:movil', kwargs={'producto': sesion.producto, 'sesion_id': sesion.pk})
     if sesion.solicitud_id:
         url += f'?solicitud_id={sesion.solicitud_id}'
-    return {'id': str(sesion.pk), 'enlace': f'{url}#{token}', 'expira_en': sesion.expira_en.isoformat()}
+    propio = reverse('captura:continuar', args=[sesion.producto, sesion.pk])
+    if sesion.solicitud_id:
+        propio += f'?solicitud_id={sesion.solicitud_id}'
+    return {'id': str(sesion.pk), 'enlace': f'{url}#{token}',
+            'enlace_propio': f'{propio}#{token}', 'expira_en': sesion.expira_en.isoformat()}
+
+
+def _retorno_solicitud(producto, solicitud_id):
+    # Called only after owner/product/context validation; never accepts a client URL.
+    if producto == 'PRESTADORES':
+        url = reverse('contractors:solicitar', urlconf='aprobado_web.urls_contractors')
+        if solicitud_id:
+            url += f'?solicitud_id={solicitud_id}'
+        return url + '#step-2'
+    return reverse('libranza:solicitar', urlconf='aprobado_web.urls_main') + '#step-3'
+
+
+def _estado_propietario(request, producto, sesion_id):
+    parametros = _parametros(request, producto, sesion_id)
+    datos = servicio.estado_publico(**parametros)
+    if datos['estado'] == 'FINALIZADA':
+        datos['retorno'] = _retorno_solicitud(producto, parametros['solicitud_id'])
+    return datos
 
 
 @privado
@@ -72,6 +96,7 @@ def continuar(request, producto, sesion_id):
     return render(request, 'gestion_creditos/captura_continuacion.html', {
         'sesion': datos, 'producto': producto, 'solicitud_id': request.GET.get('solicitud_id', ''),
         'capture_base': reverse('captura:continuar', args=[producto, sesion_id]),
+        'retorno_seguro': _retorno_solicitud(producto, _contexto_id(request)),
     })
 
 
@@ -79,7 +104,7 @@ def continuar(request, producto, sesion_id):
 @login_required
 @require_GET
 def estado(request, producto, sesion_id):
-    return JsonResponse(servicio.estado_publico(**_parametros(request, producto, sesion_id)))
+    return JsonResponse(_estado_propietario(request, producto, sesion_id))
 
 
 @privado
@@ -104,7 +129,7 @@ def operar(request, producto, sesion_id, accion):
         servicio.recibir_captura(**parametros, lado=accion, vinculo=vinculo, archivo=request.FILES.get('archivo'))
     else:
         raise Http404
-    return JsonResponse(servicio.estado_publico(**parametros))
+    return JsonResponse(_estado_propietario(request, producto, sesion_id))
 
 
 CAPTURE_GRANT_COOKIE = '__Secure-capture_grant_token'

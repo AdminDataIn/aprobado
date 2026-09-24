@@ -901,6 +901,11 @@ MODIFICAR:
 
     // Cargar datos guardados al cargar la página
     document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('captura:finalizada', function () {
+            document.querySelectorAll('.form-step').forEach(step => step.classList.toggle('active', step.id === 'step-3'));
+            updateStepIndicators(3, 3);
+            document.getElementById('step-3').scrollIntoView({block: 'start', behavior: 'smooth'});
+        });
         loadFormData();
 
         const maxValorCredito = parseInt('{{ libranza_monto_maximo|default:"3000000"|unlocalize }}', 10);

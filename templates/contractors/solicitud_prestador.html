@@ -447,6 +447,7 @@
       });
       formulario.scrollIntoView({behavior: 'smooth', block: 'start'});
     }
+    formulario.addEventListener('captura:finalizada', () => mostrarPaso(2));
 
     function limpiarError(campo) {
       if (!campo) return;

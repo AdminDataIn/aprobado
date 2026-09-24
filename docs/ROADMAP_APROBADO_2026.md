@@ -8,6 +8,50 @@
 
 **Proyecto:** Aprobado / Project_aprobado / WhatsApp Platform
 
+### APROBADO-03 P0-2 — Continuidad de captura documental (2026-09-23)
+
+- Implementado localmente; pendiente validacion PostgreSQL y UAT fisico, sin commit
+  ni despliegue. El TTL solo expira capturas ABIERTA/CANJEADA y sus credenciales.
+  FINALIZADA conserva lectura y consumo por propietario/producto/contexto legitimos
+  despues del TTL; UTILIZADA no se reutiliza. REVOCADA sigue bloqueada. No se
+  reactivan grants ni sesiones historicas previamente expiradas/purgadas.
+- La purga de abandonadas excluye FINALIZADA y UTILIZADA, revalidando bajo lock.
+  No existe una politica independiente configurada para FINALIZADA sin consumir:
+  quedan conservadas hasta definir expresamente plazo, base temporal, auditoria y
+  excepciones. Propuesta pendiente: plazo aprobado desde finalizado_en, con proceso
+  separado que revalide estado/consumo bajo lock; nunca usar el TTL del grant ni
+  borrar UTILIZADA. Sin plazo silencioso ni migracion nueva en este ticket.
+- sessionStorage conserva solo UUID como pista: UTILIZADA, REVOCADA, EXPIRADA,
+  UUID malformado o contexto rechazado limpian UUID oculto y almacenamiento local.
+  El temporizador del enlace consulta al servidor; no declara expirada una captura
+  por decision local. La condicion de vigencia OCR tambien respeta FINALIZADA:
+  no se cambia extraccion, comparacion ni el significado de identidad no verificada.
+- Captura propia: endpoints autenticados existentes, retorno derivado en backend
+  y rechazo de return_url libre. Camara en dialog/iframe same-origin conserva el
+  formulario y los PDF seleccionados en memoria. Al finalizar, mensaje con origen,
+  ventana y UUID comprobados mas consulta autenticada al servidor; abre Documentos
+  (Prestadores paso 2, Libranza paso 3). No se guardan formularios/PII en storage.
+- QR delegado: mantiene CaptureGrant, cookie scoped, CSRF y canje unico; termina
+  en pantalla publica sin retorno privado. El PC detecta FINALIZADA por polling.
+  Viewport solo cambia presentacion, no permisos ni ownership.
+- Validacion Django SQLite: 207 pruebas, 195 OK y 12 omitidas PostgreSQL. Incluye
+  captura, CaptureGrant, OCR, portal Prestadores y regresiones Libranza/integridad.
+  Hasher rapido solo en el proceso de tests. `manage.py check` y
+  `makemigrations --check --dry-run`: OK, sin cambios de esquema.
+- Navegador: 79/79 pruebas Playwright OK en Edge/Chromium con camara sintetica,
+  incluyendo retorno al formulario sin perder PDF, limpieza de storage, QR,
+  polling, pantalla delegada publica y responsive 320/390/768/1280. El HTML del
+  fixture se entrega directamente para aislar inyeccion del antivirus local;
+  no se modifican antivirus ni politicas de produccion. `git diff --check`: OK.
+- Concurrencia pendiente obligatoria en clon PostgreSQL: se conservan doble canje,
+  doble finalizacion y reemplazo serializado; se agregan consumo unico posterior
+  al TTL y regeneracion concurrente con invalidacion del grant anterior. Este equipo
+  no tiene servidor PostgreSQL ni daemon Docker operativo. Ejecutar en el clon:
+  `python manage.py test gestion_creditos.tests.test_captura_documental gestion_creditos.tests.test_capture_grant gestion_creditos.tests.test_ocr_documental contractors.tests.test_portal_minimo_prestadores gestion_creditos.tests.test_integridad_originacion_anulacion gestion_creditos.tests.test_libranza_form_js --verbosity 2 --keepdb`.
+- Pendiente UAT iPhone/Safari y Android fisicos del retorno en iframe y permisos de
+  camara, mas decision de retencion. No acredita identidad, no convierte OCR en
+  autenticacion y no declara cerrado Prestadores E2E.
+
 ### APROBADO-03 P0-1 — Continuidad del formulario (2026-09-23)
 
 - Implementado en local, sin commit ni despliegue: el servidor selecciona el primer

@@ -73,6 +73,8 @@ class CaptureGrantTest(CapturaFixture, TestCase):
         finalized = self.post('finalizar')
         self.assertEqual(finalized.status_code, 200)
         self.assertEqual(finalized.json()['estado'], 'FINALIZADA')
+        self.assertNotIn('retorno', finalized.json())
+        self.assertNotContains(self.shell(self.mobile), 'data-retorno-seguro')
         self.assertEqual(finalized.cookies[CAPTURE_GRANT_COOKIE]['max-age'], 0)
         self.sesion.refresh_from_db()
         self.assertEqual(self.sesion.capture_grant_hash, '')
@@ -88,6 +90,18 @@ class CaptureGrantTest(CapturaFixture, TestCase):
         self.assertNotIn(cookie.value, str(list(Evento.objects.values())))
         self.assertNotIn(self.token, str(list(Evento.objects.values())))
         self.assertEqual(self.post('frontal', {'archivo': imagen_documental()}).status_code, 403)
+
+    def test_finalizada_delegada_vence_grant_pero_no_evidencia(self):
+        self.canjear()
+        for lado in ('frontal', 'trasera'):
+            self.assertEqual(self.post(lado, {'archivo': imagen_documental()}).status_code, 200)
+        self.assertEqual(self.post('finalizar').json()['estado'], 'FINALIZADA')
+        Sesion.objects.filter(pk=self.sesion.pk).update(expira_en=timezone.now() - timedelta(days=1))
+        self.assertEqual(self.mobile.get(self.base + 'estado/', secure=True).status_code, 403)
+        self.assertEqual(self.post('canjear', {'token': self.token}).status_code, 403)
+        self.assertEqual(servicio.estado_publico(**self.params)['estado'], 'FINALIZADA')
+        self.assertEqual(servicio.purgar_sesiones_expiradas(), 0)
+
 
     def test_grant_no_concede_endpoints_propietario(self):
         self.assertEqual(self.canjear().status_code, 200)

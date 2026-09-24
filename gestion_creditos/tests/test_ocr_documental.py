@@ -276,6 +276,7 @@ class OCRServicioTest(OCRFixture, TestCase):
 
     def test_purga_abandonada_borra_pii_no_eventos(self):
         self.run_ocr()
+        captura.revocar_sesion(sesion_id=self.sesion.pk, actor=self.user, producto='LIBRANZA')
         Sesion.objects.filter(pk=self.sesion.pk).update(expira_en=timezone.now() - timedelta(seconds=1))
         captura.purgar_sesiones_expiradas()
         self.p.refresh_from_db()
@@ -343,6 +344,7 @@ class OCRServicioTest(OCRFixture, TestCase):
 
     def test_purga_durante_ocr_impide_republicar_pii(self):
         def recognize(c, config):
+            captura.revocar_sesion(sesion_id=self.sesion.pk, actor=self.user, producto='LIBRANZA')
             Sesion.objects.filter(pk=self.sesion.pk).update(expira_en=timezone.now() - timedelta(seconds=1))
             captura.purgar_sesiones_expiradas()
             return FRONTAL if c.lado == 'FRONTAL' else TRASERA
@@ -352,6 +354,15 @@ class OCRServicioTest(OCRFixture, TestCase):
         self.assertEqual(self.p.codigo_error, 'OCR_ARCHIVOS_PURGADOS')
         self.assertEqual(self.p.numero_documento_bruto, '')
         self.assertFalse(Comparacion.objects.exists())
+
+    def test_finalizada_procesa_ocr_despues_ttl_y_no_se_purga(self):
+        Sesion.objects.filter(pk=self.sesion.pk).update(expira_en=timezone.now() - timedelta(days=1))
+        self.run_ocr()
+        captura.purgar_sesiones_expiradas()
+        self.p.refresh_from_db()
+        self.assertEqual(self.p.estado, 'COMPLETADO')
+        self.assertEqual(self.p.numero_documento_normalizado, '99000123')
+        self.assertIsNone(self.p.purgado_en)
 
     def test_comparacion_numero_no_leible(self):
         self.bind()

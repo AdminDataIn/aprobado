@@ -4,6 +4,7 @@
   const storage = {
     get(key) { try { return sessionStorage.getItem(key) || ''; } catch (_) { return ''; } },
     set(key, value) { try { sessionStorage.setItem(key, value); } catch (_) { /* Optional resume only. */ } },
+    remove(key) { try { sessionStorage.removeItem(key); } catch (_) { /* Backend remains authoritative. */ } },
   };
   const problem = (message, retryable = false) => Object.assign(new Error(message), {retryable});
   async function requestJSON(url, body, scope) {
@@ -42,9 +43,10 @@
       }
       let data;
       try { data = await response.json(); } catch (_) { throw problem('No pudimos confirmar la respuesta. Intentalo de nuevo.', true); }
-      if (!response.ok) throw problem(grantScope
+      if (!response.ok) throw Object.assign(problem(grantScope
         ? 'No se pudo completar la captura. Revisa la foto e intenta de nuevo.'
-        : 'No se pudo completar la operacion. Comprueba que el enlace siga vigente y que uses la misma cuenta.');
+        : 'No se pudo completar la operacion. Comprueba que el enlace siga vigente y que uses la misma cuenta.'),
+        {sessionInvalid: !grantScope && [400, 404].includes(response.status)});
       if (!data || typeof data !== 'object') throw problem('No pudimos confirmar la respuesta. Intentalo de nuevo.', true);
       return data;
     } catch (error) {
@@ -62,43 +64,80 @@
     const create = field('crear-enlace'), retry = field('reintentar-estado');
     const result = field('handoff-result'), link = field('enlace-captura'), copy = field('copiar-enlace');
     const canvas = field('capture-qr'), expiry = field('capture-expiry');
+    const dialog = field('capture-dialog'), frame = field('capture-frame');
     const form = panel.closest('form') || document;
     const context = panel.dataset.contexto || '';
     const base = panel.dataset.crear.replace(/crear\/$/, '');
     const key = `captura:${panel.dataset.producto}:${context}`;
     let timer, expiryTimer, cycle = 0, attempts = 0, failures = 0, busy = false;
-    let currentState = '', secureLink = '';
+    let currentState = '', secureLink = '', ownLink = '';
+    const identityFields = ['cedula_frontal', 'cedula_trasera', 'id_documento_identidad_frontal', 'id_documento_identidad_reverso']
+      .map(id => document.getElementById(id)).filter(input => input && form.contains(input));
+    const initialFields = identityFields.map(input => ({input, required: input.required, existing: input.dataset.existing}));
     const mobile = window.matchMedia('(max-width: 640px), (pointer: coarse) and (max-width: 1024px)');
     function adaptScreen() {
       panel.dataset.mobile = String(mobile.matches);
       link.hidden = !mobile.matches;
-      field('capture-title').textContent = mobile.matches ? 'Captura tu documento de identidad' : 'Documento de identidad';
+      field('capture-title').textContent = mobile.matches ? 'Captura tu c\u00e9dula' : 'Contin\u00faa la captura desde tu celular';
       field('capture-description').textContent = mobile.matches
-        ? 'Abre la captura segura en este celular. Tu solicitud permanecer\u00e1 abierta; vuelve a esta pesta\u00f1a al terminar.'
-        : 'Para proteger tu informaci\u00f3n, la captura de tu documento se realiza desde tu celular. No perder\u00e1s la informaci\u00f3n que ya diligenciaste.';
-      if (!hidden.value) create.textContent = mobile.matches ? 'Preparar captura segura' : 'Continuar desde mi celular';
+        ? 'Necesitamos una foto del frente y del reverso.'
+        : 'Escanea el QR con tu celular. El enlace solo permite esta captura documental.';
+      const account = panel.querySelector('.capture-account');
+      if (account) account.hidden = mobile.matches;
+      if (!hidden.value) create.textContent = mobile.matches ? 'Tomar fotos de mi c\u00e9dula' : 'Continuar desde mi celular';
     }
     function paint(state, message) { panel.dataset.state = state; status.textContent = message; }
     function clearLink() {
       clearTimeout(expiryTimer);
-      secureLink = '';
+      secureLink = ''; ownLink = '';
       link.removeAttribute('href');
       result.hidden = true;
       canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    }
+    function clearLocal() {
+      storage.remove(key); hidden.value = ''; clearLink();
+      initialFields.forEach(({input, required, existing}) => {
+        input.required = required;
+        if (existing === undefined) delete input.dataset.existing;
+        else input.dataset.existing = existing;
+      });
+    }
+    function completeInForm() {
+      panel.dispatchEvent(new CustomEvent('captura:finalizada', {bubbles: true}));
+    }
+    function openOwnCapture() {
+      if (!ownLink || !dialog || !frame) return;
+      frame.src = ownLink;
+      dialog.showModal();
+    }
+    if (dialog && frame) {
+      field('capture-close').addEventListener('click', () => dialog.close());
+      dialog.addEventListener('close', () => { frame.src = 'about:blank'; restartPoll(); });
+      window.addEventListener('message', async event => {
+        if (event.origin !== location.origin || event.source !== frame.contentWindow ||
+            event.data?.type !== 'captura-finalizada' || event.data.id !== hidden.value) return;
+        try {
+          const data = await requestJSON(`${base}${hidden.value}/estado/?solicitud_id=${encodeURIComponent(context)}`, null, form);
+          if (data.estado === 'FINALIZADA') { applyState(data.estado); dialog.close(); }
+        } catch (error) { paint('error', error.message); }
+      });
+      link.addEventListener('click', event => { if (ownLink) { event.preventDefault(); openOwnCapture(); } });
     }
     function applyState(state) {
       currentState = state;
       if (['FINALIZADA', 'UTILIZADA', 'EXPIRADA', 'REVOCADA'].includes(state)) {
         clearTimeout(timer); clearLink();
         retry.hidden = true;
-        create.hidden = ['FINALIZADA', 'UTILIZADA'].includes(state);
+        create.hidden = state === 'FINALIZADA';
+        if (state !== 'FINALIZADA') clearLocal();
         if (state === 'FINALIZADA' || state === 'UTILIZADA') {
-          paint('success', state === 'FINALIZADA' ? 'Documento de identidad capturado correctamente' : 'Documento de identidad vinculado a tu solicitud.');
+          paint('success', state === 'FINALIZADA' ? 'C\u00e9dula capturada correctamente' : 'Captura ya utilizada. Puedes iniciar una nueva captura.');
           if (state === 'FINALIZADA') {
             ['cedula_frontal', 'cedula_trasera', 'id_documento_identidad_frontal', 'id_documento_identidad_reverso'].forEach(id => {
               const input = document.getElementById(id);
               if (input && form.contains(input)) { input.required = false; input.dataset.existing = 'true'; }
             });
+            completeInForm();
           }
         } else {
           paint('expired', state === 'EXPIRADA' ? 'El enlace venci\u00f3. Genera uno nuevo para continuar.' : 'Este enlace fue revocado. Genera uno nuevo para continuar.');
@@ -130,6 +169,7 @@
       } catch (error) {
         if (run !== cycle) return;
         paint('error', error.message);
+        if (error.sessionInvalid) { clearLocal(); currentState = ''; }
         retry.hidden = false;
         if (!secureLink && !error.retryable) {
           currentState = '';
@@ -185,6 +225,12 @@
         }
         hidden.value = data.id; storage.set(key, data.id);
         secureLink = url.href; link.href = secureLink;
+        if (data.enlace_propio) {
+          const own = new URL(data.enlace_propio, location.href);
+          if (own.origin !== location.origin || own.pathname !== `${base}${data.id}/` || !own.hash)
+            throw problem('No pudimos preparar la captura de tu cuenta.');
+          ownLink = own.href;
+        }
         drawQR(secureLink);
         expiry.textContent = `Enlace v\u00e1lido hasta ${expires.toLocaleTimeString('es-CO', {hour: '2-digit', minute: '2-digit'})}.`;
         result.hidden = false; create.hidden = true;
@@ -192,9 +238,10 @@
         clearTimeout(expiryTimer);
         const issuedId = data.id;
         expiryTimer = setTimeout(() => {
-          if (hidden.value === issuedId) { ++cycle; applyState('EXPIRADA'); }
+          if (hidden.value === issuedId) { clearLink(); restartPoll(); }
         }, Math.max(0, expires.getTime() - Date.now()));
         attempts = failures = 0; poll(run);
+        if (mobile.matches && ownLink) openOwnCapture();
       } catch (error) {
         paint('error', error instanceof TypeError ? 'No pudimos preparar el enlace. Intentalo nuevamente.' : error.message);
         create.hidden = false; create.textContent = 'Reintentar';
@@ -211,6 +258,7 @@
     // Listener installation precedes all optional storage access.
     const saved = hidden.value || storage.get(key);
     hidden.value = UUID.test(saved) ? saved : '';
+    if (saved && !hidden.value) storage.remove(key);
     adaptScreen();
     if (hidden.value) {
       create.hidden = true; paint('loading', 'Consultando tu captura pendiente...'); restartPoll();
@@ -364,19 +412,30 @@
     }
   }
   orientation.addEventListener('change', orientCamera);
-  function end(state) {
+  function end(state, data = {}) {
     terminal = true; clearInterval(monitor); stopCamera(); clearPhoto(); token = '';
     const completed = ['FINALIZADA', 'UTILIZADA'].includes(state);
     show(completed ? 'done' : 'error', completed
-      ? 'Documento de identidad capturado correctamente. Vuelve a tu solicitud para continuar.'
+      ? (delegated ? 'Captura completada. Puedes cerrar esta p\u00e1gina y continuar en tu computador.'
+                   : 'C\u00e9dula capturada correctamente. Regresando a tu solicitud...')
       : state === 'EXPIRADA' ? 'El enlace venci\u00f3. Vuelve a tu solicitud y genera uno nuevo.'
         : state === 'NO_DISPONIBLE'
           ? 'La captura expir\u00f3 o ya no est\u00e1 disponible. Revisa tu solicitud en el equipo de origen.'
           : 'Este enlace fue revocado. Vuelve a tu solicitud y genera uno nuevo.');
+    if (state === 'FINALIZADA' && !delegated && data.retorno && data.retorno === mobile.dataset.retornoSeguro) {
+      const destination = new URL(data.retorno, location.href);
+      if (destination.origin !== location.origin) return;
+      if (window.parent !== window) {
+        window.parent.postMessage({type: 'captura-finalizada', id: mobile.dataset.sessionId}, location.origin);
+      } else {
+        storage.set(`captura:${mobile.dataset.producto}:${mobile.dataset.contexto || ''}`, mobile.dataset.sessionId);
+        location.replace(destination.href);
+      }
+    }
   }
   function checkTerminal(data) {
     if (['FINALIZADA', 'UTILIZADA', 'EXPIRADA', 'REVOCADA'].includes(data.estado)) {
-      end(data.estado); return true;
+      end(data.estado, data); return true;
     }
     return false;
   }
@@ -480,11 +539,12 @@
       data = await readState();
       if (checkTerminal(data)) return;
     }
-    if (token) {
+    if (token && (!data || data.estado === 'ABIERTA')) {
       const body = new FormData(); body.set('token', token);
       data = await action('canjear', body); token = '';
       history.replaceState(null, '', location.pathname + location.search);
     }
+    token = '';
     if (terminal || checkTerminal(data)) return;
     redeemed = true; nextSide(data);
     if (step !== 'finish' && !document.hidden) launchCamera();

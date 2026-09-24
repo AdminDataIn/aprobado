@@ -5,10 +5,10 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="same-origin">
   <title>Documento de identidad | Aprobado</title>
-  <link rel="stylesheet" href="{% static 'css/captura_documental.css' %}?v=id01cd-1">
+  <link rel="stylesheet" href="{% static 'css/captura_documental.css' %}?v=p03p02-1">
 </head>
 <body class="capture-page">
-<main data-capture-mobile {% if capture_grant %}data-capture-grant{% endif %} data-base="{{ capture_base }}" data-contexto="{{ solicitud_id }}">
+<main data-capture-mobile {% if capture_grant %}data-capture-grant{% endif %} data-producto="{{ producto }}" data-base="{{ capture_base }}" data-contexto="{{ solicitud_id }}" data-session-id="{{ sesion.id }}" {% if retorno_seguro %}data-retorno-seguro="{{ retorno_seguro }}"{% endif %}>
   <div class="camera-rotate" data-rotate hidden role="status">Para una mejor captura, gira tu celular a posición vertical.</div>
   <header class="camera-intro">
     <img src="{% static 'images/logo-dark.png' %}" width="160" alt="Aprobado">
@@ -54,6 +54,6 @@
 </main>
 <script src="{% static 'js/vendor/jsfeat-0.0.8.min.js' %}" defer></script>
 <script src="{% static 'js/captura_quality.js' %}?v=id01cd-1" defer></script>
-<script src="{% static 'js/captura_documental.js' %}?v=id01cd-1" defer></script>
+<script src="{% static 'js/captura_documental.js' %}?v=p03p02-1" defer></script>
 </body>
 </html>

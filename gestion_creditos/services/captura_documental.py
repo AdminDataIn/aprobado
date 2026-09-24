@@ -53,8 +53,7 @@ def _auditada(funcion):
                             pk=kwargs.get('sesion_id'), capture_grant_hash=_hash(kwargs['grant'])).first()
                     except (ValidationError, ValueError):
                         pass
-                if (sesion and sesion.expira_en <= timezone.now()
-                        and sesion.estado not in {Sesion.Estado.UTILIZADA, Sesion.Estado.REVOCADA, Sesion.Estado.EXPIRADA}):
+                if sesion and _vencio_en_proceso(sesion):
                     sesion.estado = Sesion.Estado.EXPIRADA
                     _invalidar_grant(sesion)
                     sesion.save()
@@ -96,8 +95,13 @@ def _obtener(sesion_id, actor, producto, solicitud_id=None, *, lock=True):
     return sesion
 
 
+def _vencio_en_proceso(sesion):
+    return (sesion.estado in {Sesion.Estado.ABIERTA, Sesion.Estado.CANJEADA}
+            and sesion.expira_en <= timezone.now())
+
+
 def _vigente(sesion):
-    if sesion.expira_en <= timezone.now() or sesion.estado in {Sesion.Estado.EXPIRADA, Sesion.Estado.REVOCADA}:
+    if _vencio_en_proceso(sesion) or sesion.estado in {Sesion.Estado.EXPIRADA, Sesion.Estado.REVOCADA}:
         raise ValidationError('La sesion documental expiro o fue revocada.')
 
 
@@ -414,21 +418,22 @@ def estado_publico(*, sesion_id, actor, producto, solicitud_id=None):
 
 def _datos_estado(sesion):
     estado = sesion.estado
-    if estado not in {Sesion.Estado.UTILIZADA, Sesion.Estado.REVOCADA} and sesion.expira_en <= timezone.now():
+    if _vencio_en_proceso(sesion):
         estado = Sesion.Estado.EXPIRADA
     return {'id': str(sesion.pk), 'estado': estado, 'identidad': 'IDENTIDAD_NO_VERIFICADA',
             'lados': list(sesion.capturas.filter(activo=True, purgado_en__isnull=True).values_list('lado', flat=True))}
 
 
 def purgar_sesiones_expiradas():
-    """Solo borradores no vinculados. Retiene filas y eventos; nunca toca legacy."""
+    """Solo abandonadas/revocadas; FINALIZADA requiere una politica de retencion separada."""
     ahora = timezone.now()
     total = 0
-    ids = Sesion.objects.filter(expira_en__lte=ahora).exclude(estado=Sesion.Estado.UTILIZADA).values_list('pk', flat=True)
+    protegidos = {Sesion.Estado.FINALIZADA, Sesion.Estado.UTILIZADA}
+    ids = Sesion.objects.filter(expira_en__lte=ahora).exclude(estado__in=protegidos).values_list('pk', flat=True)
     for pk in ids.iterator():
         with transaction.atomic():
             sesion = Sesion.objects.select_for_update().get(pk=pk)
-            if sesion.estado == Sesion.Estado.UTILIZADA:
+            if sesion.estado in protegidos or sesion.expira_en > ahora:
                 continue
             if sesion.estado not in {Sesion.Estado.EXPIRADA, Sesion.Estado.REVOCADA}:
                 sesion.estado = Sesion.Estado.EXPIRADA
