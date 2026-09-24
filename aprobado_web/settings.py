@@ -389,6 +389,11 @@ PRIVATE_DOCUMENTS_ROOT = os.environ.get(
     os.path.join(BASE_DIR, 'private_documents'),
 )
 
+# Retention of completed, unconsumed evidence is independent of capture credentials.
+CAPTURA_DOCUMENTAL_FINALIZADA_RETENTION_HOURS = int(
+    os.environ.get('CAPTURA_DOCUMENTAL_FINALIZADA_RETENTION_HOURS', '72')
+)
+
 # Local identity OCR pins runtime/model versions for reproducible processing.
 OCR_DOCUMENTAL_VERSION_MOTOR = os.environ.get('OCR_DOCUMENTAL_VERSION_MOTOR', '')
 OCR_DOCUMENTAL_MODELO_SHA256 = os.environ.get('OCR_DOCUMENTAL_MODELO_SHA256', '')

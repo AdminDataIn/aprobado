@@ -8,6 +8,38 @@
 
 **Proyecto:** Aprobado / Project_aprobado / WhatsApp Platform
 
+### APROBADO-03 P0-2.1 — Retencion de FINALIZADA sin consumir (2026-09-23)
+
+- Implementado localmente, sin commit/push/deploy. Sustituye la decision pendiente
+  de retencion de P0-2: `CAPTURA_DOCUMENTAL_FINALIZADA_RETENTION_HOURS`, configurable
+  por entorno, default 72 horas, independiente del TTL de captura/CaptureGrant.
+  Cero/negativo bloquea la purga; no significa retencion ilimitada ni borrado inmediato.
+- Antiguedad estrictamente mayor al umbral desde `finalizado_en`: 71h59m y 72h
+  exactas se conservan. No se infiere antiguedad de expira_en/creado_en si falta
+  finalizado_en; ese caso anomalo requiere revision operativa, no borrado automatico.
+- El comando existente `python manage.py purgar_capturas_expiradas` incluye esta
+  politica. Requiere ejecucion periodica operativa; no se crea ni modifica cron,
+  Celery Beat o systemd, y no se ha verificado su programacion productiva.
+- Revalida bajo transaction.atomic/select_for_update: estado, umbral y ausencia de
+  consumo/vinculacion. UTILIZADA, utilizado_en, credito asociado, evento VINCULACION
+  o documento Prestadores con metadata_captura.sesion_id impiden la purga. El
+  contexto inicial solicitud_id no constituye por si solo vinculacion definitiva.
+- La purga cambia FINALIZADA a EXPIRADA y reutiliza borrado privado y saneamiento
+  de PII OCR. Conserva filas y eventos de auditoria, agregando el motivo tecnico
+  RETENCION_FINALIZADA_VENCIDA sin PII. Repetir no duplica eventos ni timestamps de
+  purga. No se alteran ownership, grants, camara, OCR de extraccion ni finanzas.
+- FINALIZADA dentro de retencion sigue consumible aunque venza el grant;
+  ABIERTA/CANJEADA mantienen su TTL. Cumplir 72 horas habilita la purga, no cambia
+  el estado por simple lectura: el lock serializa purga y consumo legitimo.
+- Validacion focal SQLite: 96 pruebas, 85 OK y 11 omitidas PostgreSQL; suites
+  test_captura_documental, test_capture_grant y test_ocr_documental. Doce pruebas
+  nuevas con subcasos: limites, ambos productos, consumo, vinculos, configuracion,
+  idempotencia, TTL original, privacidad OCR y carrera purga/consumo (esta ultima
+  requiere PostgreSQL). Hasher rapido limitado al proceso de tests.
+- `manage.py check`, `makemigrations --check --dry-run` y `git diff --check`: OK.
+  Sin modelos ni migraciones: se reutilizan finalizado_en/utilizado_en y eventos.
+  Concurrencia pendiente de VPS PostgreSQL; no declara identidad validada ni E2E cerrado.
+
 ### APROBADO-03 P0-2 — Continuidad de captura documental (2026-09-23)
 
 - Implementado localmente; pendiente validacion PostgreSQL y UAT fisico, sin commit
@@ -15,12 +47,9 @@
   FINALIZADA conserva lectura y consumo por propietario/producto/contexto legitimos
   despues del TTL; UTILIZADA no se reutiliza. REVOCADA sigue bloqueada. No se
   reactivan grants ni sesiones historicas previamente expiradas/purgadas.
-- La purga de abandonadas excluye FINALIZADA y UTILIZADA, revalidando bajo lock.
-  No existe una politica independiente configurada para FINALIZADA sin consumir:
-  quedan conservadas hasta definir expresamente plazo, base temporal, auditoria y
-  excepciones. Propuesta pendiente: plazo aprobado desde finalizado_en, con proceso
-  separado que revalide estado/consumo bajo lock; nunca usar el TTL del grant ni
-  borrar UTILIZADA. Sin plazo silencioso ni migracion nueva en este ticket.
+- P0-2 separo la purga de abandonadas de FINALIZADA/UTILIZADA. La retencion que
+  quedaba pendiente se implementa en P0-2.1 arriba, sin usar el TTL del grant ni
+  borrar evidencia vinculada/UTILIZADA. Sin migraciones en estos tickets.
 - sessionStorage conserva solo UUID como pista: UTILIZADA, REVOCADA, EXPIRADA,
   UUID malformado o contexto rechazado limpian UUID oculto y almacenamiento local.
   El temporizador del enlace consulta al servidor; no declara expirada una captura
@@ -49,7 +78,7 @@
   no tiene servidor PostgreSQL ni daemon Docker operativo. Ejecutar en el clon:
   `python manage.py test gestion_creditos.tests.test_captura_documental gestion_creditos.tests.test_capture_grant gestion_creditos.tests.test_ocr_documental contractors.tests.test_portal_minimo_prestadores gestion_creditos.tests.test_integridad_originacion_anulacion gestion_creditos.tests.test_libranza_form_js --verbosity 2 --keepdb`.
 - Pendiente UAT iPhone/Safari y Android fisicos del retorno en iframe y permisos de
-  camara, mas decision de retencion. No acredita identidad, no convierte OCR en
+  camara. Retencion definida en P0-2.1. No acredita identidad, no convierte OCR en
   autenticacion y no declara cerrado Prestadores E2E.
 
 ### APROBADO-03 P0-1 — Continuidad del formulario (2026-09-23)

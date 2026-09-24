@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import ImproperlyConfigured, PermissionDenied, ValidationError
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import close_old_connections, connection, transaction
@@ -479,8 +479,172 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
         self.assertEqual(requerimiento.estado, 'ATENDIDO')
 
 
+@override_settings(CAPTURA_DOCUMENTAL_FINALIZADA_RETENTION_HOURS=72)
+class CapturaRetencionTest(CapturaFixture, TestCase):
+    def envejecer(self, sesion, edad, ahora=None):
+        ahora = ahora or timezone.now()
+        Sesion.objects.filter(pk=sesion.pk).update(
+            finalizado_en=ahora - edad, expira_en=ahora - timedelta(days=5))
+
+    def test_limite_estricto_finalizada_ambos_productos(self):
+        ahora = timezone.now()
+        for producto in ('LIBRANZA', 'PRESTADORES'):
+            for edad, purgada in ((timedelta(hours=71, minutes=59), False),
+                                  (timedelta(hours=72), False),
+                                  (timedelta(hours=72, seconds=1), True)):
+                with self.subTest(producto=producto, edad=edad):
+                    sesion = sesion_finalizada(self.usuario, producto)
+                    self.envejecer(sesion, edad, ahora)
+                    archivos = [(c.archivo.storage, c.archivo.name) for c in sesion.capturas.all()]
+                    with patch.object(servicio.timezone, 'now', return_value=ahora):
+                        servicio.purgar_sesiones_expiradas()
+                    sesion.refresh_from_db()
+                    self.assertEqual(sesion.estado, 'EXPIRADA' if purgada else 'FINALIZADA')
+                    self.assertEqual(sesion.capturas.filter(purgado_en__isnull=False).count(), 2 if purgada else 0)
+                    self.assertTrue(all(storage.exists(nombre) != purgada for storage, nombre in archivos))
+                    self.assertEqual(sesion.eventos.filter(evento='RETENCION_FINALIZADA_VENCIDA').count(), int(purgada))
+
+    def test_finalizada_dentro_retencion_consumible_con_y_sin_ttl_vencido(self):
+        for vencido in (False, True):
+            with self.subTest(ttl_vencido=vencido):
+                sesion = sesion_finalizada(self.usuario)
+                self.envejecer(sesion, timedelta(hours=71, minutes=59))
+                if not vencido:
+                    Sesion.objects.filter(pk=sesion.pk).update(expira_en=timezone.now() + timedelta(minutes=5))
+                servicio.purgar_sesiones_expiradas()
+                credito = Credito.objects.create(usuario=self.usuario, linea='LIBRANZA',
+                                                monto_solicitado=1000000, plazo_solicitado=3)
+                with transaction.atomic():
+                    actual, capturas = servicio.obtener_documentos_finalizados(
+                        sesion_id=sesion.pk, actor=self.usuario, producto='LIBRANZA')
+                    self.assertEqual(len(capturas), 2)
+                    servicio.consumir_documentos(sesion=actual, actor=self.usuario, credito=credito)
+                sesion.refresh_from_db()
+                self.assertEqual(sesion.estado, 'UTILIZADA')
+
+    def test_utilizada_antigua_no_se_purga(self):
+        for producto in ('LIBRANZA', 'PRESTADORES'):
+            with self.subTest(producto=producto):
+                sesion = sesion_finalizada(self.usuario, producto)
+                with transaction.atomic():
+                    destino = ({'solicitud': self.solicitud()} if producto == 'PRESTADORES' else
+                               {'credito': Credito.objects.create(usuario=self.usuario, linea='LIBRANZA',
+                                                                  monto_solicitado=1000000, plazo_solicitado=3)})
+                    servicio.consumir_documentos(sesion=sesion, actor=self.usuario, **destino)
+                self.envejecer(sesion, timedelta(days=365))
+                servicio.purgar_sesiones_expiradas()
+                self.assertFalse(sesion.capturas.filter(purgado_en__isnull=False).exists())
+
+    def test_vinculacion_historica_protege_aunque_estado_sea_finalizada(self):
+        for vinculo in ('timestamp', 'evento', 'credito', 'documento'):
+            with self.subTest(vinculo=vinculo):
+                sesion = sesion_finalizada(self.usuario, 'PRESTADORES' if vinculo == 'documento' else 'LIBRANZA')
+                self.envejecer(sesion, timedelta(days=10))
+                if vinculo == 'timestamp':
+                    Sesion.objects.filter(pk=sesion.pk).update(utilizado_en=timezone.now() - timedelta(days=9))
+                elif vinculo == 'evento':
+                    Evento.objects.create(sesion=sesion, actor=self.usuario, evento='VINCULACION')
+                elif vinculo == 'credito':
+                    credito = Credito.objects.create(usuario=self.usuario, linea='LIBRANZA',
+                                                     monto_solicitado=1000000, plazo_solicitado=3)
+                    Sesion.objects.filter(pk=sesion.pk).update(credito=credito)
+                else:
+                    ContractorApplicationDocument.objects.create(
+                        solicitud=self.solicitud(), uploaded_by=self.usuario, tipo_documento='CEDULA_FRONTAL',
+                        archivo=imagen_documental(), metadata_captura={'source': 'sesion_documental', 'sesion_id': str(sesion.pk)})
+                servicio.purgar_sesiones_expiradas()
+                sesion.refresh_from_db()
+                self.assertEqual(sesion.estado, 'FINALIZADA')
+                self.assertFalse(sesion.capturas.filter(purgado_en__isnull=False).exists())
+
+    def test_contexto_solicitud_sin_documentos_no_es_consumo(self):
+        sesion = sesion_finalizada(self.usuario, 'PRESTADORES')
+        Sesion.objects.filter(pk=sesion.pk).update(solicitud=self.solicitud())
+        self.envejecer(sesion, timedelta(days=4))
+        self.assertEqual(servicio.purgar_sesiones_expiradas(), 2)
+
+    def test_configuracion_personalizada_no_depende_ttl_grant(self):
+        sesion = sesion_finalizada(self.usuario)
+        self.envejecer(sesion, timedelta(hours=25))
+        Sesion.objects.filter(pk=sesion.pk).update(expira_en=timezone.now() + timedelta(days=2))
+        with override_settings(CAPTURA_DOCUMENTAL_FINALIZADA_RETENTION_HOURS=48):
+            self.assertEqual(servicio.purgar_sesiones_expiradas(), 0)
+        with override_settings(CAPTURA_DOCUMENTAL_FINALIZADA_RETENTION_HOURS=24):
+            self.assertEqual(servicio.purgar_sesiones_expiradas(), 2)
+
+    def test_purga_repetida_no_duplica_eventos(self):
+        self.completar()
+        self.envejecer(self.sesion, timedelta(days=4))
+        self.assertEqual(servicio.purgar_sesiones_expiradas(), 2)
+        eventos = list(self.sesion.eventos.values_list('pk', 'evento'))
+        marcas = list(self.sesion.capturas.values_list('pk', 'purgado_en'))
+        self.assertEqual(servicio.purgar_sesiones_expiradas(), 0)
+        self.assertCountEqual(list(self.sesion.eventos.values_list('pk', 'evento')), eventos)
+        self.assertCountEqual(list(self.sesion.capturas.values_list('pk', 'purgado_en')), marcas)
+        with transaction.atomic(), self.assertRaises(ValidationError):
+            servicio.obtener_documentos_finalizados(**self.params)
+
+    def test_finalizada_sin_timestamp_no_infiere_antiguedad(self):
+        self.completar()
+        self.envejecer(self.sesion, timedelta(days=4))
+        Sesion.objects.filter(pk=self.sesion.pk).update(finalizado_en=None)
+        self.assertEqual(servicio.purgar_sesiones_expiradas(), 0)
+
+    def test_retencion_invalida_no_purga(self):
+        self.completar()
+        self.envejecer(self.sesion, timedelta(days=4))
+        for horas in (0, -1):
+            with override_settings(CAPTURA_DOCUMENTAL_FINALIZADA_RETENTION_HOURS=horas):
+                with self.assertRaises(ImproperlyConfigured):
+                    servicio.purgar_sesiones_expiradas()
+        self.assertFalse(self.sesion.capturas.filter(purgado_en__isnull=False).exists())
+
+    def test_abierta_y_canjeada_mantienen_ttl(self):
+        ahora = timezone.now()
+        for estado in ('ABIERTA', 'CANJEADA'):
+            with self.subTest(estado=estado):
+                sesion, token = servicio.crear_sesion(actor=self.usuario, producto='LIBRANZA')
+                params = dict(sesion_id=sesion.pk, actor=self.usuario, producto='LIBRANZA')
+                if estado == 'CANJEADA':
+                    servicio.canjear_sesion(**params, token=token, vinculo='test')
+                    servicio.recibir_captura(**params, vinculo='test', lado='FRONTAL', archivo=imagen_documental())
+                Sesion.objects.filter(pk=sesion.pk).update(expira_en=ahora + timedelta(minutes=1))
+                servicio.purgar_sesiones_expiradas()
+                sesion.refresh_from_db()
+                self.assertEqual(sesion.estado, estado)
+                Sesion.objects.filter(pk=sesion.pk).update(expira_en=ahora - timedelta(seconds=1))
+                servicio.purgar_sesiones_expiradas()
+                sesion.refresh_from_db()
+                self.assertEqual(sesion.estado, 'EXPIRADA')
+                self.assertFalse(sesion.capturas.filter(purgado_en__isnull=True).exists())
+
+
 @skipUnless(connection.vendor == 'postgresql', 'Requiere PostgreSQL real en VPS.')
 class CapturaConcurrenciaPostgresTest(CapturaFixture, TransactionTestCase):
+    @override_settings(CAPTURA_DOCUMENTAL_FINALIZADA_RETENTION_HOURS=72)
+    def test_purga_retencion_y_consumo_serializados(self):
+        self.completar()
+        Sesion.objects.filter(pk=self.sesion.pk).update(finalizado_en=timezone.now() - timedelta(days=4))
+        credito = Credito.objects.create(usuario=self.usuario, linea='LIBRANZA', monto_solicitado=1000000, plazo_solicitado=3)
+        def operar(n):
+            if n == 0:
+                servicio.purgar_sesiones_expiradas()
+            else:
+                with transaction.atomic():
+                    sesion, _ = servicio.obtener_documentos_finalizados(**self.params)
+                    servicio.consumir_documentos(sesion=sesion, actor=self.usuario, credito=credito)
+        resultados = self.competir(operar)
+        self.sesion.refresh_from_db()
+        if self.sesion.estado == 'UTILIZADA':
+            self.assertEqual(resultados, ['OK', 'OK'])
+            self.assertFalse(self.sesion.capturas.filter(purgado_en__isnull=False).exists())
+            self.assertEqual(self.sesion.eventos.filter(evento='VINCULACION').count(), 1)
+        else:
+            self.assertEqual(self.sesion.estado, 'EXPIRADA')
+            self.assertCountEqual(resultados, ['OK', 'RECHAZADO'])
+            self.assertEqual(self.sesion.capturas.filter(purgado_en__isnull=False).count(), 2)
+            self.assertFalse(self.sesion.eventos.filter(evento='VINCULACION').exists())
+
     def test_consumo_unico_finalizada_despues_ttl(self):
         self.completar()
         Sesion.objects.filter(pk=self.sesion.pk).update(expira_en=timezone.now() - timedelta(days=1))

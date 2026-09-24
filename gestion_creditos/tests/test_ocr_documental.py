@@ -364,6 +364,34 @@ class OCRServicioTest(OCRFixture, TestCase):
         self.assertEqual(self.p.numero_documento_normalizado, '99000123')
         self.assertIsNone(self.p.purgado_en)
 
+    @override_settings(CAPTURA_DOCUMENTAL_FINALIZADA_RETENTION_HOURS=72)
+    def test_retencion_finalizada_purga_archivos_y_pii_ocr_idempotente(self):
+        self.run_ocr()
+        Sesion.objects.filter(pk=self.sesion.pk).update(finalizado_en=timezone.now() - timedelta(hours=73),
+                                                       expira_en=timezone.now() - timedelta(hours=72))
+        self.assertEqual(captura.purgar_sesiones_expiradas(), 2)
+        self.p.refresh_from_db()
+        self.assertEqual(self.p.numero_documento_bruto, '')
+        self.assertEqual(self.p.numero_documento_normalizado, '')
+        self.assertEqual(self.p.nombres_normalizado, '')
+        self.assertEqual(self.p.evidencia, {})
+        self.assertEqual(self.p.confianza, {})
+        self.assertFalse(self.p.vigente)
+        self.assertEqual(self.p.codigo_error, 'OCR_ARCHIVOS_PURGADOS')
+        self.assertFalse(Comparacion.objects.filter(procesamiento=self.p).exists())
+        self.assertFalse(list(self.private_root.rglob('*.jpg')))
+        marca = self.p.purgado_en
+        self.assertIsNotNone(marca)
+        self.assertEqual(captura.purgar_sesiones_expiradas(), 0)
+        servicio.procesar(self.p.pk)
+        self.p.refresh_from_db()
+        self.assertEqual(self.p.purgado_en, marca)
+        self.assertEqual(self.p.numero_documento_normalizado, '')
+        eventos = str(list(Evento.objects.filter(sesion=self.sesion).values()))
+        self.assertIn('RETENCION_FINALIZADA_VENCIDA', eventos)
+        self.assertNotIn('99000123', eventos)
+        self.assertNotIn('PERSONA FICTICIA', eventos)
+
     def test_comparacion_numero_no_leible(self):
         self.bind()
         front = documento([t['text'] for t in FRONTAL['tokens'] if not t['text'].startswith('NUMERO')])

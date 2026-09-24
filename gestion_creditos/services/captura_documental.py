@@ -5,9 +5,10 @@ from functools import wraps
 from io import BytesIO
 
 from django.conf import settings
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import ImproperlyConfigured, PermissionDenied, ValidationError
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables
 from PIL import Image, ImageOps
@@ -424,17 +425,39 @@ def _datos_estado(sesion):
             'lados': list(sesion.capturas.filter(activo=True, purgado_en__isnull=True).values_list('lado', flat=True))}
 
 
+def _evidencia_vinculada(sesion):
+    # solicitud_id may be the initial capture context, not a definitive association.
+    if sesion.utilizado_en or sesion.credito_id or sesion.eventos.filter(evento='VINCULACION').exists():
+        return True
+    from contractors.models import ContractorApplicationDocument
+    return ContractorApplicationDocument.objects.filter(metadata_captura__sesion_id=str(sesion.pk)).exists()
+
+
 def purgar_sesiones_expiradas():
-    """Solo abandonadas/revocadas; FINALIZADA requiere una politica de retencion separada."""
+    """Purge abandoned captures and completed evidence past retention, never linked evidence."""
+    horas = int(settings.CAPTURA_DOCUMENTAL_FINALIZADA_RETENTION_HOURS)
+    if horas <= 0:
+        raise ImproperlyConfigured('CAPTURA_DOCUMENTAL_FINALIZADA_RETENTION_HOURS debe ser positivo.')
     ahora = timezone.now()
+    limite_finalizadas = ahora - timedelta(hours=horas)
     total = 0
-    protegidos = {Sesion.Estado.FINALIZADA, Sesion.Estado.UTILIZADA}
-    ids = Sesion.objects.filter(expira_en__lte=ahora).exclude(estado__in=protegidos).values_list('pk', flat=True)
+    abandonadas = Q(expira_en__lte=ahora) & ~Q(estado__in=[Sesion.Estado.FINALIZADA, Sesion.Estado.UTILIZADA])
+    finalizadas = Q(estado=Sesion.Estado.FINALIZADA, finalizado_en__lt=limite_finalizadas,
+                   utilizado_en__isnull=True, credito__isnull=True)
+    ids = Sesion.objects.filter(abandonadas | finalizadas).values_list('pk', flat=True)
     for pk in ids.iterator():
         with transaction.atomic():
             sesion = Sesion.objects.select_for_update().get(pk=pk)
-            if sesion.estado in protegidos or sesion.expira_en > ahora:
+            if sesion.estado == Sesion.Estado.UTILIZADA or _evidencia_vinculada(sesion):
                 continue
+            por_retencion = sesion.estado == Sesion.Estado.FINALIZADA
+            if por_retencion:
+                if not sesion.finalizado_en or sesion.finalizado_en >= limite_finalizadas:
+                    continue
+            elif sesion.expira_en > ahora:
+                continue
+            if por_retencion:
+                _evento(sesion, None, 'RETENCION_FINALIZADA_VENCIDA')
             if sesion.estado not in {Sesion.Estado.EXPIRADA, Sesion.Estado.REVOCADA}:
                 sesion.estado = Sesion.Estado.EXPIRADA
                 _invalidar_grant(sesion)
@@ -442,7 +465,8 @@ def purgar_sesiones_expiradas():
                 _evento(sesion, None, 'EXPIRACION')
             purgadas = 0
             from .ocr_documental import purgar_resultados
-            purgar_resultados(sesion.pk)
+            if sesion.procesamientos_ocr.filter(purgado_en__isnull=True).exists():
+                purgar_resultados(sesion.pk)
             for captura in sesion.capturas.filter(purgado_en__isnull=True):
                 captura.archivo.delete(save=False)
                 captura.activo = False
