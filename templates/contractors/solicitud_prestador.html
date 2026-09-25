@@ -1,5 +1,5 @@
 {% extends "contractors/base.html" %}
-{% load l10n %}
+{% load l10n static %}
 {% block title %}Solicita tu Crédito | Prestadores de Servicios{% endblock %}
 {% block content %}
 <main class="form-container">
@@ -398,6 +398,7 @@
 </div>
 
 
+<script src="{% static 'js/contract_money.js' %}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     const formulario = document.getElementById('formularioPrestador');
@@ -473,45 +474,12 @@
       return campo ? String(campo.value || '').trim() : '';
     }
 
-    function normalizarMonedaVisual(valorEntrada) {
-      const texto = String(valorEntrada || '').replace(/[$\s\u00a0]/g, '');
-      if (!texto) return '';
-      if (!/^\d[\d.,]*$/.test(texto)) return null;
-      const tienePunto = texto.includes('.');
-      const tieneComa = texto.includes(',');
-      if (tienePunto && tieneComa) {
-        const separadorDecimal = texto.lastIndexOf('.') > texto.lastIndexOf(',') ? '.' : ',';
-        const separadorMiles = separadorDecimal === '.' ? ',' : '.';
-        const indice = texto.lastIndexOf(separadorDecimal);
-        const entero = texto.slice(0, indice).replaceAll(separadorMiles, '');
-        const decimales = texto.slice(indice + 1);
-        if (!/^\d+$/.test(entero) || !/^\d{1,2}$/.test(decimales)) return null;
-        return `${entero}.${decimales}`;
-      }
-      const separador = tienePunto ? '.' : tieneComa ? ',' : '';
-      if (!separador) return texto;
-      const partes = texto.split(separador);
-      if (partes.some((parte) => !/^\d+$/.test(parte))) return null;
-      if (partes.length > 2 || partes.at(-1).length === 3) {
-        if (partes.slice(1).some((parte) => parte.length !== 3)) return null;
-        return partes.join('');
-      }
-      if (partes.length === 2 && /^\d{1,2}$/.test(partes[1])) return `${partes[0]}.${partes[1]}`;
-      return null;
-    }
-
     function formatearMonedaContrato(campo) {
-      const normalizado = normalizarMonedaVisual(campo.value);
-      if (normalizado === null || normalizado === '') return;
-      const [entero, decimales] = normalizado.split('.');
-      const enteroFormateado = new Intl.NumberFormat('es-CO', {maximumFractionDigits: 0}).format(Number(entero));
-      campo.value = decimales ? `${enteroFormateado},${decimales}` : enteroFormateado;
+      window.ContractMoney.bind(campo).format();
     }
 
     camposMonedaContrato.forEach((campo) => {
-      formatearMonedaContrato(campo);
-      campo.addEventListener('input', () => formatearMonedaContrato(campo));
-      campo.addEventListener('blur', () => formatearMonedaContrato(campo));
+      window.ContractMoney.bind(campo);
     });
 
     function validarPasoUno() {
@@ -1045,8 +1013,7 @@
         return;
       }
       camposMonedaContrato.forEach((campo) => {
-        const normalizado = normalizarMonedaVisual(campo.value);
-        if (normalizado !== null && normalizado !== '') campo.value = normalizado;
+        window.ContractMoney.bind(campo).sync();
       });
     });
     actualizarBotonAnalisis();

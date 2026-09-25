@@ -226,6 +226,65 @@ class PortalMinimoPrestadoresTest(TestCase):
         with self.assertRaises(ValidationError):
             formulario.fields['valor_total_contrato'].clean('ochenta millones')
 
+    def test_montos_equivalentes_persisten_y_redirigen_al_simulador(self):
+        self.client.force_login(self.usuario)
+        campos = ('valor_total_contrato', 'valor_pagado_contrato',
+                  'valor_pendiente_cobrar', 'valor_mensual_contractual')
+        for campo in campos:
+            for entrada in ('120000000', '120.000.000', '$ 120.000.000'):
+                with self.subTest(campo=campo, entrada=entrada):
+                    payload = self._payload_solicitud_con_documentos()
+                    payload.update(valor_total_contrato='240000000',
+                                   valor_pagado_contrato='0', valor_pendiente_cobrar='120000000')
+                    payload[campo] = entrada
+                    response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+                    self.assertEqual(response.status_code, 302,
+                                     response.context['form'].errors if response.context else '')
+                    solicitud = ContractorApplication.objects.latest('pk')
+                    self.assertEqual(getattr(solicitud, campo), Decimal('120000000'))
+                    self.assertEqual(response['Location'], f'/simular/?solicitud_id={solicitud.pk}')
+                    destino = self.client.get(response['Location'], HTTP_HOST=self.host)
+                    self.assertEqual(destino.status_code, 200)
+        self.assertEqual(ContractorApplication.objects.count(), 12)
+        self.assertFalse(Credito.objects.exists())
+        self.assertFalse(CreditoLibranza.objects.exists())
+
+    def test_monto_invalido_conserva_captura_y_paso_contractual(self):
+        from gestion_creditos.models import SesionCapturaDocumental
+
+        self.client.force_login(self.usuario)
+        payload = self._payload_solicitud_con_documentos()
+        payload['valor_total_contrato'] = '1.20000000'
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['paso_activo'], 4)
+        self.assertIn('valor_total_contrato', response.context['form'].errors)
+        self.assertContains(response, 'value="1.20000000"')
+        self.assertContains(response, 'resumen-errores-solicitud')
+        self.assertContains(response, 'Los PDF seleccionados en este intento no se guardaron.')
+        self.assertEqual(response.context['form'].data['sesion_documental_id'],
+                         payload['sesion_documental_id'])
+        sesion = SesionCapturaDocumental.objects.get(pk=payload['sesion_documental_id'])
+        self.assertEqual(sesion.estado, 'FINALIZADA')
+        self.assertFalse(ContractorApplication.objects.exists())
+        self.assertFalse(ContractorApplicationDocument.objects.exists())
+
+    def test_formatos_monetarios_no_omiten_relaciones_financieras(self):
+        self.client.force_login(self.usuario)
+        for cambios, campo_error in (
+            ({'valor_pendiente_cobrar': '$ 120.000.000'}, 'valor_pendiente_cobrar'),
+            ({'valor_pagado_contrato': '$ 5.000.000'}, 'valor_pendiente_cobrar'),
+            ({'valor_mensual_contractual': '$ 0'}, 'valor_mensual_contractual'),
+        ):
+            with self.subTest(cambios=cambios):
+                payload = self._payload_solicitud_con_documentos()
+                payload.update(cambios)
+                response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(campo_error, response.context['form'].errors)
+                self.assertEqual(response.context['paso_activo'], 4)
+        self.assertFalse(ContractorApplication.objects.exists())
+
     def test_formulario_muestra_montos_existentes_con_formato_colombiano(self):
         solicitud = self._crear_solicitud(
             self.usuario,
@@ -245,6 +304,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertContains(response, 'value="5.000.000"')
         self.assertContains(response, 'value="75.000.000"')
         self.assertContains(response, 'data-money-contract="true"', count=4)
+        self.assertContains(response, '/static/js/contract_money.js')
 
     def test_formulario_expone_enlaces_legales_de_prestadores(self):
         self.client.force_login(self.usuario)

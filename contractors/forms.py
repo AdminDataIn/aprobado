@@ -21,7 +21,7 @@ from gestion_creditos.models import Empresa
 def normalizar_monto_colombiano(valor):
     if valor in (None, ''):
         return valor
-    if isinstance(valor, (Decimal, int, float)):
+    if isinstance(valor, (Decimal, int)):
         return str(valor)
 
     texto = re.sub(r'[\s\u00a0$]', '', str(valor).strip())
@@ -62,11 +62,9 @@ class MontoContratoField(forms.DecimalField):
     def prepare_value(self, value):
         if value in (None, ''):
             return value
-        if isinstance(value, str) and not re.fullmatch(r'\d+(\.\d+)?', value.strip()):
-            return value
         try:
-            decimal = Decimal(str(value))
-        except (InvalidOperation, TypeError, ValueError):
+            decimal = Decimal(normalizar_monto_colombiano(value))
+        except (InvalidOperation, TypeError, ValueError, ValidationError):
             return value
         entero, _, decimales = format(decimal, 'f').partition('.')
         entero_formateado = f'{int(entero):,}'.replace(',', '.')
@@ -161,7 +159,7 @@ class SolicitudPrestadorForm(forms.ModelForm):
         min_value=Decimal('0'),
         widget=forms.TextInput(attrs={
             'class': 'campo money-contract-input',
-            'inputmode': 'numeric',
+            'inputmode': 'decimal',
             'autocomplete': 'off',
             'placeholder': 'Ej. 80.000.000',
             'data-money-contract': 'true',
@@ -174,7 +172,7 @@ class SolicitudPrestadorForm(forms.ModelForm):
         min_value=Decimal('0'),
         widget=forms.TextInput(attrs={
             'class': 'campo money-contract-input',
-            'inputmode': 'numeric',
+            'inputmode': 'decimal',
             'autocomplete': 'off',
             'placeholder': 'Ej. 5.000.000',
             'data-money-contract': 'true',
@@ -187,7 +185,7 @@ class SolicitudPrestadorForm(forms.ModelForm):
         min_value=Decimal('0'),
         widget=forms.TextInput(attrs={
             'class': 'campo money-contract-input',
-            'inputmode': 'numeric',
+            'inputmode': 'decimal',
             'autocomplete': 'off',
             'placeholder': 'Ej. 75.000.000',
             'data-money-contract': 'true',
@@ -201,7 +199,7 @@ class SolicitudPrestadorForm(forms.ModelForm):
         required=False,
         widget=forms.TextInput(attrs={
             'class': 'campo money-contract-input',
-            'inputmode': 'numeric',
+            'inputmode': 'decimal',
             'autocomplete': 'off',
             'placeholder': 'Ej. 8.000.000',
             'data-money-contract': 'true',
