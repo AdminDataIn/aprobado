@@ -20,7 +20,7 @@
       {% if configuracion_simulador %}
       <div class="simulador-hero">
         <div class="simulador-text-content">
-          <span class="simulador-eyebrow">SIMULACIÓN INFORMATIVA · DEMO</span>
+          <span class="simulador-eyebrow">SIMULACIÓN INFORMATIVA</span>
           <h1>Define las condiciones de tu solicitud</h1>
           <p>Selecciona el monto y el plazo que mejor se ajusten al valor pendiente de tu contrato. Revisa la cuota estimada, los costos asociados y el capital total financiado antes de registrar la solicitud.</p>
           <p class="simulador-legal-note">La simulación es informativa. La aprobación estará sujeta al análisis documental, validación de identidad, evaluación de riesgo y consulta ante centrales de información.</p>
@@ -111,12 +111,12 @@
       </div>
       {% else %}
         <div class="simulador-configuracion-ausente" role="alert">
-          <strong>SimulaciÃ³n temporalmente no disponible</strong>
+          <strong>Simulación temporalmente no disponible</strong>
           <p>
-            AÃºn no existe una configuraciÃ³n financiera activa para Prestadores de
-            Servicios. No se calcularÃ¡n ni registrarÃ¡n valores hasta que sea configurada.
+            Aún no hay una configuración financiera disponible para Prestadores de
+            Servicios. No se calcularán ni registrarán valores hasta que sea configurada.
           </p>
-          <a href="{% url 'contractors:mi_credito' %}">Volver a Mi crÃ©dito</a>
+          <a href="{% url 'contractors:mi_credito' %}">Volver a Mi crédito</a>
         </div>
       {% endif %}
     </div>

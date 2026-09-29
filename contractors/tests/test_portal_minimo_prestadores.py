@@ -1654,6 +1654,14 @@ class PortalMinimoPrestadoresTest(TestCase):
             HTTP_HOST=self.host,
         )
         self.assertContains(pagina, 'temporalmente no disponible')
+        self.assertEqual(pagina['Content-Type'], 'text/html; charset=utf-8')
+        self.assertContains(pagina, '<meta charset="utf-8">')
+        self.assertContains(pagina, 'Simulación temporalmente no disponible')
+        self.assertContains(pagina, 'Aún no hay una configuración financiera disponible')
+        self.assertContains(pagina, 'No se calcularán ni registrarán valores')
+        self.assertContains(pagina, 'Volver a Mi crédito')
+        self.assertNotContains(pagina, 'Ã')
+        self.assertNotContains(pagina, '\ufffd')
         self.assertNotContains(pagina, 'max="24"')
 
         calculo = self.client.post(
@@ -1702,6 +1710,33 @@ class PortalMinimoPrestadoresTest(TestCase):
         )
         self.assertEqual(Credito.objects.count(), creditos_antes)
         self.assertEqual(CreditoLibranza.objects.count(), creditos_libranza_antes)
+
+    def test_documentos_a_simulacion_real_sin_crear_credito(self):
+        self.client.force_login(self.usuario)
+        creada = self.client.post('/solicitar/', self._payload_solicitud_con_documentos(),
+                                  HTTP_HOST=self.host)
+        self.assertEqual(creada.status_code, 302)
+        solicitud = ContractorApplication.objects.get()
+        pagina = self.client.get(creada['Location'], HTTP_HOST=self.host)
+        self.assertEqual(pagina['Content-Type'], 'text/html; charset=utf-8')
+        self.assertContains(pagina, 'SIMULACIÓN INFORMATIVA')
+        self.assertNotContains(pagina, 'Ã')
+        self.assertTrue(pagina.context['puede_registrar'])
+        respuesta = self.client.post('/simular/calcular/',
+            data={'solicitud_id': solicitud.pk, 'monto': '3000000', 'plazo_meses': 8},
+            content_type='application/json', HTTP_HOST=self.host)
+        self.assertEqual(respuesta.status_code, 200)
+        esperado = simular_credito_prestador_informativo(
+            monto=Decimal('3000000'), plazo_meses=8, configuracion=self.configuracion_simulador)
+        self.assertIn(str(esperado.cuota_mensual), respuesta.content.decode())
+        guardada = self.client.post(creada['Location'],
+            {'solicitud_id': solicitud.pk, 'monto': '3000000', 'plazo_meses': 8}, HTTP_HOST=self.host)
+        self.assertEqual(guardada.status_code, 302)
+        solicitud.refresh_from_db()
+        self.assertEqual(solicitud.monto_simulado, Decimal('3000000'))
+        self.assertEqual(solicitud.version_configuracion_financiera_simulacion, self.configuracion_simulador.version)
+        self.assertFalse(Credito.objects.exists())
+        self.assertFalse(CreditoLibranza.objects.exists())
 
     def test_post_simulador_muestra_modal_institucional_una_sola_vez(self):
         solicitud = self._crear_solicitud(self.usuario, monto=None, plazo=None)

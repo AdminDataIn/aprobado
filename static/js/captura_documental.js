@@ -278,7 +278,9 @@
   const open = find('canjear'), take = find('tomar-foto'), repeat = find('repetir');
   const accept = find('usar-foto'), finish = find('finalizar');
   const exitCamera = find('salir'), guide = find('camera-guide'), zoom = find('camera-zoom');
-  const buttons = [open, take, repeat, accept, finish];
+  const switchCamera = find('cambiar-camara');
+  const buttons = [open, take, repeat, accept, finish, switchCamera];
+  let facingMode = 'environment';
   let stream, blob, previewURL, monitor, cameraTimer, generation = 0;
   let trackSettings = {}, trackCaps = {};
   let quality = null, expectedFrame = null, zoomTimer, zoomPending = false;
@@ -319,6 +321,7 @@
     example.dataset.exampleSide = side;
     example.setAttribute('aria-label', side === 'FRONTAL' ? 'Ejemplo ilustrativo del frente, sin datos personales' : 'Ejemplo ilustrativo del reverso, sin datos personales');
     open.hidden = next !== 'ready'; take.hidden = next !== 'live';
+    switchCamera.hidden = next !== 'live';
     repeat.hidden = accept.hidden = next !== 'preview'; finish.hidden = next !== 'finish';
     open.textContent = redeemed ? 'Abrir c\u00e1mara de nuevo' : 'Abrir c\u00e1mara';
     take.disabled = next !== 'live' || video.readyState < 2;
@@ -338,7 +341,7 @@
     const scale = Math.min(box.width / video.videoWidth, box.height / video.videoHeight);
     const width = video.videoWidth * scale, height = video.videoHeight * scale;
     const ratio = 85.60 / 53.98;
-    const frameWidth = Math.min(width * .82, height * .72 * ratio);
+    const frameWidth = Math.min(width * .90, height * .72 * ratio);
     const frameHeight = frameWidth / ratio;
     expectedFrame = {x: (width - frameWidth) / (2 * width), y: (height - frameHeight) / (2 * height), w: frameWidth / width, h: frameHeight / height};
     guide.style.width = `${frameWidth}px`; guide.style.height = `${frameHeight}px`;
@@ -493,13 +496,13 @@
       stopCamera(); show('ready', 'No recibimos acceso a la c\u00e1mara. Revisa el permiso y vuelve a intentar.');
     }, 30000);
     navigator.mediaDevices.getUserMedia({audio: false, video: {
-      facingMode: {ideal: 'environment'}, width: {ideal: 1920}, height: {ideal: 1080},
+      facingMode: {ideal: facingMode}, width: {ideal: 1920}, height: {ideal: 1080},
     }}).then(async media => {
       if (run !== generation || terminal || document.hidden) {
         media.getTracks().forEach(track => track.stop()); return;
       }
       stream = media; video.srcObject = media; video.muted = true;
-      show('live', 'Encuadra el documento y toma la foto.');
+      show('live');
       await video.play();
       if (run !== generation) return;
       clearTimeout(cameraTimer); take.disabled = false;
@@ -550,6 +553,11 @@
     if (step !== 'finish' && !document.hidden) launchCamera();
   }));
   repeat.addEventListener('click', () => { if (!busy && !terminal) launchCamera(); });
+  switchCamera.addEventListener('click', () => {
+    if (busy || terminal || step !== 'live') return;
+    facingMode = facingMode === 'environment' ? 'user' : 'environment';
+    launchCamera();
+  });
   exitCamera.addEventListener('click', () => {
     resumePortrait = false;
     stopCamera(); clearPhoto();

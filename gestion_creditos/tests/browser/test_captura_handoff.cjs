@@ -514,7 +514,7 @@ async function frameGeometry(page) {
 function assertFrame({frame: f, visible: v}) {
   assert.ok(Math.abs(f.width / f.height - 85.60 / 53.98) < .005);
   assert.ok(f.x >= v.x - 1 && f.y >= v.y - 1 && f.x + f.width <= v.x + v.width + 1 && f.y + f.height <= v.y + v.height + 1);
-  assert.ok(Math.abs(f.width - Math.min(v.width * .82, v.height * .72 * (85.60 / 53.98))) < 1);
+  assert.ok(Math.abs(f.width - Math.min(v.width * .90, v.height * .72 * (85.60 / 53.98))) < 1);
 }
 test('visor dedicado y marco dentro del video real; rotacion y stream vertical', async t => {
   const ui = await cameraSetup(t); await ui.openCamera();
@@ -629,10 +629,32 @@ for (const viewport of [{width: 390, height: 844}, {width: 360, height: 640}]) {
 }
 test('cache busting consistente entre handoff y camara', () => {
   for (const content of [html, cameraHTML]) {
-    assert.match(content, /captura_documental\.js\?v=p03p02-1/);
-    assert.match(content, /captura_documental\.css\?v=p03p02-1/);
+    assert.match(content, /captura_documental\.js\?v=p04a-1/);
+    assert.match(content, /captura_documental\.css\?v=p04a-1/);
   }
   assert.match(html, /qrcode-generator-1\.4\.4\.js/);
+});
+
+test('P0-4A visor inmersivo y cambio de camara sin nuevo canje', async t => {
+  const ui = await cameraSetup(t, {portrait: true, touch: true, caps: {zoom: {min: 1, max: 2, step: .1}}});
+  await ui.openCamera();
+  const geometry = await ui.page.evaluate(() => {
+    const rect = selector => { const r = document.querySelector(selector).getBoundingClientRect();
+      return {top: r.top, bottom: r.bottom, height: r.height}; };
+    return {height: innerHeight, media: rect('[data-camera-media]'), guide: rect('[data-camera-guide]'),
+      hint: rect('[data-camera-hint]'), zoom: rect('[data-zoom-control]')};
+  });
+  assert.ok(geometry.media.height > geometry.height * .85);
+  assert.ok(geometry.hint.bottom < geometry.guide.top);
+  assert.ok(geometry.guide.bottom < geometry.zoom.top);
+  await ui.page.locator('[data-cambiar-camara]').click();
+  await ui.waitStep('live');
+  await ui.page.waitForFunction(() => cameraStats.calls.length === 2 && !document.querySelector('[data-tomar-foto]').disabled);
+  assert.equal(await ui.page.evaluate(() => cameraStats.calls[1].video.facingMode.ideal), 'user');
+  assert.equal(await ui.page.evaluate(() => cameraStats.tracks[0].readyState), 'ended');
+  assert.equal(ui.requests.filter(r => r.name === 'canjear').length, 1);
+  assert.equal(ui.requests.filter(r => r.method === 'POST' && r.name !== 'canjear').length, 0);
+  assert.equal(ui.errors.length, 0);
 });
 
 for (const [qualityScene, reason] of [['sharp', null], ['white-card', null], ['dim', null], ['blur', 'blur'], ['dark', 'dark'], ['bright', 'bright'],

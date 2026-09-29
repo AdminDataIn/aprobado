@@ -1,5 +1,5 @@
 {% load static l10n %}
-<link rel="stylesheet" href="{% static 'css/captura_documental.css' %}?v=p03p02-1">
+<link rel="stylesheet" href="{% static 'css/captura_documental.css' %}?v=p04a-1">
 <section class="capture-handoff" data-capture-handoff data-producto="{{ producto }}" data-contexto="{{ solicitud.id|unlocalize|default:'' }}"
          data-crear="{% url 'captura:crear' producto %}">
   <div class="capture-heading">
@@ -37,4 +37,4 @@
   <noscript><p>Activa JavaScript para continuar con la captura segura.</p></noscript>
 </section>
 <script src="{% static 'js/vendor/qrcode-generator-1.4.4.js' %}" defer></script>
-<script src="{% static 'js/captura_documental.js' %}?v=p03p02-1" defer></script>
+<script src="{% static 'js/captura_documental.js' %}?v=p04a-1" defer></script>

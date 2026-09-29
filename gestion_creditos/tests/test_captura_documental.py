@@ -160,7 +160,7 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
                                  'data-camera-instructions', 'data-confirm-quality', 'data-rotate'):
                     self.assertContains(response, atributo)
                 self.assertNotContains(response, 'type="file"')
-                self.assertContains(response, 'captura_documental.js?v=p03p02-1')
+                self.assertContains(response, 'captura_documental.js?v=p04a-1')
                 self.assertContains(response, 'captura_quality.js?v=id01cd-1')
                 self.assertContains(response, 'jsfeat-0.0.8.min.js')
                 self.assertFalse(Credito.objects.exists())
@@ -172,7 +172,7 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
         pagina = cliente.get(reverse('libranza:solicitar'))
         self.assertEqual(pagina.status_code, 200)
         for elemento in ('data-capture-qr', 'data-handoff-result', 'data-reintentar-estado',
-                         'qrcode-generator-1.4.4.js', 'captura_documental.js?v=p03p02-1'):
+                         'qrcode-generator-1.4.4.js', 'captura_documental.js?v=p04a-1'):
             self.assertContains(pagina, elemento)
         url = reverse('captura:crear', args=['LIBRANZA'])
         cantidad = Sesion.objects.count()
