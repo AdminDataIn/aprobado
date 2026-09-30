@@ -37,6 +37,8 @@ from contractors.services.capacidad_contractual import (
     snapshot_configuracion_financiera,
 )
 from contractors.services.analisis_contractual_seguro import analizar_contrato_seguro
+from contractors.validators import documento_numerico
+from contractors.services.reconciliacion_contractual import confirmar_reconciliacion, reconciliar
 from contractors.services.solicitud import (
     actualizar_estado_documental,
     guardar_documento_prestador,
@@ -133,7 +135,9 @@ def analizar_contrato_prestador_view(request, solicitud_id=None):
         request.POST.get('numero_documento')
         or (solicitud.numero_documento if solicitud else '')
     )
-    if not numero_documento:
+    try:
+        numero_documento = documento_numerico(numero_documento, request.POST.get('tipo_documento') or (solicitud.tipo_documento if solicitud else 'CC'))
+    except ValidationError:
         return JsonResponse(
             {'success': False, 'manual_allowed': True, 'error': 'Ingresa el número de documento antes de analizar.'},
             status=400,
@@ -176,7 +180,18 @@ def analizar_contrato_prestador_view(request, solicitud_id=None):
             campos=['analisis_contractual', 'contrato_hash_sha256'],
             motivo='analisis_contractual_actualizado',
         )
-    return JsonResponse(resultado.respuesta_publica())
+    respuesta = resultado.respuesta_publica()
+    datos_formulario = {campo: request.POST.get(campo, getattr(solicitud, campo, '') if solicitud else '')
+                       for campo in SolicitudPrestadorForm.Meta.fields if campo != 'empresa'}
+    empresa_id = request.POST.get('empresa') or (solicitud.empresa_id if solicitud else None)
+    from gestion_creditos.models import Empresa
+    empresa_id = str(empresa_id or '')
+    id_valido = (empresa_id.isascii() and empresa_id.isdigit() and len(empresa_id) <= 19
+                 and 0 < int(empresa_id) <= 9223372036854775807)
+    datos_formulario['empresa'] = Empresa.objects.filter(pk=empresa_id, convenio_activo=True).first() if id_valido else None
+    respuesta['reconciliacion'] = reconciliar(resultado.metadata, datos_formulario)
+    respuesta['campos_extraidos'] = resultado.metadata.get('campos_extraidos', {})
+    return JsonResponse(respuesta)
 
 
 def _valor_booleano(valor):
@@ -393,9 +408,12 @@ def solicitar_prestador_view(request):
                 form=form,
                 solicitud=solicitud_existente,
             )
+            if not error_analisis:
+                evidencia, error_analisis = confirmar_reconciliacion(
+                    form=form, evidencia=evidencia, actor=request.user, sesion=sesion_documental)
             if error_analisis:
                 form.add_error(None, error_analisis)
-                paso_error_general = 2
+                paso_error_general = 4 if hasattr(form, 'reconciliacion') else 2
             if not error_analisis:
                 with transaction.atomic():
                     solicitud = form.save(commit=False)

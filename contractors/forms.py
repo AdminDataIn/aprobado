@@ -16,6 +16,7 @@ from contractors.models import (
     RevisionManualPrestador,
 )
 from gestion_creditos.models import Empresa
+from contractors.validators import validar_campos_personales
 
 
 def normalizar_monto_colombiano(valor):
@@ -151,6 +152,8 @@ class SimulacionPrestadorForm(forms.Form):
 
 class SolicitudPrestadorForm(forms.ModelForm):
     MAPA_DOCUMENTOS = MAPA_CAMPOS_DOCUMENTOS_PRESTADOR
+    confirma_discrepancias = forms.BooleanField(required=False, label='Confirmo los datos que diligencie y solicito su revision.')
+    reconciliacion_token = forms.CharField(required=False, widget=forms.HiddenInput)
 
     valor_total_contrato = MontoContratoField(
         label='Valor total contrato',
@@ -281,10 +284,10 @@ class SolicitudPrestadorForm(forms.ModelForm):
         widgets = {
             'escenario_credito': forms.Select(attrs={'class': 'campo'}),
             'tipo_documento': forms.Select(attrs={'class': 'campo'}),
-            'numero_documento': forms.TextInput(attrs={'class': 'campo', 'placeholder': 'Ej. 1020304050'}),
+            'numero_documento': forms.TextInput(attrs={'class': 'campo', 'placeholder': 'Ej. 1020304050', 'inputmode': 'numeric', 'pattern': '[0-9]{6,12}', 'maxlength': 12}),
             'nombres': forms.TextInput(attrs={'class': 'campo', 'placeholder': 'Ej. Ana María'}),
             'apellidos': forms.TextInput(attrs={'class': 'campo', 'placeholder': 'Ej. Pérez Gómez'}),
-            'celular': forms.TextInput(attrs={'class': 'campo', 'placeholder': '3001234567'}),
+            'celular': forms.TextInput(attrs={'class': 'campo', 'placeholder': '3001234567', 'inputmode': 'tel', 'pattern': r'[0-9 \(\)\-]+'}),
             'correo': forms.EmailInput(attrs={'class': 'campo', 'placeholder': 'correo@dominio.com'}),
             'direccion': forms.TextInput(attrs={'class': 'campo', 'placeholder': 'Ej. Calle 10 # 20-30, Bogotá'}),
             'cargo': forms.TextInput(attrs={'class': 'campo', 'placeholder': 'Cargo o servicio prestado'}),
@@ -353,6 +356,7 @@ class SolicitudPrestadorForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         fecha_inicio = cleaned_data.get('fecha_inicio_contrato')
+        validar_campos_personales(self, cleaned_data)
         fecha_fin = cleaned_data.get('fecha_fin_contrato')
         duracion_meses = cleaned_data.get('duracion_contrato_meses')
         valor_total = cleaned_data.get('valor_total_contrato')
@@ -595,6 +599,11 @@ class AtenderSubsanacionPrestadorForm(forms.Form):
         'valor_total_contrato', 'valor_pagado_contrato', 'valor_pendiente_cobrar',
         'forma_pago', 'valor_mensual_contractual', 'observaciones_contrato',
     )
+
+    def clean(self):
+        cleaned = super().clean()
+        validar_campos_personales(self, cleaned)
+        return cleaned
 
     def __init__(self, *args, requerimiento, **kwargs):
         super().__init__(*args, **kwargs)

@@ -1364,7 +1364,7 @@ class PortalMinimoPrestadoresTest(TestCase):
 
     @patch('contractors.services.analisis_contractual_seguro.analizar_contrato_con_openai')
     def test_empresa_detectada_por_nit_devuelve_sugerencia_exacta(self, analizar_mock):
-        self.empresa.nit = '900123456-7'
+        self.empresa.nit = '900123456-8'
         self.empresa.save(update_fields=['nit'])
         Empresa.objects.create(
             nombre='Empresa detectada por nombre',
@@ -1374,7 +1374,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         analizar_mock.return_value = ResultadoAnalisisContrato(
             documento_contratista='123456789',
             empresa_contratante='Empresa detectada por nombre',
-            nit_empresa='900123456-7',
+            nit_empresa='900123456-8',
             confianza_general=Decimal('0.90'),
             fuente='openai',
         )
@@ -2099,6 +2099,44 @@ class PortalMinimoPrestadoresTest(TestCase):
             'autoriza_analisis_contractual_asistido': 'on',
             'autoriza_consulta_centrales': 'on',
         }
+
+    @patch('contractors.services.analisis_contractual_seguro.analizar_contrato_con_openai')
+    def test_discrepancia_exige_confirmacion_y_reanalisis_no_sobrescribe(self, analizar):
+        analizar.return_value = ResultadoAnalisisContrato(
+            fuente='openai', nombres='Maria', documento_contratista='123456789',
+            valor_total_contrato=Decimal('11000000'))
+        self.client.force_login(self.usuario)
+        payload = self._payload_solicitud_con_documentos()
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(ContractorApplication.objects.exists())
+        self.assertContains(response, 'Revisa las diferencias')
+        self.assertContains(response, 'Tu formulario: Ana Maria')
+        self.assertContains(response, 'Documento: Maria')
+        self.assertEqual(response.context['paso_activo'], 4)
+        token = response.context['form']['reconciliacion_token'].value()
+        sesion_id = payload['sesion_documental_id']
+        payload = self._payload_solicitud_con_documentos()
+        payload.update(sesion_documental_id=sesion_id, reconciliacion_token=token, confirma_discrepancias='on')
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 302)
+        solicitud = ContractorApplication.objects.get()
+        self.assertEqual(solicitud.nombres, 'Ana Maria')
+        self.assertEqual(solicitud.valor_total_contrato, Decimal('12000000'))
+        self.assertTrue(solicitud.metadata_analisis_contractual['reconciliacion']['confirmada'])
+        self.assertFalse(Credito.objects.exists())
+
+    def test_validacion_personal_backend_preserva_captura_y_analisis(self):
+        self.client.force_login(self.usuario)
+        payload = self._payload_solicitud_con_documentos()
+        payload['nombres'] = 'Ana123'
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('nombres', response.context['form'].errors)
+        self.assertFalse(ContractorApplication.objects.exists())
+        from gestion_creditos.models import SesionCapturaDocumental
+        self.assertEqual(SesionCapturaDocumental.objects.get(pk=payload['sesion_documental_id']).estado, 'FINALIZADA')
+        self.assertTrue(any(isinstance(v, dict) and 'archivo_hash_sha256' in v for v in self.client.session.values()))
 
     def _payload_solicitud_con_documentos(self, solicitud=None):
         contenido_contrato = b'%PDF-1.4 contrato'

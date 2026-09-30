@@ -1098,3 +1098,23 @@ hosts Aprobado, **sin evidencia confirmada de acceso indebido**.
 Procedimiento, matriz de permisos y snippet exacto propuesto:
 [privacidad_documental_ID_00.md](privacidad_documental_ID_00.md).
 No considerar solucionada la exposicion productiva solo por pasar tests Django.
+
+### 14.8 APROBADO-03: calidad de datos y reconciliacion contractual
+
+Actualizacion P0-4 (2026-09-29):
+
+- P0-4A camara movil: UAT fisico iPhone/Safari aprobado por el usuario.
+- P0-4B UTF-8: UAT fisico aprobado por el usuario.
+- P0-4C simulador: mecanismo implementado; configuracion financiera PROD pendiente.
+- P0-4D: validadores backend reutilizables para datos personales y NIT/DV,
+  normalizacion y controles UX implementados; validacion local, no despliegue.
+- P0-4E: extraccion por campo, fallback parcial, procedencia, precarga no
+  destructiva y confirmacion backend de diferencias implementadas. Reutiliza
+  evidencia OCR disponible sin verificar identidad. Pendiente UAT de contratos
+  reales y PostgreSQL; no declarar Prestadores E2E cerrado.
+
+Auditoria, reglas y limitaciones: [PRESTADORES_P0_4D_4E.md](PRESTADORES_P0_4D_4E.md).
+
+Permanecen pendientes: P0-4F PDF bancario protegido, stepper movil compacto,
+persistencia temporal privada de PDFs tras POST invalido, P0-5 evaluacion
+automatica, P0-6 identidad real y P0-7 formalizacion/postfirma/transferencia/ACTIVO.

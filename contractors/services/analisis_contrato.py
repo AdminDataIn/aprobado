@@ -9,6 +9,8 @@ from pypdf import PdfReader
 @dataclass(frozen=True)
 class ResultadoAnalisisContrato:
     nombre_contratista: str = ''
+    nombres: str = ''
+    apellidos: str = ''
     documento_contratista: str = ''
     empresa_contratante: str = ''
     nit_empresa: str = ''
@@ -31,10 +33,13 @@ class ResultadoAnalisisContrato:
     disponible: bool = True
     error_tipo: str = ''
     diagnostico: dict = field(default_factory=dict)
+    fuentes_campos: dict = field(default_factory=dict)
 
     def datos_sugeridos(self):
         return {
             'nombre_contratista': self.nombre_contratista,
+            'nombres': self.nombres,
+            'apellidos': self.apellidos,
             'empresa_contratante': self.empresa_contratante,
             'nit_empresa': self.nit_empresa,
             'cargo_o_servicio': self.cargo_o_servicio,
@@ -55,33 +60,27 @@ class ResultadoAnalisisContrato:
         }
 
 
-def analizar_contrato_fallback(documento) -> ResultadoAnalisisContrato:
+def leer_texto_pdf(documento):
     texto = ''
     try:
         documento.open('rb')
         documento.seek(0)
         lector = PdfReader(documento)
+        if lector.is_encrypted:
+            return '', 'pdf_cifrado'
         texto = '\n'.join((pagina.extract_text() or '') for pagina in lector.pages[:25])[:120000]
-    except Exception as exc:
-        return ResultadoAnalisisContrato(
-            disponible=False,
-            error_tipo='pdf_sin_texto_extraible',
-            advertencias=(
-                'El análisis asistido no está disponible para este PDF. Completa y confirma los datos manualmente.',
-            ),
-            diagnostico={
-                'engine': 'fallback_pdf',
-                'pdf_text_chars': 0,
-                'reason': 'pdf_read_error',
-                'fallback_error_type': type(exc).__name__,
-            },
-        )
+        return texto, '' if texto.strip() else 'pdf_without_extractable_text'
+    except Exception:
+        return '', 'pdf_read_error'
     finally:
         try:
             documento.seek(0)
         except (AttributeError, OSError, ValueError):
             pass
 
+
+def analizar_contrato_fallback(documento, *, texto_pdf=None, motivo='') -> ResultadoAnalisisContrato:
+    texto, motivo = leer_texto_pdf(documento) if texto_pdf is None else (texto_pdf, motivo)
     if not texto.strip():
         return ResultadoAnalisisContrato(
             disponible=False,
@@ -92,7 +91,7 @@ def analizar_contrato_fallback(documento) -> ResultadoAnalisisContrato:
             diagnostico={
                 'engine': 'fallback_pdf',
                 'pdf_text_chars': 0,
-                'reason': 'pdf_without_extractable_text',
+                'reason': motivo or 'pdf_without_extractable_text',
             },
         )
 
@@ -101,10 +100,12 @@ def analizar_contrato_fallback(documento) -> ResultadoAnalisisContrato:
     nombre_contratista = _buscar(texto, r'(?:contratista|prestador(?:a)?(?:\s+de\s+servicios)?)\s*[:\-]\s*([^\n]{3,100})')
     empresa = _buscar(texto, r'(?:contratante|empresa contratante)\s*[:\-]\s*([^\n]{3,120})')
     cargo = _buscar(texto, r'(?:objeto|cargo|servicio|actividad)\s*(?:del contrato)?\s*[:\-]\s*([^\n]{3,240})')
-    fecha_inicio = _buscar_fecha(texto, ('fecha de inicio', 'inicio del contrato'))
-    fecha_fin = _buscar_fecha(texto, ('fecha de terminación', 'fecha de finalización', 'fin del contrato'))
-    valor_total = _buscar_valor(texto, ('valor total del contrato', 'valor del contrato'))
+    fecha_inicio = _buscar_fecha(texto, ('fecha de inicio', 'inicio del contrato', 'fecha inicio', 'inicia el'))
+    fecha_fin = _buscar_fecha(texto, ('fecha de terminación', 'fecha de finalización', 'fin del contrato', 'fecha fin', 'fecha terminación'))
+    valor_total = _buscar_valor(texto, ('valor total del contrato', 'valor del contrato', 'valor total contrato'))
     honorarios = _buscar_valor(texto, ('honorarios mensuales', 'valor mensual', 'mensualidad'))
+    pagado = _buscar_valor(texto, ('valor pagado', 'total pagado', 'pagos realizados'))
+    pendiente = _buscar_valor(texto, ('saldo pendiente', 'valor pendiente', 'saldo por cobrar'))
     forma_pago, frecuencia_pago, evidencia_pago, confianza_pago = _detectar_forma_pago(
         texto
     )
@@ -122,14 +123,19 @@ def analizar_contrato_fallback(documento) -> ResultadoAnalisisContrato:
 
     return ResultadoAnalisisContrato(
         nombre_contratista=nombre_contratista,
+        nombres=_buscar(texto, r'^nombres\s*[:\-]\s*([^\n]{2,120})'),
+        apellidos=_buscar(texto, r'^apellidos\s*[:\-]\s*([^\n]{2,120})'),
         documento_contratista=documento_contratista,
         empresa_contratante=empresa,
         nit_empresa=nit_empresa,
         cargo_o_servicio=cargo,
         tipo_contrato=tipo_contrato,
+        duracion_meses_contrato=_buscar_duracion(texto),
         fecha_inicio_contrato=fecha_inicio,
         fecha_fin_contrato=fecha_fin,
         valor_total_contrato=valor_total,
+        valor_pagado_estimado=pagado,
+        valor_pendiente_estimado=pendiente,
         valor_mensual_o_honorarios=honorarios,
         forma_pago=forma_pago,
         frecuencia_pago=frecuencia_pago,
@@ -146,7 +152,7 @@ def analizar_contrato_fallback(documento) -> ResultadoAnalisisContrato:
 
 
 def _buscar(texto, patron):
-    coincidencia = re.search(patron, texto, re.I)
+    coincidencia = re.search(patron, texto, re.I | re.M)
     return re.sub(r'\s+', ' ', coincidencia.group(1)).strip(' .,:;') if coincidencia else ''
 
 
@@ -169,10 +175,17 @@ def _buscar_valor(texto, etiquetas):
         valor = _buscar(texto, rf'{re.escape(etiqueta)}\s*[:\-]?\s*\$?\s*([\d.,]+)')
         if valor:
             try:
-                return Decimal(re.sub(r'[^\d]', '', valor))
-            except InvalidOperation:
+                from contractors.forms import MontoContratoField
+                from django.core.exceptions import ValidationError
+                return MontoContratoField(max_digits=14, decimal_places=2, min_value=Decimal('0')).clean(valor)
+            except (InvalidOperation, ValidationError):
                 continue
     return None
+
+
+def _buscar_duracion(texto):
+    valor = _buscar(texto, r'duraci[oó]n(?:\s+del contrato)?\s*[:\-]?\s*(\d{1,4})\s*meses\b')
+    return int(valor) if valor else None
 
 
 def _detectar_forma_pago(texto):

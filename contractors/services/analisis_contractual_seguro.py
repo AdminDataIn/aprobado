@@ -6,9 +6,12 @@ import re
 import unicodedata
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 
-from contractors.services.analisis_contrato import analizar_contrato_fallback
+from contractors.services.analisis_contrato import analizar_contrato_fallback, leer_texto_pdf
 from contractors.services.analisis_contrato_ia import analizar_contrato_con_openai
+from contractors.services.extraccion_campos import CAMPOS, presente, limpiar_resultado, completar_faltantes, evidencia_campos
+from contractors.validators import normalizar_nit
 from gestion_creditos.models import Empresa
 
 
@@ -62,11 +65,14 @@ def analizar_contrato_seguro(*, solicitud, documento):
     ai_enabled = bool(getattr(settings, 'CONTRACTORS_CONTRACT_AI_ENABLED', False))
     has_openai_key = bool(getattr(settings, 'OPENAI_API_KEY', ''))
     modelo = getattr(settings, 'CONTRACTORS_CONTRACT_AI_MODEL', 'gpt-4.1-mini')
-    resultado_ia = analizar_contrato_con_openai(documento)
+    texto_pdf, motivo_pdf = leer_texto_pdf(documento)
+    resultado_ia = analizar_contrato_con_openai(documento, texto_pdf=texto_pdf)
     resultado = resultado_ia
     advertencias_previas = []
     fallback_reason = ''
-    if resultado is None or not resultado.disponible:
+    if resultado is not None:
+        resultado = limpiar_resultado(resultado)
+    if resultado is None or not resultado.disponible or any(not presente(getattr(resultado, c)) for c in CAMPOS):
         if resultado is not None:
             advertencias_previas.extend(resultado.advertencias)
             fallback_reason = resultado.diagnostico.get('reason') or resultado.error_tipo
@@ -74,7 +80,8 @@ def analizar_contrato_seguro(*, solicitud, documento):
             fallback_reason = 'ai_disabled'
         elif not has_openai_key:
             fallback_reason = 'openai_key_missing'
-        resultado = analizar_contrato_fallback(documento)
+        fallback = analizar_contrato_fallback(documento, texto_pdf=texto_pdf, motivo=motivo_pdf)
+        resultado = completar_faltantes(resultado, fallback) if resultado is not None else limpiar_resultado(fallback)
 
     advertencias = list(advertencias_previas) + list(resultado.advertencias)
     bloqueos = []
@@ -109,17 +116,6 @@ def analizar_contrato_seguro(*, solicitud, documento):
                 'La empresa detectada no coincide con una empresa activa registrada en Aprobado.'
             )
 
-    valor_pendiente = resultado.valor_pendiente_estimado
-    if (
-        valor_pendiente is None
-        and resultado.valor_total_contrato is not None
-        and resultado.valor_pagado_estimado is not None
-    ):
-        valor_pendiente = max(
-            Decimal('0.00'),
-            resultado.valor_total_contrato - resultado.valor_pagado_estimado,
-        )
-
     datos = resultado.datos_sugeridos()
     forma_pago = _normalizar_forma_pago(resultado.forma_pago)
     datos.update({
@@ -128,9 +124,8 @@ def analizar_contrato_seguro(*, solicitud, documento):
         'forma_pago_mensual': forma_pago == 'MENSUAL',
         'evidencia_forma_pago': str(resultado.evidencia_forma_pago or '')[:500],
         'confianza_forma_pago': str(resultado.confianza_forma_pago),
-        'fuente_forma_pago': resultado.fuente,
+        'fuente_forma_pago': resultado.fuentes_campos.get('forma_pago', resultado.fuente),
     })
-    datos['valor_pendiente_estimado'] = str(valor_pendiente) if valor_pendiente is not None else ''
     datos['documento_detectado'] = _enmascarar_documento(documento_detectado)
 
     diagnostico_ia = resultado_ia.diagnostico if resultado_ia is not None else {}
@@ -147,7 +142,7 @@ def analizar_contrato_seguro(*, solicitud, documento):
         'analysis_status': '',
     }
     metadata = {
-        'version': 'analisis_contractual_seguro_v1',
+        'version': 'analisis_contractual_seguro_v2',
         'estado': '',
         'fuente': resultado.fuente,
         'disponible': resultado.disponible,
@@ -160,13 +155,14 @@ def analizar_contrato_seguro(*, solicitud, documento):
         },
         'empresa_sugerida': empresa_sugerida,
         'datos_sugeridos': datos,
+        'campos_extraidos': evidencia_campos(resultado),
         'forma_pago_contractual': {
             'forma_pago': forma_pago,
             'frecuencia_pago': datos['frecuencia_pago'],
             'forma_pago_mensual': forma_pago == 'MENSUAL',
             'evidencia': datos['evidencia_forma_pago'],
             'confianza': datos['confianza_forma_pago'],
-            'fuente': resultado.fuente,
+            'fuente': datos['fuente_forma_pago'],
         },
         'diagnostico': diagnostico,
     }
@@ -194,23 +190,34 @@ def analizar_contrato_seguro(*, solicitud, documento):
 
 
 def sugerir_empresa_exacta(*, nit='', nombre=''):
-    nit_normalizado = _solo_digitos(nit)
+    try:
+        nit_normalizado = normalizar_nit(nit).split('-')[0] if nit else ''
+    except ValidationError:
+        return _empresa_sin_seleccion(empresa_detectada=nombre, nit_detectado=nit, match_tipo='nit_invalido')
     nombre_normalizado = normalizar_nombre_empresa(nombre)
     empresas = list(Empresa.objects.filter(convenio_activo=True).order_by('id'))
 
     if nit_normalizado:
+        coincidencias = []
         for empresa in empresas:
-            if _solo_digitos(getattr(empresa, 'nit', '')) == nit_normalizado:
-                return _empresa_dict(
-                    empresa,
-                    coincidencia='NIT_EXACTO',
-                    match_tipo='nit_exacto',
-                    match_score=1.0,
-                    empresa_detectada=nombre,
-                    nit_detectado=nit,
-                )
+            try:
+                base = normalizar_nit(empresa.nit).split('-')[0]
+            except ValidationError:
+                continue
+            if base == nit_normalizado:
+                coincidencias.append(empresa)
+        if len(coincidencias) == 1:
+            return _empresa_dict(
+                coincidencias[0], coincidencia='NIT_EXACTO', match_tipo='nit_exacto',
+                match_score=1.0, empresa_detectada=nombre, nit_detectado=nit,
+            )
+        return _empresa_sin_seleccion(empresa_detectada=nombre, nit_detectado=nit,
+                                     match_tipo='ambiguo' if coincidencias else 'nit_sin_match')
 
     if nombre_normalizado:
+        exactas = [e for e in empresas if any(nombre_normalizado == v for _, v in _nombres_empresa(e))]
+        if len(exactas) > 1:
+            return _empresa_sin_seleccion(empresa_detectada=nombre, nit_detectado=nit, match_tipo='ambiguo')
         for empresa in empresas:
             for campo, valor in _nombres_empresa(empresa):
                 if nombre_normalizado == valor:

@@ -335,6 +335,24 @@
               {{ form.observaciones_contrato.errors }}
             </div>
           </div>
+          {% if form.reconciliacion %}
+          <section class="authorization-card" aria-labelledby="reconciliacion-title">
+            <h3 id="reconciliacion-title">Revisa las diferencias</h3>
+            <dl class="contract-analysis-data-list">
+              {% for fila in form.reconciliacion %}
+                {% if fila.estado == 'DIFIERE' or fila.estado == 'NO_COMPARABLE' %}
+                <div class="contract-analysis-data-item">
+                  <dt>{{ fila.etiqueta }} ({{ fila.fuente }})</dt>
+                  <dd>Tu formulario: {{ fila.formulario|default:"Sin dato" }}</dd>
+                  <dd>Documento: {{ fila.documento|default:"Sin dato" }}</dd>
+                </div>
+                {% endif %}
+              {% endfor %}
+            </dl>
+            {{ form.reconciliacion_token }}
+            <label>{{ form.confirma_discrepancias }} {{ form.confirma_discrepancias.label }}</label>
+          </section>
+          {% endif %}
           <div class="authorization-card legal-authorizations">
             <strong>Autorizaciones y confirmación</strong>
             <div class="legal-authorization-row">
@@ -399,6 +417,7 @@
 
 
 <script src="{% static 'js/contract_money.js' %}"></script>
+<script src="{% static 'js/contract_reconciliation.js' %}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     const formulario = document.getElementById('formularioPrestador');
@@ -486,9 +505,9 @@
       let valido = true;
       const reglas = [
         ['id_numero_documento', /^\d{6,12}$/, 'Ingresa un número de documento válido.'],
-        ['id_nombres', /^.{2,}$/, 'Ingresa un nombre válido.'],
-        ['id_apellidos', /^.{2,}$/, 'Ingresa un apellido válido.'],
-        ['id_celular', /^\d{10}$/, 'El celular debe tener exactamente 10 números.'],
+        ['id_nombres', /^[\p{L} '\u2019-]{2,}$/u, 'Ingresa un nombre válido.'],
+        ['id_apellidos', /^[\p{L} '\u2019-]{2,}$/u, 'Ingresa un apellido válido.'],
+        ['id_celular', /^(?=(?:[^0-9]*[0-9]){10}[^0-9]*$)[0-9 ()-]+$/, 'El celular debe tener exactamente 10 números.'],
         ['id_correo', /^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Ingresa un correo válido.'],
         ['id_direccion', /^.{5,}$/, 'Ingresa una dirección válida.'],
       ];
@@ -887,6 +906,8 @@
       const sugerencia = data.empresa_sugerida || {};
       const listaDatos = document.createElement('dl');
       listaDatos.className = 'contract-analysis-data-list';
+      agregarDatoDetectado(listaDatos, 'Titular detectado', datosSugeridosContrato.nombre_contratista);
+      agregarDatoDetectado(listaDatos, 'Valor pagado', datosSugeridosContrato.valor_pagado_estimado);
       agregarDatoDetectado(listaDatos, 'Empresa detectada', datosSugeridosContrato.empresa_contratante);
       agregarDatoDetectado(listaDatos, 'NIT detectado', datosSugeridosContrato.nit_empresa);
       agregarDatoDetectado(listaDatos, 'Empresa sugerida en Aprobado', sugerencia.empresa_sugerida_nombre || sugerencia.nombre);
@@ -908,13 +929,19 @@
       }
       agregarListaResultado(resultadoAnalisisContrato, 'Advertencias', data.advertencias, 'contract-analysis-warnings');
       agregarListaResultado(resultadoAnalisisContrato, 'Bloqueos', data.bloqueos, 'contract-analysis-blocks');
-      if (!data.bloqueos?.length && sugerencia.empresa_sugerida_id) {
+      const diferencias = (data.reconciliacion || []).filter(f => f.estado === 'DIFIERE' || (f.campo === 'nit_empresa' && f.estado === 'NO_COMPARABLE'));
+      agregarListaResultado(resultadoAnalisisContrato, 'Diferencias por revisar', diferencias.map(f => `${f.etiqueta}: tu formulario ${f.formulario || 'sin dato'}; documento ${f.documento || 'sin dato'}`), 'contract-analysis-warnings');
+      const faltantes = (data.reconciliacion || []).filter(f => f.estado === 'FALTANTE' && !f.formulario);
+      agregarListaResultado(resultadoAnalisisContrato, 'Datos por completar', [...new Set(faltantes.map(f => f.etiqueta))], 'contract-analysis-warnings');
+      if (!data.bloqueos?.length && !selectEmpresa.value && sugerencia.empresa_sugerida_id && ['nit_exacto', 'nombre_exacto', 'slug_exacto'].includes(sugerencia.match_tipo)) {
         confirmarEmpresa(String(sugerencia.empresa_sugerida_id), sugerencia.nombre);
       }
     }
 
     function aplicarSugerenciasContrato() {
       const mapa = {
+        nombres: 'id_nombres',
+        apellidos: 'id_apellidos',
         cargo_o_servicio: 'id_cargo',
         tipo_contrato: 'id_tipo_contrato',
         fecha_inicio_contrato: 'id_fecha_inicio_contrato',
@@ -928,8 +955,7 @@
       };
       Object.entries(mapa).forEach(([origen, destino]) => {
         const campo = document.getElementById(destino);
-        if (campo && datosSugeridosContrato[origen]) {
-          campo.value = datosSugeridosContrato[origen];
+        if (window.ContractReconciliation.fillEmpty(campo, datosSugeridosContrato[origen])) {
           if (campo.matches('[data-money-contract]')) formatearMonedaContrato(campo);
         }
       });
@@ -947,6 +973,13 @@
         const archivo = campoContrato && campoContrato.files ? campoContrato.files[0] : null;
         if (archivo) datosAnalisis.append('contrato_actual', archivo);
         datosAnalisis.append('numero_documento', valor('id_numero_documento'));
+        ['tipo_documento', 'nombres', 'apellidos', 'empresa', 'cargo', 'tipo_contrato', 'fecha_inicio_contrato', 'fecha_fin_contrato', 'duracion_contrato_meses', 'forma_pago'].forEach(nombre => {
+          datosAnalisis.set(nombre, valor(`id_${nombre}`));
+        });
+        formulario.querySelectorAll('[data-money-contract]').forEach(campo => formatearMonedaContrato(campo));
+        ['valor_total_contrato', 'valor_pagado_contrato', 'valor_pendiente_cobrar', 'valor_mensual_contractual'].forEach(nombre => {
+          datosAnalisis.set(nombre, formulario.elements.namedItem(nombre)?.value || '');
+        });
         datosAnalisis.append('autoriza_analisis_contractual_asistido', autorizacionAnalisis.checked ? '1' : '0');
         const csrf = formulario.querySelector('[name="csrfmiddlewaretoken"]').value;
         datosAnalisis.append('csrfmiddlewaretoken', csrf);
