@@ -2100,6 +2100,58 @@ class PortalMinimoPrestadoresTest(TestCase):
             'autoriza_consulta_centrales': 'on',
         }
 
+    def _payload_contrato_uat(self):
+        from contractors.tests.contrato_uat_fixture import pdf_uat
+        self.empresa.nombre = 'PRUEBAS DATAIN'
+        self.empresa.nit = '999888777'
+        self.empresa.save(update_fields=['nombre', 'nit'])
+        self.client.force_login(self.usuario)
+        archivo = pdf_uat()
+        contenido = archivo.read()
+        archivo.seek(0)
+        respuesta = self.client.post('/contrato/analizar/', {
+            'numero_documento':'1006442329', 'autoriza_analisis_contractual_asistido':'1',
+            'contrato_actual':archivo,
+        }, HTTP_HOST=self.host)
+        self.assertEqual(respuesta.status_code, 200)
+        resultado = respuesta.json()
+        payload = self._payload_solicitud()
+        payload.update(numero_documento='1006442329', nombres='CARLOS DANIEL', apellidos='ORTIZ ANGEL')
+        payload.update({campo:e['valor'] for campo,e in resultado['campos_extraidos'].items() if e['editable'] and e['encontrado']})
+        payload.update({
+            'sesion_documental_id': str(sesion_finalizada(self.usuario, 'PRESTADORES').pk),
+            'certificado_bancario': SimpleUploadedFile('banco.pdf', b'%PDF-1.4 banco', content_type='application/pdf'),
+            'contrato_actual': SimpleUploadedFile('contrato.pdf', contenido, content_type='application/pdf'),
+        })
+        return payload
+
+    def test_uat_datos_extraidos_y_derivados_continuan_a_simulador(self):
+        payload = self._payload_contrato_uat()
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/simular/', response['Location'])
+        solicitud = ContractorApplication.objects.get()
+        self.assertEqual(solicitud.valor_total_contrato, Decimal('124800000'))
+        self.assertEqual(solicitud.valor_pagado_contrato, Decimal('0'))
+        self.assertEqual(solicitud.valor_pendiente_cobrar, Decimal('124800000'))
+        self.assertEqual(solicitud.valor_mensual_contractual, Decimal('10400000'))
+        self.assertEqual(solicitud.duracion_contrato_meses, 12)
+        self.assertFalse(Credito.objects.exists())
+
+    def test_uat_error_relacion_conserva_manual_reconciliacion_y_captura(self):
+        payload = self._payload_contrato_uat()
+        payload['valor_pagado_contrato'] = '1'
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(ContractorApplication.objects.exists())
+        self.assertTrue(response.context['form'].errors)
+        self.assertEqual(response.context['form'].data['valor_pagado_contrato'], '1')
+        diferencias = response.context['form'].reconciliacion
+        self.assertTrue(any(f['campo'] == 'valor_pagado_contrato' and f['estado'] == 'DIFIERE' for f in diferencias))
+        from gestion_creditos.models import SesionCapturaDocumental
+        self.assertEqual(SesionCapturaDocumental.objects.get(pk=payload['sesion_documental_id']).estado, 'FINALIZADA')
+        self.assertTrue(any(isinstance(v, dict) and 'archivo_hash_sha256' in v for v in self.client.session.values()))
+
     @patch('contractors.services.analisis_contractual_seguro.analizar_contrato_con_openai')
     def test_discrepancia_exige_confirmacion_y_reanalisis_no_sobrescribe(self, analizar):
         analizar.return_value = ResultadoAnalisisContrato(

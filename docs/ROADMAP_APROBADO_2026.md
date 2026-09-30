@@ -1118,3 +1118,41 @@ Auditoria, reglas y limitaciones: [PRESTADORES_P0_4D_4E.md](PRESTADORES_P0_4D_4E
 Permanecen pendientes: P0-4F PDF bancario protegido, stepper movil compacto,
 persistencia temporal privada de PDFs tras POST invalido, P0-5 evaluacion
 automatica, P0-6 identidad real y P0-7 formalizacion/postfirma/transferencia/ACTIVO.
+
+### 14.9 APROBADO-03 P0-4E.1: aceptacion contractual UAT
+
+Hallazgo UAT: P0-4D acepto nombres espanoles y rechazo documento/telefono con
+letras. P0-4E no cumplio aceptacion: PDF textual con clausulas narrativas produjo
+extraccion parcial; la UI calculaba faltantes antes de precargar y confundia
+ausencia en formulario con ausencia en documento.
+
+Correccion implementada localmente: fallback para clausulas, fechas con meses en
+letras y numeros entre parentesis; cero solo ante ausencia de pagos explicita;
+esquema canonico compartido; saldo derivado con Decimal y procedencia propia;
+precarga antes de calcular faltantes, sin sobrescribir correcciones manuales.
+Reproducido con ContratoPruebaCarlos3.pdf y fixture textual de sus clausulas.
+Pendiente UAT desplegado/PostgreSQL. No cerrar Prestadores E2E.
+
+### 14.10 APROBADO-ID-01F: recorte y minimizacion del entorno
+
+**P1 ALTA / privacidad. PENDIENTE. Requerido antes del cierre productivo amplio
+de Prestadores.** No implementado dentro de P0-4E.1.
+
+Hallazgo UAT: el marco visual puede no corresponder al area persistida; la captura
+aparentemente conserva entorno exterior al documento. Primero auditar
+`static/js/captura_documental.js`, `canvas.drawImage()`, `videoWidth/videoHeight`,
+dimensiones CSS, `object-fit`, orientacion y bytes del archivo final enviado.
+
+Objetivo y criterios de aceptacion:
+
+- Marco visual igual a region real de captura; recorte client-side antes del upload.
+- No transmitir entorno innecesario; preview representa exactamente los bytes enviados.
+- Preservar bordes completos y margen de seguridad configurable/validado.
+- Conservar resolucion suficiente para OCR, sin alterar frontal/posterior, TTL,
+  handoff, polling ni retorno.
+- UAT fisico iPhone/Safari y Android/Chrome.
+- Sin perspectiva automatica ni computer vision avanzada en esta fase, salvo
+  reutilizacion justificada de una utilidad existente.
+
+Siguen separados: P0-4F PDF cifrado, borrador privado temporal de PDF, stepper
+compacto, P0-5/score/centrales, P0-6 identidad real y P0-7 formalizacion/postfirma.

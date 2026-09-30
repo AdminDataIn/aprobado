@@ -10,7 +10,7 @@ from django.core.exceptions import ValidationError
 
 from contractors.services.analisis_contrato import analizar_contrato_fallback, leer_texto_pdf
 from contractors.services.analisis_contrato_ia import analizar_contrato_con_openai
-from contractors.services.extraccion_campos import CAMPOS, presente, limpiar_resultado, completar_faltantes, evidencia_campos
+from contractors.services.extraccion_campos import CAMPOS, presente, limpiar_resultado, completar_faltantes, evidencia_campos, derivar_pendiente
 from contractors.validators import normalizar_nit
 from gestion_creditos.models import Empresa
 
@@ -83,6 +83,7 @@ def analizar_contrato_seguro(*, solicitud, documento):
         fallback = analizar_contrato_fallback(documento, texto_pdf=texto_pdf, motivo=motivo_pdf)
         resultado = completar_faltantes(resultado, fallback) if resultado is not None else limpiar_resultado(fallback)
 
+    resultado = derivar_pendiente(resultado)
     advertencias = list(advertencias_previas) + list(resultado.advertencias)
     bloqueos = []
     documento_detectado = _solo_digitos(resultado.documento_contratista)
@@ -142,7 +143,7 @@ def analizar_contrato_seguro(*, solicitud, documento):
         'analysis_status': '',
     }
     metadata = {
-        'version': 'analisis_contractual_seguro_v2',
+        'version': 'analisis_contractual_seguro_v3',
         'estado': '',
         'fuente': resultado.fuente,
         'disponible': resultado.disponible,

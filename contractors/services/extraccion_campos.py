@@ -8,13 +8,42 @@ from django.core.exceptions import ValidationError
 from contractors.validators import documento_numerico, nombre_persona, texto_normalizado
 
 
-CAMPOS = (
-    'nombre_contratista', 'nombres', 'apellidos', 'documento_contratista',
-    'empresa_contratante', 'nit_empresa', 'cargo_o_servicio', 'tipo_contrato',
-    'fecha_inicio_contrato', 'fecha_fin_contrato', 'valor_total_contrato',
-    'valor_pagado_estimado', 'valor_pendiente_estimado', 'valor_mensual_o_honorarios',
-    'forma_pago', 'duracion_meses_contrato',
-)
+# Canonical form keys -> extraction attribute, label, editable suggestion.
+# Old attributes/metadata are adapted here only; consumers use canonical keys.
+ESQUEMA = {
+    'titular': ('nombre_contratista', 'Titular', False),
+    'nombres': ('nombres', 'Nombres', True),
+    'apellidos': ('apellidos', 'Apellidos', True),
+    'numero_documento': ('documento_contratista', 'Documento', False),
+    'empresa': ('empresa_contratante', 'Empresa', False),
+    'nit_empresa': ('nit_empresa', 'NIT', False),
+    'cargo': ('cargo_o_servicio', 'Cargo o actividad', True),
+    'tipo_contrato': ('tipo_contrato', 'Tipo de contrato', True),
+    'fecha_inicio_contrato': ('fecha_inicio_contrato', 'Fecha de inicio', True),
+    'fecha_fin_contrato': ('fecha_fin_contrato', 'Fecha de fin', True),
+    'valor_total_contrato': ('valor_total_contrato', 'Valor total', True),
+    'valor_pagado_contrato': ('valor_pagado_estimado', 'Valor pagado', True),
+    'valor_pendiente_cobrar': ('valor_pendiente_estimado', 'Saldo pendiente', True),
+    'valor_mensual_contractual': ('valor_mensual_o_honorarios', 'Valor mensual', True),
+    'forma_pago': ('forma_pago', 'Forma de pago', True),
+    'duracion_contrato_meses': ('duracion_meses_contrato', 'Duración en meses', True),
+}
+CAMPOS = tuple(atributo for atributo, _, _ in ESQUEMA.values())
+
+
+def datos_canonicos(datos):
+    return {campo: datos[campo] if campo in datos else datos.get(atributo)
+            for campo, (atributo, _, _) in ESQUEMA.items()}
+
+
+def derivar_pendiente(resultado):
+    total, pagado = resultado.valor_total_contrato, resultado.valor_pagado_estimado
+    if resultado.valor_pendiente_estimado is not None or total is None or pagado is None:
+        return resultado
+    if not all(isinstance(v, Decimal) and v.is_finite() and v >= 0 for v in (total, pagado)) or pagado > total:
+        return resultado
+    return replace(resultado, valor_pendiente_estimado=total - pagado,
+                   fuentes_campos={**resultado.fuentes_campos, 'valor_pendiente_estimado': 'DERIVADO_DETERMINISTICAMENTE'})
 
 
 def presente(value):
@@ -75,17 +104,22 @@ def completar_faltantes(ia, fallback):
 
 def evidencia_campos(resultado):
     evidencia = {}
-    for campo in CAMPOS:
+    for canonico, (campo, etiqueta, editable) in ESQUEMA.items():
         valor = getattr(resultado, campo)
         encontrado = presente(valor)
         if campo == 'documento_contratista' and encontrado:
             valor = '****' + str(valor)[-4:]
         elif isinstance(valor, (Decimal, date)):
             valor = str(valor)
-        evidencia[campo] = {
+        fuente = resultado.fuentes_campos.get(campo, 'IA' if resultado.fuente == 'openai' else 'REGEX_TEXTO_PDF') if encontrado else ''
+        derivado = fuente == 'DERIVADO_DETERMINISTICAMENTE'
+        evidencia[canonico] = {
+            'etiqueta': etiqueta,
+            'editable': editable,
             'valor': valor if encontrado else None,
-            'fuente': resultado.fuentes_campos.get(campo, 'IA' if resultado.fuente == 'openai' else 'REGEX_TEXTO_PDF') if encontrado else '',
+            'fuente': fuente,
             'encontrado': encontrado,
-            'estado_evidencia': 'EXTRAIDO_NO_VERIFICADO' if encontrado else 'NO_ENCONTRADO',
+            'estado_evidencia': 'DERIVADO_NO_VERIFICADO' if derivado else 'EXTRAIDO_NO_VERIFICADO' if encontrado else 'NO_ENCONTRADO',
+            'sustentado_por': ['valor_total_contrato', 'valor_pagado_contrato'] if derivado else [],
         }
     return evidencia

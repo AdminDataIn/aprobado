@@ -62,8 +62,8 @@ class ExtraccionCamposTest(SimpleTestCase):
         self.assertIsNone(resultado.valor_pendiente_estimado)
         evidencia = evidencia_campos(resultado)
         self.assertEqual(evidencia['nombres']['fuente'], 'IA')
-        self.assertEqual(evidencia['valor_mensual_o_honorarios']['fuente'], 'REGEX_TEXTO_PDF')
-        self.assertFalse(evidencia['valor_pendiente_estimado']['encontrado'])
+        self.assertEqual(evidencia['valor_mensual_contractual']['fuente'], 'REGEX_TEXTO_PDF')
+        self.assertFalse(evidencia['valor_pendiente_cobrar']['encontrado'])
 
     def test_ia_invalida_deja_espacio_al_fallback(self):
         resultado = completar_faltantes(ResultadoAnalisisContrato(nombres='Ana1', valor_total_contrato=Decimal('NaN')),

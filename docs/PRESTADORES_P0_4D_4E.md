@@ -45,7 +45,9 @@ No se corrigen NIT historicos de Empresa automaticamente.
    fuente, encontrado y estado `EXTRAIDO_NO_VERIFICADO`/`NO_ENCONTRADO`.
 4. IA valida tiene prioridad. Regex del texto completa solo ausentes/invalidos.
    El cero es un dato. Valores no encontrados permanecen vacios; nunca se calcula
-   un saldo ausente a partir de total menos pagado.
+   un saldo ausente sin operandos. P0-4E.1 autoriza derivar total menos pagado cuando
+   ambos son conocidos, no negativos y pagado <= total. Se marca como derivado,
+   no como extraccion literal.
 5. Metadata privada conserva procedencia. Documento detectado se enmascara.
    Logs propios solo contienen motor, estado y clase de error, no texto documental.
 6. Se conserva invalidacion por archivo/documento y vigencia del analisis. Reanalizar
@@ -114,6 +116,86 @@ contractors/services/reconciliacion_contractual.py
 templates/contractors/solicitud_prestador.html
 static/js/contract_reconciliation.js
 contractors/tests/test_calidad_datos.py
+contractors/tests/test_extraccion_reconciliacion.py
+contractors/tests/test_portal_minimo_prestadores.py
+contractors/tests/browser/test_contract_reconciliation.cjs
+docs/PRESTADORES_P0_4D_4E.md
+docs/ROADMAP_APROBADO_2026.md
+```
+
+## Correccion P0-4E.1 (UAT)
+
+Reproduccion real, sin proveedor: `ContratoPruebaCarlos3.pdf` tiene 4020 caracteres
+extraibles. Antes del hotfix el fallback reconocia solo documento, NIT y forma de
+pago (confianza 0.22). No era ausencia de texto ni se demostro fallo de OpenAI.
+
+Las etiquetas estrictas no cubrian la presentacion narrativa: identificada con
+NIT, identificado con cedula, servicios profesionales como, valor en letras
+seguido de pesos entre parentesis, pagos mensuales de, Doce (12) meses y fechas
+con meses en letras. Se incorporan patrones acotados para esas estructuras.
+El fixture genera un PDF textual con las mismas clausulas relevantes, no incluye
+el PDF original ni documentos privados como assets.
+
+La UI usaba FALTANTE de la comparacion con un formulario todavia vacio; renderizaba
+antes de aplicar sugerencias. No se encontro un alias roto en el mapeo anterior,
+pero si mapas duplicados y claves diferentes entre capas. `ESQUEMA` centraliza:
+
+| Clave interna/historica | Canonica (formulario/reconciliacion/UI) |
+|---|---|
+| cargo_o_servicio | cargo |
+| valor_pagado_estimado | valor_pagado_contrato |
+| valor_pendiente_estimado | valor_pendiente_cobrar |
+| valor_mensual_o_honorarios | valor_mensual_contractual |
+| duracion_meses_contrato | duracion_contrato_meses |
+| empresa_contratante | empresa |
+| nombre_contratista | titular |
+| documento_contratista | numero_documento |
+
+IA acepta aliases solo en el adaptador de entrada. La dataclass y datos_sugeridos
+historicos siguen compatibles; campos_extraidos v3, precarga, etiquetas y
+reconciliacion usan el esquema compartido. No hay mapa de aliases propio en JS.
+Detectado no implica comparacion COINCIDE: si falta el valor humano, la comparacion
+sigue FALTANTE, pero no se etiqueta como dato documental ausente. Empresa pendiente
+de seleccion se muestra aparte, nunca como NIT no detectado.
+
+Precedencia: IA valida > fallback para ausentes > derivacion de saldo si aun falta.
+Dato manual no vacio siempre se conserva; las diferencias exigen confirmacion
+backend vigente. El saldo guarda DERIVADO_DETERMINISTICAMENTE y sustentado_por
+[valor_total_contrato, valor_pagado_contrato]. No se deduce pagado=0 por silencio:
+se exige la frase explicita sobre ningun pago efectuado.
+
+Resultado del PDF real y fixture: PRUEBAS DATAIN / NIT 999888777; titular indicado,
+Project Manager; 2026-08-01 a 2027-07-31; 12 meses; total 124800000, pagado 0,
+mensual 10400000. Solo pendiente 124800000 es derivado. No se divide el nombre
+completo por heuristicas. Se conserva la relacion pagado + pendiente <= total.
+
+Un POST invalido conserva analisis y evidencia de captura; ahora vuelve a mostrar
+reconciliacion cuando el analisis sigue valido incluso si falla la relacion de
+importes. Los PDF no persistidos aun deben reseleccionarse: su borrador privado
+temporal sigue fuera de alcance. ID-01F se registra, sin cambiar la camara.
+
+Observacion del archivo UAT: supervisión/firmas tambien mencionan otra razon social
+(APROBADO PRUEBAS S.A.S.). El encabezado identifica PRUEBAS DATAIN; una discrepancia
+real entre fuentes debe revisarse, no ocultarse ni resolverse sobrescribiendo datos.
+
+Archivos de P0-4E.1 (sin modelos, migraciones ni camara):
+
+Validacion P0-4E.1: 146 pruebas focales Django OK; ampliadas con captura documental,
+192 pruebas (184 OK, 8 omitidas por SQLite). JS/Playwright: 13 OK, incluyendo
+precarga UAT desktop/mobile y preservacion de correcciones. Check sin problemas,
+makemigrations sin cambios y diff --check OK. No llamadas reales al proveedor.
+
+```text
+contractors/services/analisis_contrato.py
+contractors/services/analisis_contrato_ia.py
+contractors/services/analisis_contractual_seguro.py
+contractors/services/extraccion_campos.py
+contractors/services/reconciliacion_contractual.py
+contractors/views.py
+templates/contractors/solicitud_prestador.html
+static/js/contract_reconciliation.js
+contractors/tests/contrato_uat_fixture.py
+contractors/tests/test_extraccion_uat.py
 contractors/tests/test_extraccion_reconciliacion.py
 contractors/tests/test_portal_minimo_prestadores.py
 contractors/tests/browser/test_contract_reconciliation.cjs

@@ -8,26 +8,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from contractors.validators import clave_texto, normalizar_nit
-
-
-MAPA = {
-    'nombres': 'nombres', 'apellidos': 'apellidos', 'cargo': 'cargo_o_servicio',
-    'tipo_contrato': 'tipo_contrato', 'fecha_inicio_contrato': 'fecha_inicio_contrato',
-    'fecha_fin_contrato': 'fecha_fin_contrato', 'valor_total_contrato': 'valor_total_contrato',
-    'valor_pagado_contrato': 'valor_pagado_estimado', 'valor_pendiente_cobrar': 'valor_pendiente_estimado',
-    'valor_mensual_contractual': 'valor_mensual_o_honorarios',
-    'duracion_contrato_meses': 'duracion_meses_contrato', 'forma_pago': 'forma_pago',
-}
-
-ETIQUETAS = {
-    'nombres': 'Nombres', 'apellidos': 'Apellidos', 'titular': 'Titular',
-    'numero_documento': 'Documento', 'empresa': 'Empresa', 'nit_empresa': 'NIT',
-    'cargo': 'Cargo o actividad', 'tipo_contrato': 'Tipo de contrato',
-    'fecha_inicio_contrato': 'Fecha de inicio', 'fecha_fin_contrato': 'Fecha de fin',
-    'valor_total_contrato': 'Valor total', 'valor_pagado_contrato': 'Valor pagado',
-    'valor_pendiente_cobrar': 'Saldo pendiente', 'valor_mensual_contractual': 'Valor mensual',
-    'duracion_contrato_meses': 'Duracion en meses', 'forma_pago': 'Forma de pago',
-}
+from contractors.services.extraccion_campos import ESQUEMA, datos_canonicos
 
 
 def comparar(campo, formulario, documento, fuente='CONTRATO', *, comparable=True):
@@ -47,13 +28,14 @@ def comparar(campo, formulario, documento, fuente='CONTRATO', *, comparable=True
 
 
 def reconciliar(metadata, datos, *, sesion=None):
-    extraidos = metadata.get('datos_sugeridos', {})
-    filas = [comparar(campo, datos.get(campo), extraidos.get(origen)) for campo, origen in MAPA.items()]
+    extraidos = datos_canonicos(metadata.get('datos_sugeridos', {}))
+    filas = [comparar(campo, datos.get(campo), extraidos.get(campo))
+             for campo, (_, _, editable) in ESQUEMA.items() if editable]
     filas.append(comparar('titular', ' '.join(filter(None, (datos.get('nombres'), datos.get('apellidos')))),
-                          extraidos.get('nombre_contratista')))
+                          extraidos.get('titular')))
     coincide = metadata.get('identidad', {}).get('documento_coincide')
     filas.append({'campo': 'numero_documento', 'formulario': '****' + str(datos.get('numero_documento', ''))[-4:],
-                  'documento': extraidos.get('documento_detectado', ''), 'fuente': 'CONTRATO',
+                  'documento': metadata.get('datos_sugeridos', {}).get('documento_detectado', ''), 'fuente': 'CONTRATO',
                   'estado': 'COINCIDE' if coincide is True else 'DIFIERE' if coincide is False else 'FALTANTE'})
     empresa = datos.get('empresa')
     nit = extraidos.get('nit_empresa')
@@ -68,7 +50,7 @@ def reconciliar(metadata, datos, *, sesion=None):
         filas.append(comparar('nit_empresa', empresa.nit if empresa else '', nit, 'CONVENIO/CONTRATO'))
     from contractors.services.analisis_contractual_seguro import normalizar_nombre_empresa
     filas.append(comparar('empresa', normalizar_nombre_empresa(empresa.razon_social or empresa.nombre) if empresa else '',
-                          normalizar_nombre_empresa(extraidos.get('empresa_contratante')), 'CONVENIO/CONTRATO'))
+                          normalizar_nombre_empresa(extraidos.get('empresa')), 'CONVENIO/CONTRATO'))
     if sesion and datos.get('tipo_documento') == 'CC':
         ocr = sesion.procesamientos_ocr.filter(vigente=True, purgado_en__isnull=True,
             estado='COMPLETADO', captura_frontal__activo=True, captura_trasera__activo=True,
@@ -80,7 +62,7 @@ def reconciliar(metadata, datos, *, sesion=None):
                     fila.update(formulario='****' + fila['formulario'][-4:], documento='****' + fila['documento'][-4:])
                 filas.append(fila)
     for fila in filas:
-        fila['etiqueta'] = ETIQUETAS[fila['campo']]
+        fila['etiqueta'] = ESQUEMA[fila['campo']][1]
     return filas
 
 

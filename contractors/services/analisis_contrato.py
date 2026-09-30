@@ -95,16 +95,28 @@ def analizar_contrato_fallback(documento, *, texto_pdf=None, motivo='') -> Resul
             },
         )
 
-    documento_contratista = _buscar(texto, r'(?:c[eé]dula|documento|c\.?c\.?)\s*(?:n[oº]\.?|n[uú]mero)?\s*[:#-]?\s*([\d.\-]{6,20})')
+    documento_contratista = _buscar(texto, r'(?:c[eé]dula(?:\s+de\s+ciudadan[ií]a)?|documento|c\.?c\.?)\s*(?:n[oº]\.?|n[uú]mero)?\s*[:#-]?\s*([\d.\-]{6,20})').replace('.', '')
     nit_empresa = _buscar(texto, r'\bNIT\s*[:#-]?\s*([\d.\-]{7,20})')
     nombre_contratista = _buscar(texto, r'(?:contratista|prestador(?:a)?(?:\s+de\s+servicios)?)\s*[:\-]\s*([^\n]{3,100})')
+    if not nombre_contratista:
+        nombre_contratista = _buscar(texto, r'^[ \t]*([^\n,;]{3,120}),\s*identificad[oa]\s+con\s+c[eé]dula\b')
     empresa = _buscar(texto, r'(?:contratante|empresa contratante)\s*[:\-]\s*([^\n]{3,120})')
-    cargo = _buscar(texto, r'(?:objeto|cargo|servicio|actividad)\s*(?:del contrato)?\s*[:\-]\s*([^\n]{3,240})')
+    if not empresa:
+        empresa = _buscar(texto, r'^[ \t]*([^\n,;]{3,160}),\s*identificad[oa]\s+con\s+NIT\b')
+    cargo = _buscar(texto, r'(?:objeto|cargo(?:\s*/\s*actividad)?|servicio|actividad)\s*(?:del contrato)?\s*[:\-]\s*([^\n]{3,160})')
+    if not cargo:
+        cargo = _buscar(texto, r'servicios\s+profesionales\s+como\s+([^,;.]{2,160})')
     fecha_inicio = _buscar_fecha(texto, ('fecha de inicio', 'inicio del contrato', 'fecha inicio', 'inicia el'))
-    fecha_fin = _buscar_fecha(texto, ('fecha de terminación', 'fecha de finalización', 'fin del contrato', 'fecha fin', 'fecha terminación'))
-    valor_total = _buscar_valor(texto, ('valor total del contrato', 'valor del contrato', 'valor total contrato'))
+    fecha_fin = _buscar_fecha(texto, ('fecha de terminación', 'fecha de terminacion', 'fecha de finalización', 'fin del contrato', 'fecha fin', 'fecha terminación', 'fecha terminacion'))
+    valor_total = _buscar_valor(texto, ('valor total del contrato', 'valor del contrato', 'valor total contrato', 'valor total'))
+    if valor_total is None:
+        valor_total = _importe(_buscar(texto, r'valor\s+total\s+del\s+(?:presente\s+)?contrato\s+(?:ser[aá]|es)\s+de\s*:[^\d$]{0,180}\$\s*([\d.,]+)'))
     honorarios = _buscar_valor(texto, ('honorarios mensuales', 'valor mensual', 'mensualidad'))
+    if honorarios is None:
+        honorarios = _importe(_buscar(texto, r'pagos?\s+mensuales\s+de\s*:?\s*\$\s*([\d.,]+)'))
     pagado = _buscar_valor(texto, ('valor pagado', 'total pagado', 'pagos realizados'))
+    if pagado is None and re.search(r'\bno\s+se\s+registra\s+ning[uú]n\s+pago\s+efectuado\b', texto, re.I):
+        pagado = Decimal('0')
     pendiente = _buscar_valor(texto, ('saldo pendiente', 'valor pendiente', 'saldo por cobrar'))
     forma_pago, frecuencia_pago, evidencia_pago, confianza_pago = _detectar_forma_pago(
         texto
@@ -157,12 +169,16 @@ def _buscar(texto, patron):
 
 
 def _buscar_fecha(texto, etiquetas):
+    meses = dict(zip(('enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'), range(1, 13)))
     for etiqueta in etiquetas:
-        valor = _buscar(texto, rf'{re.escape(etiqueta)}\s*[:\-]?\s*(\d{{1,2}}[/-]\d{{1,2}}[/-]\d{{4}}|\d{{4}}-\d{{2}}-\d{{2}})')
+        valor = _buscar(texto, rf'{re.escape(etiqueta)}\s*[:\-]?\s*(\d{{1,2}}[/-]\d{{1,2}}[/-]\d{{4}}|\d{{4}}-\d{{2}}-\d{{2}}|\d{{1,2}}\s+de\s+(?:{"|".join(meses)})\s+de\s+\d{{4}})')
         if valor:
             try:
                 if re.match(r'^\d{4}-', valor):
                     return date.fromisoformat(valor)
+                if ' de ' in valor.lower():
+                    dia, mes, anio = valor.lower().split(' de ')
+                    return date(int(anio), meses[mes], int(dia))
                 dia, mes, anio = re.split(r'[/-]', valor)
                 return date(int(anio), int(mes), int(dia))
             except ValueError:
@@ -174,17 +190,25 @@ def _buscar_valor(texto, etiquetas):
     for etiqueta in etiquetas:
         valor = _buscar(texto, rf'{re.escape(etiqueta)}\s*[:\-]?\s*\$?\s*([\d.,]+)')
         if valor:
-            try:
-                from contractors.forms import MontoContratoField
-                from django.core.exceptions import ValidationError
-                return MontoContratoField(max_digits=14, decimal_places=2, min_value=Decimal('0')).clean(valor)
-            except (InvalidOperation, ValidationError):
-                continue
+            importe = _importe(valor)
+            if importe is not None:
+                return importe
     return None
 
 
+def _importe(valor):
+    if not valor:
+        return None
+    from contractors.forms import MontoContratoField
+    from django.core.exceptions import ValidationError
+    try:
+        return MontoContratoField(max_digits=14, decimal_places=2, min_value=Decimal('0')).clean(valor)
+    except (InvalidOperation, ValidationError):
+        return None
+
+
 def _buscar_duracion(texto):
-    valor = _buscar(texto, r'duraci[oó]n(?:\s+del contrato)?\s*[:\-]?\s*(\d{1,4})\s*meses\b')
+    valor = _buscar(texto, r'duraci[oó]n(?:\s+del contrato)?(?:\s+de)?\s*[:\-]?\s*(?:[a-záéíóúñ ]{2,40}\s*\()?([0-9]{1,4})\)?\s*meses\b')
     return int(valor) if valor else None
 
 

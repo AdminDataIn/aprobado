@@ -39,6 +39,7 @@ from contractors.services.capacidad_contractual import (
 from contractors.services.analisis_contractual_seguro import analizar_contrato_seguro
 from contractors.validators import documento_numerico
 from contractors.services.reconciliacion_contractual import confirmar_reconciliacion, reconciliar
+from contractors.services.extraccion_campos import ESQUEMA
 from contractors.services.solicitud import (
     actualizar_estado_documental,
     guardar_documento_prestador,
@@ -402,6 +403,19 @@ def solicitar_prestador_view(request):
         if error_captura:
             form.add_error(None, error_captura)
             paso_error_general = 2
+        if not valido and not error_captura:
+            evidencia, error_analisis = _validar_evidencia_analisis(
+                request=request, form=form, solicitud=solicitud_existente)
+            if not error_analisis:
+                # Cross-field errors remove values from cleaned_data; retain them for comparison only.
+                datos_revision = dict(form.cleaned_data)
+                for campo in ESQUEMA:
+                    if campo in form.fields and campo not in datos_revision:
+                        try:
+                            datos_revision[campo] = form.fields[campo].clean(form.data.get(campo))
+                        except ValidationError:
+                            continue
+                form.reconciliacion = reconciliar(evidencia['metadata_segura'], datos_revision, sesion=sesion_documental)
         if valido and not error_captura:
             evidencia, error_analisis = _validar_evidencia_analisis(
                 request=request,

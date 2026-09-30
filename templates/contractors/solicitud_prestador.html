@@ -417,7 +417,7 @@
 
 
 <script src="{% static 'js/contract_money.js' %}"></script>
-<script src="{% static 'js/contract_reconciliation.js' %}"></script>
+<script src="{% static 'js/contract_reconciliation.js' %}?v=p04e1-1"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     const formulario = document.getElementById('formularioPrestador');
@@ -449,7 +449,6 @@
     let campoCamaraActual = null;
     let archivoCapturado = null;
     let urlPreviewCamara = '';
-    let datosSugeridosContrato = {};
     let analisisContratoValido = formulario.dataset.analysisValid === 'true';
     let analisisContratoEnCurso = false;
 
@@ -899,26 +898,18 @@
         : 'contract-analysis-summary';
       mensaje.textContent = data.bloqueos?.length
         ? 'El análisis detectó información que debes revisar antes de continuar.'
-        : 'Datos detectados desde el contrato. Revísalos antes de continuar.';
+        : 'Leímos tu contrato. Revisa los datos antes de continuar.';
       resultadoAnalisisContrato.appendChild(mensaje);
 
-      datosSugeridosContrato = data.datos || {};
       const sugerencia = data.empresa_sugerida || {};
       const listaDatos = document.createElement('dl');
       listaDatos.className = 'contract-analysis-data-list';
-      agregarDatoDetectado(listaDatos, 'Titular detectado', datosSugeridosContrato.nombre_contratista);
-      agregarDatoDetectado(listaDatos, 'Valor pagado', datosSugeridosContrato.valor_pagado_estimado);
-      agregarDatoDetectado(listaDatos, 'Empresa detectada', datosSugeridosContrato.empresa_contratante);
-      agregarDatoDetectado(listaDatos, 'NIT detectado', datosSugeridosContrato.nit_empresa);
+      Object.values(data.campos_extraidos || {}).forEach(campo => {
+        if (!campo.encontrado) return;
+        const etiqueta = campo.etiqueta + (campo.fuente === 'DERIVADO_DETERMINISTICAMENTE' ? ' (calculado: total menos pagado)' : '');
+        agregarDatoDetectado(listaDatos, etiqueta, campo.valor);
+      });
       agregarDatoDetectado(listaDatos, 'Empresa sugerida en Aprobado', sugerencia.empresa_sugerida_nombre || sugerencia.nombre);
-      agregarDatoDetectado(listaDatos, 'Cargo o actividad', datosSugeridosContrato.cargo_o_servicio);
-      agregarDatoDetectado(listaDatos, 'Tipo de contrato', datosSugeridosContrato.tipo_contrato);
-      agregarDatoDetectado(listaDatos, 'Fecha de inicio', datosSugeridosContrato.fecha_inicio_contrato);
-      agregarDatoDetectado(listaDatos, 'Fecha de finalización', datosSugeridosContrato.fecha_fin_contrato);
-      agregarDatoDetectado(listaDatos, 'Valor total', datosSugeridosContrato.valor_total_contrato);
-      agregarDatoDetectado(listaDatos, 'Valor pendiente', datosSugeridosContrato.valor_pendiente_estimado);
-      agregarDatoDetectado(listaDatos, 'Forma de pago', datosSugeridosContrato.forma_pago);
-      agregarDatoDetectado(listaDatos, 'Valor mensual', datosSugeridosContrato.valor_mensual_o_honorarios);
       if (listaDatos.children.length) {
         const bloqueDatos = document.createElement('div');
         bloqueDatos.className = 'contract-analysis-section contract-analysis-data';
@@ -931,31 +922,20 @@
       agregarListaResultado(resultadoAnalisisContrato, 'Bloqueos', data.bloqueos, 'contract-analysis-blocks');
       const diferencias = (data.reconciliacion || []).filter(f => f.estado === 'DIFIERE' || (f.campo === 'nit_empresa' && f.estado === 'NO_COMPARABLE'));
       agregarListaResultado(resultadoAnalisisContrato, 'Diferencias por revisar', diferencias.map(f => `${f.etiqueta}: tu formulario ${f.formulario || 'sin dato'}; documento ${f.documento || 'sin dato'}`), 'contract-analysis-warnings');
-      const faltantes = (data.reconciliacion || []).filter(f => f.estado === 'FALTANTE' && !f.formulario);
-      agregarListaResultado(resultadoAnalisisContrato, 'Datos por completar', [...new Set(faltantes.map(f => f.etiqueta))], 'contract-analysis-warnings');
+      const faltantes = window.ContractReconciliation.missingFields(data.campos_extraidos || {}, nombre => valor(`id_${nombre}`));
+      agregarListaResultado(resultadoAnalisisContrato, 'Datos por completar', faltantes, 'contract-analysis-warnings');
+      if (!selectEmpresa.value) agregarListaResultado(resultadoAnalisisContrato, 'Selección pendiente', ['Selecciona la empresa contratante del convenio.'], 'contract-analysis-warnings');
+    }
+
+    function aplicarSugerenciasContrato(data) {
+      const sugerencia = data.empresa_sugerida || {};
       if (!data.bloqueos?.length && !selectEmpresa.value && sugerencia.empresa_sugerida_id && ['nit_exacto', 'nombre_exacto', 'slug_exacto'].includes(sugerencia.match_tipo)) {
         confirmarEmpresa(String(sugerencia.empresa_sugerida_id), sugerencia.nombre);
       }
-    }
-
-    function aplicarSugerenciasContrato() {
-      const mapa = {
-        nombres: 'id_nombres',
-        apellidos: 'id_apellidos',
-        cargo_o_servicio: 'id_cargo',
-        tipo_contrato: 'id_tipo_contrato',
-        fecha_inicio_contrato: 'id_fecha_inicio_contrato',
-        fecha_fin_contrato: 'id_fecha_fin_contrato',
-        duracion_meses_contrato: 'id_duracion_contrato_meses',
-        valor_total_contrato: 'id_valor_total_contrato',
-        valor_pagado_estimado: 'id_valor_pagado_contrato',
-        valor_pendiente_estimado: 'id_valor_pendiente_cobrar',
-        forma_pago: 'id_forma_pago',
-        valor_mensual_o_honorarios: 'id_valor_mensual_contractual',
-      };
-      Object.entries(mapa).forEach(([origen, destino]) => {
-        const campo = document.getElementById(destino);
-        if (window.ContractReconciliation.fillEmpty(campo, datosSugeridosContrato[origen])) {
+      Object.entries(data.campos_extraidos || {}).forEach(([nombre, evidencia]) => {
+        if (!evidencia.editable || !evidencia.encontrado) return;
+        const campo = document.getElementById(`id_${nombre}`);
+        if (window.ContractReconciliation.fillEmpty(campo, evidencia.valor)) {
           if (campo.matches('[data-money-contract]')) formatearMonedaContrato(campo);
         }
       });
@@ -996,6 +976,7 @@
         });
         const respuestaAnalisis = await analisis.json();
         if (estadoAnalisisContrato) estadoAnalisisContrato.textContent = 'Validando información...';
+        if (analisis.ok && respuestaAnalisis.success && !respuestaAnalisis.bloqueos?.length) aplicarSugerenciasContrato(respuestaAnalisis);
         renderizarResultadoAnalisis(respuestaAnalisis);
         if (!analisis.ok) throw new Error(respuestaAnalisis.error || 'No fue posible analizar el contrato.');
         if (estadoAnalisisContrato) {
@@ -1007,7 +988,6 @@
             estadoAnalisisContrato.textContent = 'Análisis completado con advertencias. Completa y confirma la información manualmente.';
           } else {
             analisisContratoValido = true;
-            aplicarSugerenciasContrato();
             estadoAnalisisContrato.textContent = 'Datos detectados desde el contrato. Revísalos antes de continuar.';
           }
         }
@@ -1024,7 +1004,6 @@
 
     if (campoContrato) campoContrato.addEventListener('change', function () {
       analisisContratoValido = false;
-      datosSugeridosContrato = {};
       if (resultadoAnalisisContrato) resultadoAnalisisContrato.innerHTML = '';
       actualizarBotonAnalisis();
       if (estadoAnalisisContrato) estadoAnalisisContrato.textContent = 'Contrato cargado. Debes analizarlo antes de continuar.';
