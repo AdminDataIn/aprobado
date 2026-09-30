@@ -213,6 +213,15 @@ def _buscar_duracion(texto):
 
 
 def _detectar_forma_pago(texto):
+    # El PDF puede separar la periodicidad de su sustantivo con un salto de linea.
+    periodicidad = re.search(
+        r'(?i)\b(?:pagos?|honorarios|remuneraci[oó]n)\s+'
+        r'(mensual(?:es)?|quincenal(?:es)?|semanal(?:es)?)\b', texto,
+    )
+    if periodicidad:
+        forma = periodicidad.group(1).upper().removesuffix('ES')
+        evidencia = re.sub(r'\s+', ' ', periodicidad.group(0)).strip()
+        return forma, forma, evidencia[:500], Decimal('0.80')
     patrones = (
         ('MENSUAL', r'(?i)(?:pago|honorarios|remuneraci[oó]n)[^\n]{0,80}\bmensual(?:es)?\b'),
         ('QUINCENAL', r'(?i)(?:pago|honorarios|remuneraci[oó]n)[^\n]{0,80}\bquincenal(?:es)?\b'),

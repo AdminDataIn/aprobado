@@ -36,6 +36,42 @@ class ExtraccionContratoUATTest(TestCase):
             with self.subTest(campo=campo):
                 self.assertEqual(getattr(resultado, campo), valor)
 
+    def test_periodicidad_explicita_narrativa_y_formatos_existentes(self):
+        for periodicidad, esperado in (
+            ('mensuales', 'MENSUAL'), ('quincenales', 'QUINCENAL'),
+            ('semanales', 'SEMANAL'),
+        ):
+            for separador in (' ', '\n', '\r\n', '\u00a0'):
+                texto = (
+                    'El contratante cancelará el valor del contrato mediante\n'
+                    f'doce (12) pagos{separador}{periodicidad} de: $10.400.000'
+                )
+                with self.subTest(periodicidad=periodicidad, separador=separador):
+                    resultado = analizar_contrato_fallback(None, texto_pdf=texto)
+                    self.assertEqual(resultado.forma_pago, esperado)
+        for texto, esperado in (
+            ('Forma de pago: mensual.', 'MENSUAL'),
+            ('Honorarios mensuales: $10.400.000', 'MENSUAL'),
+            ('Pago por cada entregable', 'POR_ENTREGABLE'),
+            ('Contra presentación de factura', 'CONTRA_FACTURA'),
+            ('Remuneración variable', 'VARIABLE'),
+        ):
+            with self.subTest(texto=texto):
+                self.assertEqual(analizar_contrato_fallback(None, texto_pdf=texto).forma_pago, esperado)
+
+    def test_no_infiere_periodicidad_de_duracion_o_cantidad_de_pagos(self):
+        for texto in (
+            'El contratante realizará doce (12) pagos de $10.400.000.',
+            'Duración del contrato: 12 meses.',
+            'Pago de $10.400.000.\nInformes mensuales de actividad.',
+            'Contrato sin periodicidad especificada.',
+        ):
+            with self.subTest(texto=texto):
+                self.assertEqual(
+                    analizar_contrato_fallback(None, texto_pdf=texto).forma_pago,
+                    'NO_IDENTIFICADA',
+                )
+
     def test_pipeline_deriva_saldo_y_preserva_procedencia(self):
         resultado = analizar_contrato_seguro(solicitud=SimpleNamespace(numero_documento='1006442329'), documento=pdf_uat())
         self.assertFalse(resultado.bloqueos)

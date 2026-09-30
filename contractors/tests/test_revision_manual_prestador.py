@@ -228,12 +228,24 @@ class RevisionManualPrestadorTest(TestCase):
             score='910.00',
             razones=['DataCredito score alto'],
         )
+        ContractorApplication.objects.filter(pk=self.solicitud.pk).update(
+            updated_at=timezone.now().replace(microsecond=991049),
+        )
         self.client.force_login(self.solicitante)
 
         response = self.client.get('/mi-credito/', HTTP_HOST=self.host)
 
         self.assertContains(response, 'Tu evaluación inicial fue favorable.')
-        self.assertNotContains(response, '910')
+        # Los timestamps pueden contener 910; no son una exposicion del score.
+        html = response.content.decode(response.charset)
+        self.assertIn('.991049', html)
+        self.assertNotRegex(html.lower(), r'\b(?:score|proveedor|datacredito)\b')
+        self.assertNotRegex(html, r'>\s*910(?:[.,]00)?\s*<')
+        for nombre in ('estados_publicos', 'estado_publico_principal', 'timeline_publico_principal'):
+            with self.subTest(contexto=nombre):
+                contexto = str(response.context[nombre]).lower()
+                self.assertNotRegex(contexto, r'\b(?:score|proveedor|datacredito)\b')
+                self.assertNotRegex(contexto, r'(?<![\w.])910(?:[.,]00)?(?![\w.])')
         self.assertNotContains(response, 'DataCredito')
         self.assertNotContains(response, 'Credito aprobado')
 
