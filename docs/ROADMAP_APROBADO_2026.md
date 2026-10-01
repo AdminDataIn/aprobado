@@ -1106,6 +1106,7 @@ Actualizacion P0-4 (2026-09-29):
 - P0-4A camara movil: UAT fisico iPhone/Safari aprobado por el usuario.
 - P0-4B UTF-8: UAT fisico aprobado por el usuario.
 - P0-4C simulador: mecanismo implementado; configuracion financiera PROD pendiente.
+  P0-4C.1 auditado sin aplicar datos; ver 14.11.
 - P0-4D: validadores backend reutilizables para datos personales y NIT/DV,
   normalizacion y controles UX implementados; validacion local, no despliegue.
 - P0-4E: extraccion por campo, fallback parcial, procedencia, precarga no
@@ -1116,7 +1117,8 @@ Actualizacion P0-4 (2026-09-29):
 Auditoria, reglas y limitaciones: [PRESTADORES_P0_4D_4E.md](PRESTADORES_P0_4D_4E.md).
 
 Permanecen pendientes: P0-4F PDF bancario protegido, stepper movil compacto,
-persistencia temporal privada de PDFs tras POST invalido, P0-5 evaluacion
+persistencia temporal privada de PDFs tras POST invalido, P0-4E.2 semantica temporal
+contractual (obligatoria antes de P0-5), P0-5 evaluacion
 automatica, P0-6 identidad real y P0-7 formalizacion/postfirma/transferencia/ACTIVO.
 
 ### 14.9 APROBADO-03 P0-4E.1: aceptacion contractual UAT
@@ -1156,3 +1158,82 @@ Objetivo y criterios de aceptacion:
 
 Siguen separados: P0-4F PDF cifrado, borrador privado temporal de PDF, stepper
 compacto, P0-5/score/centrales, P0-6 identidad real y P0-7 formalizacion/postfirma.
+
+### 14.11 APROBADO-03 P0-4C.1: preparacion financiera productiva
+
+Auditoria de codigo y consulta local de solo lectura (2026-09-29). Sin acceso al
+VPS: valores productivos NO VERIFICADOS. La base SQLite local contiene solamente
+`prestadores-demo-v1` activa; no representa aprobacion de negocio para produccion.
+
+Fuente DEMO: `configurar_politica_prestadores_demo.py`. Monto 1.000.000 a
+10.000.000; plazo 3 a 8 meses; tasa mensual 2,2000%; originacion 10,0000%; IVA
+sobre originacion 19,0000%; fondo 2,0000%; seguro 0,3711%. El default del modelo
+para tasa mensual es 1,9000%, distinto de DEMO; ninguno acredita una tasa PROD.
+Negocio debe aprobar limites, tasa, cargos, version y tratamiento de cada concepto.
+
+El simulador informativo delega en `calcular_componentes_financieros`: originacion,
+IVA de originacion, fondo y seguro se suman al capital solicitado y se financian
+con cuota francesa. Aunque el campo de seguro dice `primera_cuota`, el calculo
+actual lo financia, no lo agrega exclusivamente a esa cuota. Fondo tiene IVA
+incluido segun metadata; no se calcula otro IVA sobre fondo. No existe una salida
+independiente de desembolso neto ni deducciones en este calculo.
+
+`configurar_simulador_prestadores --archivo parametros.json` valida todos los
+campos requeridos, version, rangos y compatibilidad de la configuracion efectiva.
+Su dry-run realiza escrituras dentro de una transaccion y las revierte: no es una
+consulta estrictamente read-only y en PostgreSQL puede consumir secuencias.
+Solo `--aplicar` confirma persistencia; repetir version y valores es idempotente.
+No crea ni activa score; una politica ya activa/vigente condiciona la seleccion
+de configuracion financiera. No ejecutar bootstrap DEMO para configurar PROD.
+
+Brechas antes de habilitacion productiva: el comando no registra actor, motivo ni
+historial antes/despues (timestamps no sustituyen auditoria); no verifica topes de
+negocio aprobados para porcentajes ni ejecuta validacion completa de cronogramas.
+La validacion del modelo por si sola tampoco equivale a los controles adicionales
+del comando. No se modifico el comando ni se suministro/aplico JSON productivo.
+
+### 14.12 APROBADO-03 P0-4E.2: Semantica temporal y calendario contractual
+
+**PENDIENTE OBLIGATORIO antes de automatizar capacidad/score en P0-5.**
+Solo registrado; sin implementacion, consultas a centrales ni predecision.
+
+Distinguir explicitamente, con fecha de corte y procedencia:
+
+- Periodicidad contractual: frecuencia y regla contractual de exigibilidad.
+- Valor pagado al corte de la fuente: evidencia historica del documento, no pago actual.
+- Valor pagado actual declarado/verificado: separar declaracion de evidencia y su fecha.
+- Cuotas causadas: periodos devengados segun contrato, no necesariamente exigibles.
+- Cuotas exigibles: obligaciones cuya fecha contractual de pago ya se alcanzo.
+- Cuotas futuras: obligaciones posteriores al corte, con sus fechas contractuales.
+- Flujo contractual futuro: cobros esperados con calendario; no dinero recibido ni
+  saldo historico indiscriminadamente disponible para capacidad.
+
+Ejemplo UAT: inicio 01/08/2026, 12 pagos mensuales de $10.400.000, pagaderos
+dentro de los primeros cinco dias habiles del mes siguiente. Al 29/09/2026,
+agosto ya alcanzo su fecha contractual de pago; septiembre vence en octubre.
+Esto NO demuestra que agosto se haya pagado. No restar pagos presumidos por el
+mero transcurso del tiempo ni convertir un cero historico en cero actual.
+
+Criterios pendientes: calendario de dias habiles y reglas de corte explicitos;
+trazabilidad de fuente/fecha de cada importe; separar causado, exigible y futuro;
+no confundir exigibilidad con pago efectivo; tests del ejemplo UAT, limites de
+mes, dias no habiles, pagos parciales y fuente desactualizada. La capacidad
+preliminar actual usa saldo declarado y una cuota sobre monto base; el simulador
+informativo incluye cargos financiados. Revisar esa diferencia antes de P0-5,
+sin duplicar la formula financiera ni automatizar decisiones con datos ambiguos.
+No declarar Prestadores E2E cerrado.
+
+### 14.13 APROBADO-03 P0-4C.2: semantica financiera del simulador
+
+2026-09-30: alineacion implementada; pendiente validacion productiva. Capacidad
+preliminar y simulador reutilizan cuota sobre capital financiado del core Decimal.
+Desembolso neto igual al monto solicitado; cargos financiados, no descontados.
+Retirada la formula duplicada con floats del navegador. Sin renombrar campos ni
+alterar snapshots historicos; seguro `primera_cuota` es nombre legado inexacto.
+
+Negocio aprueba monto 500.000 a 3.000.000, tasa mensual 1%, originacion 10%, IVA
+19% sobre originacion y fondo Figarantias 2%. Seguro SURA financiado: porcentaje
+pendiente, al igual que version y limites de plazo. Plantilla local incompleta:
+`parametros_prestadores_prod_pendientes.json`; no aplicada ni sustituida por DEMO.
+Detalles y redondeo del ejemplo: [PRESTADORES_P0_4_SIMULADOR.md](PRESTADORES_P0_4_SIMULADOR.md).
+P0-4E.2 sigue obligatorio antes de capacidad/score automatizados en P0-5.

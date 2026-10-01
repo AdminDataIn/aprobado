@@ -33,6 +33,8 @@ class Command(BaseCommand):
             raise CommandError('No se pudo leer un JSON valido.') from None
         if not isinstance(datos, dict) or set(datos) != set(CAMPOS):
             raise CommandError('El JSON debe contener exactamente: ' + ', '.join(CAMPOS))
+        if any(datos[campo] is None for campo in CAMPOS):
+            raise CommandError('Configuracion incompleta: faltan parametros aprobados; no se aplicaron defaults.')
         if not isinstance(datos['version'], str) or not datos['version'].strip():
             raise CommandError('Se requiere una version no vacia.')
         try:

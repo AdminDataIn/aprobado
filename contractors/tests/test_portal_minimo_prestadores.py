@@ -1564,8 +1564,11 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertContains(response, "amount.addEventListener('input', schedule)")
         self.assertContains(response, "term.addEventListener('input', schedule)")
         self.assertContains(response, 'id="simulator-public-config"')
-        self.assertContains(response, 'function previewCalculation()')
-        self.assertContains(response, 'previewCalculation();')
+        self.assertNotContains(response, 'previewCalculation')
+        self.assertNotContains(response, 'Math.pow')
+        self.assertContains(response, 'Monto que recibes:')
+        self.assertContains(response, 'Número de cuotas:')
+        self.assertContains(response, 'data-result="desembolso_neto"')
         self.assertContains(response, 'paint(data.resultado)')
         self.assertNotContains(response, 'SECRET_KEY')
         self.assertNotContains(response, 'OPENAI_API_KEY')
@@ -1626,6 +1629,7 @@ class PortalMinimoPrestadoresTest(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         resultado = response.json()['resultado']
+        self.assertEqual(resultado['desembolso_neto'], '10000000.00')
         self.assertEqual(resultado['costo_originacion'], '800000.00')
         self.assertEqual(resultado['fondo_garantia'], '150000.00')
         self.assertEqual(resultado['seguro_vida'], '25000.00')

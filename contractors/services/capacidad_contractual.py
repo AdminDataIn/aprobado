@@ -47,9 +47,14 @@ class ResultadoSimulacionPrestadorInformativa:
     cuota_mensual: Decimal
     fuente: str = 'simulacion_prestadores_informativa_v1'
 
+    @property
+    def desembolso_neto(self):
+        return self.monto_solicitado
+
     def como_dict(self):
         return {
             'monto_solicitado': self.monto_solicitado,
+            'desembolso_neto': self.desembolso_neto,
             'plazo_meses': self.plazo_meses,
             'tasa_mensual': self.tasa_mensual,
             'tasa_mensual_porcentaje': self.tasa_mensual_porcentaje,
@@ -152,6 +157,13 @@ def simular_credito_prestador_informativo(*, monto, plazo_meses, configuracion=N
         raise ConfiguracionSimuladorNoDisponible(
             'La simulacion no esta disponible porque falta configuracion financiera activa.'
         )
+    requeridos = (
+        'monto_minimo', 'monto_maximo', 'plazo_minimo_meses', 'plazo_maximo_meses',
+        'tasa_mensual', 'porcentaje_originacion', 'porcentaje_iva_originacion',
+        'porcentaje_fondo_garantia', 'porcentaje_seguro_vida_primera_cuota',
+    )
+    if any(getattr(configuracion, campo, None) is None for campo in requeridos):
+        raise ConfiguracionSimuladorNoDisponible('La configuracion financiera esta incompleta.')
     monto = _decimal_or_none(monto)
     plazo_meses = int(plazo_meses)
     if monto is None or monto <= 0 or plazo_meses <= 0:
@@ -176,7 +188,7 @@ def simular_credito_prestador_informativo(*, monto, plazo_meses, configuracion=N
     )
 
     return ResultadoSimulacionPrestadorInformativa(
-        monto_solicitado=monto,
+        monto_solicitado=componentes.monto_base,
         plazo_meses=plazo_meses,
         tasa_mensual=_porcentaje_como_tasa(componentes.tasa_mensual),
         tasa_mensual_porcentaje=componentes.tasa_mensual,
@@ -247,7 +259,13 @@ def evaluar_capacidad_contractual_preliminar(
     porcentaje = None
     calculable = not bloqueos and monto is not None and plazo is not None and plazo > 0
     if calculable:
-        cuota = _calcular_cuota_estimada(monto, plazo, tasa_mensual)
+        try:
+            cuota = simular_credito_prestador_informativo(
+                monto=monto, plazo_meses=plazo, configuracion=configuracion,
+            ).cuota_mensual
+        except (ValueError, ValidationError) as exc:
+            calculable = False
+            bloqueos.extend(exc.messages if isinstance(exc, ValidationError) else [str(exc)])
 
     if valor_pendiente and valor_pendiente > 0 and monto is not None:
         porcentaje = _redondear((monto / valor_pendiente) * Decimal('100'))
@@ -266,17 +284,6 @@ def evaluar_capacidad_contractual_preliminar(
         advertencias=advertencias,
         bloqueos=bloqueos,
     )
-
-
-def _calcular_cuota_estimada(monto, plazo_meses, tasa_mensual):
-    monto = Decimal(monto)
-    tasa = Decimal(tasa_mensual)
-    plazo = int(plazo_meses)
-    if tasa == 0:
-        return _redondear(monto / Decimal(plazo))
-    factor = (Decimal('1') + tasa) ** plazo
-    cuota = monto * ((tasa * factor) / (factor - Decimal('1')))
-    return _redondear(cuota)
 
 
 def _porcentaje_como_tasa(valor):

@@ -85,11 +85,11 @@
               <div class="cp-section-header">
                 <div>
                   <h2>Resumen informativo</h2>
-                  <p>Los cargos se muestran de forma separada para que puedas revisarlos.</p>
+                  <p>Recibes el monto solicitado. Los cargos se financian; no se descuentan del desembolso.</p>
                 </div>
               </div>
               <div class="simulador-results-container" aria-label="Resultado de la simulación">
-                <div class="simulador-result-row"><label class="simulador-result-label">Monto solicitado:</label><input class="simulador-result-input" data-result="monto_solicitado" value="--" readonly></div>
+                <div class="simulador-result-row"><label class="simulador-result-label">Monto que recibes:</label><input class="simulador-result-input" data-result="desembolso_neto" value="--" readonly></div>
                 <div class="simulador-result-row"><label class="simulador-result-label">Costo de originación:</label><input class="simulador-result-input" data-result="costo_originacion" value="--" readonly></div>
                 <div class="simulador-result-row"><label class="simulador-result-label">IVA sobre costo de originación:</label><input class="simulador-result-input" data-result="iva_costo_originacion" value="--" readonly></div>
                 <div class="simulador-result-row"><label class="simulador-result-label">Fondo de garantía:</label><input class="simulador-result-input" data-result="fondo_garantia" value="--" readonly></div>
@@ -99,6 +99,7 @@
                 <div class="simulador-result-row"><label class="simulador-result-label">Tasa mensual informativa:</label><input class="simulador-result-input" data-result="tasa_mensual_porcentaje" value="--" readonly></div>
                 <div class="simulador-result-row simulador-total-row"><label class="simulador-result-label">Total a pagar:</label><input class="simulador-result-input" data-result="total_a_pagar" value="--" readonly></div>
                 <div class="simulador-result-row"><label class="simulador-result-label simulador-cuota-label">Cuota mensual:</label><input class="simulador-result-input simulador-cuota-input" data-result="cuota_mensual" value="--" readonly></div>
+                <div class="simulador-result-row"><label class="simulador-result-label">Número de cuotas:</label><input class="simulador-result-input" data-result="plazo_meses" value="--" readonly></div>
               </div>
 
               <p class="simulador-legal-note" role="note">
@@ -137,13 +138,10 @@ document.addEventListener('DOMContentLoaded', function () {
   const termHidden = document.getElementById('simulador-plazo-hidden');
   const status = document.getElementById('simulator-status');
   const registerButton = document.querySelector('[data-register-application]');
-  const publicConfigNode = document.getElementById('simulator-public-config');
   if (!form || !amount || !term) return;
 
-  const publicConfig = publicConfigNode ? JSON.parse(publicConfigNode.textContent) : {};
-  const moneyFields = new Set(['monto_solicitado','costo_originacion','iva_costo_originacion','fondo_garantia','seguro_vida','capital_total_financiado','intereses_estimados','total_a_pagar','cuota_mensual']);
-  const money = value => new Intl.NumberFormat('es-CO', {style:'currency', currency:'COP', maximumFractionDigits:0}).format(Number(value || 0));
-  const roundMoney = value => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+  const moneyFields = new Set(['desembolso_neto','monto_solicitado','costo_originacion','iva_costo_originacion','fondo_garantia','seguro_vida','capital_total_financiado','intereses_estimados','total_a_pagar','cuota_mensual']);
+  const money = value => new Intl.NumberFormat('es-CO', {style:'currency', currency:'COP', minimumFractionDigits:2, maximumFractionDigits:2}).format(value || '0');
   let timer;
   let requestNumber = 0;
   let activeController = null;
@@ -170,38 +168,6 @@ document.addEventListener('DOMContentLoaded', function () {
       if (moneyFields.has(key)) node.value = money(data[key]);
       else if (key === 'tasa_mensual_porcentaje') node.value = `${Number(data[key]).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}%`;
       else node.value = data[key] || '--';
-    });
-  }
-  function previewCalculation() {
-    const requestedAmount = Number(amount.value);
-    const months = Number(term.value);
-    const monthlyRate = Number(publicConfig.tasa_mensual || 0);
-    const origination = roundMoney(requestedAmount * Number(publicConfig.tasa_originacion || 0));
-    const originationVat = roundMoney(origination * Number(publicConfig.tasa_iva_originacion || 0));
-    const guaranteeFund = roundMoney(requestedAmount * Number(publicConfig.tasa_fondo_garantia || 0));
-    const lifeInsurance = roundMoney(requestedAmount * Number(publicConfig.tasa_seguro_vida || 0));
-    const financedCapital = roundMoney(
-      requestedAmount + origination + originationVat + guaranteeFund + lifeInsurance
-    );
-    let installment = months ? financedCapital / months : 0;
-    if (monthlyRate && months) {
-      const factor = Math.pow(1 + monthlyRate, months);
-      installment = financedCapital * ((monthlyRate * factor) / (factor - 1));
-    }
-    installment = roundMoney(installment);
-    const total = roundMoney(installment * months);
-    paint({
-      monto_solicitado: requestedAmount,
-      plazo_meses: months,
-      tasa_mensual_porcentaje: roundMoney(monthlyRate * 100),
-      costo_originacion: origination,
-      iva_costo_originacion: originationVat,
-      fondo_garantia: guaranteeFund,
-      seguro_vida: lifeInsurance,
-      capital_total_financiado: financedCapital,
-      intereses_estimados: roundMoney(Math.max(0, total - financedCapital)),
-      total_a_pagar: total,
-      cuota_mensual: installment,
     });
   }
   async function calculate() {
@@ -232,7 +198,11 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   function schedule() {
     updateLabels();
-    previewCalculation();
+    ++requestNumber;
+    if (activeController) activeController.abort();
+    document.querySelectorAll('[data-result]').forEach(node => { node.value = '--'; });
+    status.className = 'simulador-status';
+    status.textContent = 'Calculando simulación...';
     clearTimeout(timer);
     timer = setTimeout(calculate, 150);
   }
@@ -246,7 +216,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
   updateLabels();
-  previewCalculation();
   calculate();
 });
 </script>

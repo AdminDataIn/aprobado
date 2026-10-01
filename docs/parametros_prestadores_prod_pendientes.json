@@ -1,0 +1,12 @@
+{
+  "version": null,
+  "monto_minimo": "500000.00",
+  "monto_maximo": "3000000.00",
+  "plazo_minimo_meses": null,
+  "plazo_maximo_meses": null,
+  "tasa_mensual": "1.0000",
+  "porcentaje_originacion": "10.0000",
+  "porcentaje_iva_originacion": "19.0000",
+  "porcentaje_fondo_garantia": "2.0000",
+  "porcentaje_seguro_vida_primera_cuota": null
+}
