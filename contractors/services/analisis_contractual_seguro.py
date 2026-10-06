@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from difflib import SequenceMatcher
 import logging
@@ -13,6 +13,7 @@ from contractors.services.analisis_contrato_ia import analizar_contrato_con_open
 from contractors.services.extraccion_campos import CAMPOS, presente, limpiar_resultado, completar_faltantes, evidencia_campos, derivar_pendiente
 from contractors.validators import normalizar_nit
 from gestion_creditos.models import Empresa
+from gestion_creditos.services.horizonte_contractual import evidencia_calendario_en_texto
 
 
 MENSAJE_DOCUMENTO_DIFERENTE = (
@@ -84,6 +85,9 @@ def analizar_contrato_seguro(*, solicitud, documento):
         resultado = completar_faltantes(resultado, fallback) if resultado is not None else limpiar_resultado(fallback)
 
     resultado = derivar_pendiente(resultado)
+    calendario = evidencia_calendario_en_texto(texto_pdf)
+    if resultado.forma_pago == 'MENSUAL' and calendario:
+        resultado = replace(resultado, evidencia_forma_pago=f'Pagos mensuales; {calendario}')
     advertencias = list(advertencias_previas) + list(resultado.advertencias)
     bloqueos = []
     documento_detectado = _solo_digitos(resultado.documento_contratista)

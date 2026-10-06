@@ -152,7 +152,7 @@ def obtener_configuracion_publica_simulador_prestador(configuracion=None):
     }
 
 
-def simular_credito_prestador_informativo(*, monto, plazo_meses, configuracion=None):
+def simular_credito_prestador_informativo(*, monto, plazo_meses, configuracion=None, solicitud=None):
     if configuracion is None:
         raise ConfiguracionSimuladorNoDisponible(
             'La simulacion no esta disponible porque falta configuracion financiera activa.'
@@ -166,6 +166,9 @@ def simular_credito_prestador_informativo(*, monto, plazo_meses, configuracion=N
         raise ConfiguracionSimuladorNoDisponible('La configuracion financiera esta incompleta.')
     monto = _decimal_or_none(monto)
     plazo_meses = int(plazo_meses)
+    if solicitud is not None:
+        from contractors.services.horizonte_simulacion import validar_plazo_contractual
+        validar_plazo_contractual(solicitud, configuracion, plazo_meses)
     if monto is None or monto <= 0 or plazo_meses <= 0:
         raise ValueError('Monto y plazo deben ser mayores a cero.')
     if monto < configuracion.monto_minimo or monto > configuracion.monto_maximo:
@@ -261,7 +264,7 @@ def evaluar_capacidad_contractual_preliminar(
     if calculable:
         try:
             cuota = simular_credito_prestador_informativo(
-                monto=monto, plazo_meses=plazo, configuracion=configuracion,
+                monto=monto, plazo_meses=plazo, configuracion=configuracion, solicitud=solicitud,
             ).cuota_mensual
         except (ValueError, ValidationError) as exc:
             calculable = False

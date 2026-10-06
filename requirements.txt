@@ -27,6 +27,7 @@ pydantic==2.11.5
 pydantic_core==2.33.2
 PyJWT==2.8.0
 python-dateutil==2.9.0.post0
+holidays==0.83
 requests==2.32.3
 PySocks==1.7.1
 six==1.17.0

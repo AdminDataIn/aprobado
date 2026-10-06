@@ -87,7 +87,14 @@ class SimulacionPrestadorForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         configuracion = kwargs.pop('configuracion', None)
+        horizonte = kwargs.pop('horizonte', None)
         super().__init__(*args, **kwargs)
+        self.error_horizonte = ''
+        if horizonte is not None:
+            if not horizonte.disponible:
+                self.error_horizonte = horizonte.motivo
+            elif not horizonte.periodos_futuros:
+                self.error_horizonte = 'El contrato no tiene flujos futuros disponibles para simular.'
         self.configuracion_disponible = configuracion is not None
         if configuracion is None:
             self.monto_minimo = None
@@ -103,6 +110,11 @@ class SimulacionPrestadorForm(forms.Form):
         monto_maximo = Decimal(str(configuracion.monto_maximo))
         plazo_minimo = int(configuracion.plazo_minimo_meses)
         plazo_maximo = int(configuracion.plazo_maximo_meses)
+        if horizonte is not None:
+            from contractors.services.horizonte_simulacion import plazo_maximo_respaldado
+            plazo_maximo = plazo_maximo_respaldado(horizonte, min(plazo_maximo, 8))
+            if plazo_maximo < plazo_minimo and not self.error_horizonte:
+                self.error_horizonte = 'No hay un plazo cuyas cuotas queden respaldadas por el calendario contractual.'
 
         self.fields['monto'].min_value = monto_minimo
         self.fields['monto'].max_value = monto_maximo
@@ -143,6 +155,8 @@ class SimulacionPrestadorForm(forms.Form):
 
     def clean(self):
         cleaned_data = super().clean()
+        if self.error_horizonte:
+            raise forms.ValidationError(self.error_horizonte)
         if not self.configuracion_disponible:
             raise forms.ValidationError(
                 'La simulacion no esta disponible porque falta configuracion financiera activa.'

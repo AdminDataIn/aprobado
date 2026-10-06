@@ -1532,6 +1532,79 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(Credito.objects.count(), creditos_antes)
         self.assertEqual(CreditoLibranza.objects.count(), creditos_libranza_antes)
 
+    def _solicitud_prod_con_calendario(self):
+        from datetime import date
+        from contractors.services.politica_financiera_prestador import VERSION, PARAMETROS
+        for campo, valor in PARAMETROS.items():
+            setattr(self.configuracion_simulador, campo, valor)
+        self.configuracion_simulador.version = VERSION
+        self.configuracion_simulador.save()
+        solicitud = self._crear_solicitud(self.usuario, monto=None, plazo=None)
+        self.client.force_login(self.usuario)
+        self._cargar_documentos_obligatorios(solicitud)
+        solicitud.refresh_from_db()
+        solicitud.fecha_inicio_contrato = date(2026,8,1)
+        solicitud.fecha_fin_contrato = date(2026,11,30)
+        solicitud.duracion_contrato_meses = 4
+        solicitud.evidencia_forma_pago = 'pagos mensuales; primeros cinco dias habiles del mes siguiente'
+        solicitud.estado_analisis_contractual = ContractorApplication.EstadoAnalisisContractual.COMPLETADO
+        solicitud.save()
+        return solicitud
+
+    @patch('django.utils.timezone.localdate')
+    def test_prod_get_y_endpoint_limite_contractual_sin_score(self, fecha):
+        from datetime import date
+        fecha.return_value = date(2026,8,1)
+        solicitud = self._solicitud_prod_con_calendario()
+        response = self.client.get(f'/simular/?solicitud_id={solicitud.pk}', HTTP_HOST=self.host)
+        self.assertEqual(response.context['form'].plazo_maximo, 4)
+        self.assertContains(response, 'Figarantías')
+        self.assertTrue(response.context['puede_registrar'])
+        for plazo, estado in ((4,200), (5,400), (18,400)):
+            with self.subTest(plazo=plazo):
+                response = self.client.post('/simular/calcular/',
+                    data={'solicitud_id': solicitud.pk, 'monto': '1000000', 'plazo_meses': plazo},
+                    content_type='application/json', HTTP_HOST=self.host)
+                self.assertEqual(response.status_code, estado, response.content)
+        self.assertFalse(solicitud.auditorias_predecision.exists())
+        self.assertFalse(Credito.objects.exists())
+
+    @patch('django.utils.timezone.localdate')
+    def test_prod_post_no_permite_bypass_plazo_y_conserva_snapshot(self, fecha):
+        from datetime import date
+        fecha.return_value = date(2026,8,1)
+        solicitud = self._solicitud_prod_con_calendario()
+        url = f'/simular/?solicitud_id={solicitud.pk}'
+        response = self.client.post(url, {'solicitud_id':solicitud.pk, 'monto':'1000000', 'plazo_meses':5}, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('plazo_meses', response.context['form'].errors)
+        solicitud.refresh_from_db()
+        self.assertIsNone(solicitud.simulada_en)
+        response = self.client.post(url, {'solicitud_id':solicitud.pk, 'monto':'1000000', 'plazo_meses':4}, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 302)
+        solicitud.refresh_from_db()
+        self.assertEqual(solicitud.plazo_simulado_meses, 4)
+        self.assertEqual(solicitud.version_configuracion_financiera_simulacion, 'prestadores-prod-v1')
+        self.assertFalse(solicitud.auditorias_predecision.exists())
+
+    @patch('django.utils.timezone.localdate')
+    def test_prod_sin_calendario_o_sin_flujos_no_simula(self, fecha):
+        from datetime import date
+        fecha.return_value = date(2026,8,1)
+        solicitud = self._solicitud_prod_con_calendario()
+        solicitud.evidencia_forma_pago = 'pagos mensuales'
+        solicitud.save(update_fields=['evidencia_forma_pago'])
+        response = self.client.get(f'/simular/?solicitud_id={solicitud.pk}', HTTP_HOST=self.host)
+        self.assertContains(response, 'Revisa el calendario contractual')
+        self.assertNotContains(response, 'id="simulator-form"')
+        response = self.client.post('/simular/calcular/', data={'solicitud_id':solicitud.pk, 'monto':'1000000', 'plazo_meses':1}, content_type='application/json', HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 400)
+        fecha.return_value = date(2027,1,1)
+        solicitud.evidencia_forma_pago = 'primeros cinco dias habiles del mes siguiente'
+        solicitud.save(update_fields=['evidencia_forma_pago'])
+        response = self.client.get(f'/simular/?solicitud_id={solicitud.pk}', HTTP_HOST=self.host)
+        self.assertFalse(response.context['horizonte_disponible'])
+
     def test_simulador_muestra_copy_cta_y_actualizacion_interactiva(self):
         solicitud = self._crear_solicitud(self.usuario, monto=None, plazo=None)
         solicitud.estado_analisis_contractual = ContractorApplication.EstadoAnalisisContractual.COMPLETADO

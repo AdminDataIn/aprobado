@@ -9,6 +9,7 @@ from django.db import IntegrityError, transaction
 
 from contractors.models import ConfiguracionSimuladorPrestador
 from contractors.services.capacidad_contractual import obtener_configuracion_simulador_prestador
+from contractors.services.politica_financiera_prestador import VERSION, validar_configuracion_prod
 
 
 CAMPOS = (
@@ -48,6 +49,8 @@ class Command(BaseCommand):
                     setattr(candidata, campo, valor)
                 candidata.activo = True
                 candidata.full_clean()
+                if candidata.version == VERSION:
+                    validar_configuracion_prod(candidata)
                 for campo in CAMPOS[1:]:
                     valor = getattr(candidata, campo)
                     if valor < 0 or (campo.startswith(('monto_', 'plazo_')) and valor == 0):

@@ -17,7 +17,13 @@
         </div>
       {% endif %}
 
-      {% if configuracion_simulador %}
+      {% if configuracion_simulador and not horizonte_disponible %}
+        <div class="simulador-configuracion-ausente" role="alert">
+          <strong>Revisa el calendario contractual</strong>
+          <p>{{ horizonte_contractual.motivo|default:'El calendario contractual no respalda las fechas de las cuotas de un plazo simulable.' }}</p>
+          <a href="{% url 'contractors:solicitar' %}?solicitud_id={{ solicitud.id|unlocalize }}">Revisar contrato</a>
+        </div>
+      {% elif configuracion_simulador %}
       <div class="simulador-hero">
         <div class="simulador-text-content">
           <span class="simulador-eyebrow">SIMULACIÓN INFORMATIVA</span>
@@ -92,8 +98,8 @@
                 <div class="simulador-result-row"><label class="simulador-result-label">Monto que recibes:</label><input class="simulador-result-input" data-result="desembolso_neto" value="--" readonly></div>
                 <div class="simulador-result-row"><label class="simulador-result-label">Costo de originación:</label><input class="simulador-result-input" data-result="costo_originacion" value="--" readonly></div>
                 <div class="simulador-result-row"><label class="simulador-result-label">IVA sobre costo de originación:</label><input class="simulador-result-input" data-result="iva_costo_originacion" value="--" readonly></div>
-                <div class="simulador-result-row"><label class="simulador-result-label">Fondo de garantía:</label><input class="simulador-result-input" data-result="fondo_garantia" value="--" readonly></div>
-                <div class="simulador-result-row"><label class="simulador-result-label">Seguro de vida:</label><input class="simulador-result-input" data-result="seguro_vida" value="--" readonly></div>
+                <div class="simulador-result-row"><label class="simulador-result-label">Fondo de garantía / Figarantías:</label><input class="simulador-result-input" data-result="fondo_garantia" value="--" readonly></div>
+                <div class="simulador-result-row"><label class="simulador-result-label">Seguro de vida / SURA:</label><input class="simulador-result-input" data-result="seguro_vida" value="--" readonly></div>
                 <div class="simulador-result-row"><label class="simulador-result-label">Capital total financiado:</label><input class="simulador-result-input" data-result="capital_total_financiado" value="--" readonly></div>
                 <div class="simulador-result-row"><label class="simulador-result-label">Intereses estimados:</label><input class="simulador-result-input" data-result="intereses_estimados" value="--" readonly></div>
                 <div class="simulador-result-row"><label class="simulador-result-label">Tasa mensual informativa:</label><input class="simulador-result-input" data-result="tasa_mensual_porcentaje" value="--" readonly></div>

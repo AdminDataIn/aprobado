@@ -37,6 +37,7 @@ from contractors.services.capacidad_contractual import (
     snapshot_configuracion_financiera,
 )
 from contractors.services.analisis_contractual_seguro import analizar_contrato_seguro
+from contractors.services.horizonte_simulacion import horizonte_para_solicitud, plazo_maximo_respaldado
 from contractors.validators import documento_numerico
 from contractors.services.reconciliacion_contractual import confirmar_reconciliacion, reconciliar
 from contractors.services.extraccion_campos import ESQUEMA
@@ -642,8 +643,14 @@ def simular_prestador_view(request):
         configuracion=configuracion,
     )
     analisis_habilita_simulacion = solicitud.estado_analisis_contractual in ESTADOS_ANALISIS_PERMITIDOS
+    horizonte = horizonte_para_solicitud(solicitud, configuracion)
+    horizonte_disponible = horizonte is None or (
+        horizonte.disponible
+        and plazo_maximo_respaldado(horizonte, min(8, configuracion.plazo_maximo_meses))
+        >= configuracion.plazo_minimo_meses
+    )
     puede_registrar = bool(
-        configuracion and documentos_cargados and analisis_habilita_simulacion
+        configuracion and documentos_cargados and analisis_habilita_simulacion and horizonte_disponible
     )
     monto_inicial = solicitud.monto_solicitado or (
         configuracion.monto_minimo if configuracion else None
@@ -656,6 +663,7 @@ def simular_prestador_view(request):
         request.POST or None,
         initial=initial,
         configuracion=configuracion,
+        horizonte=horizonte,
     )
 
     if request.method == 'POST' and form.is_valid():
@@ -674,6 +682,14 @@ def simular_prestador_view(request):
                     pk=solicitud.pk,
                     usuario=request.user,
                 )
+                try:
+                    resultado = simular_credito_prestador_informativo(
+                        monto=form.cleaned_data['monto'], plazo_meses=form.cleaned_data['plazo_meses'],
+                        configuracion=configuracion, solicitud=solicitud_bloqueada,
+                    )
+                except ValidationError as exc:
+                    messages.error(request, '; '.join(exc.messages))
+                    return redirect(f"{reverse('contractors:simular')}?solicitud_id={solicitud.id}")
                 version_anterior, _ = construir_version_datos(solicitud_bloqueada)
                 estado_anterior = solicitud_bloqueada.estado
                 solicitud_bloqueada.monto_solicitado = resultado.monto_solicitado
@@ -736,6 +752,8 @@ def simular_prestador_view(request):
             'capacidad_contractual': capacidad_contractual,
             'analisis_habilita_simulacion': analisis_habilita_simulacion,
             'puede_registrar': puede_registrar,
+            'horizonte_contractual': horizonte,
+            'horizonte_disponible': horizonte_disponible,
             'form': form,
             'configuracion_simulador': configuracion,
             'configuracion_publica_simulador': obtener_configuracion_publica_simulador_prestador(
@@ -779,17 +797,22 @@ def calcular_simulacion_prestador_view(request):
             'plazo_meses': payload.get('plazo_meses'),
         },
         configuracion=configuracion,
+        horizonte=horizonte_para_solicitud(solicitud, configuracion),
     )
     if not form.is_valid():
         return JsonResponse(
             {'ok': False, 'error': 'Selecciona un monto y plazo dentro de los rangos permitidos.'},
             status=400,
         )
-    resultado = simular_credito_prestador_informativo(
-        monto=form.cleaned_data['monto'],
-        plazo_meses=form.cleaned_data['plazo_meses'],
-        configuracion=configuracion,
-    )
+    try:
+        resultado = simular_credito_prestador_informativo(
+            monto=form.cleaned_data['monto'],
+            plazo_meses=form.cleaned_data['plazo_meses'],
+            configuracion=configuracion,
+            solicitud=solicitud,
+        )
+    except ValidationError as exc:
+        return JsonResponse({'ok': False, 'error': '; '.join(exc.messages)}, status=400)
     return JsonResponse({'ok': True, 'resultado': _resultado_simulacion_json(resultado)})
 
 

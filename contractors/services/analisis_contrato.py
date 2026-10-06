@@ -4,6 +4,7 @@ from decimal import Decimal, InvalidOperation
 import re
 
 from pypdf import PdfReader
+from gestion_creditos.services.horizonte_contractual import evidencia_calendario_en_texto
 
 
 @dataclass(frozen=True)
@@ -121,6 +122,9 @@ def analizar_contrato_fallback(documento, *, texto_pdf=None, motivo='') -> Resul
     forma_pago, frecuencia_pago, evidencia_pago, confianza_pago = _detectar_forma_pago(
         texto
     )
+    calendario = evidencia_calendario_en_texto(texto)
+    if forma_pago == 'MENSUAL' and calendario:
+        evidencia_pago = f'{evidencia_pago[:90]}; {calendario}'
     tipo_contrato = 'PRESTACION_SERVICIOS' if re.search(r'prestaci[oó]n\s+de\s+servicios', texto, re.I) else ''
 
     encontrados = sum(bool(valor) for valor in (

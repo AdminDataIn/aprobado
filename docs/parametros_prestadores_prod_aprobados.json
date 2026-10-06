@@ -1,0 +1,12 @@
+{
+  "version": "prestadores-prod-v1",
+  "monto_minimo": "1000000",
+  "monto_maximo": "10000000",
+  "plazo_minimo_meses": 1,
+  "plazo_maximo_meses": 8,
+  "tasa_mensual": "2.2000",
+  "porcentaje_originacion": "10.0000",
+  "porcentaje_iva_originacion": "19.0000",
+  "porcentaje_fondo_garantia": "2.0000",
+  "porcentaje_seguro_vida_primera_cuota": "0.3711"
+}

@@ -1237,3 +1237,47 @@ pendiente, al igual que version y limites de plazo. Plantilla local incompleta:
 `parametros_prestadores_prod_pendientes.json`; no aplicada ni sustituida por DEMO.
 Detalles y redondeo del ejemplo: [PRESTADORES_P0_4_SIMULADOR.md](PRESTADORES_P0_4_SIMULADOR.md).
 P0-4E.2 sigue obligatorio antes de capacidad/score automatizados en P0-5.
+
+### 14.14 APROBADO-03 P0-4C.3 + P0-4E.2: politica cerrada y horizonte
+
+2026-09-30: PROD v1 preparada, NO aplicada: 1M-10M, plazo 1-8, tasa mensual
+2,2%, originacion 10%, IVA originacion 19%, Figarantias 2%, SURA 0,3711% financiado.
+Sustituye valores provisionales de 14.13; JSON aprobado completo versionado.
+Core financiero unico Decimal; desembolso neto igual al monto solicitado.
+
+Calendario deterministico mensual implementado; distingue causado/exigible/futuro
+de pagado documental/declarado/verificado. Conserva ultimo flujo posterior al fin
+formal cuando esta respaldado. Contrato solo reduce plazo: MIN(8, flujos futuros).
+Calendario insuficiente, ambiguo o periodos parciales: bloqueo explicito, sin inferir.
+Sin cambios retroactivos a otras versiones; evidencia historica incompleta requiere
+reanalisis/confirmacion. Sin migraciones ni modificaciones de datos existentes.
+
+Oferta pura preparada para P0-5, NO conectada a score: bandas 10/8/5/3M y 8/8/8/6;
+capacidad 30% del ingreso disponible, cuota real financiada, sin elevar al minimo.
+Fuente XLSX B24/B27/B10; inconsistencias J18/J20/K19/K20 documentadas, XLSX intacto.
+Ingreso neto valido con procedencia definitiva pendiente de P0-5; no equiparar
+honorarios brutos a neto. Calendarios especiales y UAT/PostgreSQL pendientes.
+Detalles: [PRESTADORES_P0_4_SIMULADOR.md](PRESTADORES_P0_4_SIMULADOR.md).
+No se ejecutaron centrales reales, score real, predecision ni aprobaciones.
+No declarar Prestadores E2E cerrado.
+
+#### Consolidacion posterior a auditoria
+
+2026-10-05: eliminado catalogo de bandas paralelo de `preparar_oferta`.
+Unico motor: `evaluar_score_prestador`; se preservan pesos/componentes y snapshots.
+Oferta recibe resultado versionado y politica/configuracion financiera correspondiente;
+`BandaScorePrestador` es la fuente de topes post-score. Contrato probado con bandas
+persistidas; cambios de fixture se reflejan sin cambios de codigo.
+
+Capacidad del componente score historico y capacidad crediticia de oferta son
+conceptos separados. Oferta limita la cuota real al 30% del ingreso neto disponible;
+sin neto valido queda NO EVALUABLE, sin fallback al valor contractual bruto.
+Fuente definitiva de neto y contraste/calibracion del componente capacidad siguen
+pendientes de P0-5. NO hay conexion funcional de oferta PROD a la predecision
+productiva hasta resolver esa fuente. Se reutilizara la auditoria existente.
+
+Horizonte restringe oferta y simulacion, sin cambiar meses/componentes del score.
+Ademas del conteo, ultima cuota proyectada <= ultimo flujo respaldante usando fechas
+del core y corte explicito. Revalidacion con desembolso efectivo/fecha forzada queda
+pendiente para la futura conexion de originacion; no asumir fechas futuras garantizadas.
+Sin modelos/migraciones ni activacion PROD, centrales o aprobaciones reales.
