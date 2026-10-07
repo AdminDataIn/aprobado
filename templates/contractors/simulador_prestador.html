@@ -26,21 +26,19 @@
       {% elif configuracion_simulador %}
       <div class="simulador-hero">
         <div class="simulador-text-content">
-          <span class="simulador-eyebrow">SIMULACIÓN INFORMATIVA</span>
-          <h1>Define las condiciones de tu solicitud</h1>
-          <p>Selecciona el monto y el plazo que mejor se ajusten al valor pendiente de tu contrato. Revisa la cuota estimada, los costos asociados y el capital total financiado antes de registrar la solicitud.</p>
-          <p class="simulador-legal-note">La simulación es informativa. La aprobación estará sujeta al análisis documental, validación de identidad, evaluación de riesgo y consulta ante centrales de información.</p>
+          <span class="simulador-eyebrow">PRESTADORES DE SERVICIOS</span>
+          <h1>SIMULA TU CRÉDITO</h1>
           <button type="submit" class="simulador-cta-button simulador-submit simulador-register-cta"
                   form="simulator-form" data-register-application
-                  {% if not puede_registrar %}disabled{% endif %}>Guardar condiciones solicitadas</button>
+                  {% if not puede_registrar %}disabled{% endif %}>Continuar con esta simulación</button>
         </div>
 
         <div class="simulador-card">
           <form method="post" class="simulador-form" id="simulator-form"
                 data-calculate-url="{% url 'contractors:calcular_simulacion' %}"
-                data-application-id="{{ solicitud.id }}">
+                data-application-id="{{ solicitud.id|unlocalize }}" data-can-register="{{ puede_registrar|yesno:'true,false' }}">
             {% csrf_token %}
-            <input type="hidden" name="solicitud_id" value="{{ solicitud.id }}">
+            <input type="hidden" name="solicitud_id" value="{{ solicitud.id|unlocalize }}">
             <input type="hidden" name="monto" id="simulador-monto-hidden"
                    value="{{ form.monto.value|default:form.monto.field.widget.attrs.min|unlocalize }}">
             <input type="hidden" name="plazo_meses" id="simulador-plazo-hidden"
@@ -48,12 +46,6 @@
             {{ form.non_field_errors }}
 
             <div class="simulador-form-step active">
-              <div class="cp-section-header">
-                <div>
-                  <h2>Personaliza tu solicitud</h2>
-                  <p>Puedes modificar el monto y el plazo antes de guardar.</p>
-                </div>
-              </div>
               <div class="simulador-slider-container">
                 <div class="simulador-slider-title">¿Cuánto necesitas?</div>
                 <div class="simulador-range-container">
@@ -72,7 +64,7 @@
               </div>
 
               <div class="simulador-slider-container">
-                <div class="simulador-slider-title">¿En cuántos meses deseas pagarlo?</div>
+                <div class="simulador-slider-title">¿En cuánto tiempo?</div>
                 <div class="simulador-range-container">
                   <div class="simulador-range-progress" id="simulador-progress-2"></div>
                   <input class="simulador-range-input" id="simulador-range-2" type="range"
@@ -90,30 +82,42 @@
 
               <div class="cp-section-header">
                 <div>
-                  <h2>Resumen informativo</h2>
-                  <p>Recibes el monto solicitado. Los cargos se financian; no se descuentan del desembolso.</p>
+                  <h2>Resumen</h2>
                 </div>
               </div>
               <div class="simulador-results-container" aria-label="Resultado de la simulación">
                 <div class="simulador-result-row"><label class="simulador-result-label">Monto que recibes:</label><input class="simulador-result-input" data-result="desembolso_neto" value="--" readonly></div>
+                <div class="simulador-result-row simulador-primary-result"><label class="simulador-result-label simulador-cuota-label">Cuota mensual:</label><input class="simulador-result-input simulador-cuota-input" data-result="cuota_mensual" value="--" readonly></div>
+                <div class="simulador-result-row"><label class="simulador-result-label">Número de cuotas:</label><input class="simulador-result-input" data-result="plazo_meses" value="--" readonly></div>
+                <div class="simulador-result-row"><label class="simulador-result-label">Tasa mensual:</label><input class="simulador-result-input" data-result="tasa_mensual_porcentaje" value="--" readonly></div>
+                <div class="simulador-result-row simulador-total-row"><label class="simulador-result-label">Total a pagar:</label><input class="simulador-result-input" data-result="total_a_pagar" value="--" readonly></div>
+              </div>
+              <p id="simulator-status" class="simulador-status" aria-live="polite">Calculando simulación...</p>
+              <details class="simulador-cost-details">
+                <summary>Ver costos y detalles</summary>
+                <p class="simulador-legal-note">Recibes el monto solicitado. Los cargos se financian; no se descuentan del desembolso.</p>
+                <div class="simulador-results-container">
                 <div class="simulador-result-row"><label class="simulador-result-label">Costo de originación:</label><input class="simulador-result-input" data-result="costo_originacion" value="--" readonly></div>
                 <div class="simulador-result-row"><label class="simulador-result-label">IVA sobre costo de originación:</label><input class="simulador-result-input" data-result="iva_costo_originacion" value="--" readonly></div>
                 <div class="simulador-result-row"><label class="simulador-result-label">Fondo de garantía / Figarantías:</label><input class="simulador-result-input" data-result="fondo_garantia" value="--" readonly></div>
                 <div class="simulador-result-row"><label class="simulador-result-label">Seguro de vida / SURA:</label><input class="simulador-result-input" data-result="seguro_vida" value="--" readonly></div>
                 <div class="simulador-result-row"><label class="simulador-result-label">Capital total financiado:</label><input class="simulador-result-input" data-result="capital_total_financiado" value="--" readonly></div>
                 <div class="simulador-result-row"><label class="simulador-result-label">Intereses estimados:</label><input class="simulador-result-input" data-result="intereses_estimados" value="--" readonly></div>
-                <div class="simulador-result-row"><label class="simulador-result-label">Tasa mensual informativa:</label><input class="simulador-result-input" data-result="tasa_mensual_porcentaje" value="--" readonly></div>
-                <div class="simulador-result-row simulador-total-row"><label class="simulador-result-label">Total a pagar:</label><input class="simulador-result-input" data-result="total_a_pagar" value="--" readonly></div>
-                <div class="simulador-result-row"><label class="simulador-result-label simulador-cuota-label">Cuota mensual:</label><input class="simulador-result-input simulador-cuota-input" data-result="cuota_mensual" value="--" readonly></div>
-                <div class="simulador-result-row"><label class="simulador-result-label">Número de cuotas:</label><input class="simulador-result-input" data-result="plazo_meses" value="--" readonly></div>
+                <div class="simulador-result-row"><label class="simulador-result-label">Desembolso neto:</label><input class="simulador-result-input" data-result="desembolso_neto" value="--" readonly></div>
               </div>
+              </details>
 
               <p class="simulador-legal-note" role="note">
+                La simulación es informativa. La aprobación estará sujeta al análisis documental, validación de identidad, evaluación de riesgo y consulta ante centrales de información.
                 {% if configuracion_simulador.texto_nota_simulacion %}{{ configuracion_simulador.texto_nota_simulacion }}{% else %}Los valores son estimados y están sujetos al análisis de riesgo y la validación documental.{% endif %}
               </p>
-              <p id="simulator-status" class="simulador-status" aria-live="polite">Calculando simulación...</p>
+              <button type="submit" class="simulador-cta-button simulador-submit" form="simulator-form" data-register-application {% if not puede_registrar %}disabled{% endif %}>Continuar con esta simulación</button>
             </div>
           </form>
+          <div class="simulador-sticky-cta">
+            <span data-selection-summary></span>
+            <button type="submit" class="cp-button" form="simulator-form" data-register-application {% if not puede_registrar %}disabled{% endif %}>Continuar</button>
+          </div>
         </div>
       </div>
       {% else %}
@@ -144,6 +148,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const termHidden = document.getElementById('simulador-plazo-hidden');
   const status = document.getElementById('simulator-status');
   const registerButton = document.querySelector('[data-register-application]');
+  const registerButtons = document.querySelectorAll('[data-register-application]');
   if (!form || !amount || !term) return;
 
   const moneyFields = new Set(['desembolso_neto','monto_solicitado','costo_originacion','iva_costo_originacion','fondo_garantia','seguro_vida','capital_total_financiado','intereses_estimados','total_a_pagar','cuota_mensual']);
@@ -159,7 +164,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const percent = max === min ? 0 : ((value - min) / (max - min)) * 100;
     tooltip.textContent = formatter(value);
     tooltip.style.left = `${percent}%`;
-    tooltip.style.transform = 'translateX(-50%)';
+    tooltip.style.transform = percent <= 5 ? 'translateX(0)' : percent >= 95 ? 'translateX(-100%)' : 'translateX(-50%)';
     progress.style.width = `${percent}%`;
   }
   function updateLabels() {
@@ -167,6 +172,9 @@ document.addEventListener('DOMContentLoaded', function () {
     updateSlider(term, termTip, termProgress, value => `${value} meses`);
     amountHidden.value = amount.value;
     termHidden.value = term.value;
+    document.querySelectorAll('[data-selection-summary]').forEach(node => {
+      node.textContent = `${money(amount.value)} · ${term.value} meses`;
+    });
   }
   function paint(data) {
     document.querySelectorAll('[data-result]').forEach(node => {
@@ -181,8 +189,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const current = ++requestNumber;
     if (activeController) activeController.abort();
     activeController = new AbortController();
+    registerButtons.forEach(button => { button.disabled = true; });
     status.className = 'simulador-status';
-    status.textContent = 'Verificando cálculo...';
+    status.textContent = 'Actualizando…';
     try {
       const response = await fetch(form.dataset.calculateUrl, {
         method: 'POST', credentials: 'same-origin',
@@ -195,6 +204,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!response.ok || !data.ok) throw new Error(data.error || 'No fue posible calcular la simulación.');
       paint(data.resultado);
       status.textContent = '';
+      registerButtons.forEach(button => { button.disabled = form.dataset.canRegister !== 'true'; });
     } catch (error) {
       if (error.name === 'AbortError') return;
       if (current !== requestNumber) return;
@@ -206,9 +216,9 @@ document.addEventListener('DOMContentLoaded', function () {
     updateLabels();
     ++requestNumber;
     if (activeController) activeController.abort();
-    document.querySelectorAll('[data-result]').forEach(node => { node.value = '--'; });
+    registerButtons.forEach(button => { button.disabled = true; });
     status.className = 'simulador-status';
-    status.textContent = 'Calculando simulación...';
+    status.textContent = 'Actualizando…';
     clearTimeout(timer);
     timer = setTimeout(calculate, 150);
   }
@@ -220,6 +230,7 @@ document.addEventListener('DOMContentLoaded', function () {
       registerButton.disabled = true;
       registerButton.textContent = 'Registrando...';
     }
+    registerButtons.forEach(button => { button.disabled = true; });
   });
   updateLabels();
   calculate();

@@ -66,6 +66,15 @@ test('detectado nunca aparece faltante aunque el formulario previo estuviera vac
   assert.deepEqual(missingFields(fields, () => 'manual'), []);
 });
 
+test('periodicidad no identificada es vacia pero una eleccion explicita se conserva', () => {
+  const field = {value:'NO_IDENTIFICADA'};
+  assert.equal(fillEmpty(field, 'MENSUAL'), true);
+  assert.equal(field.value, 'MENSUAL');
+  field.value = 'QUINCENAL';
+  assert.equal(fillEmpty(field, 'MENSUAL'), false);
+  assert.equal(field.value, 'QUINCENAL');
+});
+
 for (const mobile of [false, true]) {
   test(`UAT precarga antes de calcular faltantes (${mobile ? 'mobile' : 'desktop'})`, async t => {
     const page = await browser.newPage({viewport: {width: mobile ? 390 : 1280, height:844}, isMobile:mobile, hasTouch:mobile});
@@ -90,7 +99,7 @@ for (const mobile of [false, true]) {
     for (const [name, expected] of Object.entries({empresa:'2', cargo:'Project Manager', fecha_inicio_contrato:'2026-08-01', fecha_fin_contrato:'2027-07-31', duracion_contrato_meses:'12'})) {
       assert.equal(await page.locator('#id_' + name).inputValue(), expected);
     }
-    for (const [name, expected] of Object.entries({valor_total_contrato:'124800000', valor_pagado_contrato:'0', valor_pendiente_cobrar:'124800000', valor_mensual_contractual:'10400000'})) {
+    for (const [name, expected] of Object.entries({valor_total_contrato:'124800000', valor_pagado_contrato:'0', valor_pendiente_cobrar:'124800000.00', valor_mensual_contractual:'10400000'})) {
       assert.equal(await page.locator('[name="' + name + '"]').inputValue(), expected);
     }
     const summary = await page.locator('#contract_ai_result').textContent();
@@ -100,6 +109,20 @@ for (const mobile of [false, true]) {
     assert.ok(!summary.includes('Selección pendiente'));
     assert.ok(!summary.includes('pocos campos'));
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    assert.equal(await page.locator('#id_forma_pago').inputValue(), 'MENSUAL');
+    await page.evaluate(() => {
+      const paid = document.querySelector('#id_valor_pagado_contrato');
+      paid.value = '20800000';
+      paid.dispatchEvent(new Event('input', {bubbles:true}));
+    });
+    assert.equal(await page.locator('[name="valor_pendiente_cobrar"]').inputValue(), '104000000.00');
+    await page.evaluate(() => {
+      document.querySelector('#id_valor_pendiente_cobrar').value = '100000000';
+      const paid = document.querySelector('#id_valor_pagado_contrato');
+      paid.value = '30000000';
+      paid.dispatchEvent(new Event('input', {bubbles:true}));
+    });
+    assert.equal(await page.locator('#id_valor_pendiente_cobrar').inputValue(), '100000000');
   });
 
   test(`formulario Django real conserva campos y empresa al reanalizar (${mobile ? 'mobile' : 'desktop'})`, async t => {

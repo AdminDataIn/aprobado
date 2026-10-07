@@ -31,6 +31,14 @@ def reconciliar(metadata, datos, *, sesion=None):
     extraidos = datos_canonicos(metadata.get('datos_sugeridos', {}))
     filas = [comparar(campo, datos.get(campo), extraidos.get(campo))
              for campo, (_, _, editable) in ESQUEMA.items() if editable]
+    for fila in filas:
+        if fila['campo'] == 'valor_pagado_contrato' and fila['estado'] == 'DIFIERE':
+            fila.update(estado='DIFERENCIA_TEMPORAL', etiqueta='Pagado actual declarado',
+                        mensaje=(f"Pagado al corte del documento: {fila['documento']}. "
+                                 f"Pagado actual declarado: {fila['formulario']}. Confirma el dato actual; "
+                                 'el calendario no demuestra pagos efectivos.'))
+        if fila['campo'] == 'valor_pendiente_cobrar' and saldo_es_derivado(metadata):
+            fila.update(estado='NO_COMPARABLE', fuente='SALDO_DERIVADO_ACTUAL')
     filas.append(comparar('titular', ' '.join(filter(None, (datos.get('nombres'), datos.get('apellidos')))),
                           extraidos.get('titular')))
     coincide = metadata.get('identidad', {}).get('documento_coincide')
@@ -62,8 +70,30 @@ def reconciliar(metadata, datos, *, sesion=None):
                     fila.update(formulario='****' + fila['formulario'][-4:], documento='****' + fila['documento'][-4:])
                 filas.append(fila)
     for fila in filas:
-        fila['etiqueta'] = ESQUEMA[fila['campo']][1]
+        fila.setdefault('etiqueta', ESQUEMA[fila['campo']][1])
     return filas
+
+
+def saldo_es_derivado(metadata):
+    return (metadata.get('campos_extraidos', {}).get('valor_pendiente_cobrar', {}).get('fuente')
+            == 'DERIVADO_DETERMINISTICAMENTE')
+
+
+def ajustar_datos_contractuales(datos, metadata):
+    """Fill missing periodicity; refresh only a previously suggested derived balance."""
+    sugeridos = datos_canonicos(metadata.get('datos_sugeridos', {}))
+    if datos.get('forma_pago') in (None, '', 'NO_IDENTIFICADA') and sugeridos.get('forma_pago'):
+        datos['forma_pago'] = sugeridos['forma_pago']
+    if not saldo_es_derivado(metadata):
+        return
+    total, pagado, saldo = (datos.get(c) for c in
+                           ('valor_total_contrato', 'valor_pagado_contrato', 'valor_pendiente_cobrar'))
+    try:
+        anterior = Decimal(str(sugeridos.get('valor_pendiente_cobrar')))
+        if total is not None and pagado is not None and 0 <= pagado <= total and saldo == anterior:
+            datos['valor_pendiente_cobrar'] = total - pagado
+    except (ValueError, ArithmeticError):
+        return
 
 
 def confirmar_reconciliacion(*, form, evidencia, actor, sesion=None):
@@ -80,7 +110,7 @@ def confirmar_reconciliacion(*, form, evidencia, actor, sesion=None):
         raise ValidationError('La evidencia documental no corresponde a esta solicitud.')
     metadata = dict(evidencia.get('metadata_segura') or {})
     filas = reconciliar(metadata, form.cleaned_data, sesion=sesion)
-    pendientes = [f for f in filas if f['estado'] == 'DIFIERE' or
+    pendientes = [f for f in filas if f['estado'] in ('DIFIERE', 'DIFERENCIA_TEMPORAL') or
                   (f['campo'] == 'nit_empresa' and f['estado'] == 'NO_COMPARABLE')]
     form.reconciliacion = filas
     material = {'filas': filas, 'archivo': evidencia['archivo_hash_sha256'],
@@ -98,8 +128,19 @@ def confirmar_reconciliacion(*, form, evidencia, actor, sesion=None):
         form.data = form.data.copy()
         form.data['reconciliacion_token'] = signing.dumps(digest, salt='prestador-reconciliacion')
         form.data.pop('confirma_discrepancias', None)
-        return evidencia, 'Revisa las diferencias entre tu formulario y los documentos y confirma los datos antes de continuar.'
+        detalle = '; '.join(f.get('mensaje') or f"{f['etiqueta']}: tu formulario {f['formulario']}; documento {f['documento']}"
+                            for f in pendientes)
+        return evidencia, 'Revisa las diferencias y confirma los datos antes de continuar. ' + detalle
     metadata['reconciliacion'] = {'version': 1, 'campos': filas, 'requiere_revision': bool(pendientes),
                                   'confirmada': confirmado, 'actor_id': actor.pk,
                                   'registrada_en': timezone.now().isoformat()}
+    if saldo_es_derivado(metadata):
+        total = form.cleaned_data.get('valor_total_contrato')
+        pagado = form.cleaned_data.get('valor_pagado_contrato')
+        saldo = form.cleaned_data.get('valor_pendiente_cobrar')
+        metadata['saldo_actual_declarado'] = {
+            'valor': str(saldo),
+            'fuente': ('TOTAL_MENOS_PAGADO_ACTUAL_DECLARADO' if total is not None and pagado is not None
+                       and saldo == total - pagado else 'DECLARACION_USUARIO'),
+        }
     return {**evidencia, 'metadata_segura': metadata}, ''

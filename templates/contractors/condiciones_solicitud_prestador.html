@@ -42,15 +42,14 @@
           <div class="cp-section-header">
             <div>
               <h2 id="conditions-detail-title">Detalle guardado</h2>
-              <p>Valores de trazabilidad asociados a la simulación confirmada.</p>
+              <p>Condiciones que confirmaste para tu solicitud.</p>
             </div>
           </div>
           <dl class="cp-data-list">
             <div class="cp-data-row"><dt>Fecha de simulación</dt><dd>{{ condiciones.fecha|date:'d/m/Y, g:i a' }}</dd></div>
-            <div class="cp-data-row"><dt>Versión de configuración</dt><dd>{{ condiciones.version_configuracion }}</dd></div>
-            <div class="cp-data-row"><dt>Versión de política</dt><dd>{{ condiciones.version_politica|default:'No registrada' }}</dd></div>
-            <div class="cp-data-row"><dt>Monto máximo configurado</dt><dd>{% if condiciones.monto_maximo_configuracion %}${{ condiciones.monto_maximo_configuracion|floatformat:0|intcomma }}{% else %}<span class="cp-empty-value">No registrado</span>{% endif %}</dd></div>
-            <div class="cp-data-row"><dt>Plazo máximo configurado</dt><dd>{% if condiciones.plazo_maximo_configuracion %}{{ condiciones.plazo_maximo_configuracion }} meses{% else %}<span class="cp-empty-value">No registrado</span>{% endif %}</dd></div>
+            {% if condiciones.cuota_guardada %}
+            <div class="cp-data-row"><dt>Cuota mensual</dt><dd>${{ condiciones.cuota_guardada|floatformat:2|intcomma }}</dd></div>
+            {% endif %}
           </dl>
         </section>
 
@@ -58,10 +57,23 @@
           <div class="cp-section-header">
             <div><h2 id="cost-summary-title">Cuota y cargos</h2></div>
           </div>
+          {% if condiciones.cargos_guardados %}
+          <dl class="cp-data-list">
+            <div class="cp-data-row"><dt>Originación</dt><dd>${{ condiciones.cargos_guardados.costo_originacion|floatformat:2|intcomma }}</dd></div>
+            <div class="cp-data-row"><dt>IVA de originación</dt><dd>${{ condiciones.cargos_guardados.iva_costo_originacion|floatformat:2|intcomma }}</dd></div>
+            <div class="cp-data-row"><dt>Figarantías</dt><dd>${{ condiciones.cargos_guardados.fondo_garantia|floatformat:2|intcomma }}</dd></div>
+            <div class="cp-data-row"><dt>Seguro de vida / SURA</dt><dd>${{ condiciones.cargos_guardados.seguro_vida|floatformat:2|intcomma }}</dd></div>
+            <div class="cp-data-row"><dt>Capital financiado</dt><dd>${{ condiciones.cargos_guardados.capital_total_financiado|floatformat:2|intcomma }}</dd></div>
+            <div class="cp-data-row"><dt>Intereses</dt><dd>${{ condiciones.cargos_guardados.intereses_estimados|floatformat:2|intcomma }}</dd></div>
+            <div class="cp-data-row"><dt>Total a pagar</dt><dd>${{ condiciones.cargos_guardados.total_a_pagar|floatformat:2|intcomma }}</dd></div>
+            <div class="cp-data-row"><dt>Desembolso neto</dt><dd>${{ condiciones.cargos_guardados.desembolso_neto|floatformat:2|intcomma }}</dd></div>
+          </dl>
+          {% else %}
           <div class="cp-alert cp-alert--warning" role="status">
-            <strong>Detalle histórico no disponible</strong>
-            <p>Esta versión del snapshot no almacenó cuota ni cargos desagregados. No los recalculamos para evitar mostrar valores distintos a los confirmados.</p>
+            <strong>Desglose no disponible para esta solicitud anterior</strong>
+            <p>Conservamos las condiciones registradas originalmente, sin recalcular sus costos.</p>
           </div>
+          {% endif %}
           <p class="cp-description">La aprobación final depende de las validaciones documentales y de riesgo.</p>
         </aside>
       </div>

@@ -333,7 +333,7 @@ class SolicitudPrestadorForm(forms.ModelForm):
             'fecha_fin_contrato': 'Fecha fin contrato',
             'duracion_contrato_meses': 'Duracion contractual (meses)',
             'valor_total_contrato': 'Valor total contrato',
-            'valor_pagado_contrato': 'Valor pagado del contrato',
+            'valor_pagado_contrato': 'Valor pagado actual declarado',
             'valor_pendiente_cobrar': 'Valor pendiente por cobrar',
             'forma_pago': 'Forma de pago',
             'valor_mensual_contractual': 'Valor mensual contractual',
@@ -346,6 +346,7 @@ class SolicitudPrestadorForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.metadata_contractual = getattr(self, 'metadata_contractual', {})
         self.fields['empresa'].queryset = Empresa.objects.filter(
             convenio_activo=True,
         ).order_by('nombre')
@@ -370,6 +371,12 @@ class SolicitudPrestadorForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         fecha_inicio = cleaned_data.get('fecha_inicio_contrato')
+        from contractors.services.reconciliacion_contractual import ajustar_datos_contractuales
+        ajustar_datos_contractuales(cleaned_data, self.metadata_contractual)
+        self.data = self.data.copy()
+        for campo in ('forma_pago', 'valor_pendiente_cobrar'):
+            if campo in cleaned_data:
+                self.data[campo] = cleaned_data[campo]
         validar_campos_personales(self, cleaned_data)
         fecha_fin = cleaned_data.get('fecha_fin_contrato')
         duracion_meses = cleaned_data.get('duracion_contrato_meses')

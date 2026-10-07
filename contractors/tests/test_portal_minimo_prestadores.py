@@ -1018,10 +1018,12 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.client.force_login(self.usuario)
 
         dashboard = self.client.get('/mi-credito/', HTTP_HOST=self.host)
-        condiciones = self.client.get(
-            f'/mi-credito/solicitud/{solicitud.id}/condiciones/',
-            HTTP_HOST=self.host,
-        )
+        with patch('contractors.services.capacidad_contractual.simular_credito_prestador_informativo') as calcular:
+            condiciones = self.client.get(
+                f'/mi-credito/solicitud/{solicitud.id}/condiciones/',
+                HTTP_HOST=self.host,
+            )
+        calcular.assert_not_called()
 
         self.assertContains(dashboard, 'Ver condiciones solicitadas')
         self.assertContains(
@@ -1033,8 +1035,8 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertContains(condiciones, '$3.500.000')
         self.assertContains(condiciones, '6 meses')
         self.assertContains(condiciones, '2,20%')
-        self.assertContains(condiciones, 'portal-tests-v1')
-        self.assertContains(condiciones, 'Detalle histórico no disponible')
+        self.assertNotContains(condiciones, 'portal-tests-v1')
+        self.assertContains(condiciones, 'Desglose no disponible para esta solicitud anterior')
         self.assertNotContains(condiciones, 'simulador-range-1')
 
     def test_condiciones_sin_snapshot_muestran_estado_controlado_y_respetan_owner(self):
@@ -1517,9 +1519,9 @@ class PortalMinimoPrestadoresTest(TestCase):
         response = self.client.get(f'/simular/?solicitud_id={solicitud.id}', HTTP_HOST=self.host)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Define las condiciones de tu solicitud')
+        self.assertContains(response, 'SIMULA TU CRÉDITO')
         self.assertContains(response, '¿Cuánto necesitas?')
-        self.assertContains(response, '¿En cuántos meses deseas pagarlo?')
+        self.assertContains(response, '¿En cuánto tiempo?')
         self.assertContains(response, 'Costo de originación')
         self.assertContains(response, 'IVA sobre costo de originación')
         self.assertContains(response, 'Intereses estimados')
@@ -1585,6 +1587,17 @@ class PortalMinimoPrestadoresTest(TestCase):
         solicitud.refresh_from_db()
         self.assertEqual(solicitud.plazo_simulado_meses, 4)
         self.assertEqual(solicitud.version_configuracion_financiera_simulacion, 'prestadores-prod-v1')
+        desglose = solicitud.metadata_analisis_contractual['simulacion_guardada']
+        esperado = simular_credito_prestador_informativo(
+            monto=Decimal('1000000'), plazo_meses=4, configuracion=self.configuracion_simulador,
+            solicitud=solicitud)
+        for campo, valor in esperado.como_dict().items():
+            self.assertEqual(str(desglose[campo]), str(valor))
+        condiciones = self.client.get(f'/mi-credito/solicitud/{solicitud.pk}/condiciones/', HTTP_HOST=self.host)
+        self.assertContains(condiciones, 'Cuota mensual')
+        self.assertNotContains(condiciones, 'prestadores-prod-v1')
+        self.assertNotContains(condiciones, 'snapshot')
+        self.assertNotContains(condiciones, 'Desglose no disponible')
         self.assertFalse(solicitud.auditorias_predecision.exists())
 
     @patch('django.utils.timezone.localdate')
@@ -1615,17 +1628,14 @@ class PortalMinimoPrestadoresTest(TestCase):
         response = self.client.get(f'/simular/?solicitud_id={solicitud.id}', HTTP_HOST=self.host)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(
-            response,
-            'Selecciona el monto y el plazo que mejor se ajusten al valor pendiente de tu contrato.',
-        )
+        self.assertContains(response, 'SIMULA TU CRÉDITO')
         self.assertContains(
             response,
             'La simulación es informativa. La aprobación estará sujeta al análisis documental, '
             'validación de identidad, evaluación de riesgo y consulta ante centrales de información.',
         )
         self.assertContains(response, 'form="simulator-form" data-register-application')
-        self.assertContains(response, '>Guardar condiciones solicitadas</button>')
+        self.assertContains(response, '>Continuar con esta simulación</button>', count=2)
         self.assertContains(response, '<form method="post"', count=1)
         contenido = response.content.decode('utf-8')
         self.assertLess(
@@ -1796,7 +1806,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         solicitud = ContractorApplication.objects.get()
         pagina = self.client.get(creada['Location'], HTTP_HOST=self.host)
         self.assertEqual(pagina['Content-Type'], 'text/html; charset=utf-8')
-        self.assertContains(pagina, 'SIMULACIÓN INFORMATIVA')
+        self.assertContains(pagina, 'SIMULA TU CRÉDITO')
         self.assertNotContains(pagina, 'Ã')
         self.assertTrue(pagina.context['puede_registrar'])
         respuesta = self.client.post('/simular/calcular/',
@@ -2213,7 +2223,76 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(solicitud.valor_pendiente_cobrar, Decimal('124800000'))
         self.assertEqual(solicitud.valor_mensual_contractual, Decimal('10400000'))
         self.assertEqual(solicitud.duracion_contrato_meses, 12)
+        self.assertEqual(solicitud.forma_pago, 'MENSUAL')
         self.assertFalse(Credito.objects.exists())
+
+    def test_uat_periodicidad_desconocida_y_pago_actual_conservan_evidencia_historica(self):
+        payload = self._payload_contrato_uat()
+        payload.update(forma_pago='NO_IDENTIFICADA', valor_pagado_contrato='20800000')
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 200)
+        form = response.context['form']
+        self.assertEqual(form.cleaned_data['valor_pendiente_cobrar'], Decimal('104000000'))
+        self.assertEqual(form.cleaned_data['forma_pago'], 'MENSUAL')
+        self.assertContains(response, 'Pagado al corte del documento')
+        payload.update(reconciliacion_token=form['reconciliacion_token'].value(), confirma_discrepancias='on')
+        for nombre in ('contrato_actual', 'certificado_bancario'):
+            payload[nombre].seek(0)
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 302)
+        solicitud = ContractorApplication.objects.get()
+        self.assertEqual(solicitud.valor_pagado_contrato, Decimal('20800000'))
+        self.assertEqual(solicitud.valor_pendiente_cobrar, Decimal('104000000'))
+        self.assertEqual(solicitud.metadata_analisis_contractual['datos_sugeridos']['valor_pagado_estimado'], '0')
+        self.assertEqual(solicitud.forma_pago, 'MENSUAL')
+
+    def test_otra_solicitud_en_evaluacion_bloquea_nuevo_avance_y_conserva_historia(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        anterior = self._crear_solicitud(self.usuario)
+        anterior.estado_analisis_contractual = 'COMPLETADO'
+        anterior.save()
+        self.client.force_login(self.usuario)
+        self._cargar_documentos_obligatorios(anterior)
+        solicitud.estado = 'EVALUACION_PENDIENTE'
+        solicitud.save()
+        documento = anterior.documentos.get(tipo_documento='CONTRATO')
+        archivo_anterior = documento.archivo.name
+        self.assertRedirects(self.client.get('/solicitar/', HTTP_HOST=self.host), '/mi-credito/', fetch_redirect_response=False)
+        self.assertEqual(self.client.get(f'/solicitud/{anterior.pk}/documentos/', HTTP_HOST=self.host).status_code, 200)
+        response = self.client.post('/solicitar/', {'solicitud_id': anterior.pk}, HTTP_HOST=self.host)
+        self.assertRedirects(response, '/mi-credito/', fetch_redirect_response=False)
+        response = self._cargar_documento(anterior, 'CONTRATO', 'reemplazo.pdf')
+        self.assertRedirects(response, '/mi-credito/', fetch_redirect_response=False)
+        documento.refresh_from_db()
+        self.assertEqual(documento.archivo.name, archivo_anterior)
+        response = self.client.post('/simular/', {'solicitud_id':anterior.pk, 'monto':'1000000', 'plazo_meses':3}, HTTP_HOST=self.host)
+        self.assertRedirects(response, '/mi-credito/', fetch_redirect_response=False)
+        anterior.refresh_from_db()
+        self.assertIsNone(anterior.simulada_en)
+        self.assertEqual(ContractorApplication.objects.count(), 2)
+        self.assertFalse(Credito.objects.exists())
+
+    def test_cedula_guardada_y_solicitudes_anteriores_colapsadas(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        self._cargar_documentos_obligatorios(solicitud)
+        self.client.force_login(self.usuario)
+        response = self.client.get(f'/solicitar/?solicitud_id={solicitud.pk}', HTTP_HOST=self.host)
+        self.assertContains(response, 'Cédula guardada')
+        self.assertContains(response, '<summary>Volver a capturar</summary>')
+        self._crear_solicitud(self.usuario)
+        response = self.client.get('/mi-credito/', HTTP_HOST=self.host)
+        self.assertContains(response, '<details class="cp-surface cp-history"')
+        self.assertContains(response, 'Validación con contratante')
+        self.assertNotContains(response, 'Contrato pendiente de confirmación')
+
+    def test_solicitud_no_aprobada_no_bloquea_otro_proceso(self):
+        solicitud = self._crear_solicitud(self.usuario)
+        solicitud.estado = 'NO_APROBADO'
+        solicitud.save()
+        self.client.force_login(self.usuario)
+        response = self.client.get('/solicitar/', HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(ContractorApplication.objects.count(), 1)
 
     def test_uat_error_relacion_conserva_manual_reconciliacion_y_captura(self):
         payload = self._payload_contrato_uat()
@@ -2224,7 +2303,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertTrue(response.context['form'].errors)
         self.assertEqual(response.context['form'].data['valor_pagado_contrato'], '1')
         diferencias = response.context['form'].reconciliacion
-        self.assertTrue(any(f['campo'] == 'valor_pagado_contrato' and f['estado'] == 'DIFIERE' for f in diferencias))
+        self.assertTrue(any(f['campo'] == 'valor_pagado_contrato' and f['estado'] == 'DIFERENCIA_TEMPORAL' for f in diferencias))
         from gestion_creditos.models import SesionCapturaDocumental
         self.assertEqual(SesionCapturaDocumental.objects.get(pk=payload['sesion_documental_id']).estado, 'FINALIZADA')
         self.assertTrue(any(isinstance(v, dict) and 'archivo_hash_sha256' in v for v in self.client.session.values()))

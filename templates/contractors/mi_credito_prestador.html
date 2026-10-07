@@ -16,13 +16,15 @@
           <a class="cp-button cp-button--secondary cp-new-request" href="{% url 'contractors:solicitar' %}">Nueva solicitud</a>
         </header>
 
-        {% include "contractors/components/application_summary.html" with estado_publico=estado_publico %}
-
         <section class="cp-dashboard-hero" aria-labelledby="application-status-title">
           <div>
             <span class="cp-status-badge status-tone-{{ estado_publico.tono }}">{{ estado_publico.etiqueta }}</span>
             <h1 id="application-status-title">{{ estado_publico.titulo }}</h1>
             <p>{{ estado_publico.detalle }}</p>
+            <div class="cp-financial-highlight">
+              <div><small>Monto solicitado</small><strong>{% if solicitud.monto_solicitado %}${{ solicitud.monto_solicitado|floatformat:0|intcomma }}{% else %}Pendiente{% endif %}</strong></div>
+              <div><small>Plazo</small><strong>{{ solicitud.plazo_meses|default:'Por definir' }}{% if solicitud.plazo_meses %} meses{% endif %}</strong></div>
+            </div>
             {% if estado_publico.requerimiento %}
               <div class="cp-alert cp-alert--warning" role="status">
                 <strong>Necesitamos información adicional</strong>
@@ -40,6 +42,9 @@
           </div>
         </section>
 
+        <details class="cp-dashboard-details">
+          <summary>Ver detalle de mi solicitud</summary>
+          {% include "contractors/components/application_summary.html" with estado_publico=estado_publico %}
         <div class="cp-dashboard-grid">
           <section class="cp-surface cp-dashboard-section" aria-labelledby="application-summary-title">
             <div class="cp-section-header"><div><h2 id="application-summary-title">Resumen</h2><p>Información principal registrada en tu solicitud.</p></div></div>
@@ -47,7 +52,7 @@
               <div class="cp-data-row"><dt>Monto solicitado</dt><dd>{% if solicitud.monto_solicitado %}${{ solicitud.monto_solicitado|floatformat:0|intcomma }}{% else %}Pendiente{% endif %}</dd></div>
               <div class="cp-data-row"><dt>Plazo</dt><dd>{% if solicitud.plazo_meses %}{{ solicitud.plazo_meses }} meses{% else %}Pendiente{% endif %}</dd></div>
               <div class="cp-data-row"><dt>Empresa</dt><dd>{{ solicitud.empresa.nombre }}</dd></div>
-              <div class="cp-data-row"><dt>Contrato</dt><dd>{{ solicitud.get_estado_contrato_display|default:'Pendiente de confirmación' }}</dd></div>
+              <div class="cp-data-row"><dt>Validación con contratante</dt><dd>{{ validacion_contratante|default:'Pendiente' }}</dd></div>
               <div class="cp-data-row"><dt>Documentos</dt><dd>{{ progreso.cargados }} de {{ progreso.total }}</dd></div>
             </dl>
           </section>
@@ -68,6 +73,7 @@
             </ol>
           </section>
         </div>
+        </details>
 
         <nav class="cp-quick-actions" aria-label="Acciones de la solicitud">
           {% if estado_publico.accion == 'SUBSANACION' and estado_publico.requerimiento %}
@@ -89,8 +95,8 @@
       {% endwith %}
 
       {% if solicitudes_anteriores %}
-        <section class="cp-surface cp-history" aria-labelledby="previous-applications-title">
-          <div class="cp-section-header"><div><h2 id="previous-applications-title">Solicitudes anteriores</h2><p>Consulta el registro de procesos anteriores.</p></div></div>
+        <details class="cp-surface cp-history" aria-labelledby="previous-applications-title">
+          <summary id="previous-applications-title">Solicitudes anteriores</summary>
           <div class="cp-history-list">
             {% for solicitud, progreso, estado_publico in solicitudes_anteriores %}
               <article class="cp-history-row">
@@ -98,17 +104,15 @@
                 <div class="cp-history-cell"><small>Empresa</small><strong>{{ solicitud.empresa.nombre }}</strong></div>
                 <div class="cp-history-cell"><small>Condiciones</small><strong>{% if solicitud.monto_solicitado %}${{ solicitud.monto_solicitado|floatformat:0|intcomma }} · {{ solicitud.plazo_meses }} meses{% else %}Pendientes{% endif %}</strong></div>
                 <div class="cp-history-cell"><small>Estado</small><strong>{{ estado_publico.etiqueta }}</strong></div>
-                {% if progreso.porcentaje < 100 %}
-                  <a class="cp-button cp-button--quiet" href="{% url 'contractors:documentos' solicitud.id %}">Completar</a>
-                {% elif solicitud.simulada_en %}
+                {% if solicitud.simulada_en %}
                   <a class="cp-button cp-button--quiet" href="{% url 'contractors:condiciones_solicitud' solicitud.id %}">Consultar</a>
                 {% else %}
-                  <a class="cp-button cp-button--quiet" href="{% url 'contractors:simular' %}?solicitud_id={{ solicitud.id }}">Continuar</a>
+                  <a class="cp-button cp-button--quiet" href="{% url 'contractors:documentos' solicitud.id %}">Consultar documentos</a>
                 {% endif %}
               </article>
             {% endfor %}
           </div>
-        </section>
+        </details>
       {% endif %}
     {% else %}
       <section class="cp-surface cp-empty-state">

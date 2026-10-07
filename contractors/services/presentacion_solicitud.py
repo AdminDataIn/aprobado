@@ -400,6 +400,7 @@ def construir_detalle_documento_publico(documento):
 
 
 def construir_condiciones_guardadas(solicitud):
+    desglose = solicitud.metadata_analisis_contractual.get('simulacion_guardada') or {}
     disponible = bool(
         solicitud.monto_simulado
         and solicitud.plazo_simulado_meses
@@ -412,13 +413,12 @@ def construir_condiciones_guardadas(solicitud):
         'monto': solicitud.monto_simulado,
         'plazo_meses': solicitud.plazo_simulado_meses,
         'tasa_mensual_porcentaje': solicitud.tasa_mensual_simulacion,
-        'version_configuracion': solicitud.version_configuracion_financiera_simulacion,
-        'version_politica': solicitud.version_politica_simulacion,
-        'monto_maximo_configuracion': solicitud.monto_maximo_configuracion_simulacion,
-        'plazo_maximo_configuracion': solicitud.plazo_maximo_configuracion_simulacion,
         'fecha': solicitud.simulada_en,
-        'cuota_guardada': None,
-        'cargos_guardados': None,
+        'cuota_guardada': desglose.get('cuota_mensual'),
+        'cargos_guardados': {campo: desglose[campo] for campo in (
+            'costo_originacion', 'iva_costo_originacion', 'fondo_garantia', 'seguro_vida',
+            'capital_total_financiado', 'intereses_estimados', 'total_a_pagar', 'desembolso_neto',
+        ) if campo in desglose},
     }
 
 

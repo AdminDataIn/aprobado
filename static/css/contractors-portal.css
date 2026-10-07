@@ -345,6 +345,8 @@
 .cp-financial-highlight > div + div { border-left: 1px solid var(--cp-border); }
 .cp-financial-highlight small { color: var(--cp-muted); }
 .cp-financial-highlight strong { display: block; margin-top: 6px; color: var(--cp-navy); font-size: 22px; }
+.cp-dashboard-hero .cp-financial-highlight { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 16px 0 0; border: 0; }
+.cp-dashboard-hero .cp-financial-highlight > div { padding: 0; border: 0; }
 .cp-empty-value { color: var(--cp-muted); font-style: normal; }
 
 .cp-document-preview {
@@ -364,10 +366,10 @@
 .contractors-portal .simulador-main { min-height: 68vh; background: var(--cp-background); }
 .contractors-portal .simulador-hero-section { padding: 34px 0 72px; }
 .contractors-portal .simulador-container { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
-.contractors-portal .simulador-hero { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(430px, 1.15fr); gap: 34px; align-items: start; }
-.contractors-portal .simulador-text-content { position: sticky; top: 96px; padding: 34px 0; color: var(--cp-text); }
+.contractors-portal .simulador-hero { display: block; max-width: 760px; margin: 0 auto; }
+.contractors-portal .simulador-text-content { position: static; padding: 12px 0 18px; color: var(--cp-text); }
 .contractors-portal .simulador-eyebrow { color: #087f93; font-weight: 800; }
-.contractors-portal .simulador-text-content h1 { margin: 8px 0 14px; color: var(--cp-navy); font-size: 38px; line-height: 1.15; }
+.contractors-portal .simulador-text-content h1 { margin: 8px 0 12px; color: var(--cp-navy); font-size: 28px; line-height: 1.15; }
 .contractors-portal .simulador-text-content > p { color: var(--cp-muted); font-size: 15px; }
 .contractors-portal .simulador-card { padding: 28px; border: 1px solid var(--cp-border); border-radius: 8px; background: #ffffff; box-shadow: var(--cp-shadow); }
 .contractors-portal .simulador-slider-container { padding: 18px 0; }
@@ -394,6 +396,28 @@
 .contractors-portal .simulador-submit:disabled { opacity: .5; cursor: not-allowed; }
 .contractors-portal .simulador-card .cp-section-header { margin-top: 8px; margin-bottom: 5px; }
 .contractors-portal .simulador-card .cp-section-header h2 { font-size: 17px; }
+.contractors-portal .simulador-primary-result .simulador-result-input { font-size: 24px; }
+.contractors-portal .simulador-result-input { min-width: 0; max-width: none; }
+.contractors-portal .simulador-form-step { gap: 8px; }
+.simulador-cost-details { margin: 12px 0; }
+.simulador-cost-details summary { padding: 12px 0; color: #087f93; cursor: pointer; font-weight: 700; }
+.simulador-sticky-cta { display: none; }
+.cp-history > summary { cursor: pointer; font-size: 17px; font-weight: 700; padding-bottom: 12px; }
+.cp-dashboard-details > summary { padding: 16px 0; cursor: pointer; font-weight: 700; }
+@media (max-width: 640px) {
+  .contractors-portal .simulador-hero { display: block; }
+  .contractors-portal .simulador-text-content { position: static; padding: 0 0 12px; }
+  .contractors-portal .simulador-text-content h1 { font-size: 26px; }
+  .contractors-portal .simulador-text-content > p { font-size: 13px; margin: 8px 0; }
+  .contractors-portal .simulador-register-cta { display: none; }
+  .contractors-portal .simulador-card { padding: 16px; }
+  .contractors-portal .simulador-slider-container { padding: 14px 0; }
+  .contractors-portal .simulador-result-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+  .contractors-portal .simulador-hero-section { padding-bottom: calc(112px + env(safe-area-inset-bottom)); }
+  .simulador-sticky-cta { display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--cp-border); background: #fff; }
+  .simulador-sticky-cta span { min-width: 0; font-size: 13px; font-weight: 700; }
+  .contractors-portal .simulador-sticky-cta button { flex: 0 0 auto; width: auto; }
+}
 .contractors-portal .errorlist { margin: 8px 0; padding-left: 0; color: var(--cp-red); font-size: 13px; list-style: none; }
 
 /* Solicitud */
@@ -550,10 +574,15 @@ body.camera-open { overflow: hidden; }
   .cp-history-row > .cp-button { grid-column: 1 / -1; }
   .cp-financial-highlight { grid-template-columns: 1fr; }
   .cp-financial-highlight > div + div { border-top: 1px solid var(--cp-border); border-left: 0; }
+  .cp-dashboard-hero { gap: 16px; }
+  .cp-dashboard-hero .cp-financial-highlight > div + div { border: 0; }
+  .cp-dashboard-hero .cp-dashboard-progress { padding: 16px 0 0; }
   .contractors-portal .simulador-card { padding: 18px; }
   .contractors-portal .simulador-text-content h1 { font-size: 28px; }
-  .contractors-portal .simulador-result-row { grid-template-columns: 1fr; gap: 3px; }
-  .contractors-portal .simulador-result-input { text-align: left; }
+  .contractors-portal .simulador-result-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+  .contractors-portal .simulador-result-input { text-align: right; font-size: 14px; }
+  .contractors-portal .simulador-primary-result { grid-template-columns: 1fr; }
+  .contractors-portal .simulador-primary-result .simulador-result-input { text-align: left; }
   .contractors-portal .form-sidebar,
   .contractors-portal .form-main { padding: 24px 18px; }
   .contractors-portal .form-title h1 { font-size: 28px; }

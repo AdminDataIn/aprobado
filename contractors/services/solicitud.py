@@ -53,7 +53,8 @@ def guardar_documento_prestador(
         solicitud.estado_analisis_contractual = (
             ContractorApplication.EstadoAnalisisContractual.NO_SOLICITADO
         )
-        solicitud.metadata_analisis_contractual = {}
+        desglose = solicitud.metadata_analisis_contractual.get('simulacion_guardada')
+        solicitud.metadata_analisis_contractual = {'simulacion_guardada': desglose} if desglose else {}
         solicitud.fecha_analisis_contractual = None
         solicitud.estado = ContractorApplication.Estado.EVALUACION_PENDIENTE
         solicitud.save(update_fields=[

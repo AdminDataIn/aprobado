@@ -45,14 +45,18 @@ test('solo muestra los importes calculados por backend y envia monto/plazo/CSRF'
   assert.doesNotMatch(script, /Math\.pow|roundMoney|previewCalculation/);
 });
 
-test('un cambio invalida resultados y descarta respuestas anteriores', async () => {
+test('un cambio conserva resultados y descarta respuestas anteriores', async () => {
   const h = harness();
+  answer(h.requests[0], {desembolso_neto: '1000000.00', cuota_mensual: '388547.01', plazo_meses: 3});
+  await flush();
+  const previous = h.results[1].value;
   h.amount.value = '2000000';
   h.amount.input();
   assert.equal(h.requests[0].options.signal.aborted, true);
   answer(h.requests[0], {cuota_mensual: '999.00'});
   await flush();
-  assert.ok(h.results.every(node => node.value === '--'));
+  assert.equal(h.results[1].value, previous);
+  assert.equal(h.elements['simulator-status'].textContent, 'Actualizando…');
   const pending = h.runScheduled();
   answer(h.requests[1], {desembolso_neto: '2000000.00', cuota_mensual: '777094.02', plazo_meses: 3});
   await pending;
@@ -65,4 +69,25 @@ test('error backend no inventa cuota local', async () => {
   await flush();
   assert.ok(h.results.every(node => node.value === '--'));
   assert.equal(h.elements['simulator-status'].textContent, 'Configuracion no disponible');
+});
+
+test('respuesta tardia nunca pisa el ultimo monto ni borra una cuota vigente', async () => {
+  const h = harness();
+  answer(h.requests[0], {cuota_mensual:'100.00'});
+  await flush();
+  h.amount.value = '2000000';
+  h.amount.input();
+  const old = h.runScheduled();
+  h.amount.value = '3000000';
+  h.amount.input();
+  const latest = h.runScheduled();
+  assert.equal(h.requests[1].options.signal.aborted, true);
+  answer(h.requests[2], {cuota_mensual:'300.00'});
+  await latest;
+  const actual = h.results[1].value;
+  answer(h.requests[1], {cuota_mensual:'200.00'});
+  await old;
+  assert.equal(h.results[1].value, actual);
+  assert.match(actual, /300,00/);
+  assert.equal(h.elements['simulador-monto-hidden'].value, '3000000');
 });

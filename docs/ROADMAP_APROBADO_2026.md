@@ -1281,3 +1281,23 @@ Ademas del conteo, ultima cuota proyectada <= ultimo flujo respaldante usando fe
 del core y corte explicito. Revalidacion con desembolso efectivo/fecha forzada queda
 pendiente para la futura conexion de originacion; no asumir fechas futuras garantizadas.
 Sin modelos/migraciones ni activacion PROD, centrales o aprobaciones reales.
+
+### P0-4G: cierre funcional y mobile-first previo a P0-5
+
+Periodicidad explicita completa el selector NO_IDENTIFICADA y se valida con evidencia
+vigente en servidor. Pagado documental historico se conserva separado del actual
+declarado; saldo derivado se actualiza sin sobreescribir evidencia independiente.
+Confirmacion firmada de diferencias temporales, sin afirmar pago verificado.
+Desglose de nuevas simulaciones guardado en JSON existente; legacy no se recalcula.
+Simulador con costos desplegables, resultados estables durante debounce y CTA mobile
+por el mismo POST. Cedula guardada visible, recaptura secundaria e historial colapsado.
+Guard por usuario serializa el paso a evaluacion: no inicia otro proceso concurrente;
+borradores historicos se conservan, sin inventar estados de cancelacion/reemplazo.
+POST de formulario/documentos historicos usa el mismo guard, evitando reabrir otro
+proceso por reemplazo contractual. GET de consulta permanece disponible.
+Una politica de cierre de solicitudes firmadas requiere definicion de negocio;
+no se declaran canceladas automaticamente. Validar concurrencia en PostgreSQL/VPS.
+Sin cambios a politica PROD, formula, score, centrales ni predecision.
+Pendientes: ID-01F recorte cliente, P0-4F PDF cifrado, ingreso neto definitivo P0-5,
+P0-6 identidad, P0-7 firma/postfirma/desembolso y UAT fisico Android/iPhone del ajuste.
+Prestadores E2E NO se declara cerrado.

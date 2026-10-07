@@ -129,7 +129,15 @@
           {% if captura_recuperada %}<p role="status">Ambas caras de tu cédula están recibidas y disponibles para este envío.</p>{% endif %}
           <div class="document-flow">
             <section class="document-section identity-document-section">
-              {% include 'gestion_creditos/components/captura_handoff.html' with producto='PRESTADORES' %}
+              {% if identidad_guardada %}
+              <div class="alerta" role="status"><strong>Cédula guardada</strong><p>Frente y reverso recibidos correctamente.</p></div>
+              <details><summary>Volver a capturar</summary>
+                <p class="form-helper-text">Al guardar las nuevas fotos se reemplaza la evidencia anterior y se reprocesa su lectura documental. Revisa ambas caras antes de confirmar.</p>
+                {% include 'gestion_creditos/components/captura_handoff.html' with producto='PRESTADORES' %}
+              </details>
+              {% else %}
+                {% include 'gestion_creditos/components/captura_handoff.html' with producto='PRESTADORES' %}
+              {% endif %}
               <div id="errores-captura-solicitud" tabindex="-1">
                 {{ form.documento_identidad_frontal.errors }}
                 {{ form.documento_identidad_reverso.errors }}
@@ -311,6 +319,7 @@
               {{ form.valor_pagado_contrato.label_tag }}
               {{ form.valor_pagado_contrato }}
               {{ form.valor_pagado_contrato.errors }}
+              <small class="form-helper-text">Pagos efectivamente recibidos a la fecha; no incluye pagos futuros del calendario contractual.</small>
             </div>
             <div class="form-field">
               {{ form.valor_pendiente_cobrar.label_tag }}
@@ -340,11 +349,12 @@
             <h3 id="reconciliacion-title">Revisa las diferencias</h3>
             <dl class="contract-analysis-data-list">
               {% for fila in form.reconciliacion %}
-                {% if fila.estado == 'DIFIERE' or fila.estado == 'NO_COMPARABLE' %}
+                {% if fila.estado == 'DIFIERE' or fila.estado == 'DIFERENCIA_TEMPORAL' or fila.campo == 'nit_empresa' and fila.estado == 'NO_COMPARABLE' %}
                 <div class="contract-analysis-data-item">
-                  <dt>{{ fila.etiqueta }} ({{ fila.fuente }})</dt>
+                  <dt>{{ fila.etiqueta }} ({% if fila.fuente == 'OCR_CEDULA_NO_IDENTIDAD' %}Lectura de la cédula{% elif fila.fuente == 'CONVENIO/CONTRATO' %}Empresa y contrato{% else %}Contrato{% endif %})</dt>
                   <dd>Tu formulario: {{ fila.formulario|default:"Sin dato" }}</dd>
-                  <dd>Documento: {{ fila.documento|default:"Sin dato" }}</dd>
+                  <dd>{% if fila.estado == 'DIFERENCIA_TEMPORAL' %}Pagado al corte del documento:{% else %}Documento:{% endif %} {{ fila.documento|default:"Sin dato" }}</dd>
+                  {% if fila.mensaje %}<dd>{{ fila.mensaje }}</dd>{% endif %}
                 </div>
                 {% endif %}
               {% endfor %}
@@ -939,6 +949,7 @@
           if (campo.matches('[data-money-contract]')) formatearMonedaContrato(campo);
         }
       });
+      window.ContractReconciliation.refreshDerivedBalance(formulario, data.campos_extraidos || {});
     }
 
     async function ejecutarAnalisisContrato() {

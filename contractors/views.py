@@ -41,6 +41,7 @@ from contractors.services.horizonte_simulacion import horizonte_para_solicitud, 
 from contractors.validators import documento_numerico
 from contractors.services.reconciliacion_contractual import confirmar_reconciliacion, reconciliar
 from contractors.services.extraccion_campos import ESQUEMA
+from contractors.services.continuidad_solicitud import bloquear_solicitante, solicitud_en_proceso
 from contractors.services.solicitud import (
     actualizar_estado_documental,
     guardar_documento_prestador,
@@ -285,6 +286,9 @@ def _evidencia_contractual_vigente(*, request, archivo, numero_documento, solici
 
 def _aplicar_evidencia_analisis(solicitud, evidencia):
     metadata = dict(evidencia.get('metadata_segura') or {})
+    desglose = solicitud.metadata_analisis_contractual.get('simulacion_guardada')
+    if desglose:
+        metadata['simulacion_guardada'] = desglose
     metadata['archivo_hash_sha256'] = evidencia['archivo_hash_sha256']
     metadata['documento_hash'] = evidencia['documento_hash']
     solicitud.estado_analisis_contractual = evidencia['estado']
@@ -365,6 +369,7 @@ def _contexto_continuidad_solicitud(request, form, solicitud, *, paso_error_gene
         'errores_solicitud': errores,
         'documentos_guardados': documentos_guardados,
         'captura_recuperada': bool(sesion_documental),
+        'identidad_guardada': bool(sesion_documental) or {'CEDULA_FRONTAL', 'CEDULA_TRASERA'}.issubset(existentes),
         'archivos_sin_guardar': any(campo in request.FILES for campo in
                                    ('contrato_actual', 'certificado_bancario')),
         'analisis_contractual_vigente': analisis_vigente,
@@ -375,9 +380,20 @@ def _contexto_continuidad_solicitud(request, form, solicitud, *, paso_error_gene
 @transaction.atomic
 def solicitar_prestador_view(request):
     solicitud_id = request.POST.get('solicitud_id') or request.GET.get('solicitud_id')
+    if not solicitud_id:
+        bloquear_solicitante(request.user)
+        activa = solicitud_en_proceso(request.user)
+        if activa:
+            messages.info(request, 'Ya tienes una solicitud en proceso. Consulta su avance antes de iniciar otra.')
+            return redirect('contractors:mi_credito')
     solicitud_existente = None
     if solicitud_id:
         solicitud_existente = _obtener_solicitud_del_usuario(solicitud_id, request.user)
+        if request.method == 'POST':
+            bloquear_solicitante(request.user)
+            if solicitud_en_proceso(request.user, excluir=solicitud_existente.pk):
+                messages.error(request, 'Ya tienes otra solicitud en proceso. Este registro permanece disponible para consulta.')
+                return redirect('contractors:mi_credito')
     version_anterior = (
         construir_version_datos(solicitud_existente)[0]
         if solicitud_existente is not None else ''
@@ -400,6 +416,12 @@ def solicitar_prestador_view(request):
             archivos,
             instance=solicitud_existente,
         )
+        evidencia_previa, error_previo = _evidencia_contractual_vigente(
+            request=request, archivo=archivos.get('contrato_actual'),
+            numero_documento=request.POST.get('numero_documento'), solicitud=solicitud_existente,
+        )
+        if not error_previo:
+            form.metadata_contractual = evidencia_previa.get('metadata_segura', {})
         valido = form.is_valid()
         if error_captura:
             form.add_error(None, error_captura)
@@ -538,10 +560,15 @@ def legal_prestadores_view(request, seccion):
 
 
 @login_required
+@transaction.atomic
 def documentos_prestador_view(request, solicitud_id):
     solicitud = _obtener_solicitud_del_usuario(solicitud_id, request.user)
 
     if request.method == 'POST':
+        bloquear_solicitante(request.user)
+        if solicitud_en_proceso(request.user, excluir=solicitud.pk):
+            messages.error(request, 'Ya tienes otra solicitud en proceso. Este registro permanece disponible para consulta.')
+            return redirect('contractors:mi_credito')
         form = DocumentoPrestadorForm(request.POST, request.FILES)
         valido = form.is_valid()
         if request.POST.get('tipo_documento') in {'CEDULA_FRONTAL', 'CEDULA_TRASERA'}:
@@ -678,6 +705,10 @@ def simular_prestador_view(request):
                 configuracion=configuracion,
             )
             with transaction.atomic():
+                bloquear_solicitante(request.user)
+                if solicitud_en_proceso(request.user, excluir=solicitud.pk):
+                    messages.error(request, 'Ya tienes otra solicitud en proceso. Puedes consultar este registro sin enviarlo a evaluación.')
+                    return redirect('contractors:mi_credito')
                 solicitud_bloqueada = ContractorApplication.objects.select_for_update().get(
                     pk=solicitud.pk,
                     usuario=request.user,
@@ -711,6 +742,13 @@ def simular_prestador_view(request):
                     snapshot_financiero['plazo_maximo_meses']
                 )
                 solicitud_bloqueada.simulada_en = timezone.now()
+                solicitud_bloqueada.metadata_analisis_contractual = {
+                    **solicitud_bloqueada.metadata_analisis_contractual,
+                    'simulacion_guardada': {
+                        **_resultado_simulacion_json(resultado),
+                        'version': snapshot_financiero['version'],
+                    },
+                }
                 solicitud_bloqueada.save(update_fields=[
                     'monto_solicitado', 'plazo_meses',
                     'version_configuracion_financiera_simulacion',
@@ -719,6 +757,7 @@ def simular_prestador_view(request):
                     'tasa_mensual_simulacion',
                     'monto_maximo_configuracion_simulacion',
                     'plazo_maximo_configuracion_simulacion', 'simulada_en', 'updated_at',
+                    'metadata_analisis_contractual',
                 ])
                 if estado_anterior in ESTADOS_CON_EVALUACION:
                     invalidar_evaluacion_si_cambiaron_datos(
@@ -756,9 +795,10 @@ def simular_prestador_view(request):
             'horizonte_disponible': horizonte_disponible,
             'form': form,
             'configuracion_simulador': configuracion,
-            'configuracion_publica_simulador': obtener_configuracion_publica_simulador_prestador(
-                configuracion,
-            ),
+            'configuracion_publica_simulador': {
+                clave: valor for clave, valor in obtener_configuracion_publica_simulador_prestador(configuracion).items()
+                if clave != 'version'
+            },
         },
     )
 
@@ -813,7 +853,9 @@ def calcular_simulacion_prestador_view(request):
         )
     except ValidationError as exc:
         return JsonResponse({'ok': False, 'error': '; '.join(exc.messages)}, status=400)
-    return JsonResponse({'ok': True, 'resultado': _resultado_simulacion_json(resultado)})
+    return JsonResponse({'ok': True, 'resultado': {
+        clave: valor for clave, valor in _resultado_simulacion_json(resultado).items() if clave != 'fuente'
+    }})
 
 
 def _resultado_simulacion_json(resultado):
@@ -848,6 +890,8 @@ def mi_credito_prestador_view(request):
     estado_publico_principal = (
         estados_publicos.get(solicitud_principal[0].id) if solicitud_principal else None
     )
+    confirmacion = (solicitud_principal[0].aprobaciones_pagador.order_by('-created_at', '-id').first()
+                    if solicitud_principal else None)
     return render(
         request,
         'contractors/mi_credito_prestador.html',
@@ -857,6 +901,7 @@ def mi_credito_prestador_view(request):
             'solicitudes_anteriores': solicitudes_con_progreso[1:],
             'estados_publicos': estados_publicos,
             'estado_publico_principal': estado_publico_principal,
+            'validacion_contratante': confirmacion.get_estado_display() if confirmacion else 'Pendiente',
             'timeline_publico_principal': (
                 construir_timeline_publico_solicitud(
                     solicitud_principal[0],

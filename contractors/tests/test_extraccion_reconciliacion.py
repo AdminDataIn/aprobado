@@ -17,6 +17,22 @@ from gestion_creditos.models import Empresa
 
 
 class ExtraccionCamposTest(SimpleTestCase):
+    def test_saldo_derivado_actual_sin_pisar_evidencia_independiente(self):
+        from contractors.services.reconciliacion_contractual import ajustar_datos_contractuales
+        metadata = {'datos_sugeridos': {'valor_pendiente_estimado':'124800000'},
+                    'campos_extraidos': {'valor_pendiente_cobrar': {'fuente':'DERIVADO_DETERMINISTICAMENTE'}}}
+        datos = {'valor_total_contrato':Decimal('124800000'), 'valor_pagado_contrato':Decimal('20800000'),
+                 'valor_pendiente_cobrar':Decimal('124800000')}
+        ajustar_datos_contractuales(datos, metadata)
+        self.assertEqual(datos['valor_pendiente_cobrar'], Decimal('104000000'))
+        datos['valor_pendiente_cobrar'] = Decimal('120000000')
+        ajustar_datos_contractuales(datos, metadata)
+        self.assertEqual(datos['valor_pendiente_cobrar'], Decimal('120000000'))
+        datos['valor_pendiente_cobrar'] = Decimal('124800000')
+        metadata['campos_extraidos']['valor_pendiente_cobrar']['fuente'] = 'REGEX_TEXTO_PDF'
+        ajustar_datos_contractuales(datos, metadata)
+        self.assertEqual(datos['valor_pendiente_cobrar'], Decimal('124800000'))
+
     def test_pdf_real_lee_texto_reinicia_stream_y_no_lanza_ocr(self):
         from weasyprint import HTML
         pdf = HTML(string='<p>Valor total del contrato: $ 12.000.000,37</p>').write_pdf()
