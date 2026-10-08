@@ -8,6 +8,8 @@ app_name = 'contractors'
 urlpatterns = [
     path('', views.inicio_prestadores_view, name='inicio'),
     path('solicitar/', views.solicitar_prestador_view, name='solicitar'),
+    path('solicitud/<int:solicitud_id>/consentimiento-centrales/',
+         views.consentimiento_centrales_prestador_view, name='consentimiento_centrales'),
     path(
         'contrato/analizar/',
         views.analizar_contrato_prestador_view,

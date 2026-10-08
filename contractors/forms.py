@@ -17,6 +17,37 @@ from contractors.models import (
 )
 from gestion_creditos.models import Empresa
 from contractors.validators import validar_campos_personales
+from contractors.services.autorizacion_datacredito import (
+    crear_confirmacion_consentimiento, obtener_configuracion_autorizacion_datacredito,
+    validar_confirmacion_consentimiento,
+)
+
+
+class ConsentimientoCentralesMixin:
+    def __init__(self, *args, usuario=None, **kwargs):
+        self.usuario_consentimiento = usuario
+        super().__init__(*args, **kwargs)
+        self.configuracion_consentimiento = obtener_configuracion_autorizacion_datacredito()
+        self.fields['autoriza_consulta_centrales'] = forms.BooleanField(
+            required=True, label='Autorizo la consulta ante centrales de informacion',
+            widget=forms.CheckboxInput(attrs={'class': 'authorization-checkbox'}),
+            error_messages={'required': 'Debes aceptar explicitamente la autorizacion de centrales.'},
+        )
+        self.fields['consentimiento_centrales'] = forms.CharField(widget=forms.HiddenInput())
+        self.initial['autoriza_consulta_centrales'] = False
+        self.initial['consentimiento_centrales'] = crear_confirmacion_consentimiento(usuario)
+
+    def clean(self):
+        datos = super().clean()
+        if not self.configuracion_consentimiento.configurada:
+            raise ValidationError('La autorizacion de centrales no esta configurada.')
+        if datos.get('autoriza_consulta_centrales') and datos.get('consentimiento_centrales'):
+            validar_confirmacion_consentimiento(datos['consentimiento_centrales'], self.usuario_consentimiento)
+        return datos
+
+
+class ConsentimientoCentralesForm(ConsentimientoCentralesMixin, forms.Form):
+    pass
 
 
 def normalizar_monto_colombiano(valor):
@@ -164,7 +195,7 @@ class SimulacionPrestadorForm(forms.Form):
         return cleaned_data
 
 
-class SolicitudPrestadorForm(forms.ModelForm):
+class SolicitudPrestadorForm(ConsentimientoCentralesMixin, forms.ModelForm):
     MAPA_DOCUMENTOS = MAPA_CAMPOS_DOCUMENTOS_PRESTADOR
     confirma_discrepancias = forms.BooleanField(required=False, label='Confirmo los datos que diligencie y solicito su revision.')
     reconciliacion_token = forms.CharField(required=False, widget=forms.HiddenInput)

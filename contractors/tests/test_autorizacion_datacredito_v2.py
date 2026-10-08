@@ -7,7 +7,9 @@ from contractors.models import (
     AutorizacionConsultaDatacreditoPrestador,
     ContractorApplication,
 )
+from contractors.consentimiento_centrales import TEXTO_CONSENTIMIENTO_CENTRALES, VERSION_CONSENTIMIENTO_CENTRALES
 from contractors.services.autorizacion_datacredito import (
+    crear_confirmacion_consentimiento,
     obtener_autorizacion_datacredito_vigente,
     registrar_autorizacion_datacredito_desde_solicitud,
 )
@@ -15,8 +17,8 @@ from gestion_creditos.models import Empresa
 
 
 @override_settings(
-    DATACREDITO_AUTHORIZATION_TEXT_VERSION='prestadores-v1',
-    DATACREDITO_AUTHORIZATION_TEXT='Autorizo la consulta ante centrales de información.',
+    DATACREDITO_AUTHORIZATION_TEXT_VERSION=VERSION_CONSENTIMIENTO_CENTRALES,
+    DATACREDITO_AUTHORIZATION_TEXT=TEXTO_CONSENTIMIENTO_CENTRALES,
 )
 class AutorizacionDatacreditoPrestadorV2Test(TestCase):
     def setUp(self):
@@ -41,6 +43,7 @@ class AutorizacionDatacreditoPrestadorV2Test(TestCase):
         )
         self.request = RequestFactory().post(
             '/solicitar/',
+            data={'consentimiento_centrales': crear_confirmacion_consentimiento(self.usuario)},
             HTTP_USER_AGENT='Navegador seguro',
             REMOTE_ADDR='192.0.2.20',
         )
@@ -62,11 +65,10 @@ class AutorizacionDatacreditoPrestadorV2Test(TestCase):
         self.assertEqual(obtener_autorizacion_datacredito_vigente(self.solicitud), primera)
         self.assertNotEqual(primera.ip_hash, '192.0.2.20')
 
-    @override_settings(
-        DATACREDITO_AUTHORIZATION_TEXT_VERSION='prestadores-v2',
-        DATACREDITO_AUTHORIZATION_TEXT='Nueva versión jurídica de autorización.',
-    )
     def test_cambio_version_crea_nueva_evidencia(self):
+        self.request = RequestFactory().post('/solicitar/', {
+            'consentimiento_centrales': crear_confirmacion_consentimiento(self.usuario),
+        })
         primera = AutorizacionConsultaDatacreditoPrestador.objects.create(
             solicitud=self.solicitud,
             usuario=self.usuario,
@@ -102,11 +104,9 @@ class AutorizacionDatacreditoPrestadorV2Test(TestCase):
         DATACREDITO_AUTHORIZATION_TEXT='',
     )
     def test_sin_texto_juridico_no_crea_evidencia_vigente(self):
-        evidencia = registrar_autorizacion_datacredito_desde_solicitud(
-            self.solicitud,
-            usuario=self.usuario,
-            request=self.request,
-        )
-
-        self.assertIsNone(evidencia)
+        with self.assertRaises(ValidationError):
+            registrar_autorizacion_datacredito_desde_solicitud(
+                self.solicitud, usuario=self.usuario, request=self.request,
+            )
+        self.assertFalse(AutorizacionConsultaDatacreditoPrestador.objects.exists())
         self.assertIsNone(obtener_autorizacion_datacredito_vigente(self.solicitud))

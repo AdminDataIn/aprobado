@@ -1,0 +1,16 @@
+{% extends 'contractors/base.html' %}
+{% block title %}Autorizacion de centrales | Aprobado{% endblock %}
+{% block content %}
+<main class="cp-page"><div class="cp-shell">
+  <header class="cp-page-header"><div><h1 class="cp-title">Autorizacion de centrales</h1></div></header>
+  <form method="post" class="cp-surface cp-dashboard-section">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {% include 'contractors/components/consentimiento_centrales.html' %}
+    <div class="cp-quick-actions">
+      <button type="submit" class="cp-button" {% if not form.configuracion_consentimiento.configurada %}disabled{% endif %}>Aceptar autorizacion</button>
+      <a href="{% url 'contractors:mi_credito' %}" class="cp-button cp-button--secondary">Volver</a>
+    </div>
+  </form>
+</div></main>
+{% endblock %}

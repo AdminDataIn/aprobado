@@ -12,6 +12,7 @@ from contractors.datacredito.dto import (
     ResultadoProveedorDatacreditoPrestador,
 )
 from contractors.models import ContractorApplication
+from contractors.consentimiento_centrales import TEXTO_CONSENTIMIENTO_CENTRALES, VERSION_CONSENTIMIENTO_CENTRALES
 from contractors.services.autorizacion_datacredito import (
     registrar_autorizacion_datacredito_desde_solicitud,
 )
@@ -41,9 +42,9 @@ CONFIGURACION_DATACREDITO_PRUEBA = {
     'DATACREDITO_ENVIRONMENT': 'uat',
     'DATACREDITO_DEFAULT_SERVICE': 'decisor',
     'DATACREDITO_REUSE_DAYS': 30,
-    'DATACREDITO_DOCUMENT_HASH_SECRET': 'secreto-hmac-de-prueba',
-    'DATACREDITO_AUTHORIZATION_TEXT_VERSION': 'prestadores-v1',
-    'DATACREDITO_AUTHORIZATION_TEXT': 'Autorizo la consulta ante centrales.',
+    'DATACREDITO_DOCUMENT_HASH_SECRET': 'secreto-hmac-sintetico-de-prueba-32-bytes',
+    'DATACREDITO_AUTHORIZATION_TEXT_VERSION': VERSION_CONSENTIMIENTO_CENTRALES,
+    'DATACREDITO_AUTHORIZATION_TEXT': TEXTO_CONSENTIMIENTO_CENTRALES,
     'DATACREDITO_DECISOR_CLIENT_ID': 'client-id-prueba',
     'DATACREDITO_DECISOR_CLIENT_SECRET': 'client-secret-prueba',
     'DATACREDITO_DECISOR_TOKEN_USERNAME': 'usuario-token-prueba',

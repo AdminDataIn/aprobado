@@ -1,0 +1,21 @@
+{% if form.configuracion_consentimiento.configurada %}
+  <details class="consentimiento-legal">
+    <summary>Autorizacion completa de centrales · {{ form.configuracion_consentimiento.version_texto }}</summary>
+    <div class="consentimiento-texto" data-consentimiento-texto>{{ form.configuracion_consentimiento.texto }}</div>
+    <a href="{% url 'contractors:centrales_informacion' %}" target="_blank" rel="noopener">Autorizacion de centrales</a>
+  </details>
+  <div class="legal-authorization-row">
+    {{ form.autoriza_consulta_centrales }}
+    <label for="{{ form.autoriza_consulta_centrales.id_for_label }}">{{ resumen_consentimiento }}</label>
+  </div>
+  {{ form.consentimiento_centrales }}
+{% else %}
+  <p role="alert">La autorizacion de centrales no esta disponible temporalmente. No puedes aceptarla todavia.</p>
+{% endif %}
+{{ form.autoriza_consulta_centrales.errors }}
+{{ form.consentimiento_centrales.errors }}
+<style>
+  .consentimiento-legal { margin: 12px 0; }
+  .consentimiento-legal summary { cursor: pointer; }
+  .consentimiento-texto { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; margin-top: 12px; font-size: 14px; }
+</style>

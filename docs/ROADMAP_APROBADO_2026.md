@@ -1381,3 +1381,55 @@ Validacion local: 129 tests de ocho modulos, OK (skipped=5), 69.632 s, sin HTTP 
 24 casos nuevos (dos PostgreSQL); check sin incidencias, sin cambios de migracion,
 diff --check limpio. Persistencia limitada a la base efimera del test runner.
 No declarar politica activa ni Prestadores E2E cerrado.
+
+### P0-5B2.2B2: consentimiento unificado y readiness local sin HTTP
+
+Implementado para validacion local. Se conserva literalmente el cuerpo legal ya
+mostrado, trasladado a consentimiento_centrales.py, version prestadores-centrales-v1.
+Settings, formulario, pagina legal y hash usan el mismo texto completo; checkbox
+desmarcado, POST/CSRF y confirmacion firmada de titular/version/hash. Ausencia de
+texto/version falla cerrada. Solicitudes historicas sin evidencia compatible exigen
+nueva aceptacion sobre la misma solicitud: no hay backfill ni autorizacion inferida.
+La evidencia permanece inmutable e idempotente; no cambia contabilidad ni consulta
+proveedores. Se conservan controles existentes de vigencia/version de evaluacion;
+la reaceptacion no retrocede solicitudes ya originadas ni en firma.
+
+verificar_readiness_datacredito y evaluar_readiness_datacredito inspeccionan solo
+configuracion local, sin HTTP, DNS, OAuth, escrituras ni salida de secretos.
+DEMO contratado de Aprobado usa URLs uat-api confirmadas (token/revokeToken/
+MiDecisor/HDC). HDC requiere CONEXRED-01 / 42. ProductId/InfoAccountType por defecto
+son DEFAULT_NO_CONFIRMADO hasta configuracion explicita con respaldo contractual;
+el comando no valida autenticidad del contrato ni conectividad/whitelist real.
+HMAC requiere minimo 32 bytes y generacion criptografica segura; no se genera valor.
+No se cargaron credenciales reales en este ticket, .env intacto, sin activacion de
+flags ni politica score. Produccion fue confirmada previamente con flags apagados
+y prestadores-score-prod-v1 INACTIVA; no se consulto ese entorno. La configuracion
+local efectiva ya tiene ambos flags True y overrides de consentimiento; readiness
+reporta NO_LISTO / INCOMPLETO_Y_HABILITADO por token MiDecisor incompleto y canal HDC
+distinto. Pruebas con flags False, HTTP/DNS bloqueados y caché en memoria.
+Validacion PostgreSQL de aceptacion concurrente requerida en VPS/clon; se omite
+en SQLite. No declarar UAT externo ni Prestadores E2E cerrado.
+Guia: docs/PRESTADORES_DATACREDITO_READINESS.md.
+
+Validacion local final: focal 34 tests en 6.245 s OK (una omision PostgreSQL);
+contractors.tests + integrations.tests: 530 tests en 544.966 s OK (13 omisiones
+PostgreSQL). HTTP/DNS bloqueados; base SQLite efimera y cache en memoria.
+check sin incidencias, makemigrations --check --dry-run sin cambios y diff --check
+limpio. Sin commit/push/deploy ni llamadas reales a proveedores.
+
+### P0-5B2.2B2.1: contrato estricto de consentimiento canonico
+
+Una sola definicion efectiva: cuerpo legal completo y version de
+contractors/consentimiento_centrales.py. Se conserva el contenido existente sin
+reescritura. Variables juridicas solo se admiten por igualdad EXACTA; no se recortan
+ni normalizan. Si difieren/vacias, UI y aceptacion fallan cerradas; readiness NO_LISTO
+con mensaje seguro. El CTA corto permanece separado del cuerpo legal hasheado.
+Readiness demuestra disponibilidad canonica de texto/version/SHA256 y compatibilidad
+de ambas variables. Version futura requiere revision/cambio de codigo y aceptacion
+nueva, sin backfill ni reinterpretacion de evidencias anteriores.
+Flags locales preexistentes True no modificados y no prueban estado de produccion.
+Sin cambios de .env, proveedores, HTTP, score, migraciones, commit/push/deploy.
+Validacion local: focal 54 tests en 18.723 s OK (una omision PostgreSQL);
+regresion contractors.tests + integrations.tests: 536 tests en 541.601 s OK
+(13 omisiones PostgreSQL). Check sin incidencias, sin cambios de migracion y
+diff --check limpio. Locks/concurrencia PostgreSQL pendientes de VPS/clon.

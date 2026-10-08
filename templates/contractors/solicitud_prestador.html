@@ -379,13 +379,7 @@
               </label>
             </div>
             {{ form.acepta_politica_privacidad.errors }}
-            <div class="legal-authorization-row">
-              {{ form.autoriza_consulta_centrales }}
-              <label for="{{ form.autoriza_consulta_centrales.id_for_label }}">
-                Autorizo la consulta futura ante <a href="{% url 'contractors:centrales_informacion' %}" target="_blank" rel="noopener">centrales de información y riesgo</a> en etapas posteriores del proceso.
-              </label>
-            </div>
-            {{ form.autoriza_consulta_centrales.errors }}
+            {% include 'contractors/components/consentimiento_centrales.html' %}
             <small>La autorización de consulta se registra como consentimiento. En este flujo no se ejecuta ninguna consulta externa.</small>
           </div>
           <div class="form-actions">

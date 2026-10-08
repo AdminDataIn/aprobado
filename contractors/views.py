@@ -11,12 +11,13 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import FileResponse, Http404, JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from contractors.forms import (
+    ConsentimientoCentralesForm,
     AtenderSubsanacionPrestadorForm,
     DocumentoPrestadorForm,
     SimulacionPrestadorForm,
@@ -56,8 +57,11 @@ from contractors.services.evaluacion_audit import (
 )
 from contractors.services.evaluacion_versionado import construir_version_datos
 from contractors.services.autorizacion_datacredito import (
+    obtener_autorizacion_datacredito_vigente,
+    obtener_configuracion_autorizacion_datacredito,
     registrar_autorizacion_datacredito_desde_solicitud,
 )
+from contractors.consentimiento_centrales import RESUMEN_CONSENTIMIENTO_CENTRALES
 from contractors.services.presentacion_solicitud import (
     construir_condiciones_guardadas,
     construir_detalle_documento_publico,
@@ -415,6 +419,7 @@ def solicitar_prestador_view(request):
             request.POST,
             archivos,
             instance=solicitud_existente,
+            usuario=request.user,
         )
         evidencia_previa, error_previo = _evidencia_contractual_vigente(
             request=request, archivo=archivos.get('contrato_actual'),
@@ -489,7 +494,7 @@ def solicitar_prestador_view(request):
                 messages.success(request, 'Información y documentos guardados. Continúa con la simulación.')
                 return redirect(f'{reverse("contractors:simular")}?solicitud_id={solicitud.id}')
     else:
-        form = SolicitudPrestadorForm(instance=solicitud_existente)
+        form = SolicitudPrestadorForm(instance=solicitud_existente, usuario=request.user)
 
     return render(
         request,
@@ -498,6 +503,7 @@ def solicitar_prestador_view(request):
             'form': form,
             'solicitud': solicitud_existente,
             'allow_id_upload_fallback': settings.CONTRACTORS_ALLOW_ID_UPLOAD_FALLBACK,
+            'resumen_consentimiento': RESUMEN_CONSENTIMIENTO_CENTRALES,
             **_contexto_continuidad_solicitud(
                 request, form, solicitud_existente, paso_error_general=paso_error_general,
                 sesion_documental=sesion_documental,
@@ -507,6 +513,11 @@ def solicitar_prestador_view(request):
 
 
 def legal_prestadores_view(request, seccion):
+    if seccion == 'centrales':
+        return render(request, 'contractors/legal_prestadores.html', {
+            'contenido': {'titulo': 'Autorizacion para consulta ante centrales de informacion'},
+            'consentimiento': obtener_configuracion_autorizacion_datacredito(),
+        })
     contenidos = {
         'terminos': {
             'titulo': 'Términos y condiciones para Prestadores de Servicios',
@@ -538,25 +549,56 @@ def legal_prestadores_view(request, seccion):
                 ('08', 'Vigencia', 'Esta política rige desde su fecha de actualización y podrá modificarse para reflejar cambios normativos u operativos.'),
             ),
         },
-        'centrales': {
-            'titulo': 'Autorización para consulta ante centrales de información',
-            'actualizacion': 'Julio de 2026',
-            'introduccion': 'Explica el alcance de una consulta futura de información financiera o crediticia.',
-            'destacado': 'La aceptación registrada en este paso no ejecuta una consulta externa ni representa una aprobación financiera.',
-            'secciones': (
-                ('01', 'Alcance de la autorización', 'El titular autoriza que, en una etapa posterior y cuando corresponda, Aprobado consulte información relevante para la evaluación de la solicitud.'),
-                ('02', 'Momento de la consulta', 'La consulta solo podrá realizarse dentro del proceso de evaluación y bajo una configuración operativa habilitada. No se realiza al cargar documentos ni al ejecutar el análisis contractual.'),
-                ('03', 'Finalidad', 'La información podrá utilizarse para verificar identidad, comportamiento financiero, endeudamiento y señales de riesgo conforme a las políticas aplicables.'),
-                ('04', 'Ausencia de aprobación automática', 'Una consulta, cuando se ejecute, será solo un insumo de evaluación y no garantiza aprobación, monto, plazo ni desembolso.'),
-                ('05', 'Derechos del titular', 'El titular conserva sus derechos de consulta, actualización, rectificación y reclamo ante los operadores de información y ante Aprobado.'),
-                ('06', 'Canal de contacto', 'Las inquietudes sobre esta autorización pueden dirigirse a info@aprobado.com.co.'),
-            ),
-        },
     }
     contenido = contenidos.get(seccion)
     if contenido is None:
         raise Http404('Contenido legal no encontrado.')
     return render(request, 'contractors/legal_prestadores.html', {'contenido': contenido})
+
+
+@login_required
+def consentimiento_centrales_prestador_view(request, solicitud_id):
+    from gestion_creditos.models import OrigenCreditoPrestador
+
+    solicitud = _obtener_solicitud_del_usuario(solicitud_id, request.user)
+    form = ConsentimientoCentralesForm(
+        request.POST if request.method == 'POST' else None, usuario=request.user,
+    )
+    if request.method == 'POST' and form.is_valid():
+        try:
+            with transaction.atomic():
+                solicitud = get_object_or_404(ContractorApplication.objects.select_for_update(),
+                    pk=solicitud.pk, usuario=request.user,
+                )
+                version_anterior, _ = construir_version_datos(solicitud)
+                if not solicitud.autoriza_consulta_centrales:
+                    solicitud.autoriza_consulta_centrales = True
+                    solicitud.save(update_fields=['autoriza_consulta_centrales', 'updated_at'])
+                registrar_autorizacion_datacredito_desde_solicitud(
+                    solicitud, usuario=request.user, request=request,
+                )
+                en_firma = solicitud.estado in {
+                    ContractorApplication.Estado.PENDIENTE_FIRMA,
+                    ContractorApplication.Estado.FIRMADO,
+                }
+                originada = OrigenCreditoPrestador.objects.filter(
+                    gate_id__in=solicitud.aprobaciones_internas.values('pk'),
+                    credito__isnull=False,
+                ).exists()
+                if not en_firma and not originada:
+                    invalidar_evaluacion_si_cambiaron_datos(
+                        solicitud, version_anterior=version_anterior, usuario=request.user,
+                        campos=['autorizaciones'], motivo='consentimiento_centrales_actualizado',
+                    )
+        except ValidationError as exc:
+            form.add_error(None, exc)
+        else:
+            messages.success(request, 'Autorizacion de centrales registrada. No se ejecuto ninguna consulta externa.')
+            return redirect('contractors:mi_credito')
+    return render(request, 'contractors/consentimiento_centrales.html', {
+        'form': form, 'solicitud': solicitud,
+        'resumen_consentimiento': RESUMEN_CONSENTIMIENTO_CENTRALES,
+    })
 
 
 @login_required
@@ -902,6 +944,9 @@ def mi_credito_prestador_view(request):
             'estados_publicos': estados_publicos,
             'estado_publico_principal': estado_publico_principal,
             'validacion_contratante': confirmacion.get_estado_display() if confirmacion else 'Pendiente',
+            'requiere_consentimiento_centrales': bool(
+                solicitud_principal and obtener_autorizacion_datacredito_vigente(solicitud_principal[0]) is None
+            ),
             'timeline_publico_principal': (
                 construir_timeline_publico_solicitud(
                     solicitud_principal[0],

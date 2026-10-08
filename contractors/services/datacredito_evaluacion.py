@@ -25,7 +25,7 @@ from integrations.datacredito.exceptions import (
     DatacreditoProviderError,
     DatacreditoTimeoutError,
 )
-from integrations.datacredito.settings import obtener_configuracion_datacredito
+from integrations.datacredito.settings import obtener_configuracion_datacredito, secreto_documental_valido
 from integrations.datacredito.normalizadores import VERSION_NORMALIZADOR
 from integrations.datacredito.identificacion import homologar_tipo_identificacion
 from integrations.models import ConsultaDatacreditoSnapshot
@@ -310,6 +310,8 @@ def _validar_configuracion(configuracion, servicio):
         return 'datacredito_deshabilitado'
     if not configuracion.document_hash_secret:
         return 'secreto_hash_documento_no_configurado'
+    if not secreto_documental_valido(configuracion.document_hash_secret):
+        return 'secreto_hash_documento_insuficiente'
     if servicio == ConsultaDatacreditoSnapshot.Servicio.DECISOR:
         faltantes = configuracion.credenciales_decisor.validar_para_token()
     elif servicio == ConsultaDatacreditoSnapshot.Servicio.HISTORIAL:

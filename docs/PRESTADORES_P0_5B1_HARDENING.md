@@ -1,5 +1,11 @@
 # P0-5B1: hardening DataCredito y preparacion score PROD
 
+P0-5B2.2B2 unifica consentimiento completo/versionado y agrega readiness local sin
+HTTP ni secretos: ver [guia operativa](PRESTADORES_DATACREDITO_READINESS.md).
+No activa proveedores ni politica; solicitudes historicas deben aceptar de nuevo
+si no tienen evidencia compatible. ProductId/InfoAccountType tecnicos requieren
+confirmacion explicita y respaldo contractual antes de declarar configuracion lista.
+
 P0-5B1: CERRADO y desplegado segun confirmacion operativa del ticket P0-5B2.1.
 P0-5B2.1: CERRADO y desplegado segun confirmacion operativa de P0-5B2.2A;
 contractors.0020 aplicada. Esto no significa que exista una politica PROD activa.

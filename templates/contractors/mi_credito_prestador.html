@@ -76,6 +76,9 @@
         </details>
 
         <nav class="cp-quick-actions" aria-label="Acciones de la solicitud">
+          {% if requiere_consentimiento_centrales %}
+            <a class="cp-button cp-button--secondary" href="{% url 'contractors:consentimiento_centrales' solicitud.id %}">Autorizar consulta de centrales</a>
+          {% endif %}
           {% if estado_publico.accion == 'SUBSANACION' and estado_publico.requerimiento %}
             <a class="cp-button" href="{% url 'contractors:atender_subsanacion' solicitud.id estado_publico.requerimiento.id %}">{{ estado_publico.accion_etiqueta }}</a>
           {% elif estado_publico.accion == 'DOCUMENTOS' %}

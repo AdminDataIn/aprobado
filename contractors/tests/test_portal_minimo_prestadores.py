@@ -22,6 +22,8 @@ from contractors.models import (
     TimelinePrestador,
 )
 from contractors.forms import SolicitudPrestadorForm
+from contractors.consentimiento_centrales import TEXTO_CONSENTIMIENTO_CENTRALES, VERSION_CONSENTIMIENTO_CENTRALES
+from contractors.services.autorizacion_datacredito import crear_confirmacion_consentimiento
 from contractors.services.analisis_contrato import ResultadoAnalisisContrato
 from contractors.services.analisis_contrato_ia import analizar_contrato_con_openai
 from contractors.services.analisis_contractual_seguro import MENSAJE_DOCUMENTO_DIFERENTE
@@ -43,6 +45,8 @@ from gestion_creditos.tests.captura_fixtures import sesion_finalizada
     CONTRACTORS_CONTRACT_AI_ENABLED=False,
     OPENAI_API_KEY='',
     ALLOWED_HOSTS=['testserver', 'localhost', 'contratistas.localhost'],
+    DATACREDITO_AUTHORIZATION_TEXT=TEXTO_CONSENTIMIENTO_CENTRALES,
+    DATACREDITO_AUTHORIZATION_TEXT_VERSION=VERSION_CONSENTIMIENTO_CENTRALES,
 )
 class PortalMinimoPrestadoresTest(TestCase):
     host = 'contratistas.localhost'
@@ -168,10 +172,6 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(Credito.objects.count(), creditos_antes)
         self.assertEqual(CreditoLibranza.objects.count(), creditos_libranza_antes)
 
-    @override_settings(
-        DATACREDITO_AUTHORIZATION_TEXT_VERSION='prestadores-v1',
-        DATACREDITO_AUTHORIZATION_TEXT='Autorización de consulta para pruebas.',
-    )
     def test_formulario_registra_evidencia_versionada_de_autorizacion(self):
         self.client.force_login(self.usuario)
 
@@ -186,7 +186,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(response.status_code, 302)
         evidencia = AutorizacionConsultaDatacreditoPrestador.objects.get()
         self.assertTrue(evidencia.autorizada)
-        self.assertEqual(evidencia.version_texto, 'prestadores-v1')
+        self.assertEqual(evidencia.version_texto, VERSION_CONSENTIMIENTO_CENTRALES)
         self.assertEqual(len(evidencia.texto_hash), 64)
         self.assertEqual(len(evidencia.ip_hash), 64)
         self.assertNotEqual(evidencia.ip_hash, '192.0.2.10')
@@ -2162,6 +2162,7 @@ class PortalMinimoPrestadoresTest(TestCase):
 
     def _payload_solicitud(self):
         return {
+            'consentimiento_centrales': crear_confirmacion_consentimiento(self.usuario),
             'escenario_credito': ContractorApplication.EscenarioCredito.NUEVO_CREDITO,
             'tipo_documento': ContractorApplication.TipoDocumento.CEDULA_CIUDADANIA,
             'numero_documento': '123456789',

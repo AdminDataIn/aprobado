@@ -34,6 +34,11 @@ HISTORIAL_URLS = {
 }
 
 
+def secreto_documental_valido(valor):
+    # Length is a minimum safeguard, not proof of entropy: generate 32 random bytes.
+    return isinstance(valor, str) and len(valor.strip().encode('utf-8')) >= 32
+
+
 @dataclass(frozen=True)
 class ConfiguracionDatacredito:
     real_enabled: bool

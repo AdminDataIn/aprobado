@@ -6,6 +6,9 @@ import os
 import socket
 import sys
 from urllib.parse import urlparse
+from contractors.consentimiento_centrales import (
+    TEXTO_CONSENTIMIENTO_CENTRALES, VERSION_CONSENTIMIENTO_CENTRALES,
+)
 
 try:
     import dj_database_url
@@ -176,9 +179,11 @@ DATACREDITO_REUSE_DAYS = int(os.environ.get('DATACREDITO_REUSE_DAYS', '30'))
 DATACREDITO_IN_PROGRESS_MINUTES = int(os.environ.get('DATACREDITO_IN_PROGRESS_MINUTES', '5'))
 DATACREDITO_DOCUMENT_HASH_SECRET = os.environ.get('DATACREDITO_DOCUMENT_HASH_SECRET', '').strip()
 DATACREDITO_AUTHORIZATION_TEXT_VERSION = os.environ.get(
-    'DATACREDITO_AUTHORIZATION_TEXT_VERSION', ''
-).strip()
-DATACREDITO_AUTHORIZATION_TEXT = os.environ.get('DATACREDITO_AUTHORIZATION_TEXT', '').strip()
+    'DATACREDITO_AUTHORIZATION_TEXT_VERSION', VERSION_CONSENTIMIENTO_CENTRALES
+)
+DATACREDITO_AUTHORIZATION_TEXT = os.environ.get(
+    'DATACREDITO_AUTHORIZATION_TEXT', TEXTO_CONSENTIMIENTO_CENTRALES
+)
 DATACREDITO_TOKEN_URL = os.environ.get('DATACREDITO_TOKEN_URL', '').strip()
 DATACREDITO_REVOKE_TOKEN_URL = os.environ.get('DATACREDITO_REVOKE_TOKEN_URL', '').strip()
 DATACREDITO_MIDECISOR_URL = os.environ.get('DATACREDITO_MIDECISOR_URL', '').strip()
@@ -197,6 +202,8 @@ DATACREDITO_HDC_SERVICE_USER = os.environ.get('DATACREDITO_HDC_SERVICE_USER', ''
 DATACREDITO_HDC_SERVICE_PASSWORD = os.environ.get('DATACREDITO_HDC_SERVICE_PASSWORD', '').strip()
 DATACREDITO_HDC_PRODUCT_ID = os.environ.get('DATACREDITO_HDC_PRODUCT_ID', '64').strip()
 DATACREDITO_HDC_INFO_ACCOUNT_TYPE = os.environ.get('DATACREDITO_HDC_INFO_ACCOUNT_TYPE', '1').strip()
+DATACREDITO_HDC_PRODUCT_ID_EXPLICIT = 'DATACREDITO_HDC_PRODUCT_ID' in os.environ
+DATACREDITO_HDC_INFO_ACCOUNT_TYPE_EXPLICIT = 'DATACREDITO_HDC_INFO_ACCOUNT_TYPE' in os.environ
 DATACREDITO_HDC_SERVER_IP_ADDRESS = os.environ.get('DATACREDITO_HDC_SERVER_IP_ADDRESS', '').strip()
 DATACREDITO_HDC_CHANNEL_NAME = os.environ.get('DATACREDITO_HDC_CHANNEL_NAME', 'Canal-01').strip()
 DATACREDITO_HDC_CHANNEL_TYPE = os.environ.get('DATACREDITO_HDC_CHANNEL_TYPE', '42').strip()
@@ -456,7 +463,13 @@ X_FRAME_OPTIONS = 'SAMEORIGIN'
 # Cache (usar Redis si esta disponible)
 REDIS_URL = os.environ.get('REDIS_URL', '')
 ALLOW_LOCAL_REDIS_FALLBACK = env_bool('ALLOW_LOCAL_REDIS_FALLBACK', True)
-USE_LOCAL_REDIS_FALLBACK = ALLOW_LOCAL_REDIS_FALLBACK and _is_local_redis_url(REDIS_URL) and not _can_open_redis_socket(REDIS_URL)
+# Readiness is strictly local, including Django's settings initialization.
+USE_LOCAL_REDIS_FALLBACK = (
+    ALLOW_LOCAL_REDIS_FALLBACK
+    and 'verificar_readiness_datacredito' not in sys.argv
+    and _is_local_redis_url(REDIS_URL)
+    and not _can_open_redis_socket(REDIS_URL)
+)
 if REDIS_URL and not USE_LOCAL_REDIS_FALLBACK:
     CACHES = {
         'default': {

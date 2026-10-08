@@ -24,6 +24,7 @@ from contractors.models import (
     RevisionManualPrestador,
     TimelinePrestador,
 )
+from contractors.consentimiento_centrales import TEXTO_CONSENTIMIENTO_CENTRALES, VERSION_CONSENTIMIENTO_CENTRALES
 from contractors.services.aprobacion_pagador import (
     decidir_aprobacion_pagador_prestador,
 )
@@ -123,8 +124,8 @@ class ClienteNovedadPrueba:
 
 
 @override_settings(
-    DATACREDITO_AUTHORIZATION_TEXT_VERSION='uat-gate-v1',
-    DATACREDITO_AUTHORIZATION_TEXT='Autorizacion controlada para pruebas del gate.',
+    DATACREDITO_AUTHORIZATION_TEXT_VERSION=VERSION_CONSENTIMIENTO_CENTRALES,
+    DATACREDITO_AUTHORIZATION_TEXT=TEXTO_CONSENTIMIENTO_CENTRALES,
 )
 class AprobacionInternaPrestadorTest(TestCase):
     host = 'contratistas.localhost'
