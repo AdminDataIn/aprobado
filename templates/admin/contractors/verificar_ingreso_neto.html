@@ -1,0 +1,23 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<form method="get">
+  <div class="form-row">{{ form.solicitud.label_tag }}{{ form.solicitud }}
+    <input type="submit" value="Consultar evidencias">
+  </div>
+</form>
+{% if solicitud_seleccionada %}
+<form method="post">
+  {% csrf_token %}
+  <input type="hidden" name="solicitud" value="{{ solicitud_seleccionada }}">
+  {{ form.non_field_errors }}
+  <fieldset class="module aligned">
+    {% for field in form %}
+    {% if field.name != 'solicitud' %}
+    <div class="form-row">{{ field.errors }}{{ field.label_tag }}{{ field }}</div>
+    {% endif %}
+    {% endfor %}
+  </fieldset>
+  <div class="submit-row"><input type="submit" class="default" value="Registrar nueva versión"></div>
+</form>
+{% endif %}
+{% endblock %}

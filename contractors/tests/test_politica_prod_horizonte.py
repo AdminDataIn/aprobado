@@ -34,6 +34,7 @@ from contractors.services.politica_financiera_prestador import (
     VERSION, PARAMETROS, IngresoNetoValido, preparar_oferta,
 )
 from gestion_creditos.services.horizonte_contractual import calcular_horizonte_contractual
+from contractors.tests.fixtures_ingreso_neto import preparar_evidencia_neta, ingreso_neto_test
 
 
 ARCHIVO = Path(settings.BASE_DIR) / 'docs/parametros_prestadores_prod_aprobados.json'
@@ -149,6 +150,7 @@ class HorizonteProdTest(SimpleTestCase):
 
 class OfertaProdIntegradaTest(TestCase):
     def setUp(self):
+        self.solicitud_neta, self.analista, self.evidencia = preparar_evidencia_neta(self)
         self.config = ConfiguracionSimuladorPrestador.objects.create(version=VERSION, **PARAMETROS)
         self.politica = crear_politica_score(version='prod-test', configuracion_financiera=self.config)
         self.solicitud = SimpleNamespace(
@@ -176,11 +178,16 @@ class OfertaProdIntegradaTest(TestCase):
     def oferta(self, score=900, **kwargs):
         resultado = self.score_del_motor(score) if isinstance(score, (int, Decimal)) else score
         datos = dict(score=resultado, politica=self.politica,
-            ingreso_neto=IngresoNetoValido(Decimal('100000000'), 'fuente-test-verificada', date(2026,8,1)),
+            ingreso_neto=None, solicitud_id=self.solicitud_neta.pk,
             obligaciones_mensuales=Decimal('0'), monto_solicitado=Decimal('10000000'), plazo_solicitado=8,
             horizonte=horizonte(18), configuracion=self.config, corte=date(2026,8,1))
         datos.update(kwargs)
+        if 'ingreso_neto' not in kwargs:
+            datos['ingreso_neto'] = self.ingreso('100000000')
         return preparar_oferta(**datos)
+
+    def ingreso(self, monto):
+        return ingreso_neto_test(self.solicitud_neta, self.analista, self.evidencia, monto)
 
     def test_bandas_y_limites_sin_calcular_score(self):
         for score, banda, monto, plazo in ((850,'PREMIUM',10000000,8), (849,'ALTA',8000000,8),
@@ -195,13 +202,13 @@ class OfertaProdIntegradaTest(TestCase):
         self.assertEqual(self.oferta(monto_solicitado=Decimal('2000000')).monto, Decimal('2000000'))
 
     def test_capacidad_treinta_por_ciento_sobre_disponible_y_cuota_real(self):
-        r = self.oferta(ingreso_neto=IngresoNetoValido(Decimal('3000000'), 'test', date(2026,8,1)),
+        r = self.oferta(ingreso_neto=self.ingreso('3000000'),
                         obligaciones_mensuales=Decimal('1000000'))
         self.assertEqual(r.cuota_maxima, Decimal('600000'))
         self.assertLessEqual(r.cuota, r.cuota_maxima)
         siguiente = simular_credito_prestador_informativo(monto=r.monto+Decimal('.01'), plazo_meses=r.plazo, configuracion=self.config)
         self.assertGreater(siguiente.cuota_mensual, r.cuota_maxima)
-        r = self.oferta(ingreso_neto=IngresoNetoValido(Decimal('1000'), 'test', date(2026,8,1)))
+        r = self.oferta(ingreso_neto=self.ingreso('1000'))
         self.assertEqual((r.monto,r.plazo), (0,0))
         self.assertEqual(self.oferta(monto_solicitado=Decimal('500000')).monto, 0)
 
@@ -248,12 +255,12 @@ class OfertaProdIntegradaTest(TestCase):
     def test_capacidades_separadas_no_recalibra_score(self):
         score = self.score_del_motor(900)
         antes = score.como_dict()
-        r = self.oferta(score, ingreso_neto=IngresoNetoValido(Decimal('3000000'), 'test', date(2026, 8, 1)),
+        r = self.oferta(score, ingreso_neto=self.ingreso('3000000'),
                         obligaciones_mensuales=Decimal('1000000'))
         self.assertEqual(r.capacidad_componente_score, Decimal('900000'))
         self.assertEqual(r.cuota_maxima, Decimal('600000'))
         self.assertEqual(r.capacidad_crediticia_oferta, Decimal('600000'))
-        self.assertEqual(r.como_dict()['capacidad_crediticia_oferta'], '600000.00')
+        self.assertEqual(Decimal(r.como_dict()['capacidad_crediticia_oferta']), Decimal('600000.00'))
         self.assertEqual(score.como_dict(), antes)
 
     def test_version_o_configuracion_distinta_rechazada(self):

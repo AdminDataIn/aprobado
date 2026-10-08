@@ -5,6 +5,8 @@ from django import forms
 from django.forms.models import BaseInlineFormSet
 from gestion_creditos.document_widgets import DocumentosPrivadosAdminMixin
 from django.template.response import TemplateResponse
+from django.http import HttpResponseRedirect
+from django.urls import reverse
 
 from contractors.models import (
     AprobacionInternaPrestador,
@@ -17,6 +19,7 @@ from contractors.models import (
     ContractorApplication,
     ContractorApplicationDocument,
     FormalizacionCreditoPrestador,
+    IngresoNetoVerificadoPrestador,
     NovedadOperativaPrestador,
     PredecisionPrestadorAudit,
     RequerimientoSubsanacionPrestador,
@@ -27,6 +30,78 @@ from contractors.services.politica_score import (
     PERMISO_ACTIVAR_POLITICA,
     activar_politica_score_prestador,
 )
+from contractors.services.ingreso_neto import exigir_verificador, registrar_ingreso_neto
+
+
+class VerificarIngresoNetoForm(forms.Form):
+    solicitud = forms.ModelChoiceField(queryset=ContractorApplication.objects.all())
+    accion = forms.ChoiceField(choices=IngresoNetoVerificadoPrestador.Accion.choices)
+    monto = forms.DecimalField(max_digits=14, decimal_places=2, min_value=0.01, required=False)
+    fecha_corte = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'))
+    vigente_hasta = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'))
+    documentos = forms.ModelMultipleChoiceField(queryset=ContractorApplicationDocument.objects.none(), required=False)
+    observacion = forms.CharField(max_length=1000, widget=forms.Textarea(attrs={'rows': 3}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        solicitud_id = self.data.get('solicitud') if self.is_bound else self.initial.get('solicitud')
+        if str(solicitud_id or '').isdigit():
+            self.fields['documentos'].queryset = ContractorApplicationDocument.objects.filter(solicitud_id=solicitud_id)
+
+
+@admin.register(IngresoNetoVerificadoPrestador)
+class IngresoNetoVerificadoPrestadorAdmin(admin.ModelAdmin):
+    list_display = ['solicitud', 'version', 'accion', 'fuente', 'fecha_corte', 'vigente_hasta', 'verificado_por', 'verificado_en']
+    list_filter = ['accion', 'verificado_en']
+    readonly_fields = [campo.name for campo in IngresoNetoVerificadoPrestador._meta.fields]
+    list_select_related = ['solicitud', 'verificado_por']
+    actions = None
+
+    def has_module_permission(self, request):
+        try:
+            exigir_verificador(request.user)
+        except PermissionDenied:
+            return False
+        return True
+
+    def has_view_permission(self, request, obj=None):
+        return self.has_module_permission(request)
+
+    def has_add_permission(self, request):
+        return self.has_module_permission(request)
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def add_view(self, request, form_url='', extra_context=None):
+        exigir_verificador(request.user)
+        form = VerificarIngresoNetoForm(
+            request.POST if request.method == 'POST' else None,
+            initial={'solicitud': request.GET.get('solicitud'), 'accion': 'VERIFICADO'},
+        )
+        if request.method == 'POST' and form.is_valid():
+            datos = form.cleaned_data
+            try:
+                registro = registrar_ingreso_neto(
+                    solicitud=datos['solicitud'], actor=request.user, monto=datos['monto'],
+                    fecha_corte=datos['fecha_corte'], vigente_hasta=datos['vigente_hasta'],
+                    documentos=datos['documentos'], observacion=datos['observacion'],
+                    invalidar=datos['accion'] == 'INVALIDADO',
+                )
+            except ValidationError:
+                form.add_error(None, 'Verifica monto, corte, vigencia, evidencias y etapa de la solicitud.')
+            else:
+                self.message_user(request, f'Version {registro.version} registrada.', messages.SUCCESS)
+                return HttpResponseRedirect(reverse('admin:contractors_ingresonetoverificadoprestador_changelist'))
+        return TemplateResponse(request, 'admin/contractors/verificar_ingreso_neto.html', {
+            **self.admin_site.each_context(request), 'opts': self.model._meta,
+            'title': 'Verificar o invalidar ingreso neto', 'form': form,
+            'solicitud_seleccionada': request.GET.get('solicitud') or request.POST.get('solicitud'),
+            **(extra_context or {}),
+        })
 
 
 class ContractorApplicationDocumentInline(DocumentosPrivadosAdminMixin, admin.TabularInline):

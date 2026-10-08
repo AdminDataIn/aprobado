@@ -113,6 +113,9 @@ def _proyectar_resultado_allowlist(normalizado, *, servicio):
         carga_mensual_completa=resumen_hdc.get('carga_mensual_completa'),
         obligaciones_incompletas=resumen_hdc.get('obligaciones_incompletas'),
         version_normalizador=VERSION_NORMALIZADOR,
+        ingreso_estimado_midecisor=(
+            _texto_decimal(normalizado.ingreso_estimado) if servicio == 'decisor' else None
+        ),
     )
 
 

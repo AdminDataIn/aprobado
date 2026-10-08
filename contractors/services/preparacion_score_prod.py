@@ -1,6 +1,7 @@
 """Prepared definition only; no provider calls, activation, or financial effects."""
 import hashlib
 import json
+from decimal import Decimal
 from pathlib import Path
 
 from django.conf import settings
@@ -24,17 +25,27 @@ def definicion_score_prod():
 
 def preparar_politica_score_prod(*, parametros=None, persistir=False, actor=None, motivo=''):
     definicion = definicion_score_prod()
-    parametros = dict(parametros or {})
-    requeridos = set(definicion['parametros_pendientes_aprobacion']) | {
-        'peso_datacredito', 'fecha_vigencia_desde',
-    }
-    if set(parametros) - requeridos:
+    recibidos = dict(parametros or {})
+    aprobados = definicion['parametros_aprobados']
+    requeridos = set(aprobados) | set(definicion['parametros_pendientes_aprobacion'])
+    if set(recibidos) - requeridos:
         raise ValidationError('Parametros no permitidos en la definicion preparada.')
+    for campo, aprobado in aprobados.items():
+        if campo not in recibidos:
+            continue
+        if campo == 'fuente_ingreso_neto_valido_para_riesgo':
+            coincide = recibidos[campo] == aprobado
+        else:
+            field = ConfiguracionScorePrestador._meta.get_field(campo)
+            coincide = field.to_python(recibidos[campo]) == field.to_python(aprobado)
+        if not coincide:
+            raise ValidationError('El parametro ' + campo + ' difiere de la politica ratificada.')
+    parametros = {**aprobados, **recibidos}
     faltantes = sorted(campo for campo in requeridos if parametros.get(campo) is None)
     if faltantes:
         if persistir:
             raise ValidationError('Politica incompleta; faltan: ' + ', '.join(faltantes))
-        return {**definicion, 'pendientes': faltantes, 'persistida': False}
+        return {**definicion, 'parametros': parametros, 'pendientes': faltantes, 'persistida': False}
     if parametros['version_politica'] != definicion['version']:
         raise ValidationError('La version de politica debe corresponder a la definicion PROD.')
     if not str(parametros['fuente_ingreso_neto_valido_para_riesgo']).strip():
@@ -54,7 +65,8 @@ def preparar_politica_score_prod(*, parametros=None, persistir=False, actor=None
         )
         validar_configuracion_prod(financiera)
         valores = {
-            key: value for key, value in parametros.items()
+            key: ConfiguracionScorePrestador._meta.get_field(key).to_python(value)
+            for key, value in parametros.items()
             if key != 'fuente_ingreso_neto_valido_para_riesgo'
         }
         valores.update(
@@ -66,8 +78,28 @@ def preparar_politica_score_prod(*, parametros=None, persistir=False, actor=None
         )
         politica = ConfiguracionScorePrestador(**valores)
         politica.full_clean(validate_unique=False)
+        cursor = 0
+        bandas = []
+        for datos in sorted(definicion['bandas_aprobadas'], key=lambda banda: banda['score_min']):
+            banda = BandaScorePrestador(**datos, resultado=(
+                BandaScorePrestador.Resultado.REQUIERE_REVISION_MANUAL
+                if datos['nombre'] == 'REVISION' else BandaScorePrestador.Resultado.PREAPROBADO_READ_ONLY
+            ))
+            banda.clean_fields(exclude=['configuracion'])
+            if (banda.score_min != cursor or banda.score_max < banda.score_min
+                    or banda.monto_maximo > politica.monto_maximo_politica
+                    or banda.plazo_maximo > politica.plazo_maximo_politica):
+                raise ValidationError('Bandas incompletas o inconsistentes con la politica financiera.')
+            cursor = banda.score_max + 1
+            bandas.append(banda)
+        if cursor != 1001 or {b.nombre for b in bandas} != set(BandaScorePrestador.Nombre.values):
+            raise ValidationError('Las bandas deben cubrir 0 a 1000 sin vacios.')
         if not persistir:
-            return {**definicion, 'pendientes': [], 'persistida': False}
+            return {**definicion, 'parametros': parametros, 'pendientes': [], 'persistida': False,
+                    'configuracion_financiera_id': financiera.pk,
+                    'configuracion_financiera_activa': financiera.activo,
+                    'peso_total': str(sum((Decimal(str(parametros[k])) for k in aprobados
+                                          if k.startswith('peso_')), Decimal('0')))}
         existente = ConfiguracionScorePrestador.objects.filter(version=politica.version).first()
         if existente:
             if any(getattr(existente, campo) != getattr(politica, campo) for campo in valores):

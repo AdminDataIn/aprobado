@@ -1,8 +1,10 @@
 # P0-5B1: hardening DataCredito y preparacion score PROD
 
-Estado: PARCIAL en validacion; implementacion tecnica completa. PostgreSQL pendiente antes
-de UAT externo. No hubo consultas reales, activacion
-de proveedores/politicas, cambios financieros, commit, push ni deploy.
+P0-5B1: CERRADO y desplegado segun confirmacion operativa del ticket P0-5B2.1.
+P0-5B2.1: implementacion local de politica ratificada INACTIVA e ingreso manual
+verificado; requiere validacion PostgreSQL antes de promover este cambio.
+En P0-5B2.1 no hubo consultas reales, activacion de proveedores/politicas,
+cambios a formulas financieras, commit, push ni deploy.
 
 ## Implementado y probado localmente
 
@@ -68,17 +70,19 @@ Revoke usa Client_id, Client_secret, token y JSON username/password segun
 DocsIntegracionDatacredito/MiDecisor/Token/swagger-api-externa.yaml.
 Se conserva TLS verificado, timeout y session/proxy existente. No logs de secretos.
 
-## Definicion score preparada: NO aplicable
+## Definicion score ratificada: INACTIVA
 
 `parametros_score_prestadores_prod_pendientes.json` es la unica definicion preparada
-de bandas PROD. Parametros no ratificados permanecen null; no existe politica PROD
-instalada en bases operativas. preparar_politica_score_prod valida parametros explicitos
+de bandas y parametros PROD. P0-5B2.1 ratifica los pesos, flags, TTL y acciones.
+Solo fecha_vigencia_desde permanece pendiente: no se inventa fecha de activacion.
+No se instala politica PROD en bases operativas durante este ticket.
+preparar_politica_score_prod valida parametros explicitos
 y puede persistir SOLO durante tests (RUNNING_TESTS), con actor staff autorizado/motivo.
 Reutiliza ConfiguracionScorePrestador/BandaScorePrestador, ligado a la configuracion
 financiera exacta prestadores-prod-v1; siempre activa=False. Repeticion es idempotente;
 rechaza diferencias en versiones existentes. La auditoria existente registra SIN_CAMBIO
 con preparacion_inactiva=True, pues NO hay transicion de politica activa.
-No copia DEMO ni completa pendientes con defaults por conveniencia.
+No copia DEMO ni admite cambiar los parametros ratificados en esta version.
 
 Comando seguro, exclusivamente dry-run, sin opcion --aplicar ni --activar:
 
@@ -86,23 +90,33 @@ Comando seguro, exclusivamente dry-run, sin opcion --aplicar ni --activar:
 python manage.py preparar_politica_score_prestadores_prod
 ```
 
-Devuelve pendientes y persistida=false sin necesitar instalar configuracion financiera.
---parametros admite un JSON de decisiones ratificadas para validar; tampoco persiste.
+Sin fecha devuelve pendientes=['fecha_vigencia_desde'] y persistida=false sin DB.
+Para una validacion completa, suministrar la fecha autorizada mediante --fecha-vigencia
+(YYYY-MM-DD). Debe existir la configuracion financiera exacta prestadores-prod-v1;
+el comando informa su ID/estado, pesos, bandas, versiones, TTL y flags. No crea
+esa configuracion ni la activa. --parametros admite valores coincidentes con los
+ratificados y la fecha explicita; tampoco persiste.
 
 | Parametro | XLSX | DEMO dual | Propuesto PROD | Requiere aprobacion | Efecto |
 |---|---|---|---|---|---|
-| Pesos | 45/30/8/12/5% | iguales, HDC 0% | sin definir | si | score y banda |
-| Redistribucion/referencias | componente 5% | opcionales, redistribuye | sin definir | si | pesos efectivos |
-| Geografia | -80 bajo 600 | configurada, senal ausente | sin definir | si | penalizacion |
-| Mora | sugiere revision severa | 90d configurados, no hard rule | sin definir | si | revision/bloqueo |
-| Consultas | referencia 90d | 6 configuradas; DTO cuenta 180d | sin definir | si | alerta/revision |
-| TTL fuentes | no fija contrato operativo | 30/30 dias | sin definir | si | vigencia/reuso |
-| Fuentes obligatorias | no define disponibilidad | ambas requeridas | sin definir | si | no evaluable/parcial |
-| Fallos fuentes | no define politica completa | revision/revision/no evaluable | sin definir | si | resultado seguro |
-| Capacidad del score | 30%; regla auxiliar 25% | carga total/contractual 30% | sin recalibrar | si | componente historico |
-| Capacidad oferta | disponible x 30% | no equivalente | neto valido menos obligaciones x 30% | neto: si | cuota real ofertable |
+| Pesos | 45/30/8/12/5% | iguales, HDC 0% | ratificados; HDC/legacy 0% | no | score y banda |
+| Redistribucion/referencias | componente 5% | opcionales, redistribuye | opcionales, redistribuye | no | pesos efectivos |
+| Geografia | -80 bajo 600 | configurada, senal ausente | sin penalizacion, 0/0 | no | sin hard rule |
+| Mora | sugiere revision severa | 90d configurados, no hard rule | informativa; metadata historica 90d | no | no bloqueo automatico |
+| Consultas | referencia 90d | 6 configuradas; DTO cuenta 180d | informativas; metadata historica 6 | no | no bloqueo automatico |
+| TTL fuentes | no fija contrato operativo | 30/30 dias | 30/30 dias | no | vigencia/reuso |
+| Fuentes obligatorias | no define disponibilidad | ambas requeridas | ambas requeridas, sin modo parcial | no | disponibilidad |
+| Fallos fuentes | no define politica completa | revision/revision/no evaluable | revision/revision/no evaluable | no | resultado seguro |
+| Capacidad del score | 30%; regla auxiliar 25% | carga total/contractual 30% | sin recalibrar | no | componente historico |
+| Capacidad oferta | disponible x 30% | no equivalente | neto manual menos obligaciones x 30% | no | cuota real ofertable |
 | Topes bandas | B24/B27; tabla auxiliar contradictoria | 10/8/5/3M, 8/8/6/4 meses | 10/8/5/3M, 8/8/8/6 meses | no, ticket los aprueba | limites post-score |
-| Tolerancia ingreso contractual | sin regla homologada | 15% | sin definir | si | revision por discrepancias |
+| Tolerancia ingreso contractual | sin regla homologada | 15% | 15% | no | revision por discrepancias |
+
+version_politica=prestadores-score-prod-v1; version_score=prestadores-score-dual-v2
+identifica la parametrizacion del motor existente, no un segundo motor.
+accion_exceso_capacidad=REVISION conserva la regla existente, sin nueva hard rule.
+Referencias ausentes redistribuyen el 5% entre componentes puntuables disponibles;
+ausencia de HDC/MiDecisor obligatorios nunca se redistribuye.
 
 ## Legacy y fuente neta
 
@@ -121,7 +135,65 @@ banda/id, topes de banda, capacidad del score separada de cuota_maxima de oferta
 horizonte/fechas, monto/plazo/cuota ofertables y motivo NO_EVALUABLE.
 Sin neto valido o sin carga mensual HDC no hay oferta evaluable ni fallback.
 
-## Pruebas y archivos
+## P0-5B2.1: ingreso MANUAL_VERIFICADA
+
+No existia una estructura con toda la procedencia/vigencia requerida. Se agrega
+IngresoNetoVerificadoPrestador (contractors.0020, dependiente de 0019 y AUTH_USER_MODEL).
+No se modifican modelos financieros ni formulas. Referencia solicitud, monto, corte,
+vigente_hasta, verificador/timestamp, observacion, version y evidencias privadas
+(ID/tipo/hash SHA256 del documento existente; sin rutas ni copias de documentos).
+Invalidar genera una version INVALIDADO sin monto; no recupera una version anterior.
+
+registrar_ingreso_neto exige authenticated + staff +
+contractors.can_verify_contractor_net_income y excluye PerfilPagador incluso con permiso.
+Admin de riesgo permite registrar/invalidar por POST + CSRF y consultar historial;
+no edicion/borrado. Vigencia y evidencia son explicitas, no defaults ni inferencias.
+No se permite modificar ingreso despues de aprobacion para originar/firma.
+
+El servicio bloquea la solicitud en atomic y asigna version incremental con UNIQUE
+(solicitud, version). Reintento equivalente reutiliza version. Cada cambio conserva
+la anterior y registra timeline interno no visible al cliente. Archivo alterado,
+vencimiento o invalidacion impiden reuso. save/delete ordinarios estan bloqueados;
+QuerySet.update/delete y SQL directo quedan fuera de protecciones de aplicacion.
+
+construir_version_datos incorpora la version/corte/vigencia de ingreso y validez de
+su evidencia. Cambios invalidan reuso/cierre/aprobacion por los controles existentes,
+sin sobrescribir snapshot de auditoria completada. Solicitudes sin fuente nueva
+conservan su fingerprint previo. Nueva evaluacion registra la version exacta.
+
+preparar_oferta recibe IngresoNetoValido y solicitud_id; verifica la version persistida
+actual, monto, fechas y hashes de evidencia. OfertaCalculada serializa registro/version/
+fuente/vigencia. oferta_con_ingreso_vigente rechaza oferta obsoleta; el caller futuro
+debera usar esta validacion y los gates/version_datos existentes al persistir/consumir.
+Sin ingreso o vencido: NO_EVALUABLE. Capacidad score contractual no se recalibra;
+cuota_maxima oferta = max(0, ingreso neto verificado - carga mensual HDC) * 0.30.
+preparar_oferta no recalcula score. Oferta sigue sin caller automatico productivo.
+
+ingreso_estimado_midecisor se conserva solo en DTO/snapshot normalizado interno,
+no en resumen publico ni en capacidad/oferta. No se deduce neto desde contrato,
+certificado bancario, saldo pendiente ni estimado. Documentos son evidencia que
+el analista verifica, no prueba automatica de ingreso. Sin nuevas senales device/IP/OTP.
+
+Pendientes de este bloque: concurrencia PostgreSQL de ingreso, permisos/versionado
+sobre clon y UAT del admin. Politica aun INACTIVA; ningun proveedor consultado.
+No declarar Prestadores E2E cerrado.
+
+Validacion focal final P0-5B2.1 (SQLite): 51 tests, OK (skipped=2), 21.014 s;
+modulos test_ingreso_neto, test_politica_riesgo_prod, test_hardening_score_prod,
+test_politica_prod_horizonte. Permisos/admin/CSRF, historial, rollback, evidencia
+alterada, expiracion, aislamiento, cierre de evaluacion obsoleta, pesos/flags/TTL,
+fallos de centrales, senales informativas y oferta sin recalcular score cubiertos.
+Requests y httpx bloqueados para impedir HTTP real durante toda la validacion.
+Regresion completa final contractors.tests + integrations.tests: 477 tests,
+OK (skipped=10), 602.429 s, cero fallos/errores. Los diez omitidos requieren
+PostgreSQL: ocho existentes y dos nuevos de versionado de ingreso.
+PostgreSQL pendiente para IngresoNetoConcurrenciaPostgresTest:
+test_reintentos_equivalentes_una_version y
+test_cambios_simultaneos_versionados_sin_sobrescribir.
+manage.py check sin incidencias; makemigrations --check --dry-run sin cambios;
+git diff --check sin errores. Migracion nueva solo generada, no aplicada a DB operativa.
+
+## Pruebas anteriores y archivos P0-5B1
 
 Validacion local SQLite (2026-10-07):
 

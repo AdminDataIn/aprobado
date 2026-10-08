@@ -12,10 +12,13 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--parametros', help='JSON de parametros explicitamente ratificados.')
+        parser.add_argument('--fecha-vigencia', help='Fecha autorizada YYYY-MM-DD; no activa la politica.')
 
     def handle(self, *args, **options):
         try:
-            parametros = json.loads(Path(options['parametros']).read_text(encoding='utf-8')) if options['parametros'] else None
+            parametros = json.loads(Path(options['parametros']).read_text(encoding='utf-8')) if options['parametros'] else {}
+            if options['fecha_vigencia']:
+                parametros['fecha_vigencia_desde'] = options['fecha_vigencia']
             resultado = preparar_politica_score_prod(parametros=parametros)
         except (OSError, ValueError, TypeError, ValidationError, ObjectDoesNotExist) as exc:
             raise CommandError('Definicion de politica incompleta o invalida.') from exc

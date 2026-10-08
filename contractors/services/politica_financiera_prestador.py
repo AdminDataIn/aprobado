@@ -34,6 +34,10 @@ class IngresoNetoValido:
     monto: Decimal
     fuente: str
     fecha_corte: date
+    vigente_hasta: date | None = None
+    version: int | None = None
+    solicitud_id: int | None = None
+    registro_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -56,6 +60,10 @@ class OfertaCalculada:
     monto_maximo_banda: Decimal | None = None
     plazo_maximo_banda: int | None = None
     horizonte_disponible: bool = False
+    ingreso_neto_registro_id: int | None = None
+    ingreso_neto_version: int | None = None
+    ingreso_neto_fuente: str = ''
+    ingreso_neto_vigente_hasta: date | None = None
 
     @property
     def capacidad_crediticia_oferta(self):
@@ -70,7 +78,7 @@ class OfertaCalculada:
 
 
 def preparar_oferta(*, score, politica, ingreso_neto, obligaciones_mensuales, monto_solicitado,
-                    plazo_solicitado, horizonte, configuracion, corte):
+                    plazo_solicitado, horizonte, configuracion, corte, solicitud_id=None):
     from contractors.services.capacidad_contractual import simular_credito_prestador_informativo
     from contractors.services.horizonte_simulacion import (
         fecha_ultima_cuota_proyectada, plazo_maximo_respaldado,
@@ -107,6 +115,15 @@ def preparar_oferta(*, score, politica, ingreso_neto, obligaciones_mensuales, mo
     if (not isinstance(ingreso_neto, IngresoNetoValido) or not ingreso_neto.fuente.strip()
             or not ingreso_neto.fecha_corte or ingreso_neto.fecha_corte > corte):
         raise ValidationError('Se requiere ingreso neto valido con fuente y fecha de corte.')
+    from contractors.services.ingreso_neto import FUENTE, ingreso_para_oferta_vigente
+    if ingreso_neto.fuente == FUENTE:
+        if not ingreso_para_oferta_vigente(ingreso_neto, corte=corte, solicitud_id=solicitud_id):
+            return OfertaCalculada(estado='NO_EVALUABLE', motivo='Ingreso manual vencido, modificado o invalidado.', **contexto)
+    else:
+        raise ValidationError('Solo se admite ingreso neto manual verificado.')
+    contexto.update(ingreso_neto_registro_id=ingreso_neto.registro_id,
+                    ingreso_neto_version=ingreso_neto.version, ingreso_neto_fuente=ingreso_neto.fuente,
+                    ingreso_neto_vigente_hasta=ingreso_neto.vigente_hasta)
     ingreso = Decimal(str(ingreso_neto.monto))
     if obligaciones_mensuales is None:
         return OfertaCalculada(estado='NO_EVALUABLE', motivo='Carga mensual HDC incompleta.', **contexto)
@@ -152,3 +169,12 @@ def preparar_oferta(*, score, politica, ingreso_neto, obligaciones_mensuales, mo
         estado='OFERTA_CALCULADA', fecha_ultima_cuota_credito=fecha_ultima_cuota_proyectada(corte, plazo),
         **contexto,
     )
+
+
+def oferta_con_ingreso_vigente(oferta, solicitud, *, corte=None):
+    """Historical offers remain readable, but never reusable with a stale income version."""
+    from contractors.services.ingreso_neto import obtener_ingreso_neto_vigente
+    ingreso = obtener_ingreso_neto_vigente(solicitud, corte=corte)
+    return bool(oferta.estado == 'OFERTA_CALCULADA'
+                and ingreso and oferta.ingreso_neto_registro_id == ingreso.registro_id
+                and oferta.ingreso_neto_version == ingreso.version)

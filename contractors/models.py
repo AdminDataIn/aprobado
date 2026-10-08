@@ -229,6 +229,62 @@ class ContractorApplication(models.Model):
         return f'{self.nombres} {self.apellidos}'.strip()
 
 
+class IngresoNetoVerificadoPrestador(models.Model):
+    class Accion(models.TextChoices):
+        VERIFICADO = 'VERIFICADO', 'Verificado'
+        INVALIDADO = 'INVALIDADO', 'Invalidado'
+
+    solicitud = models.ForeignKey(ContractorApplication, on_delete=models.PROTECT,
+                                  related_name='ingresos_netos_verificados')
+    version = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    accion = models.CharField(max_length=12, choices=Accion.choices)
+    fuente = models.CharField(max_length=24, default='MANUAL_VERIFICADA', editable=False)
+    monto = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True,
+                                validators=[MinValueValidator(Decimal('0.01'))])
+    fecha_corte = models.DateField(null=True, blank=True)
+    vigente_hasta = models.DateField(null=True, blank=True)
+    verificado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                       related_name='ingresos_prestador_verificados')
+    verificado_en = models.DateTimeField(auto_now_add=True)
+    evidencias = models.JSONField(default=list, blank=True)
+    observacion = models.CharField(max_length=1000)
+
+    class Meta:
+        ordering = ['-version']
+        permissions = [('can_verify_contractor_net_income', 'Puede verificar e invalidar ingreso neto de prestadores')]
+        constraints = [
+            models.UniqueConstraint(fields=['solicitud', 'version'], name='unique_prestador_ingreso_version'),
+            models.CheckConstraint(condition=Q(version__gte=1), name='prestador_ingreso_version_positiva'),
+            models.CheckConstraint(condition=(
+                Q(accion='VERIFICADO', monto__isnull=False, monto__gt=0, fecha_corte__isnull=False, vigente_hasta__isnull=False)
+                | Q(accion='INVALIDADO', monto__isnull=True, fecha_corte__isnull=True, vigente_hasta__isnull=True)
+            ), name='prestador_ingreso_datos_accion'),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.fuente != 'MANUAL_VERIFICADA' or not str(self.observacion).strip():
+            raise ValidationError('Se requiere fuente manual y observacion interna.')
+        if self.accion == self.Accion.VERIFICADO:
+            if not self.evidencias or not self.fecha_corte or not self.vigente_hasta:
+                raise ValidationError('La verificacion requiere evidencia y vigencia explicitas.')
+            if self.vigente_hasta < self.fecha_corte:
+                raise ValidationError('La vigencia no puede preceder al corte.')
+
+    def save(self, *args, **kwargs):
+        if not getattr(self, '_registro_por_servicio', False):
+            raise ValidationError('Registra una nueva version mediante el servicio de ingreso neto.')
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValidationError('Una version de ingreso neto es inmutable.')
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('El ingreso neto conserva su historial; registra una invalidacion.')
+
+    def __str__(self):
+        return f'Solicitud {self.solicitud_id} / ingreso v{self.version}'
+
+
 class PredecisionPrestadorAudit(models.Model):
     class EstadoEjecucion(models.TextChoices):
         PENDIENTE = 'PENDIENTE', 'Pendiente'

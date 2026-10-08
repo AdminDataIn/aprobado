@@ -15,13 +15,16 @@ VERSION_AUTORIZACIONES = 'autorizaciones_prestadores_v1'
 
 
 def construir_snapshot_entrada_evaluacion(solicitud):
+    from contractors.services.ingreso_neto import snapshot_ingreso_neto
     tipos_documentos = sorted(solicitud.documentos.values_list('tipo_documento', flat=True))
     metadata_analisis = solicitud.metadata_analisis_contractual or {}
     autorizacion_datacredito = solicitud.autorizaciones_datacredito.order_by(
         '-aceptada_en', '-id'
     ).first()
+    ingreso_neto = snapshot_ingreso_neto(solicitud)
     return {
         'solicitud_id': solicitud.id,
+        **({'ingreso_neto_verificado': ingreso_neto} if ingreso_neto else {}),
         'empresa_id': solicitud.empresa_id,
         'documento_hash': _hmac_documento(solicitud.numero_documento),
         'documento_enmascarado': _enmascarar_documento(solicitud.numero_documento),

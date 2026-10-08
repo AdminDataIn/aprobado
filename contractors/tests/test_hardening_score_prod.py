@@ -18,27 +18,15 @@ from contractors.services.politica_financiera_prestador import VERSION, PARAMETR
 from contractors.services.preparacion_score_prod import preparar_politica_score_prod, definicion_score_prod
 from contractors.tests import test_politica_prod_horizonte as fixtures
 from gestion_creditos.models import Credito, CreditoLibranza
+from contractors.tests.fixtures_ingreso_neto import preparar_evidencia_neta, ingreso_neto_test
 
 
 class PreparacionScoreProdTest(TestCase):
     def setUp(self):
+        self.solicitud_neta, self.analista, self.evidencia = preparar_evidencia_neta(self)
         self.financiera = ConfiguracionSimuladorPrestador.objects.create(version=VERSION, **PARAMETROS)
         self.actor = get_user_model().objects.create_superuser('preparador', 'preparador@example.com', 'test')
-        # These values exist exclusively as synthetic test inputs, NOT an approved PROD policy.
-        self.parametros = dict(
-            version_score='motor-sintetico-v1', version_politica='prestadores-score-prod-v1',
-            peso_datacredito=Decimal('0'), peso_midecisor=Decimal('.45'), peso_hdcplus=Decimal('0'),
-            peso_capacidad=Decimal('.30'), peso_comportamiento=Decimal('.08'), peso_riesgo=Decimal('.12'),
-            peso_referencias=Decimal('.05'), permite_redistribuir_pesos_faltantes=False,
-            requiere_referencias=False, penalizacion_geolocalizacion=0, umbral_geolocalizacion=0,
-            mora_bloqueo_dias=90, consultas_recientes_revision=6, requiere_midecisor=True,
-            requiere_hdcplus=True, permite_evaluar_sin_midecisor=False, permite_evaluar_sin_hdc=False,
-            vigencia_midecisor_dias=30, vigencia_hdcplus_dias=30,
-            accion_sin_informacion_centrales='REVISION_MANUAL', accion_error_transitorio_centrales='REVISION_MANUAL',
-            accion_error_permanente_centrales='NO_EVALUABLE', accion_exceso_capacidad='REVISION',
-            cuota_ingreso_maxima=Decimal('.30'), tolerancia_ingreso_contractual=Decimal('.15'),
-            fuente_ingreso_neto_valido_para_riesgo='fuente-sintetica-test', fecha_vigencia_desde=date(2026,8,1),
-        )
+        self.parametros = {'fecha_vigencia_desde': date(2026, 8, 1)}
         guard = patch('requests.sessions.Session.request', side_effect=AssertionError('HTTP real prohibido'))
         guard.start()
         self.addCleanup(guard.stop)
@@ -53,7 +41,8 @@ class PreparacionScoreProdTest(TestCase):
         datos = json.loads(salida.getvalue())
         self.assertFalse(datos['activa'])
         self.assertFalse(datos['persistida'])
-        self.assertIn('peso_midecisor', datos['pendientes'])
+        self.assertEqual(['fecha_vigencia_desde'], datos['pendientes'])
+        self.assertEqual(datos['parametros']['fuente_ingreso_neto_valido_para_riesgo'], 'MANUAL_VERIFICADA')
         self.assertTrue(all(v is None for v in definicion_score_prod()['parametros_pendientes_aprobacion'].values()))
         self.assertFalse(ConfiguracionScorePrestador.objects.exists())
         with self.assertRaises(ValidationError):
@@ -106,6 +95,7 @@ class PreparacionScoreProdTest(TestCase):
             score = evaluar_score_prestador(solicitud, politica, None)
         datos = dict(score=score, politica=politica, ingreso_neto=None, obligaciones_mensuales=Decimal('0'),
             monto_solicitado=solicitud.monto_solicitado, plazo_solicitado=8, horizonte=fixtures.horizonte(18),
+            solicitud_id=self.solicitud_neta.pk,
             configuracion=self.financiera, corte=date(2026,8,1))
         oferta = preparar_oferta(**datos)
         serializado = json.loads(json.dumps(oferta.como_dict()))
@@ -115,7 +105,7 @@ class PreparacionScoreProdTest(TestCase):
         self.assertEqual(serializado['banda_id'], politica.bandas.get(nombre='PREMIUM').pk)
         self.assertEqual(serializado['monto_maximo_banda'], '10000000.00')
         self.assertEqual(serializado['plazo_maximo_banda'], 8)
-        datos['ingreso_neto'] = IngresoNetoValido(Decimal('100000000'), 'fuente-sintetica-test', date(2026,8,1))
+        datos['ingreso_neto'] = ingreso_neto_test(self.solicitud_neta, self.analista, self.evidencia, '100000000')
         datos['obligaciones_mensuales'] = None
         self.assertEqual(preparar_oferta(**datos).estado, 'NO_EVALUABLE')
         datos['obligaciones_mensuales'] = Decimal('0')

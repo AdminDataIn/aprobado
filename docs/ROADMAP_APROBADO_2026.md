@@ -1309,7 +1309,7 @@ de ingreso neto valido pendiente de negocio. Politica score PROD NO activa.
 No promover DEMO ni equiparar ingreso contractual/estimado con ingreso neto.
 Homologacion compartida CC/CE y calidad de carga mensual HDC implementadas:
 cerradas no suman cuota, incompleto no se convierte en deuda cero.
-Definicion documental PROD con bandas aprobadas y parametros pendientes null.
+Definicion documental PROD con bandas aprobadas; ratificacion posterior en P0-5B2.1.
 Reserva y cierre serializados por fingerprint PostgreSQL, transacciones cortas sin
 HTTP. Lease vencido se recupera sin replay automatico; nuevo intento requiere permiso
 y motivo. Evaluacion formal conserva auditorias; fuentes vencidas requieren revision.
@@ -1319,7 +1319,39 @@ OAuth separado por ambiente/servicio; 401 invalida token sin repetir consulta;
 Definicion y bandas persistibles solo en tests, siempre inactivas y auditadas;
 comando PROD solo dry-run. Contrato score existente -> banda -> oferta probado,
 sin conectar oferta al pipeline real ni inferir ingreso neto. Legacy exige revision
-sin completar evidencia historica. Pendientes: concurrencia PostgreSQL, ratificacion
-de parametros y fuente neta; NO declarar UAT externo ni Prestadores E2E cerrado.
+sin completar evidencia historica. P0-5B1 cerrado y desplegado segun confirmacion
+operativa; validacion posterior de P0-5B2.1 independiente. NO declarar UAT externo
+ni Prestadores E2E cerrado.
 Sin consultas reales ni cambios a formula financiera/originacion.
 Detalle y matriz: [PRESTADORES_P0_5B1_HARDENING.md](PRESTADORES_P0_5B1_HARDENING.md).
+
+### P0-5B2.1: politica ratificada INACTIVA e ingreso neto manual verificable
+
+Implementado localmente: definicion prestadores-score-prod-v1 con pesos MiDecisor
+45%, capacidad 30%, comportamiento 8%, riesgo 12%, referencias 5%; HDC/legacy 0%.
+Referencias opcionales con redistribucion; HDC/MiDecisor requeridos, TTL 30/30 dias.
+Sin informacion/transitorio -> revision; permanente -> NO_EVALUABLE.
+Capacidad limite 30%, tolerancia contractual 15%. Bandas 850/750/680/600,
+topes 10/8/5/3M, plazos 8/8/8/6; debajo de 600 sin oferta automatica.
+Mora/consultas solo informativas; geografia sin senal no penaliza. No device/IP/OTP.
+
+IngresoNetoVerificadoPrestador: fuente MANUAL_VERIFICADA, corte/vigencia, actor/fecha,
+referencias documentales privadas con hash, observacion interna y versiones inmutables.
+Permiso can_verify_contractor_net_income para staff, PerfilPagador excluido.
+Registro/invalidation explicitos en admin por POST/CSRF; sin edicion/borrado ordinario.
+Solicitud bloqueada en atomic + UNIQUE(solicitud,version); reintentos idempotentes.
+Cambio/vencimiento/evidencia alterada invalidan version_datos sin reescribir auditorias;
+oferta registra registro/version y valida fuente vigente. Sin neto no hay oferta,
+sin fallback de bruto/contrato/MiDecisor/banco. Formula financiera no cambia;
+score contractual historico separado de cuota_maxima oferta sobre neto disponible.
+
+Migracion contractors.0020_ingreso_neto_verificado_prestador (0019 + AUTH_USER_MODEL),
+sin modificaciones a core financiero. Comando de politica solo dry-run, sin activar
+ni persistir en DB operativa; fecha de vigencia requiere autorizacion separada.
+DTO estimado MiDecisor interno, nunca cliente ni neto automatico. Politica INACTIVA,
+proveedores no consultados. Oferta automatica productiva y UAT E2E siguen pendientes.
+Concurrencia PostgreSQL de nuevas versiones y reintentos: validacion requerida en VPS.
+Validacion local SQLite P0-5B2.1: focal 51 tests OK (2 PostgreSQL omitidos);
+regresion completa contractors + integrations 477 tests OK (10 PostgreSQL omitidos),
+602.429 s. HTTP real bloqueado durante las suites. Check sin incidencias;
+makemigrations --check --dry-run sin cambios y diff --check limpio.
