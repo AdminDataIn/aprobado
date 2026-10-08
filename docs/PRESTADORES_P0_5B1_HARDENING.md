@@ -1,8 +1,8 @@
 # P0-5B1: hardening DataCredito y preparacion score PROD
 
 P0-5B1: CERRADO y desplegado segun confirmacion operativa del ticket P0-5B2.1.
-P0-5B2.1: implementacion local de politica ratificada INACTIVA e ingreso manual
-verificado; requiere validacion PostgreSQL antes de promover este cambio.
+P0-5B2.1: CERRADO y desplegado segun confirmacion operativa de P0-5B2.2A;
+contractors.0020 aplicada. Esto no significa que exista una politica PROD activa.
 En P0-5B2.1 no hubo consultas reales, activacion de proveedores/politicas,
 cambios a formulas financieras, commit, push ni deploy.
 
@@ -76,26 +76,72 @@ Se conserva TLS verificado, timeout y session/proxy existente. No logs de secret
 de bandas y parametros PROD. P0-5B2.1 ratifica los pesos, flags, TTL y acciones.
 Solo fecha_vigencia_desde permanece pendiente: no se inventa fecha de activacion.
 No se instala politica PROD en bases operativas durante este ticket.
-preparar_politica_score_prod valida parametros explicitos
-y puede persistir SOLO durante tests (RUNNING_TESTS), con actor staff autorizado/motivo.
+P0-5B2.2A sustituye la barrera temporal RUNNING_TESTS: preparar_politica_score_prod
+solo persiste con persistir=True explicito, actor Django authenticated/activo/staff,
+permiso contractors.can_activate_contractor_score_policy y motivo no vacio.
+PerfilPagador se rechaza incluso con permiso. No existe un permiso de preparacion
+mas especifico; no se agrega otro. Sin esos controles el servicio no escribe.
 Reutiliza ConfiguracionScorePrestador/BandaScorePrestador, ligado a la configuracion
 financiera exacta prestadores-prod-v1; siempre activa=False. Repeticion es idempotente;
 rechaza diferencias en versiones existentes. La auditoria existente registra SIN_CAMBIO
 con preparacion_inactiva=True, pues NO hay transicion de politica activa.
 No copia DEMO ni admite cambiar los parametros ratificados en esta version.
 
-Comando seguro, exclusivamente dry-run, sin opcion --aplicar ni --activar:
+Comando por defecto dry-run; sin opcion --aplicar ni --activar:
 
 ```powershell
-python manage.py preparar_politica_score_prestadores_prod
+python manage.py preparar_politica_score_prestadores_prod --parametros docs/parametros_score_prestadores_prod_pendientes.json --fecha-vigencia YYYY-MM-DD
 ```
 
-Sin fecha devuelve pendientes=['fecha_vigencia_desde'] y persistida=false sin DB.
+YYYY-MM-DD es un placeholder: requiere fecha autorizada, no se decide en este ticket.
+Sin fecha devuelve pendientes=['fecha_vigencia_desde'] y persistida=false sin escrituras.
 Para una validacion completa, suministrar la fecha autorizada mediante --fecha-vigencia
 (YYYY-MM-DD). Debe existir la configuracion financiera exacta prestadores-prod-v1;
 el comando informa su ID/estado, pesos, bandas, versiones, TTL y flags. No crea
-esa configuracion ni la activa. --parametros admite valores coincidentes con los
-ratificados y la fecha explicita; tampoco persiste.
+esa configuracion ni la activa. --fecha-vigencia completa solo los parametros efectivos;
+nunca reescribe el JSON. --parametros admite el sobre oficial completo o el formato
+plano anterior. El sobre valida version, version financiera, activa=false, estado,
+bandas, reglas y nota contra la definicion del repositorio. Rechaza metadata
+contradictoria, campos extra o bloques incompletos. Extrae exclusivamente parametros
+aprobados y pendientes; los aprobados deben coincidir con los valores ratificados.
+Las bandas siempre se crean desde la definicion versionada, nunca desde overrides CLI.
+
+Persistencia INACTIVA posterior, solo tras autorizacion humana de fecha/actor/motivo:
+
+```sh
+python manage.py preparar_politica_score_prestadores_prod \
+  --parametros docs/parametros_score_prestadores_prod_pendientes.json \
+  --fecha-vigencia YYYY-MM-DD \
+  --persistir-inactiva \
+  --actor-id <ID> \
+  --motivo "<motivo autorizado>"
+```
+
+El actor se resuelve desde AUTH_USER_MODEL, no desde el usuario root del sistema.
+La persistencia bloquea la politica existente antes de la configuracion financiera,
+como activacion; la fila financiera existente serializa las primeras preparaciones.
+Atomic cubre politica, cinco bandas y CambioPoliticaScorePrestadorAudit. Misma
+definicion/fecha reutiliza filas y auditoria; parametros equivalentes se normalizan
+para una clave SHA256 estable. Conflictos de politica/banda (o bandas incompletas)
+fallan cerrados, sin reparar ni sobrescribir historicos. Dry-run no toma esos locks.
+
+Activacion sigue siendo una operacion humana SEPARADA con activar_politica_prestadores
+y activar_politica_score_prestador existentes, no modificados por P0-5B2.2A.
+Preparar no llama activacion, HDC, MiDecisor, OAuth ni HTTP; no cambia los flags
+DATACREDITO_ENABLED/DATACREDITO_REAL_ENABLED, confirmados False por operacion.
+No se ha ejecutado --persistir-inactiva ni activacion en una base operativa durante
+este ticket. La fecha de vigencia autorizada no implica activacion automatica.
+
+Validacion local P0-5B2.2A (SQLite): 129 tests, OK (skipped=5), 69.632 s.
+Modulos test_preparacion_score_prod, test_hardening_score_prod,
+test_politica_riesgo_prod, test_ingreso_neto, test_politica_prod_horizonte,
+test_activacion_politica_score, test_centrales_duales_prestador y test_evaluacion_formal_v2.
+Nuevo modulo: 24 casos, incluidos dos PostgreSQL omitidos. Los otros tres omitidos
+son los existentes de ingreso (dos) y activacion (uno). Requests y httpx bloqueados.
+check sin incidencias; makemigrations --check --dry-run sin cambios; diff --check limpio.
+Validacion PostgreSQL pendiente para PreparacionScoreProdConcurrenciaPostgresTest:
+test_doble_preparacion_equivalente_una_politica_y_auditoria y
+test_preparaciones_incompatibles_una_gana_otra_falla_cerrada.
 
 | Parametro | XLSX | DEMO dual | Propuesto PROD | Requiere aprobacion | Efecto |
 |---|---|---|---|---|---|

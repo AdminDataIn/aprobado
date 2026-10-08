@@ -65,10 +65,9 @@ class PreparacionScoreProdTest(TestCase):
         self.assertFalse(Credito.objects.exists())
         self.assertFalse(CreditoLibranza.objects.exists())
 
-    def test_no_persiste_fuera_de_tests_ni_reinterpreta_version_existente(self):
-        with override_settings(RUNNING_TESTS=False), self.assertRaises(PermissionDenied):
-            self.persistir()
-        politica = self.persistir()
+    def test_persistencia_autorizada_no_depende_de_running_tests_ni_reinterpreta_version(self):
+        with override_settings(RUNNING_TESTS=False):
+            politica = self.persistir()
         self.parametros['peso_midecisor'] = Decimal('.40')
         self.parametros['peso_capacidad'] = Decimal('.35')
         with self.assertRaises(ValidationError):

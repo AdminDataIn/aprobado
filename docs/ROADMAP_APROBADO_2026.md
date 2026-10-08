@@ -1316,8 +1316,8 @@ y motivo. Evaluacion formal conserva auditorias; fuentes vencidas requieren revi
 Fingerprint v3 incluye HMAC apellido/normalizador/parametros; historicos no se reescriben.
 OAuth separado por ambiente/servicio; 401 invalida token sin repetir consulta;
 429/timeout controlados y revoke conforme Swagger, TLS verificado.
-Definicion y bandas persistibles solo en tests, siempre inactivas y auditadas;
-comando PROD solo dry-run. Contrato score existente -> banda -> oferta probado,
+En P0-5B1 definicion y bandas persistibles solo en tests; P0-5B2.2A habilita
+persistencia INACTIVA explicita y auditada, sin activacion. Contrato score existente -> banda -> oferta probado,
 sin conectar oferta al pipeline real ni inferir ingreso neto. Legacy exige revision
 sin completar evidencia historica. P0-5B1 cerrado y desplegado segun confirmacion
 operativa; validacion posterior de P0-5B2.1 independiente. NO declarar UAT externo
@@ -1327,7 +1327,7 @@ Detalle y matriz: [PRESTADORES_P0_5B1_HARDENING.md](PRESTADORES_P0_5B1_HARDENING
 
 ### P0-5B2.1: politica ratificada INACTIVA e ingreso neto manual verificable
 
-Implementado localmente: definicion prestadores-score-prod-v1 con pesos MiDecisor
+Cerrado y desplegado segun confirmacion operativa P0-5B2.2A: definicion prestadores-score-prod-v1 con pesos MiDecisor
 45%, capacidad 30%, comportamiento 8%, riesgo 12%, referencias 5%; HDC/legacy 0%.
 Referencias opcionales con redistribucion; HDC/MiDecisor requeridos, TTL 30/30 dias.
 Sin informacion/transitorio -> revision; permanente -> NO_EVALUABLE.
@@ -1346,8 +1346,8 @@ sin fallback de bruto/contrato/MiDecisor/banco. Formula financiera no cambia;
 score contractual historico separado de cuota_maxima oferta sobre neto disponible.
 
 Migracion contractors.0020_ingreso_neto_verificado_prestador (0019 + AUTH_USER_MODEL),
-sin modificaciones a core financiero. Comando de politica solo dry-run, sin activar
-ni persistir en DB operativa; fecha de vigencia requiere autorizacion separada.
+sin modificaciones a core financiero. Comando inicialmente solo dry-run; ampliacion
+operativa INACTIVA en P0-5B2.2A, sin activar. Fecha requiere autorizacion separada.
 DTO estimado MiDecisor interno, nunca cliente ni neto automatico. Politica INACTIVA,
 proveedores no consultados. Oferta automatica productiva y UAT E2E siguen pendientes.
 Concurrencia PostgreSQL de nuevas versiones y reintentos: validacion requerida en VPS.
@@ -1355,3 +1355,29 @@ Validacion local SQLite P0-5B2.1: focal 51 tests OK (2 PostgreSQL omitidos);
 regresion completa contractors + integrations 477 tests OK (10 PostgreSQL omitidos),
 602.429 s. HTTP real bloqueado durante las suites. Check sin incidencias;
 makemigrations --check --dry-run sin cambios y diff --check limpio.
+
+### P0-5B2.2A: preparacion/persistencia INACTIVA operativa
+
+Comando preparar_politica_score_prestadores_prod acepta JSON oficial completo o
+parametros planos compatibles. Valida metadata/version financiera/version politica
+y rechaza overrides de bandas/pesos. --fecha-vigencia YYYY-MM-DD completa solo los
+parametros efectivos; no reescribe JSON ni decide fecha productiva.
+Por defecto dry-run: sin politica, bandas, auditoria, efectos financieros o HTTP.
+Sin fecha informa pendiente; persistencia incompleta falla cerrada.
+
+--persistir-inactiva exige --actor-id de AUTH_USER_MODEL y --motivo no vacio.
+El servicio exige persistir=True, authenticated/activo/staff, permiso existente
+can_activate_contractor_score_policy y excluye PerfilPagador. Atomic/locks y clave
+idempotente conservan una politica, cinco bandas y auditoria SIN_CAMBIO, activa=False.
+Version/banda incompatible no se sobrescribe. Activacion sigue separada y auditada
+mediante activar_politica_prestadores existente, sin cambios ni llamadas desde preparacion.
+No cambia motor score, bandas ratificadas, formula, ingreso neto ni flags proveedores.
+DATACREDITO_ENABLED=False y DATACREDITO_REAL_ENABLED=False confirmados por operacion.
+No se persiste ni activa politica en DB operativa durante este ticket.
+
+Pruebas de concurrencia PostgreSQL agregadas para doble preparacion equivalente e
+intentos incompatibles; deben ejecutarse en VPS/clon, se omiten explicitamente en SQLite.
+Validacion local: 129 tests de ocho modulos, OK (skipped=5), 69.632 s, sin HTTP real.
+24 casos nuevos (dos PostgreSQL); check sin incidencias, sin cambios de migracion,
+diff --check limpio. Persistencia limitada a la base efimera del test runner.
+No declarar politica activa ni Prestadores E2E cerrado.

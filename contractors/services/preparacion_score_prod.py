@@ -4,7 +4,6 @@ import json
 from decimal import Decimal
 from pathlib import Path
 
-from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 
@@ -14,6 +13,7 @@ from contractors.models import (
 )
 from contractors.score.politica import validar_politica_score_completa
 from contractors.services.politica_financiera_prestador import validar_configuracion_prod
+from contractors.services.politica_score import PERMISO_ACTIVAR_POLITICA
 
 
 ARCHIVO_DEFINICION = Path(__file__).resolve().parents[2] / 'docs' / 'parametros_score_prestadores_prod_pendientes.json'
@@ -23,9 +23,33 @@ def definicion_score_prod():
     return json.loads(ARCHIVO_DEFINICION.read_text(encoding='utf-8'))
 
 
+def extraer_parametros_score_prod(documento, *, definicion=None):
+    """Accept the versioned envelope or legacy flat inputs, never CLI-defined bands."""
+    definicion = definicion if definicion is not None else definicion_score_prod()
+    if not isinstance(documento, dict):
+        raise ValidationError('La definicion debe ser un objeto JSON.')
+    if not set(documento).intersection(definicion):
+        return dict(documento)
+    if set(documento) != set(definicion):
+        raise ValidationError('El documento oficial requiere su estructura completa, sin campos adicionales.')
+    for campo in set(definicion) - {'parametros_aprobados', 'parametros_pendientes_aprobacion'}:
+        if (type(documento[campo]) is not type(definicion[campo])
+                or documento[campo] != definicion[campo]):
+            raise ValidationError('Metadata inconsistente: ' + campo + '.')
+    aprobados = documento['parametros_aprobados']
+    pendientes = documento['parametros_pendientes_aprobacion']
+    if (not isinstance(aprobados, dict) or not isinstance(pendientes, dict)
+            or set(aprobados) != set(definicion['parametros_aprobados'])
+            or set(pendientes) != set(definicion['parametros_pendientes_aprobacion'])):
+        raise ValidationError('Los bloques de parametros no corresponden a la definicion versionada.')
+    if documento['version'] != aprobados['version_politica']:
+        raise ValidationError('La version del documento no coincide con version_politica.')
+    return {**aprobados, **pendientes}
+
+
 def preparar_politica_score_prod(*, parametros=None, persistir=False, actor=None, motivo=''):
     definicion = definicion_score_prod()
-    recibidos = dict(parametros or {})
+    recibidos = extraer_parametros_score_prod({} if parametros is None else parametros, definicion=definicion)
     aprobados = definicion['parametros_aprobados']
     requeridos = set(aprobados) | set(definicion['parametros_pendientes_aprobacion'])
     if set(recibidos) - requeridos:
@@ -40,8 +64,9 @@ def preparar_politica_score_prod(*, parametros=None, persistir=False, actor=None
             coincide = field.to_python(recibidos[campo]) == field.to_python(aprobado)
         if not coincide:
             raise ValidationError('El parametro ' + campo + ' difiere de la politica ratificada.')
-    parametros = {**aprobados, **recibidos}
-    faltantes = sorted(campo for campo in requeridos if parametros.get(campo) is None)
+    # Canonical approved values keep the audit key stable across equivalent JSON types.
+    parametros = {**aprobados, **{k: v for k, v in recibidos.items() if k not in aprobados}}
+    faltantes = sorted(campo for campo in requeridos if parametros.get(campo) in (None, ''))
     if faltantes:
         if persistir:
             raise ValidationError('Politica incompleta; faltan: ' + ', '.join(faltantes))
@@ -50,17 +75,28 @@ def preparar_politica_score_prod(*, parametros=None, persistir=False, actor=None
         raise ValidationError('La version de politica debe corresponder a la definicion PROD.')
     if not str(parametros['fuente_ingreso_neto_valido_para_riesgo']).strip():
         raise ValidationError('La fuente neta debe definirse explicitamente.')
-    if persistir and not getattr(settings, 'RUNNING_TESTS', False):
-        raise PermissionDenied('P0-5B1 solo autoriza persistencia en bases de tests.')
     if persistir and (
-        not getattr(actor, 'is_authenticated', False) or not actor.is_staff
+        persistir is not True
+        or not getattr(actor, 'is_authenticated', False)
+        or not getattr(actor, 'is_active', False) or not getattr(actor, 'is_staff', False)
         or hasattr(actor, 'perfil_pagador')
-        or not actor.has_perm('contractors.can_activate_contractor_score_policy')
-        or not str(motivo).strip()
+        or not actor.has_perm(PERMISO_ACTIVAR_POLITICA)
+        or not isinstance(motivo, str) or not motivo.strip()
     ):
         raise PermissionDenied('La preparacion exige staff autorizado y motivo.')
+    parametros['fecha_vigencia_desde'] = ConfiguracionScorePrestador._meta.get_field(
+        'fecha_vigencia_desde',
+    ).to_python(parametros['fecha_vigencia_desde']).isoformat()
     with transaction.atomic():
-        financiera = ConfiguracionSimuladorPrestador.objects.select_for_update().get(
+        financieras = ConfiguracionSimuladorPrestador.objects.all()
+        if persistir:
+            # Match activation's policy -> financial lock order when the policy exists.
+            ConfiguracionScorePrestador.objects.select_for_update().filter(
+                version=definicion['version'],
+            ).first()
+            # This existing row also serializes concurrent first preparations.
+            financieras = financieras.select_for_update()
+        financiera = financieras.get(
             version=definicion['configuracion_financiera_version'],
         )
         validar_configuracion_prod(financiera)
@@ -102,9 +138,13 @@ def preparar_politica_score_prod(*, parametros=None, persistir=False, actor=None
                                           if k.startswith('peso_')), Decimal('0')))}
         existente = ConfiguracionScorePrestador.objects.filter(version=politica.version).first()
         if existente:
-            if any(getattr(existente, campo) != getattr(politica, campo) for campo in valores):
+            campos = [f.attname for f in politica._meta.concrete_fields
+                      if f.name not in {'id', 'created_at', 'updated_at'}]
+            if any(getattr(existente, campo) != getattr(politica, campo) for campo in campos):
                 raise ValidationError('La version existente no coincide; no se reinterpreta ni activa.')
             politica = existente
+            if set(politica.bandas.values_list('nombre', flat=True)) != {b.nombre for b in bandas}:
+                raise ValidationError('Las bandas existentes estan incompletas; no se reparan implicitamente.')
         else:
             politica.save()
         for datos in definicion['bandas_aprobadas']:
@@ -126,7 +166,7 @@ def preparar_politica_score_prod(*, parametros=None, persistir=False, actor=None
         clave = hashlib.sha256(json.dumps(snapshot, sort_keys=True, default=str).encode('utf-8')).hexdigest()
         CambioPoliticaScorePrestadorAudit.objects.get_or_create(
             clave_idempotencia=clave,
-            defaults=dict(politica_nueva=politica, actor=actor, motivo=motivo,
+            defaults=dict(politica_nueva=politica, actor=actor, motivo=motivo.strip(),
                           accion=CambioPoliticaScorePrestadorAudit.Accion.SIN_CAMBIO,
                           snapshot_nuevo=json.loads(json.dumps(snapshot, default=str))),
         )
