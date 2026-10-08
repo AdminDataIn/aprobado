@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 from django.utils import timezone
 
-from integrations.datacredito.auth import SERVICIO_HISTORIAL, obtener_token_cacheado, validar_consumo_real_habilitado
+from integrations.datacredito.auth import SERVICIO_HISTORIAL, invalidar_token, obtener_token_cacheado, validar_consumo_real_habilitado
 from integrations.datacredito.dto import EntradaHistorialCredito, ResultadoHistorialCreditoRawSeguro
 from integrations.datacredito.exceptions import (
     DatacreditoConfigError,
@@ -12,6 +12,7 @@ from integrations.datacredito.exceptions import (
     DatacreditoTimeoutError,
 )
 from integrations.datacredito.http import crear_session_datacredito
+from integrations.datacredito.identificacion import homologar_tipo_identificacion
 from integrations.datacredito.settings import obtener_configuracion_datacredito
 
 
@@ -28,6 +29,7 @@ def consultar_historial_credito(entrada: EntradaHistorialCredito, session=None):
             f"Faltan credenciales DataCredito historial: {', '.join(faltantes)}"
         )
 
+    payload = _construir_payload_historial(entrada, configuracion)
     cliente_http = session if session is not None else crear_session_datacredito(configuracion)
     token = obtener_token_cacheado(servicio=SERVICIO_HISTORIAL, session=cliente_http)
     headers = {
@@ -41,8 +43,6 @@ def consultar_historial_credito(entrada: EntradaHistorialCredito, session=None):
     }
     if entrada.user_ip_address:
         headers['userIpAddress'] = entrada.user_ip_address
-
-    payload = _construir_payload_historial(entrada, configuracion)
 
     try:
         respuesta = cliente_http.post(
@@ -67,6 +67,8 @@ def consultar_historial_credito(entrada: EntradaHistorialCredito, session=None):
         ) from exc
 
     if respuesta.status_code >= 400:
+        if respuesta.status_code == 401:
+            invalidar_token(token, SERVICIO_HISTORIAL)
         raise DatacreditoProviderError(
             f'Error Historia de Credito DataCredito status={respuesta.status_code}.',
             servicio='historial',
@@ -119,20 +121,7 @@ def _construir_payload_historial(entrada, configuracion):
 
 
 def _normalizar_tipo_identificacion(tipo_identificacion):
-    texto = str(tipo_identificacion or '').strip().upper()
-    mapa = {
-        'CC': 1,
-        '1': 1,
-        'CE': 2,
-        '2': 2,
-        'NIT': 3,
-        '3': 3,
-        'TI': 4,
-        '4': 4,
-        'PP': 5,
-        '5': 5,
-    }
-    return mapa.get(texto, texto)
+    return int(homologar_tipo_identificacion(tipo_identificacion))
 
 
 def _sanitizar_raw(cuerpo):

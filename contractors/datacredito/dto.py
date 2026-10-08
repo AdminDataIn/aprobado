@@ -26,6 +26,9 @@ class ResultadoNormalizadoDatacreditoPrestador:
     alertas: tuple[str, ...] = field(default_factory=tuple)
     servicio_fuente: str = ''
     fecha_consulta: str | None = None
+    carga_mensual_completa: bool | None = None
+    obligaciones_incompletas: int | None = None
+    version_normalizador: str = ''
 
     def como_dict(self):
         resultado = asdict(self)

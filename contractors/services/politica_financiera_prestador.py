@@ -52,6 +52,10 @@ class OfertaCalculada:
     capacidad_componente_score: Decimal | None = None
     fecha_ultima_cuota_credito: date | None = None
     fecha_ultimo_flujo_contractual: date | None = None
+    score: Decimal | None = None
+    monto_maximo_banda: Decimal | None = None
+    plazo_maximo_banda: int | None = None
+    horizonte_disponible: bool = False
 
     @property
     def capacidad_crediticia_oferta(self):
@@ -81,9 +85,12 @@ def preparar_oferta(*, score, politica, ingreso_neto, obligaciones_mensuales, mo
             or politica.configuracion_financiera_id != configuracion.pk):
         raise ValidationError('Score, politica y configuracion financiera no corresponden a la misma version.')
     contexto = dict(
+        score=score.score_final,
         version_score=score.version_score, version_politica=score.version_politica,
         version_configuracion_financiera=configuracion.version,
         capacidad_componente_score=score.variables_calculadas.get('capacidad_disponible'),
+        horizonte_disponible=horizonte.disponible,
+        fecha_ultimo_flujo_contractual=horizonte.fecha_ultimo_flujo_contractual,
     )
     if score.score_final is None:
         return OfertaCalculada(banda='', estado='NO_EVALUABLE', motivo='No hay score existente evaluable.', **contexto)
@@ -93,13 +100,16 @@ def preparar_oferta(*, score, politica, ingreso_neto, obligaciones_mensuales, mo
     banda = buscar_banda(politica, valor_score)
     if banda is None or banda.nombre != score.banda:
         raise ValidationError('La banda persistida no corresponde al resultado del score.')
-    contexto.update(banda=banda.nombre, banda_id=banda.pk)
+    contexto.update(banda=banda.nombre, banda_id=banda.pk,
+                    monto_maximo_banda=banda.monto_maximo, plazo_maximo_banda=banda.plazo_maximo)
     if ingreso_neto is None:
         return OfertaCalculada(estado='NO_EVALUABLE', motivo='Falta ingreso neto valido para riesgo; no se infiere del contrato.', **contexto)
     if (not isinstance(ingreso_neto, IngresoNetoValido) or not ingreso_neto.fuente.strip()
             or not ingreso_neto.fecha_corte or ingreso_neto.fecha_corte > corte):
         raise ValidationError('Se requiere ingreso neto valido con fuente y fecha de corte.')
     ingreso = Decimal(str(ingreso_neto.monto))
+    if obligaciones_mensuales is None:
+        return OfertaCalculada(estado='NO_EVALUABLE', motivo='Carga mensual HDC incompleta.', **contexto)
     obligaciones = Decimal(str(obligaciones_mensuales))
     monto = Decimal(str(monto_solicitado))
     if any(not v.is_finite() or v < 0 for v in (ingreso, obligaciones, monto)):
@@ -118,7 +128,6 @@ def preparar_oferta(*, score, politica, ingreso_neto, obligaciones_mensuales, mo
     ))
     limite = max(Decimal('0'), ingreso-obligaciones) * Decimal('0.30')
     techo = min(monto, configuracion.monto_maximo, politica.monto_maximo_politica, banda.monto_maximo)
-    contexto['fecha_ultimo_flujo_contractual'] = horizonte.fecha_ultimo_flujo_contractual
     if plazo < configuracion.plazo_minimo_meses or techo < configuracion.monto_minimo:
         return OfertaCalculada(cuota_maxima=limite, motivo='Sin plazo respaldado o monto minimo ofertable.', **contexto)
 

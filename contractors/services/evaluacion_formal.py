@@ -1,13 +1,21 @@
 from dataclasses import dataclass
+from datetime import timedelta
+import hashlib
 
+from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from contractors.models import ContractorApplication, PredecisionPrestadorAudit, TimelinePrestador
 from contractors.score.politica import PoliticaScoreNoDisponible, obtener_politica_score_activa
 from contractors.services.datacredito_evaluacion import (
+    FORZAR_CONSULTA,
     REUTILIZAR_SI_VIGENTE,
+    VERSION_FINGERPRINT,
+    VERSION_NORMALIZADOR,
+    _validar_modo,
     obtener_evaluacion_datacredito_prestador,
 )
 from contractors.services.centrales_riesgo import obtener_evaluacion_centrales_prestador
@@ -17,6 +25,7 @@ from contractors.services.evaluacion_versionado import (
     construir_version_datos,
 )
 from contractors.services.predecision import evaluar_predecision_formal_prestador
+from integrations.models import ConsultaDatacreditoSnapshot
 
 
 MODO_EVALUACION_FORMAL = 'FORMAL_READ_ONLY_V2'
@@ -29,6 +38,7 @@ class ResultadoEvaluacionFormalPrestador:
     auditoria: PredecisionPrestadorAudit
     reutilizada: bool = False
     en_proceso: bool = False
+    requiere_reconfirmacion: bool = False
 
 
 def evaluar_solicitud_prestador(
@@ -38,6 +48,7 @@ def evaluar_solicitud_prestador(
     justificacion=None,
 ):
     _validar_actor(solicitado_por)
+    _validar_modo(modo_datacredito, solicitado_por, justificacion)
     try:
         politica = obtener_politica_score_activa()
         version_politica = politica.version_politica if politica else VERSION_SIN_POLITICA
@@ -72,6 +83,12 @@ def evaluar_solicitud_prestador(
         return inicio
 
     auditoria = inicio.auditoria
+    if inicio.requiere_reconfirmacion:
+        return _finalizar_sin_decision(
+            auditoria, resultado=PredecisionPrestadorAudit.Resultado.NO_EVALUABLE,
+            razones=('Fuentes vencidas; requiere revision o reconsulta manual autorizada.',),
+            error_codigo='fuentes_evaluacion_vencidas', usuario=solicitado_por,
+        )
     if politica is None:
         return _finalizar_sin_decision(
             auditoria,
@@ -142,22 +159,63 @@ def _iniciar_evaluacion(
         version_politica=version_politica,
         version_score=version_score,
         version_configuracion_financiera=version_configuracion_financiera,
-        modo_evaluacion=f'{MODO_EVALUACION_FORMAL}:{modo_datacredito}',
+        modo_evaluacion=(
+            f'{MODO_EVALUACION_FORMAL}:{modo_datacredito}'
+            f':{VERSION_FINGERPRINT}:{VERSION_NORMALIZADOR}'
+        ),
     )
-    existente = PredecisionPrestadorAudit.objects.filter(clave_idempotencia=clave).first()
+    existente = PredecisionPrestadorAudit.objects.filter(
+        solicitud=solicitud_bloqueada,
+    ).filter(
+        Q(clave_idempotencia=clave)
+        | Q(snapshot_entrada__clave_operacion=clave)
+    ).order_by('-created_at', '-pk').first()
+    if existente is None:
+        existente = PredecisionPrestadorAudit.objects.filter(
+            solicitud=solicitud_bloqueada,
+            estado_ejecucion=PredecisionPrestadorAudit.EstadoEjecucion.EN_PROCESO,
+        ).order_by('-created_at', '-pk').first()
+    requiere_reconfirmacion = False
     if existente:
-        return ResultadoEvaluacionFormalPrestador(
-            auditoria=existente,
-            reutilizada=existente.estado_ejecucion in {
-                existente.EstadoEjecucion.COMPLETADA,
-                existente.EstadoEjecucion.ERROR_CONTROLADO,
-            },
-            en_proceso=existente.estado_ejecucion == existente.EstadoEjecucion.EN_PROCESO,
+        if existente.estado_ejecucion == existente.EstadoEjecucion.EN_PROCESO:
+            segundos = max(
+                int(getattr(settings, 'DATACREDITO_IN_PROGRESS_MINUTES', 5) or 5) * 60,
+                int(getattr(settings, 'DATACREDITO_TIMEOUT_SECONDS', 15) or 15) * 8 + 60,
+            )
+            if existente.iniciada_en > timezone.now() - timedelta(seconds=segundos):
+                return ResultadoEvaluacionFormalPrestador(auditoria=existente, en_proceso=True)
+            _finalizar_sin_decision(
+                existente, resultado=PredecisionPrestadorAudit.Resultado.ERROR_CONTROLADO,
+                razones=('Evaluacion interrumpida; requiere reintento manual autorizado.',),
+                error_codigo='evaluacion_en_proceso_expirada', usuario=usuario,
+                estado_ejecucion=PredecisionPrestadorAudit.EstadoEjecucion.ERROR_CONTROLADO,
+            )
+            existente.refresh_from_db()
+        ids = {str(valor) for valor in (existente.snapshot_midecisor_id, existente.snapshot_hdcplus_id) if valor}
+        legacy_id = (existente.snapshot_salida.get('datacredito') or {}).get('snapshot_id')
+        if legacy_id:
+            ids.add(str(legacy_id))
+        vencida = (
+            existente.estado_ejecucion == existente.EstadoEjecucion.COMPLETADA
+            and bool(ids) and ConsultaDatacreditoSnapshot.objects.filter(
+                pk__in=ids, vigente_hasta__gt=timezone.now(),
+                estado__in=[ConsultaDatacreditoSnapshot.Estado.EXITOSO,
+                            ConsultaDatacreditoSnapshot.Estado.SIN_INFORMACION],
+            ).count() != len(ids)
         )
+        if (modo_datacredito != FORZAR_CONSULTA and not vencida) or (
+            existente.estado_ejecucion == existente.EstadoEjecucion.COMPLETADA and not vencida
+            and existente.error_codigo != 'fuentes_evaluacion_vencidas'
+        ):
+            return ResultadoEvaluacionFormalPrestador(auditoria=existente, reutilizada=True)
+        # Keep the interrupted/error audit immutable on retries; root and attempt differ.
+        snapshot_entrada['clave_operacion'] = clave
+        clave = hashlib.sha256(f'{clave}:reintento:{existente.pk}'.encode('ascii')).hexdigest()
+        requiere_reconfirmacion = vencida and modo_datacredito != FORZAR_CONSULTA
     if solicitud_bloqueada.estado not in {
         ContractorApplication.Estado.EVALUACION_PENDIENTE,
         ContractorApplication.Estado.EN_REVISION_MANUAL,
-    }:
+    } and not (existente and vencida and solicitud_bloqueada.estado == ContractorApplication.Estado.EVALUACION_COMPLETADA):
         raise ValidationError('La solicitud no esta pendiente ni habilitada para reintento.')
 
     auditoria = PredecisionPrestadorAudit.objects.create(
@@ -196,15 +254,19 @@ def _iniciar_evaluacion(
         },
         usuario=usuario,
     )
-    return ResultadoEvaluacionFormalPrestador(auditoria=auditoria)
+    return ResultadoEvaluacionFormalPrestador(
+        auditoria=auditoria, requiere_reconfirmacion=requiere_reconfirmacion,
+    )
 
 
 @transaction.atomic
 def _finalizar_evaluacion(
     *, auditoria, predecision, datacredito=None, centrales=None, usuario
 ):
-    auditoria_bloqueada = PredecisionPrestadorAudit.objects.select_for_update().get(pk=auditoria.pk)
     solicitud = ContractorApplication.objects.select_for_update().get(pk=auditoria.solicitud_id)
+    auditoria_bloqueada = PredecisionPrestadorAudit.objects.select_for_update().get(pk=auditoria.pk)
+    if auditoria_bloqueada.estado_ejecucion != auditoria_bloqueada.EstadoEjecucion.EN_PROCESO:
+        return ResultadoEvaluacionFormalPrestador(auditoria=auditoria_bloqueada, reutilizada=True)
     version_actual, _ = construir_version_datos(solicitud)
     if version_actual != auditoria_bloqueada.version_datos:
         auditoria_bloqueada.estado_ejecucion = PredecisionPrestadorAudit.EstadoEjecucion.ERROR_CONTROLADO
@@ -329,8 +391,10 @@ def _finalizar_sin_decision(
     auditoria, *, resultado, razones, error_codigo, usuario,
     estado_ejecucion=PredecisionPrestadorAudit.EstadoEjecucion.COMPLETADA,
 ):
-    auditoria_bloqueada = PredecisionPrestadorAudit.objects.select_for_update().get(pk=auditoria.pk)
     solicitud = ContractorApplication.objects.select_for_update().get(pk=auditoria.solicitud_id)
+    auditoria_bloqueada = PredecisionPrestadorAudit.objects.select_for_update().get(pk=auditoria.pk)
+    if auditoria_bloqueada.estado_ejecucion != auditoria_bloqueada.EstadoEjecucion.EN_PROCESO:
+        return ResultadoEvaluacionFormalPrestador(auditoria=auditoria_bloqueada, reutilizada=True)
     auditoria_bloqueada.estado_ejecucion = estado_ejecucion
     auditoria_bloqueada.resultado = resultado
     auditoria_bloqueada.razones = list(razones)

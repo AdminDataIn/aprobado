@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from decimal import Decimal
 
+from integrations.datacredito.identificacion import homologar_tipo_identificacion
+
 
 FUENTE_MIDECISOR = 'midecisor'
 FUENTE_HISTORIAL_CREDITO = 'historial_credito'
@@ -34,18 +36,8 @@ def enmascarar_valor(valor, visibles=4):
     return f"{'*' * (len(texto) - visibles)}{texto[-visibles:]}"
 
 
-TIPOS_IDENTIFICACION_MIDECISOR = {
-    'CC': '1',
-    'CEDULA': '1',
-    'CEDULA_CIUDADANIA': '1',
-    'CEDULA DE CIUDADANIA': '1',
-    '1': '1',
-}
-
-
 def homologar_tipo_identificacion_midecisor(tipo_identificacion):
-    valor = str(tipo_identificacion or '').strip().upper()
-    return TIPOS_IDENTIFICACION_MIDECISOR.get(valor, str(tipo_identificacion or '').strip())
+    return homologar_tipo_identificacion(tipo_identificacion)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -220,7 +212,7 @@ class ResultadoMiDecisorRawSeguro:
     response_code: str | None = None
     codigo_funcional: str | None = None
     fuente: str = FUENTE_MIDECISOR
-    raw_sanitizado: dict = field(default_factory=dict)
+    raw_sanitizado: dict = field(default_factory=dict, repr=False)
     metadata_segura: dict = field(default_factory=dict)
 
 
@@ -229,7 +221,7 @@ class ResultadoHistorialCreditoRawSeguro:
     status_code: int
     response_code: str | None = None
     fuente: str = FUENTE_HISTORIAL_CREDITO
-    raw_sanitizado: dict = field(default_factory=dict)
+    raw_sanitizado: dict = field(default_factory=dict, repr=False)
     metadata_segura: dict = field(default_factory=dict)
 
 

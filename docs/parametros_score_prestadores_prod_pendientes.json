@@ -1,0 +1,42 @@
+{
+  "version": "prestadores-score-prod-v1",
+  "configuracion_financiera_version": "prestadores-prod-v1",
+  "activa": false,
+  "estado_definicion": "INCOMPLETA_NO_APLICABLE",
+  "bandas_aprobadas": [
+    {"nombre": "PREMIUM", "score_min": 850, "score_max": 1000, "monto_maximo": "10000000", "plazo_maximo": 8, "orden": 1},
+    {"nombre": "ALTA", "score_min": 750, "score_max": 849, "monto_maximo": "8000000", "plazo_maximo": 8, "orden": 2},
+    {"nombre": "MEDIA", "score_min": 680, "score_max": 749, "monto_maximo": "5000000", "plazo_maximo": 8, "orden": 3},
+    {"nombre": "ENTRADA", "score_min": 600, "score_max": 679, "monto_maximo": "3000000", "plazo_maximo": 6, "orden": 4},
+    {"nombre": "REVISION", "score_min": 0, "score_max": 599, "monto_maximo": "0", "plazo_maximo": 0, "orden": 5}
+  ],
+  "parametros_pendientes_aprobacion": {
+    "version_score": null,
+    "version_politica": null,
+    "peso_midecisor": null,
+    "peso_hdcplus": null,
+    "peso_capacidad": null,
+    "peso_comportamiento": null,
+    "peso_riesgo": null,
+    "peso_referencias": null,
+    "permite_redistribuir_pesos_faltantes": null,
+    "requiere_referencias": null,
+    "penalizacion_geolocalizacion": null,
+    "umbral_geolocalizacion": null,
+    "mora_bloqueo_dias": null,
+    "consultas_recientes_revision": null,
+    "requiere_midecisor": null,
+    "requiere_hdcplus": null,
+    "permite_evaluar_sin_midecisor": null,
+    "permite_evaluar_sin_hdc": null,
+    "vigencia_midecisor_dias": null,
+    "vigencia_hdcplus_dias": null,
+    "accion_sin_informacion_centrales": null,
+    "accion_error_transitorio_centrales": null,
+    "accion_error_permanente_centrales": null,
+    "accion_exceso_capacidad": null,
+    "cuota_ingreso_maxima": null,
+    "tolerancia_ingreso_contractual": null,
+    "fuente_ingreso_neto_valido_para_riesgo": null
+  }
+}

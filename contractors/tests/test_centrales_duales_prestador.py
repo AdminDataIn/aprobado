@@ -116,6 +116,17 @@ class CentralesDualesPrestadorTest(TestCase):
                 self.assertEqual(componente.peso_configurado, Decimal('0.00000'))
                 self.assertEqual(componente.peso_aplicado, Decimal('0.00000'))
 
+    def test_hdc_incompleto_no_se_convierte_en_capacidad_sin_deuda(self):
+        with self._parches_autorizacion():
+            incompleto = evaluar_score_prestador(self.solicitud, self.politica,
+                self._centrales(historial=self._hdc(cuota=None)))
+            sin_deuda = evaluar_score_prestador(self.solicitud, self.politica,
+                self._centrales(historial=self._hdc(cuota='0')))
+        self.assertIsNone(incompleto.score_final)
+        self.assertIsNone(incompleto.variables_calculadas['obligaciones_mensuales'])
+        self.assertTrue(incompleto.requiere_revision_manual)
+        self.assertIsNotNone(sin_deuda.score_final)
+
     def test_midecisor_es_score_crediticio_y_referencias_se_redistribuyen(self):
         score = evaluar_score_prestador(
             self.solicitud,

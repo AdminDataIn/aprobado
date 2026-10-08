@@ -36,6 +36,12 @@ COMPORTAMIENTO_PAGO = {
     'D': 'dudoso_recaudo',
 }
 CODIGOS_MORA_SEVERA = {'3', '4', '5', '6', 'C', 'D'}
+VERSION_NORMALIZADOR = 'datacredito-normalizado-v3'
+
+# Tabla 41 del manual HDC: pago total/canceladas; no inferir cierre por saldo cero.
+HDC_CUENTAS_CERRADAS = {'03', '08', '09', '11', '12', '13', '15', '16', '17'}
+HDC_CUENTAS_VIGENTES = {'01', '02', '05', '06', '14'}
+HDC_DESCRIPCIONES_VIGENTES = {'AL DIA', 'EN MORA', 'DUDOSO RECAUDO', 'CASTIGADA', 'INSOLUTA'}
 
 HDC_ESTADOS = {
     '02': ESTADO_ERROR_CREDENCIAL_SERVICIO,
@@ -223,7 +229,8 @@ def normalizar_historial_credito(raw):
         mora_actual = None
 
     disponible = estado == ESTADO_EXITOSA_CON_INFORMACION
-    requiere_manual = estado != ESTADO_EXITOSA_CON_INFORMACION or not scores_hdc
+    requiere_manual = (estado != ESTADO_EXITOSA_CON_INFORMACION
+                       or not hdc_resumen['carga_mensual_completa'])
 
     return ResultadoDatacreditoNormalizado(
         disponible=disponible,
@@ -242,16 +249,15 @@ def normalizar_historial_credito(raw):
         saldo_mora=saldo_mora,
         valor_cuota_total=cuota_total_hdc,
         creditos_vigentes=obligaciones_vigentes,
-        creditos_cerrados=(
-            max(total_obligaciones - (obligaciones_vigentes or 0), 0)
-            if total_obligaciones is not None else None
-        ),
+        creditos_cerrados=_entero(hdc_resumen.get('liabilities_cerradas')),
         mora_severa=mora_severa,
         mora_actual=mora_actual,
         response_code=response_code,
         requiere_revision_manual=requiere_manual,
         error_tipo=None if disponible else _error_tipo_desde_estado(estado),
-        alertas_resumen=('mora_severa_detectada',) if mora_severa else tuple(),
+        alertas_resumen=(('mora_severa_detectada',) if mora_severa else tuple()) + (
+            ('hdc:carga_mensual_incompleta',) if not hdc_resumen['carga_mensual_completa'] else tuple()
+        ),
         metadata_segura={
             'fuente': FUENTE_HISTORIAL_CREDITO,
             'estado': estado,
@@ -475,7 +481,9 @@ def extraer_resumen_hdcplus(datos):
     agregated_info = _path(report, 'agregatedInfo')
     agregated_info_microcredit = _path(report, 'agregatedInfoMicrocredit')
 
-    resumen_liabilities = _resumir_liabilities_hdc(liabilities)
+    resumen_liabilities = _resumir_liabilities_hdc(
+        liabilities, estructura_completa=isinstance(_path(report, 'liabilities'), list),
+    )
     resumen_huellas = _resumir_huellas_hdc(inquiry_footprints)
     resumen_global = _resumir_endeudamiento_global_hdc(global_indebtedness)
     resumen_savings = _resumir_savings_hdc(savings)
@@ -489,6 +497,11 @@ def extraer_resumen_hdcplus(datos):
         'savings_cerradas': resumen_savings['savings_cerradas'],
         'total_liabilities': resumen_liabilities['total_liabilities'],
         'liabilities_vigentes': resumen_liabilities['liabilities_vigentes'],
+        'liabilities_cerradas': resumen_liabilities['liabilities_cerradas'],
+        'liabilities_estado_desconocido': resumen_liabilities['liabilities_estado_desconocido'],
+        'carga_mensual_completa': resumen_liabilities['carga_mensual_completa'],
+        'obligaciones_incompletas': resumen_liabilities['obligaciones_incompletas'],
+        'version_normalizador': VERSION_NORMALIZADOR,
         'liabilities_al_dia': resumen_liabilities['liabilities_al_dia'],
         'liabilities_en_mora': resumen_liabilities['liabilities_en_mora'],
         'liabilities_castigadas': resumen_liabilities['liabilities_castigadas'],
@@ -520,7 +533,7 @@ def extraer_resumen_hdcplus(datos):
     }
 
 
-def _resumir_liabilities_hdc(liabilities):
+def _resumir_liabilities_hdc(liabilities, *, estructura_completa=True):
     total = len(liabilities)
     al_dia = 0
     en_mora = 0
@@ -536,11 +549,17 @@ def _resumir_liabilities_hdc(liabilities):
     roles = set()
     eventos = set()
     estados = set()
+    cerradas = desconocidas = incompletas = 0
+    carga_completa = estructura_completa
+    saldos_completos = mora_completa = estructura_completa
 
     for liability in liabilities:
         if not isinstance(liability, Mapping):
+            carga_completa = saldos_completos = mora_completa = False
+            incompletas += 1
+            desconocidas += 1
             continue
-        account = liability.get('account') or {}
+        account = liability.get('account') if isinstance(liability.get('account'), Mapping) else {}
         status = liability.get('status') or {}
         status_account = status.get('account') if isinstance(status, Mapping) else {}
         status_payment = status.get('payment') if isinstance(status, Mapping) else {}
@@ -548,6 +567,19 @@ def _resumir_liabilities_hdc(liabilities):
         evento = _valor_limpio(_path(status_payment or {}, 'businessBureauEventDesc'))
         estado_norm = _normalizar_texto_hdc(estado)
         evento_norm = _normalizar_texto_hdc(evento)
+        codigo_raw = _path(status_account or {}, 'businessAccountStatus')
+        codigo_estado = str(codigo_raw).zfill(2) if codigo_raw is not None else ''
+        es_cerrada = codigo_estado in HDC_CUENTAS_CERRADAS or (
+            not codigo_estado and (estado_norm == 'PAGO TOTAL' or estado_norm.startswith('CANCELADA'))
+        )
+        es_vigente = codigo_estado in HDC_CUENTAS_VIGENTES or (
+            not codigo_estado and estado_norm in HDC_DESCRIPCIONES_VIGENTES
+        )
+        if es_cerrada:
+            cerradas += 1
+        elif not es_vigente:
+            desconocidas += 1
+            carga_completa = False
 
         if estado:
             estados.add(estado)
@@ -558,14 +590,22 @@ def _resumir_liabilities_hdc(liabilities):
         _agregar_si_existe(roles, account.get('stateOfAccountHolderDesc') or account.get('tradeHolderIndicator'))
 
         valores = _lista_segura(liability.get('values'))
-        saldo_obligacion = sum((_decimal(valor.get('debtBalance')) or Decimal('0')) for valor in valores if isinstance(valor, Mapping))
-        mora_obligacion = sum((_decimal(valor.get('businessValueBalanceOverdue')) or Decimal('0')) for valor in valores if isinstance(valor, Mapping))
-        cuota_obligacion = sum((_decimal(valor.get('valueMonthlyPayment')) or Decimal('0')) for valor in valores if isinstance(valor, Mapping))
-        cuotas_vencidas = max((_entero(valor.get('installmentsOverdue')) or 0) for valor in valores if isinstance(valor, Mapping)) if valores else 0
-        mora_dias = max((_entero(valor.get('delinquencyMaturation')) or 0) for valor in valores if isinstance(valor, Mapping)) if valores else 0
-        saldo_total += saldo_obligacion
-        saldo_mora += mora_obligacion
-        cuota_total += cuota_obligacion
+        saldo_obligacion = _sumar_importes_hdc(valores, 'debtBalance')
+        mora_obligacion = _sumar_importes_hdc(valores, 'businessValueBalanceOverdue')
+        cuota_obligacion = _sumar_importes_hdc(valores, 'valueMonthlyPayment')
+        if saldo_obligacion is None:
+            saldos_completos = False
+        if mora_obligacion is None:
+            mora_completa = False
+        if not es_cerrada and (not es_vigente or cuota_obligacion is None):
+            carga_completa = False
+            incompletas += 1
+        cuotas_vencidas = max(((_entero(valor.get('installmentsOverdue')) or 0) for valor in valores if isinstance(valor, Mapping)), default=0)
+        mora_dias = max(((_entero(valor.get('delinquencyMaturation')) or 0) for valor in valores if isinstance(valor, Mapping)), default=0)
+        saldo_total += saldo_obligacion or Decimal('0')
+        saldo_mora += mora_obligacion or Decimal('0')
+        if es_vigente and not es_cerrada and cuota_obligacion is not None:
+            cuota_total += cuota_obligacion
         max_cuotas_vencidas = max(max_cuotas_vencidas, cuotas_vencidas)
         max_mora_dias = max(max_mora_dias, mora_dias)
 
@@ -574,7 +614,7 @@ def _resumir_liabilities_hdc(liabilities):
         es_mora = (
             'MORA' in estado_norm
             or 'MORA' in evento_norm
-            or mora_obligacion > 0
+            or (mora_obligacion is not None and mora_obligacion > 0)
             or cuotas_vencidas > 0
             or mora_dias > 0
         )
@@ -589,13 +629,17 @@ def _resumir_liabilities_hdc(liabilities):
 
     return {
         'total_liabilities': total,
-        'liabilities_vigentes': max(total - pago_total, 0),
+        'liabilities_vigentes': total - cerradas - desconocidas,
+        'liabilities_cerradas': cerradas,
+        'liabilities_estado_desconocido': desconocidas,
+        'carga_mensual_completa': carga_completa,
+        'obligaciones_incompletas': incompletas,
         'liabilities_al_dia': al_dia,
         'liabilities_en_mora': en_mora,
         'liabilities_castigadas': castigadas,
-        'saldo_total_hdc': saldo_total,
-        'saldo_mora_hdc': saldo_mora,
-        'cuota_total_hdc': cuota_total,
+        'saldo_total_hdc': saldo_total if saldos_completos else None,
+        'saldo_mora_hdc': saldo_mora if mora_completa else None,
+        'cuota_total_hdc': cuota_total if carga_completa else None,
         'max_mora_dias': max_mora_dias,
         'max_cuotas_vencidas': max_cuotas_vencidas,
         'max_mora_categoria': _categoria_mora(max_mora_dias=max_mora_dias, castigadas=castigadas),
@@ -605,6 +649,18 @@ def _resumir_liabilities_hdc(liabilities):
         'eventos_pago_detectados': sorted(eventos),
         'estados_cuenta_detectados': sorted(estados),
     }
+
+
+def _sumar_importes_hdc(valores, campo):
+    if not valores:
+        return None
+    total = Decimal('0')
+    for valor in valores:
+        importe = _decimal(valor.get(campo)) if isinstance(valor, Mapping) else None
+        if importe is None or not importe.is_finite() or importe < 0:
+            return None
+        total += importe
+    return total
 
 
 def _resumir_savings_hdc(savings):

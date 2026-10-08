@@ -152,7 +152,7 @@ class DatacreditoSnapshotV2Test(TestCase):
         self.assertEqual(consultar.call_count, 2)
 
     @patch('contractors.services.datacredito_evaluacion.consultar_proveedor_datacredito_prestador')
-    def test_timeout_es_controlado_y_no_reutilizable(self, consultar):
+    def test_timeout_es_controlado_y_no_repite_consulta_cobrable(self, consultar):
         consultar.side_effect = DatacreditoTimeoutError('timeout controlado')
 
         primero = obtener_evaluacion_datacredito_prestador(
@@ -170,8 +170,9 @@ class DatacreditoSnapshotV2Test(TestCase):
         )
         self.assertTrue(primero.requiere_revision_manual)
         self.assertFalse(primero.reutilizado)
-        self.assertNotEqual(primero.snapshot_id, segundo.snapshot_id)
-        self.assertEqual(consultar.call_count, 2)
+        self.assertEqual(primero.snapshot_id, segundo.snapshot_id)
+        self.assertTrue(segundo.reutilizado)
+        self.assertEqual(consultar.call_count, 1)
 
     @patch('contractors.services.datacredito_evaluacion.consultar_proveedor_datacredito_prestador')
     def test_error_proveedor_no_aprueba_ni_modifica_solicitud(self, consultar):
@@ -205,6 +206,7 @@ class DatacreditoSnapshotV2Test(TestCase):
             (503, ConsultaDatacreditoSnapshot.Estado.ERROR_TRANSITORIO),
         ):
             with self.subTest(http_status=http_status):
+                self.solicitud.apellidos = f'Prueba{http_status}'
                 consultar.side_effect = DatacreditoProviderError(
                     'error proveedor controlado',
                     http_status=http_status,

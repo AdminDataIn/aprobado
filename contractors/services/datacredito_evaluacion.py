@@ -5,7 +5,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.utils import timezone
 
 from contractors.datacredito.adapter import consultar_proveedor_datacredito_prestador
@@ -19,12 +19,15 @@ from contractors.services.autorizacion_datacredito import (
 )
 from contractors.services.evaluacion_timeline import registrar_evento_timeline_prestador
 from integrations.datacredito.exceptions import (
+    DatacreditoAuthError,
     DatacreditoConfigError,
     DatacreditoProviderDisabled,
     DatacreditoProviderError,
     DatacreditoTimeoutError,
 )
 from integrations.datacredito.settings import obtener_configuracion_datacredito
+from integrations.datacredito.normalizadores import VERSION_NORMALIZADOR
+from integrations.datacredito.identificacion import homologar_tipo_identificacion
 from integrations.models import ConsultaDatacreditoSnapshot
 
 
@@ -32,6 +35,7 @@ REUTILIZAR_SI_VIGENTE = 'REUTILIZAR_SI_VIGENTE'
 FORZAR_CONSULTA = 'FORZAR_CONSULTA'
 SOLO_CACHE = 'SOLO_CACHE'
 MODOS_VALIDOS = {REUTILIZAR_SI_VIGENTE, FORZAR_CONSULTA, SOLO_CACHE}
+VERSION_FINGERPRINT = 'datacredito-fingerprint-v3'
 
 ESTADO_AUTORIZACION_REQUERIDA = 'AUTORIZACION_REQUERIDA'
 ESTADO_NO_CONFIGURADO = 'NO_CONFIGURADO'
@@ -46,6 +50,7 @@ def obtener_evaluacion_datacredito_prestador(
     servicio=None,
     vigencia_dias=None,
 ):
+    inicio_operacion = timezone.now()
     _validar_actor(solicitud, solicitado_por)
     _validar_modo(modo, solicitado_por, justificacion)
     autorizacion = obtener_autorizacion_datacredito_vigente(solicitud)
@@ -103,6 +108,8 @@ def obtener_evaluacion_datacredito_prestador(
         documento_hash=documento_hash,
         fingerprint=fingerprint,
         solicitado_por=solicitado_por,
+        modo=modo,
+        inicio_operacion=inicio_operacion,
     )
     if snapshot_en_proceso.estado != ConsultaDatacreditoSnapshot.Estado.EN_PROCESO:
         return _resultado_desde_snapshot(snapshot_en_proceso, reutilizado=True)
@@ -123,6 +130,13 @@ def obtener_evaluacion_datacredito_prestador(
             codigo='timeout_proveedor',
             tipo='TIMEOUT',
         )
+    except DatacreditoAuthError as exc:
+        return _finalizar_error(
+            snapshot_en_proceso, solicitud=solicitud, usuario=solicitado_por,
+            estado=ConsultaDatacreditoSnapshot.Estado.ERROR_TRANSITORIO,
+            codigo='autenticacion_proveedor_requerida', tipo='OAUTH',
+            codigo_http=exc.http_status,
+        )
     except (DatacreditoConfigError, DatacreditoProviderDisabled):
         return _finalizar_error(
             snapshot_en_proceso,
@@ -133,7 +147,7 @@ def obtener_evaluacion_datacredito_prestador(
             tipo='CONFIGURACION',
         )
     except DatacreditoProviderError as exc:
-        transitorio = not exc.http_status or int(exc.http_status) >= 500
+        transitorio = not exc.http_status or int(exc.http_status) >= 500 or int(exc.http_status) in {401, 429}
         return _finalizar_error(
             snapshot_en_proceso,
             solicitud=solicitud,
@@ -144,6 +158,7 @@ def obtener_evaluacion_datacredito_prestador(
             ),
             codigo='proveedor_no_disponible' if transitorio else 'peticion_rechazada',
             tipo=str(exc.error_tipo or exc.__class__.__name__)[:80],
+            codigo_http=exc.http_status,
         )
     except (TypeError, ValueError):
         return _finalizar_error(
@@ -168,6 +183,22 @@ def obtener_evaluacion_datacredito_prestador(
             tipo='RESPUESTA_FUNCIONAL',
         )
 
+    # A worker whose lease was recovered must never overwrite the recovery result.
+    with transaction.atomic():
+        _bloquear_fingerprint(snapshot_en_proceso.fingerprint)
+        snapshot_en_proceso = ConsultaDatacreditoSnapshot.objects.select_for_update().get(
+            pk=snapshot_en_proceso.pk,
+        )
+        if snapshot_en_proceso.estado != ConsultaDatacreditoSnapshot.Estado.EN_PROCESO:
+            return _resultado_desde_snapshot(snapshot_en_proceso, reutilizado=True)
+        return _finalizar_exito(
+            snapshot_en_proceso, proveedor, solicitud, solicitado_por,
+            configuracion, vigencia_dias,
+        )
+
+
+def _finalizar_exito(snapshot_en_proceso, proveedor, solicitud, solicitado_por,
+                     configuracion, vigencia_dias):
     ahora = timezone.now()
     snapshot_en_proceso.estado = proveedor.estado_snapshot
     snapshot_en_proceso.resultado_normalizado = proveedor.resultado_normalizado.como_dict()
@@ -204,13 +235,33 @@ def construir_fingerprint_datacredito(
         solicitud.numero_documento,
         configuracion.document_hash_secret,
     )
+    credenciales = (
+        configuracion.credenciales_historial if servicio == 'historial'
+        else configuracion.credenciales_decisor
+    )
+    identidad_servicio = json.dumps({
+        'client_id': credenciales.client_id, 'username': credenciales.username,
+        'user_hdc': configuracion.credenciales_servicio_historial.user if servicio == 'historial' else '',
+    }, sort_keys=True, separators=(',', ':'))
     parametros = {
+        'version_fingerprint': VERSION_FINGERPRINT,
+        'version_normalizador': VERSION_NORMALIZADOR,
         'ambiente': configuracion.environment,
         'servicio': servicio,
         'documento_hash': documento_hash,
+        'cuenta_servicio_hash': hmac.new(
+            str(configuracion.document_hash_secret).encode('utf-8'),
+            ('cuenta:' + identidad_servicio).encode('utf-8'), hashlib.sha256,
+        ).hexdigest(),
         'autorizacion_version': autorizacion.version_texto,
         'autorizacion_texto_hash': autorizacion.texto_hash,
-        'tipo_documento': solicitud.tipo_documento,
+        'tipo_documento': homologar_tipo_identificacion(solicitud.tipo_documento),
+        'apellido_hash': hmac.new(
+            str(configuracion.document_hash_secret).encode('utf-8'),
+            ('apellido:' + next(iter(str(solicitud.apellidos or '').strip().split()), '').upper()).encode('utf-8'),
+            hashlib.sha256,
+        ).hexdigest(),
+        'endpoint': configuracion.historial_url if servicio == 'historial' else configuracion.midecisor_url,
     }
     if servicio == ConsultaDatacreditoSnapshot.Servicio.HISTORIAL:
         parametros['product_id'] = configuracion.credenciales_servicio_historial.product_id
@@ -218,6 +269,8 @@ def construir_fingerprint_datacredito(
             configuracion.credenciales_servicio_historial.info_account_type
         )
         parametros['parametros'] = list(configuracion.parametros_historial)
+        parametros['canal_nombre'] = configuracion.credenciales_servicio_historial.channel_name
+        parametros['canal_tipo'] = configuracion.credenciales_servicio_historial.channel_type
     serializado = json.dumps(
         parametros,
         sort_keys=True,
@@ -286,13 +339,26 @@ def _buscar_snapshot_reutilizable(fingerprint):
 
 def _reservar_consulta(
     *, solicitud, autorizacion, configuracion, servicio, documento_hash,
-    fingerprint, solicitado_por,
+    fingerprint, solicitado_por, modo=REUTILIZAR_SI_VIGENTE, inicio_operacion=None,
 ):
-    ahora = timezone.now()
-    limite_proceso = ahora + timedelta(
-        minutes=max(int(getattr(settings, 'DATACREDITO_IN_PROGRESS_MINUTES', 5) or 5), 1)
-    )
     with transaction.atomic():
+        _bloquear_fingerprint(fingerprint)
+        ahora = timezone.now()
+        limite_proceso = ahora + timedelta(seconds=max(
+            int(getattr(settings, 'DATACREDITO_IN_PROGRESS_MINUTES', 5) or 5) * 60,
+            configuracion.timeout_seconds * 4 + 60,
+        ))
+        if modo != FORZAR_CONSULTA:
+            reutilizable = _buscar_snapshot_reutilizable(fingerprint)
+            if reutilizable is not None:
+                return reutilizable
+        elif inicio_operacion is not None:
+            # A concurrent explicit refresh that already finished satisfies this attempt.
+            finalizada_durante_operacion = ConsultaDatacreditoSnapshot.objects.filter(
+                fingerprint=fingerprint, consultado_en__gte=inicio_operacion,
+            ).exclude(estado=ConsultaDatacreditoSnapshot.Estado.EN_PROCESO).order_by('-consultado_en').first()
+            if finalizada_durante_operacion is not None:
+                return finalizada_durante_operacion
         procesos = ConsultaDatacreditoSnapshot.objects.select_for_update().filter(
             fingerprint=fingerprint,
             estado=ConsultaDatacreditoSnapshot.Estado.EN_PROCESO,
@@ -309,6 +375,20 @@ def _reservar_consulta(
             obsoleto.save(update_fields=[
                 'estado', 'error_codigo', 'error_tipo', 'vigente_hasta', 'updated_at'
             ])
+            _registrar_timeline_snapshot(
+                solicitud, obsoleto, TimelinePrestador.TipoEvento.DATACREDITO_ERROR,
+                solicitado_por,
+            )
+        # A timeout/expired lease does not prove that the paid request was not processed.
+        # All final errors require an explicitly authorized manual refresh, never a loop.
+        if modo != FORZAR_CONSULTA:
+            error = ConsultaDatacreditoSnapshot.objects.filter(
+                fingerprint=fingerprint,
+                estado__in=[ConsultaDatacreditoSnapshot.Estado.ERROR_TRANSITORIO,
+                            ConsultaDatacreditoSnapshot.Estado.ERROR_PERMANENTE],
+            ).order_by('-created_at').first()
+            if error is not None:
+                return error
         try:
             with transaction.atomic():
                 return ConsultaDatacreditoSnapshot.objects.create(
@@ -334,17 +414,31 @@ def _reservar_consulta(
             return existente
 
 
-def _finalizar_error(snapshot, *, solicitud, usuario, estado, codigo, tipo):
+def _bloquear_fingerprint(fingerprint):
+    # PostgreSQL row locks cannot lock a missing row; this transaction-scoped key can.
+    if connection.vendor == 'postgresql':
+        clave = int.from_bytes(bytes.fromhex(fingerprint)[:8], 'big', signed=True)
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT pg_advisory_xact_lock(%s)', [clave])
+
+
+@transaction.atomic
+def _finalizar_error(snapshot, *, solicitud, usuario, estado, codigo, tipo, codigo_http=None):
+    _bloquear_fingerprint(snapshot.fingerprint)
+    snapshot = ConsultaDatacreditoSnapshot.objects.select_for_update().get(pk=snapshot.pk)
+    if snapshot.estado != ConsultaDatacreditoSnapshot.Estado.EN_PROCESO:
+        return _resultado_desde_snapshot(snapshot, reutilizado=True)
     ahora = timezone.now()
     snapshot.estado = estado
     snapshot.error_codigo = codigo
     snapshot.error_tipo = tipo
+    snapshot.codigo_http = codigo_http
     snapshot.resultado_normalizado = {}
     snapshot.consultado_en = ahora
     snapshot.vigente_hasta = ahora
     snapshot.save(update_fields=[
         'estado', 'error_codigo', 'error_tipo', 'resultado_normalizado',
-        'consultado_en', 'vigente_hasta', 'updated_at',
+        'consultado_en', 'vigente_hasta', 'codigo_http', 'updated_at',
     ])
     _registrar_timeline_snapshot(
         solicitud,

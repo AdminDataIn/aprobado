@@ -1,6 +1,6 @@
 import requests
 
-from integrations.datacredito.auth import SERVICIO_DECISOR, obtener_token_cacheado, validar_consumo_real_habilitado
+from integrations.datacredito.auth import SERVICIO_DECISOR, invalidar_token, obtener_token_cacheado, validar_consumo_real_habilitado
 from integrations.datacredito.dto import EntradaMiDecisor, ResultadoMiDecisorRawSeguro
 from integrations.datacredito.exceptions import DatacreditoProviderError, DatacreditoTimeoutError
 from integrations.datacredito.http import crear_session_datacredito
@@ -17,13 +17,13 @@ def consultar_midecisor_persona_juridica(entrada: EntradaMiDecisor, session=None
 
 def _consultar_midecisor(entrada, tipo_persona, session=None):
     configuracion = validar_consumo_real_habilitado(obtener_configuracion_datacredito())
+    payload = entrada.como_payload()
     cliente_http = session if session is not None else crear_session_datacredito(configuracion)
     token = obtener_token_cacheado(servicio=SERVICIO_DECISOR, session=cliente_http)
     headers = {
         'Authorization': token.authorization_header,
         'Content-Type': 'application/json',
     }
-    payload = entrada.como_payload()
 
     try:
         respuesta = cliente_http.post(
@@ -50,6 +50,9 @@ def _consultar_midecisor(entrada, tipo_persona, session=None):
         ) from exc
 
     if respuesta.status_code >= 400:
+        if respuesta.status_code == 401:
+            invalidar_token(token, SERVICIO_DECISOR)
+        # No automatic replay of a potentially billable consultation.
         raise DatacreditoProviderError(
             f'Error MiDecisor DataCredito status={respuesta.status_code}.',
             servicio='decisor',

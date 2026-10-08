@@ -1301,3 +1301,25 @@ Sin cambios a politica PROD, formula, score, centrales ni predecision.
 Pendientes: ID-01F recorte cliente, P0-4F PDF cifrado, ingreso neto definitivo P0-5,
 P0-6 identidad, P0-7 firma/postfirma/desembolso y UAT fisico Android/iPhone del ajuste.
 Prestadores E2E NO se declara cerrado.
+
+### P0-5A / P0-5B1: readiness y hardening tecnico implementado
+
+Auditoria: unico motor score formal existente; oferta PROD no conectada y fuente
+de ingreso neto valido pendiente de negocio. Politica score PROD NO activa.
+No promover DEMO ni equiparar ingreso contractual/estimado con ingreso neto.
+Homologacion compartida CC/CE y calidad de carga mensual HDC implementadas:
+cerradas no suman cuota, incompleto no se convierte en deuda cero.
+Definicion documental PROD con bandas aprobadas y parametros pendientes null.
+Reserva y cierre serializados por fingerprint PostgreSQL, transacciones cortas sin
+HTTP. Lease vencido se recupera sin replay automatico; nuevo intento requiere permiso
+y motivo. Evaluacion formal conserva auditorias; fuentes vencidas requieren revision.
+Fingerprint v3 incluye HMAC apellido/normalizador/parametros; historicos no se reescriben.
+OAuth separado por ambiente/servicio; 401 invalida token sin repetir consulta;
+429/timeout controlados y revoke conforme Swagger, TLS verificado.
+Definicion y bandas persistibles solo en tests, siempre inactivas y auditadas;
+comando PROD solo dry-run. Contrato score existente -> banda -> oferta probado,
+sin conectar oferta al pipeline real ni inferir ingreso neto. Legacy exige revision
+sin completar evidencia historica. Pendientes: concurrencia PostgreSQL, ratificacion
+de parametros y fuente neta; NO declarar UAT externo ni Prestadores E2E cerrado.
+Sin consultas reales ni cambios a formula financiera/originacion.
+Detalle y matriz: [PRESTADORES_P0_5B1_HARDENING.md](PRESTADORES_P0_5B1_HARDENING.md).

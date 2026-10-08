@@ -30,6 +30,7 @@ from contractors.services.evaluacion_formal import evaluar_solicitud_prestador
 from contractors.tests.test_score_prestadores_v2 import crear_politica_score
 from gestion_creditos.models import AprobacionPagadorLibranza, Credito, CreditoLibranza, Empresa
 from usuarios.models import PerfilPagador
+from integrations.models import ConsultaDatacreditoSnapshot
 
 
 class EvaluacionFormalPrestadorV2Test(TestCase):
@@ -260,6 +261,22 @@ class EvaluacionFormalPrestadorV2Test(TestCase):
         )
         self.assertNotIn(self.solicitud.numero_documento, contenido)
 
+    def test_simulacion_legacy_sin_version_exige_revision_sin_reescribir_evidencia(self):
+        crear_politica_score()
+        self.solicitud.version_politica_simulacion = ''
+        self.solicitud.save(update_fields=['version_politica_simulacion'])
+        campos = ('version_politica_simulacion', 'monto_simulado', 'plazo_simulado_meses', 'simulada_en')
+        antes = {campo: getattr(self.solicitud, campo) for campo in campos}
+        with patch('contractors.services.evaluacion_formal.obtener_evaluacion_datacredito_prestador',
+                return_value=self._datacredito(950)), patch(
+                'contractors.services.predecision.obtener_autorizacion_datacredito_vigente', return_value=object()), patch(
+                'contractors.score.componentes.obtener_autorizacion_datacredito_vigente', return_value=object()):
+            resultado = evaluar_solicitud_prestador(self.solicitud, solicitado_por=self.staff)
+        self.solicitud.refresh_from_db()
+        self.assertEqual(antes, {campo: getattr(self.solicitud, campo) for campo in campos})
+        self.assertNotEqual(resultado.auditoria.resultado, 'PREAPROBADO_READ_ONLY')
+        self.assertEqual(self.solicitud.estado, ContractorApplication.Estado.EN_REVISION_MANUAL)
+
     def test_servicio_bloquea_perfil_pagador_con_permiso_accidental(self):
         pagador = get_user_model().objects.create_user(
             username='pagador-evaluacion-formal',
@@ -282,6 +299,13 @@ class EvaluacionFormalPrestadorV2Test(TestCase):
         self.assertFalse(self.solicitud.auditorias_predecision.exists())
 
     def _datacredito(self, score):
+        ConsultaDatacreditoSnapshot.objects.get_or_create(
+            pk='00000000-0000-0000-0000-000000000001',
+            defaults=dict(ambiente='uat', servicio='decisor', documento_hash='0'*64,
+                documento_enmascarado='****0002', fingerprint='0'*64, estado='EXITOSO',
+                consultado_en=timezone.now(), vigente_hasta=timezone.now()+timedelta(days=30),
+                autorizacion_referencia='fixture-sintetico'),
+        )
         return ResultadoConsultaDatacreditoPrestador(
             estado='EXITOSO',
             snapshot_id='00000000-0000-0000-0000-000000000001',
