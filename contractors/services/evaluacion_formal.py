@@ -46,7 +46,10 @@ def evaluar_solicitud_prestador(
     solicitado_por=None,
     modo_datacredito=REUTILIZAR_SI_VIGENTE,
     justificacion=None,
+    nuevo_intento=False,
+    inicio_operacion=None,
 ):
+    inicio_operacion = inicio_operacion or timezone.now()
     _validar_actor(solicitado_por)
     _validar_modo(modo_datacredito, solicitado_por, justificacion)
     try:
@@ -76,6 +79,8 @@ def evaluar_solicitud_prestador(
         configuracion_financiera=configuracion_financiera,
         version_configuracion_financiera=version_configuracion_financiera,
         modo_datacredito=modo_datacredito,
+        nuevo_intento=nuevo_intento,
+        inicio_operacion=inicio_operacion,
     )
     if inicio.reutilizada or inicio.en_proceso:
         if inicio.reutilizada:
@@ -150,7 +155,9 @@ def evaluar_solicitud_prestador(
 def _iniciar_evaluacion(
     *, solicitud, usuario, version_politica, version_score, configuracion_financiera,
     version_configuracion_financiera, modo_datacredito,
+    nuevo_intento=False, inicio_operacion=None,
 ):
+    inicio_operacion = inicio_operacion or timezone.now()
     solicitud_bloqueada = ContractorApplication.objects.select_for_update().get(pk=solicitud.pk)
     version_datos, snapshot_entrada = construir_version_datos(solicitud_bloqueada)
     clave = construir_clave_idempotencia(
@@ -203,9 +210,17 @@ def _iniciar_evaluacion(
                             ConsultaDatacreditoSnapshot.Estado.SIN_INFORMACION],
             ).count() != len(ids)
         )
-        if (modo_datacredito != FORZAR_CONSULTA and not vencida) or (
-            existente.estado_ejecucion == existente.EstadoEjecucion.COMPLETADA and not vencida
-            and existente.error_codigo != 'fuentes_evaluacion_vencidas'
+        # A concurrent retry may already have finished while this caller waited.
+        if nuevo_intento and (
+            existente.iniciada_en >= inicio_operacion
+            or (existente.finalizada_en and existente.finalizada_en >= inicio_operacion)
+        ):
+            return ResultadoEvaluacionFormalPrestador(auditoria=existente, reutilizada=True)
+        if not nuevo_intento and (
+            (modo_datacredito != FORZAR_CONSULTA and not vencida) or (
+                existente.estado_ejecucion == existente.EstadoEjecucion.COMPLETADA and not vencida
+                and existente.error_codigo != 'fuentes_evaluacion_vencidas'
+            )
         ):
             return ResultadoEvaluacionFormalPrestador(auditoria=existente, reutilizada=True)
         # Keep the interrupted/error audit immutable on retries; root and attempt differ.

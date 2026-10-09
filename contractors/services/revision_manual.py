@@ -305,7 +305,9 @@ def marcar_subsanacion_atendida(requerimiento, *, usuario):
 
 
 def reintentar_evaluacion(revision, *, actor):
+    inicio_operacion = timezone.now()
     _exigir_permiso(actor, 'contractors.can_resolve_contractor_review')
+    revision = RevisionManualPrestador.objects.select_related('solicitud').get(pk=revision.pk)
     if revision.estado not in ESTADOS_REVISION_ACTIVA:
         raise ValidationError('La revision no esta activa.')
     if revision.requerimientos_subsanacion.filter(
@@ -318,6 +320,8 @@ def reintentar_evaluacion(revision, *, actor):
     resultado = evaluar_solicitud_prestador(
         revision.solicitud,
         solicitado_por=actor,
+        nuevo_intento=True,
+        inicio_operacion=inicio_operacion,
     )
     registrar_evento_timeline_prestador(
         solicitud=revision.solicitud,

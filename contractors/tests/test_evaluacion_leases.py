@@ -9,8 +9,9 @@ from django.db import connection, connections, close_old_connections
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
-from contractors.models import ContractorApplication, PredecisionPrestadorAudit
+from contractors.models import ContractorApplication, PredecisionPrestadorAudit, RevisionManualPrestador
 from contractors.services import evaluacion_formal as servicio
+from contractors.services.revision_manual import reintentar_evaluacion
 from integrations.models import ConsultaDatacreditoSnapshot
 from gestion_creditos.models import Empresa
 
@@ -28,13 +29,39 @@ class FixtureEvaluacion:
         guard.start()
         self.addCleanup(guard.stop)
 
-    def iniciar(self, modo=servicio.REUTILIZAR_SI_VIGENTE):
+    def iniciar(self, modo=servicio.REUTILIZAR_SI_VIGENTE, **kwargs):
         return servicio._iniciar_evaluacion(solicitud=self.solicitud, usuario=self.actor,
             version_politica='politica_lease_test', version_score='score_lease_test',
-            configuracion_financiera=None, version_configuracion_financiera='', modo_datacredito=modo)
+            configuracion_financiera=None, version_configuracion_financiera='', modo_datacredito=modo,
+            **kwargs)
 
 
 class EvaluacionLeaseTest(FixtureEvaluacion, TestCase):
+    def test_reintentos_solapados_reutilizan_intento_incluso_si_ya_termino(self):
+        inicial = self.iniciar()
+        servicio._finalizar_sin_decision(inicial.auditoria, resultado='NO_EVALUABLE',
+            razones=('Proveedor deshabilitado',), error_codigo='datacredito_deshabilitado',
+            usuario=self.actor)
+        inicio = timezone.now()
+        nueva = self.iniciar(nuevo_intento=True, inicio_operacion=inicio)
+        pendiente = self.iniciar(nuevo_intento=True, inicio_operacion=inicio)
+        self.assertTrue(pendiente.en_proceso)
+        self.assertEqual(pendiente.auditoria.pk, nueva.auditoria.pk)
+        inicio_durante_evaluacion = timezone.now()
+        servicio._finalizar_sin_decision(nueva.auditoria, resultado='NO_EVALUABLE',
+            razones=('Resultado del reintento',), error_codigo='datacredito_deshabilitado',
+            usuario=self.actor)
+        completada = self.iniciar(nuevo_intento=True, inicio_operacion=inicio)
+        self.assertTrue(completada.reutilizada)
+        self.assertEqual(completada.auditoria.pk, nueva.auditoria.pk)
+        tardia = self.iniciar(nuevo_intento=True, inicio_operacion=inicio_durante_evaluacion)
+        self.assertTrue(tardia.reutilizada)
+        self.assertEqual(tardia.auditoria.pk, nueva.auditoria.pk)
+        self.assertEqual(PredecisionPrestadorAudit.objects.count(), 2)
+        posterior = self.iniciar(nuevo_intento=True)
+        self.assertNotEqual(posterior.auditoria.pk, nueva.auditoria.pk)
+        self.assertEqual(PredecisionPrestadorAudit.objects.count(), 3)
+
     def test_lease_reciente_vencido_recuperado_y_cierre_tardio_descartado(self):
         inicial = self.iniciar()
         self.assertTrue(self.iniciar().en_proceso)
@@ -91,6 +118,36 @@ class EvaluacionLeaseTest(FixtureEvaluacion, TestCase):
 
 @skipUnless(connection.vendor == 'postgresql', 'Requiere locks PostgreSQL reales')
 class EvaluacionLeaseConcurrenciaPostgresTest(FixtureEvaluacion, TransactionTestCase):
+    @patch.object(servicio, 'obtener_politica_score_activa', return_value=None)
+    def test_reintentos_concurrentes_crean_un_solo_intento(self, politica):
+        inicial = servicio.evaluar_solicitud_prestador(self.solicitud, solicitado_por=self.actor)
+        revision = RevisionManualPrestador.objects.create(solicitud=self.solicitud,
+            auditoria_predecision=inicial.auditoria, motivo='DATACREDITO_ERROR')
+        anterior = PredecisionPrestadorAudit.objects.values().get(pk=inicial.auditoria.pk)
+        barrera = threading.Barrier(2)
+        iniciar_original = servicio._iniciar_evaluacion
+
+        def iniciar_solapados(**kwargs):
+            barrera.wait(timeout=10)
+            return iniciar_original(**kwargs)
+
+        def reintentar():
+            close_old_connections()
+            try:
+                return reintentar_evaluacion(revision, actor=self.actor)
+            finally:
+                connections.close_all()
+
+        with patch.object(servicio, '_iniciar_evaluacion', side_effect=iniciar_solapados), \
+                ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(reintentar) for _ in range(2)]
+            resultados = [f.result(timeout=20) for f in futures]
+        self.assertEqual(len({r.auditoria.pk for r in resultados}), 1)
+        self.assertEqual(sum(not r.en_proceso and not r.reutilizada for r in resultados), 1)
+        self.assertNotEqual(resultados[0].auditoria.pk, inicial.auditoria.pk)
+        self.assertEqual(PredecisionPrestadorAudit.objects.count(), 2)
+        self.assertEqual(PredecisionPrestadorAudit.objects.values().get(pk=inicial.auditoria.pk), anterior)
+
     def test_dos_recuperadores_cierran_una_sola_auditoria(self):
         inicial = self.iniciar()
         PredecisionPrestadorAudit.objects.filter(pk=inicial.auditoria.pk).update(

@@ -1,4 +1,5 @@
 from datetime import timedelta
+import hashlib
 from decimal import Decimal
 from io import StringIO
 from unittest.mock import patch
@@ -10,13 +11,14 @@ from django.core.exceptions import PermissionDenied
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.db import connection
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
 
 from contractors.admin import ContractorApplicationAdmin
 from contractors.datacredito.dto import (
     ResultadoConsultaDatacreditoPrestador,
     ResultadoNormalizadoDatacreditoPrestador,
+    ResultadoProveedorDatacreditoPrestador,
 )
 from contractors.models import (
     ConfiguracionSimuladorPrestador,
@@ -27,10 +29,16 @@ from contractors.models import (
     TimelinePrestador,
 )
 from contractors.services.evaluacion_formal import evaluar_solicitud_prestador
+from contractors.services.autorizacion_datacredito import (
+    crear_confirmacion_consentimiento,
+    registrar_autorizacion_datacredito_desde_solicitud,
+)
+from contractors.services.revision_manual import reintentar_evaluacion
 from contractors.tests.test_score_prestadores_v2 import crear_politica_score
 from gestion_creditos.models import AprobacionPagadorLibranza, Credito, CreditoLibranza, Empresa
 from usuarios.models import PerfilPagador
 from integrations.models import ConsultaDatacreditoSnapshot
+from integrations.tests.test_datacredito_snapshot_v2 import CONFIGURACION_DATACREDITO_PRUEBA
 
 
 class EvaluacionFormalPrestadorV2Test(TestCase):
@@ -128,6 +136,7 @@ class EvaluacionFormalPrestadorV2Test(TestCase):
         self.assertFalse(primero.reutilizada)
         self.assertTrue(segundo.reutilizada)
         self.assertEqual(primero.auditoria.pk, segundo.auditoria.pk)
+        self.assertEqual(self.solicitud.auditorias_predecision.count(), 1)
         self.assertEqual(primero.auditoria.resultado, 'PREAPROBADO_READ_ONLY')
         self.assertEqual(
             primero.auditoria.version_configuracion_financiera,
@@ -197,6 +206,108 @@ class EvaluacionFormalPrestadorV2Test(TestCase):
         )
         resultado = evaluar_solicitud_prestador(self.solicitud, solicitado_por=self.staff)
         self.assertEqual(resultado.auditoria.resultado, 'NO_EVALUABLE')
+
+    @patch('requests.sessions.Session.request', side_effect=AssertionError('HTTP real prohibido'))
+    @patch('contractors.services.evaluacion_formal.obtener_evaluacion_datacredito_prestador')
+    def test_reintentos_sucesivos_sin_snapshots_preservan_historial(self, consulta, http):
+        crear_politica_score()
+        consulta.return_value = ResultadoConsultaDatacreditoPrestador(
+            estado='NO_CONFIGURADO', error_codigo='datacredito_deshabilitado',
+        )
+        inicial = evaluar_solicitud_prestador(self.solicitud, solicitado_por=self.staff)
+        revision = self._revision_reintento(inicial.auditoria)
+        anteriores = []
+        clave_raiz = inicial.auditoria.clave_idempotencia
+        anterior = inicial.auditoria
+        for _ in range(3):
+            anteriores.append(PredecisionPrestadorAudit.objects.values().get(pk=anterior.pk))
+            nueva = reintentar_evaluacion(revision, actor=self.staff)
+            self.assertFalse(nueva.reutilizada)
+            self.assertEqual(nueva.auditoria.snapshot_entrada['clave_operacion'], clave_raiz)
+            self.assertEqual(nueva.auditoria.clave_idempotencia, hashlib.sha256(
+                f'{clave_raiz}:reintento:{anterior.pk}'.encode('ascii')
+            ).hexdigest())
+            anterior = nueva.auditoria
+        for datos in anteriores:
+            self.assertEqual(PredecisionPrestadorAudit.objects.values().get(pk=datos['id']), datos)
+        self.assertEqual(self.solicitud.auditorias_predecision.count(), 4)
+        self.assertEqual(len(set(self.solicitud.auditorias_predecision.values_list(
+            'clave_idempotencia', flat=True,
+        ))), 4)
+        self.assertEqual(consulta.call_count, 4)
+        self.assertTrue(all(llamada.kwargs['modo'] == 'REUTILIZAR_SI_VIGENTE'
+                            for llamada in consulta.call_args_list))
+        self.assertFalse(ConsultaDatacreditoSnapshot.objects.exists())
+        normal = evaluar_solicitud_prestador(self.solicitud, solicitado_por=self.staff)
+        self.assertTrue(normal.reutilizada)
+        self.assertEqual(normal.auditoria.pk, anterior.pk)
+        self.assertEqual(consulta.call_count, 4)
+        http.assert_not_called()
+
+    @override_settings(**CONFIGURACION_DATACREDITO_PRUEBA)
+    @patch('requests.sessions.Session.request', side_effect=AssertionError('HTTP real prohibido'))
+    @patch('contractors.services.datacredito_evaluacion.consultar_proveedor_datacredito_prestador')
+    def test_reintento_tras_habilitar_configuracion_consulta_sin_forzar(self, proveedor, http):
+        self._preparar_centrales_reales(proveedor)
+        with override_settings(DATACREDITO_REAL_ENABLED=False):
+            inicial = evaluar_solicitud_prestador(self.solicitud, solicitado_por=self.staff)
+        self.assertEqual(inicial.auditoria.estado_ejecucion, 'COMPLETADA')
+        self.assertEqual(inicial.auditoria.resultado, 'NO_EVALUABLE')
+        self.assertFalse(ConsultaDatacreditoSnapshot.objects.exists())
+        proveedor.assert_not_called()
+        datos = PredecisionPrestadorAudit.objects.values().get(pk=inicial.auditoria.pk)
+        nueva = reintentar_evaluacion(self._revision_reintento(inicial.auditoria), actor=self.staff)
+        self.assertFalse(nueva.reutilizada)
+        self.assertNotEqual(nueva.auditoria.pk, inicial.auditoria.pk)
+        self.assertEqual(nueva.auditoria.version_datos, inicial.auditoria.version_datos)
+        self.assertEqual(PredecisionPrestadorAudit.objects.values().get(pk=inicial.auditoria.pk), datos)
+        self.assertEqual(ConsultaDatacreditoSnapshot.objects.get().estado, 'EXITOSO')
+        proveedor.assert_called_once_with(self.solicitud, servicio='decisor')
+        self.assertEqual(self.solicitud.auditorias_predecision.count(), 2)
+        http.assert_not_called()
+
+    @override_settings(**CONFIGURACION_DATACREDITO_PRUEBA)
+    @patch('requests.sessions.Session.request', side_effect=AssertionError('HTTP real prohibido'))
+    @patch('contractors.services.datacredito_evaluacion.consultar_proveedor_datacredito_prestador')
+    def test_reintento_nueva_auditoria_reutiliza_snapshot_real_vigente(self, proveedor, http):
+        self._preparar_centrales_reales(proveedor)
+        inicial = evaluar_solicitud_prestador(self.solicitud, solicitado_por=self.staff)
+        self.assertEqual(inicial.auditoria.resultado, 'REQUIERE_REVISION_MANUAL')
+        datos = PredecisionPrestadorAudit.objects.values().get(pk=inicial.auditoria.pk)
+        nueva = reintentar_evaluacion(self._revision_reintento(inicial.auditoria), actor=self.staff)
+        self.assertFalse(nueva.reutilizada)
+        self.assertNotEqual(nueva.auditoria.pk, inicial.auditoria.pk)
+        self.assertEqual(nueva.auditoria.snapshot_salida['datacredito']['snapshot_id'],
+                         inicial.auditoria.snapshot_salida['datacredito']['snapshot_id'])
+        self.assertTrue(nueva.auditoria.snapshot_salida['datacredito']['reutilizado'])
+        self.assertEqual(ConsultaDatacreditoSnapshot.objects.count(), 1)
+        self.assertEqual(PredecisionPrestadorAudit.objects.values().get(pk=inicial.auditoria.pk), datos)
+        self.assertEqual(proveedor.call_count, 1)
+        http.assert_not_called()
+
+    def _revision_reintento(self, auditoria):
+        return RevisionManualPrestador.objects.get_or_create(
+            solicitud=self.solicitud, motivo=RevisionManualPrestador.Motivo.DATACREDITO_ERROR,
+            defaults={'auditoria_predecision': auditoria},
+        )[0]
+
+    def _preparar_centrales_reales(self, proveedor):
+        crear_politica_score()
+        self.solicitud.estado_contractual_declarado = 'SUSPENDIDO'
+        self.solicitud.save(update_fields=['estado_contractual_declarado'])
+        registrar_autorizacion_datacredito_desde_solicitud(
+            self.solicitud, usuario=self.usuario,
+            request=RequestFactory().post('/solicitar/', {
+                'consentimiento_centrales': crear_confirmacion_consentimiento(self.usuario),
+            }),
+        )
+        proveedor.return_value = ResultadoProveedorDatacreditoPrestador(
+            estado_snapshot='EXITOSO', codigo_http=200,
+            resultado_normalizado=ResultadoNormalizadoDatacreditoPrestador(
+                score_externo=950, cuota_mensual_total='0', mora_actual=False,
+                mora_severa=False, obligaciones_vigentes=1, servicio_fuente='decisor',
+            ),
+        )
 
     @patch('contractors.services.predecision.obtener_autorizacion_datacredito_vigente', return_value=object())
     @patch('contractors.services.evaluacion_formal.obtener_evaluacion_datacredito_prestador')

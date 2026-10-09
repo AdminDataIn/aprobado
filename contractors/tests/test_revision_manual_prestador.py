@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
@@ -371,9 +371,39 @@ class RevisionManualPrestadorTest(TestCase):
 
         reintentar_evaluacion(revision, actor=self.analista)
 
-        evaluar.assert_called_once_with(revision.solicitud, solicitado_por=self.analista)
+        evaluar.assert_called_once_with(
+            revision.solicitud, solicitado_por=self.analista, nuevo_intento=True,
+            inicio_operacion=ANY,
+        )
         revision.refresh_from_db()
         self.assertEqual(revision.estado, RevisionManualPrestador.Estado.RESUELTA)
+
+    @patch('contractors.services.evaluacion_formal.evaluar_solicitud_prestador')
+    def test_reintento_rechaza_revision_cerrada_aunque_instancia_este_obsoleta(self, evaluar):
+        for estado in ('RESUELTA', 'CANCELADA'):
+            with self.subTest(estado=estado):
+                revision = self._crear_revision()
+                RevisionManualPrestador.objects.filter(pk=revision.pk).update(estado=estado)
+                with self.assertRaises(ValidationError):
+                    reintentar_evaluacion(revision, actor=self.analista)
+        evaluar.assert_not_called()
+
+    @patch('contractors.services.evaluacion_formal.evaluar_solicitud_prestador')
+    def test_reintento_rechaza_subsanacion_pendiente(self, evaluar):
+        revision = self._crear_revision()
+        solicitar_subsanacion(
+            revision, tipo=RequerimientoSubsanacionPrestador.Tipo.INFORMACION_PERSONAL,
+            actor=self.analista,
+        )
+        with self.assertRaises(ValidationError):
+            reintentar_evaluacion(revision, actor=self.analista)
+        evaluar.assert_not_called()
+
+    @patch('contractors.services.evaluacion_formal.evaluar_solicitud_prestador')
+    def test_reintento_requiere_permiso_de_resolucion(self, evaluar):
+        with self.assertRaises(PermissionDenied):
+            reintentar_evaluacion(self._crear_revision(), actor=self.staff_solo_lectura)
+        evaluar.assert_not_called()
 
     def _crear_solicitud(self):
         return ContractorApplication.objects.create(
