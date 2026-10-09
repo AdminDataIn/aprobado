@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.core.exceptions import ValidationError
 from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
 
@@ -17,6 +18,7 @@ from contractors.datacredito.dto import (
     ResultadoProveedorDatacreditoPrestador,
 )
 from contractors.models import (
+    AprobacionInternaPrestador,
     ConfiguracionScorePrestador,
     ContractorApplication,
     ContractorApplicationDocument,
@@ -30,6 +32,7 @@ from contractors.services.centrales_riesgo import (
     obtener_evaluacion_centrales_prestador,
 )
 from contractors.services.evaluacion_formal import evaluar_solicitud_prestador
+from contractors.services.aprobacion_interna import crear_o_reutilizar_aprobacion_interna
 from contractors.services.autorizacion_datacredito import (
     crear_confirmacion_consentimiento,
     registrar_autorizacion_datacredito_desde_solicitud,
@@ -39,6 +42,9 @@ from contractors.services.predecision import evaluar_predecision_formal_prestado
 from contractors.views_admin import _construir_detalle_auditoria
 from gestion_creditos.models import Credito, CreditoLibranza, Empresa
 from integrations.models import ConsultaDatacreditoSnapshot
+from integrations.datacredito.dto import ResultadoHistorialCreditoRawSeguro, ResultadoMiDecisorRawSeguro
+from integrations.tests import test_hdcplus_normalizacion_dual as hdc_fixtures
+from integrations.tests.test_midecisor_clasificacion import payload_pn
 from integrations.tests.test_datacredito_snapshot_v2 import CONFIGURACION_DATACREDITO_PRUEBA
 
 
@@ -405,6 +411,52 @@ class CentralesDualesPrestadorTest(TestCase):
         self.assertEqual(proveedor.call_count, 2)
         self.assertEqual(self.solicitud.auditorias_predecision.count(), 3)
         self.assertEqual(PredecisionPrestadorAudit.objects.values().get(pk=inicial.auditoria.pk), datos)
+        http.assert_not_called()
+
+    @override_settings(**CONFIGURACION_DATACREDITO_PRUEBA)
+    @patch('requests.sessions.Session.request', side_effect=AssertionError('HTTP real prohibido'))
+    @patch('contractors.datacredito.adapter.consultar_historial_credito')
+    @patch('contractors.datacredito.adapter.consultar_midecisor_persona_natural')
+    def test_error_funcional_real_del_adapter_no_preaprueba_ni_habilita_originacion(self, decisor, hdc, http):
+        registrar_autorizacion_datacredito_desde_solicitud(
+            self.solicitud, usuario=self.usuario,
+            request=RequestFactory().post('/solicitar/', {
+                'consentimiento_centrales': crear_confirmacion_consentimiento(self.usuario),
+            }),
+        )
+        historicos = list(ConsultaDatacreditoSnapshot.objects.values().order_by('pk'))
+        decisor.return_value = ResultadoMiDecisorRawSeguro(
+            status_code=200, codigo_funcional='TX20',
+            raw_sanitizado=payload_pn(hc=None, tx='20', informacion=False),
+        )
+        hdc.return_value = ResultadoHistorialCreditoRawSeguro(
+            status_code=200, response_code='13',
+            raw_sanitizado=hdc_fixtures.HDCPlusNormalizacionDualTest._payload_hdc(),
+        )
+        primero = evaluar_solicitud_prestador(self.solicitud, solicitado_por=self.staff)
+        auditoria_original = PredecisionPrestadorAudit.objects.values().get(pk=primero.auditoria.pk)
+        segundo = evaluar_solicitud_prestador(self.solicitud, solicitado_por=self.staff)
+        auditoria = primero.auditoria
+        self.assertIn(auditoria.resultado, ('NO_EVALUABLE', 'REQUIERE_REVISION_MANUAL'))
+        self.assertIsNone(auditoria.score)
+        self.assertEqual(auditoria.estado_midecisor, 'ERROR_PERMANENTE')
+        self.assertEqual(auditoria.estado_hdcplus, 'EXITOSO')
+        self.assertEqual(auditoria.snapshot_midecisor.resultado_normalizado, {})
+        self.assertEqual(auditoria.snapshot_midecisor.codigo_http, 200)
+        self.assertEqual(auditoria.snapshot_midecisor.codigo_funcional, 'TX20')
+        self.assertIn(segundo.auditoria.resultado, ('NO_EVALUABLE', 'REQUIERE_REVISION_MANUAL'))
+        self.assertEqual(PredecisionPrestadorAudit.objects.values().get(pk=primero.auditoria.pk), auditoria_original)
+        self.assertEqual(ConsultaDatacreditoSnapshot.objects.count(), len(historicos) + 2)
+        with self.assertRaises(ValidationError):
+            crear_o_reutilizar_aprobacion_interna(auditoria, actor=self.staff)
+        self.assertFalse(AprobacionInternaPrestador.objects.filter(solicitud=self.solicitud).exists())
+        self.assertFalse(Credito.objects.exists())
+        self.assertFalse(CreditoLibranza.objects.exists())
+        self.assertEqual(list(ConsultaDatacreditoSnapshot.objects.filter(
+            pk__in=[item['id'] for item in historicos],
+        ).values().order_by('pk')), historicos)
+        decisor.assert_called_once()
+        hdc.assert_called_once()
         http.assert_not_called()
 
     def _crear_solicitud(self):

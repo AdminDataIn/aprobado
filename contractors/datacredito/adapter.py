@@ -6,6 +6,7 @@ from contractors.datacredito.dto import (
 )
 from integrations.datacredito.decisor_client import consultar_midecisor_persona_natural
 from integrations.datacredito.dto import (
+    ESTADO_ERROR_TEMPORAL,
     ESTADO_EXITOSA_CON_INFORMACION,
     ESTADO_EXITOSA_SIN_INFORMACION,
     ESTADO_IDENTIFICACION_NO_ENCONTRADA,
@@ -31,8 +32,18 @@ def consultar_proveedor_datacredito_prestador(solicitud, *, servicio):
                 apellido_razon_social=apellido,
             )
         )
-        normalizado = normalizar_midecisor_pn(respuesta.raw_sanitizado)
         codigo_funcional = respuesta.codigo_funcional or respuesta.response_code or ''
+        try:
+            normalizado = normalizar_midecisor_pn(respuesta.raw_sanitizado)
+        except (TypeError, ValueError, ArithmeticError):
+            return ResultadoProveedorDatacreditoPrestador(
+                estado_snapshot=ConsultaDatacreditoSnapshot.Estado.ERROR_PERMANENTE,
+                resultado_normalizado=ResultadoNormalizadoDatacreditoPrestador(),
+                codigo_http=respuesta.status_code,
+                codigo_funcional=str(codigo_funcional)[:60],
+                error_codigo='respuesta_funcional_indeterminada',
+                error_tipo='RESPUESTA_INVALIDA',
+            )
     elif servicio == ConsultaDatacreditoSnapshot.Servicio.HISTORIAL:
         respuesta = consultar_historial_credito(
             EntradaHistorialCredito(
@@ -53,6 +64,8 @@ def consultar_proveedor_datacredito_prestador(solicitud, *, servicio):
         ESTADO_IDENTIFICACION_NO_ENCONTRADA,
     }:
         estado = ConsultaDatacreditoSnapshot.Estado.SIN_INFORMACION
+    elif servicio == ConsultaDatacreditoSnapshot.Servicio.DECISOR and normalizado.estado == ESTADO_ERROR_TEMPORAL:
+        estado = ConsultaDatacreditoSnapshot.Estado.ERROR_TRANSITORIO
     else:
         estado = ConsultaDatacreditoSnapshot.Estado.ERROR_PERMANENTE
     resultado = _proyectar_resultado_allowlist(normalizado, servicio=servicio)
@@ -61,6 +74,8 @@ def consultar_proveedor_datacredito_prestador(solicitud, *, servicio):
         resultado_normalizado=resultado,
         codigo_http=respuesta.status_code,
         codigo_funcional=str(codigo_funcional)[:60],
+        error_codigo=(normalizado.metadata_segura.get('error_codigo') or '') if servicio == 'decisor' else '',
+        error_tipo=(normalizado.error_tipo or '') if servicio == 'decisor' else '',
     )
 
 

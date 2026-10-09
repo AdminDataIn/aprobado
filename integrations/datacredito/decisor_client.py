@@ -4,6 +4,7 @@ from integrations.datacredito.auth import SERVICIO_DECISOR, invalidar_token, obt
 from integrations.datacredito.dto import EntradaMiDecisor, ResultadoMiDecisorRawSeguro
 from integrations.datacredito.exceptions import DatacreditoProviderError, DatacreditoTimeoutError
 from integrations.datacredito.http import crear_session_datacredito
+from integrations.datacredito.normalizadores import _codigos_midecisor, _normalizar_codigo_midecisor
 from integrations.datacredito.settings import obtener_configuracion_datacredito
 
 
@@ -50,6 +51,10 @@ def _consultar_midecisor(entrada, tipo_persona, session=None):
         ) from exc
 
     if respuesta.status_code >= 400:
+        try:
+            codigo_funcional = _codigo_funcional_midecisor(respuesta.json())
+        except ValueError:
+            codigo_funcional = None
         if respuesta.status_code == 401:
             invalidar_token(token, SERVICIO_DECISOR)
         # No automatic replay of a potentially billable consultation.
@@ -58,6 +63,7 @@ def _consultar_midecisor(entrada, tipo_persona, session=None):
             servicio='decisor',
             etapa='HTTP',
             http_status=respuesta.status_code,
+            codigo_funcional=codigo_funcional,
             error_tipo='HTTP_ERROR',
         )
 
@@ -124,7 +130,7 @@ def _buscar_response_code(cuerpo):
         return str(codigo_hc)
     for clave in ('responseCode', 'response_code', 'codigoRespuesta'):
         if clave in cuerpo:
-            return str(cuerpo[clave])
+            return _normalizar_codigo_midecisor(cuerpo[clave])
     for valor in cuerpo.values():
         if isinstance(valor, dict):
             encontrado = _buscar_response_code(valor)
@@ -140,22 +146,17 @@ def _codigo_funcional_midecisor(cuerpo):
         return f'HC{codigo_hc}_TX{codigo_tx}'
     if codigo_hc:
         return f'HC{codigo_hc}'
+    if codigo_tx:
+        return f'TX{codigo_tx}'
     return None
 
 
 def _codigo_midecisor(cuerpo, clave_buscada):
     if not isinstance(cuerpo, dict):
         return None
-    codigos = (
-        cuerpo.get('content', {})
-        .get('infoTransaccion', {})
-        .get('codigosRespuesta', [])
-    )
-    if isinstance(codigos, list):
-        for item in codigos:
-            if isinstance(item, dict) and str(item.get('clave', '')).upper() == clave_buscada:
-                return item.get('valor')
-    return None
+    content = cuerpo.get('content')
+    info = content.get('infoTransaccion') if isinstance(content, dict) else None
+    return _codigos_midecisor(info).get(clave_buscada)
 
 
 def _enmascarar_documento(documento):

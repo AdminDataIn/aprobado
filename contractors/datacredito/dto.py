@@ -70,6 +70,8 @@ class ResultadoProveedorDatacreditoPrestador:
     resultado_normalizado: ResultadoNormalizadoDatacreditoPrestador
     codigo_http: int | None = None
     codigo_funcional: str = ''
+    error_codigo: str = ''
+    error_tipo: str = ''
 
 
 @dataclass(frozen=True)

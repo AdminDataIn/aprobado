@@ -1,6 +1,6 @@
 import json
 from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -27,13 +27,14 @@ from contractors.services.datacredito_evaluacion import (
     obtener_evaluacion_datacredito_prestador,
 )
 from gestion_creditos.models import Credito, CreditoLibranza, Empresa
-from integrations.datacredito.dto import ResultadoMiDecisorRawSeguro
+from integrations.datacredito.dto import ResultadoMiDecisorRawSeguro, TokenDatacredito
 from integrations.datacredito.exceptions import (
     DatacreditoProviderError,
     DatacreditoTimeoutError,
 )
 from integrations.datacredito.settings import obtener_configuracion_datacredito
 from integrations.models import ConsultaDatacreditoSnapshot
+from integrations.tests.test_midecisor_clasificacion import payload_pn
 
 
 CONFIGURACION_DATACREDITO_PRUEBA = {
@@ -64,6 +65,9 @@ CONFIGURACION_DATACREDITO_PRUEBA = {
 @override_settings(**CONFIGURACION_DATACREDITO_PRUEBA)
 class DatacreditoSnapshotV2Test(TestCase):
     def setUp(self):
+        guard = patch('requests.sessions.Session.request', side_effect=AssertionError('HTTP real prohibido'))
+        guard.start()
+        self.addCleanup(guard.stop)
         self.usuario = get_user_model().objects.create_user(
             username='prestador-datacredito',
             email='prestador-datacredito@example.com',
@@ -358,11 +362,13 @@ class DatacreditoSnapshotV2Test(TestCase):
         cliente.return_value = ResultadoMiDecisorRawSeguro(
             status_code=200,
             response_code='13',
-            codigo_funcional='HC13',
+            codigo_funcional='HC13_TX02',
             raw_sanitizado={
+                'status': 'ACCEPTED',
                 'access_token': 'token-que-no-debe-persistir',
                 'nombreCompleto': 'Persona de Prueba',
                 'content': {
+                    'status': '202 ACCEPTED',
                     'respuesta': {
                         'validacion': {'conInformacion': True},
                         'informacionRiesgo': {'score': 837},
@@ -376,7 +382,9 @@ class DatacreditoSnapshotV2Test(TestCase):
                         },
                     },
                     'infoTransaccion': {
-                        'codigosRespuesta': [{'clave': 'HC', 'valor': '13'}]
+                        'codigosRespuesta': [
+                            {'clave': 'HC', 'valor': '13'}, {'clave': 'TX', 'valor': '02'},
+                        ]
                     },
                 },
             },
@@ -424,6 +432,156 @@ class DatacreditoSnapshotV2Test(TestCase):
         self.assertNotIn('proxy', persistido.lower())
         self.assertNotIn('socks5h://', persistido)
         self.assertNotIn('usuario:clave', persistido)
+
+    @patch('contractors.datacredito.adapter.consultar_midecisor_persona_natural')
+    def test_error_funcional_conserva_diagnostico_sin_raw_y_reutiliza_intento(self, cliente):
+        from integrations.datacredito.decisor_client import _codigo_funcional_midecisor
+
+        for tx, estado, codigo, tipo in (
+            ('20', 'ERROR_PERMANENTE', 'solicitud_funcional_invalida', 'ERROR_SOLICITUD'),
+            ('23', 'ERROR_TRANSITORIO', 'excepcion_interna_proveedor', 'ERROR_PROVEEDOR'),
+            ('17', 'ERROR_PERMANENTE', 'tx17_pn_no_confirmado', 'RESPUESTA_INVALIDA'),
+            ('09', 'ERROR_PERMANENTE', 'consulta_funcional_fallida', 'RESPUESTA_FUNCIONAL'),
+            (None, 'ERROR_PERMANENTE', 'respuesta_funcional_indeterminada', 'RESPUESTA_INVALIDA'),
+        ):
+            with self.subTest(tx=tx):
+                self.solicitud.apellidos = f'Prueba{tx}'
+                payload = payload_pn(hc=None, tx=tx, informacion=False)
+                payload.update({
+                    'documento': 'documento-sintetico-no-persistir',
+                    'nombres': 'nombre-sintetico-no-persistir',
+                    'access_token': 'token-sintetico-no-persistir',
+                    'headers': {'Authorization': 'credencial-sintetica-no-persistir'},
+                })
+                payload['content']['infoTransaccion']['msjExcepcion'] = 'mensaje-libre-no-persistir'
+                cliente.return_value = ResultadoMiDecisorRawSeguro(
+                    status_code=202, codigo_funcional=_codigo_funcional_midecisor(payload),
+                    raw_sanitizado=payload,
+                )
+                llamadas = cliente.call_count
+                primero = obtener_evaluacion_datacredito_prestador(self.solicitud, solicitado_por=self.usuario)
+                segundo = obtener_evaluacion_datacredito_prestador(self.solicitud, solicitado_por=self.usuario)
+                snapshot = ConsultaDatacreditoSnapshot.objects.get(pk=primero.snapshot_id)
+                self.assertEqual(snapshot.estado, estado)
+                self.assertEqual(snapshot.codigo_http, 202)
+                self.assertEqual(snapshot.codigo_funcional, f'TX{tx}' if tx else '')
+                self.assertEqual(snapshot.error_codigo, codigo)
+                self.assertEqual(snapshot.error_tipo, tipo)
+                self.assertEqual(snapshot.resultado_normalizado, {})
+                self.assertIsNone(primero.resultado_normalizado)
+                self.assertEqual(primero.snapshot_id, segundo.snapshot_id)
+                self.assertTrue(segundo.reutilizado)
+                self.assertEqual(cliente.call_count - llamadas, 1)
+                persistido = json.dumps({
+                    'resultado': snapshot.resultado_normalizado, 'codigo': snapshot.codigo_funcional,
+                    'error': snapshot.error_codigo, 'tipo': snapshot.error_tipo,
+                })
+                for sensible in ('no-persistir', 'Authorization', 'headers', self.solicitud.numero_documento):
+                    self.assertNotIn(sensible, persistido)
+
+    @patch('integrations.datacredito.decisor_client.obtener_token_cacheado', return_value=TokenDatacredito('token-sintetico'))
+    @patch('integrations.datacredito.decisor_client.invalidar_token')
+    @patch('integrations.datacredito.decisor_client.crear_session_datacredito')
+    def test_http_error_con_codigo_funcional_conserva_clasificacion_y_no_reintenta(self, crear_session, invalidar, token):
+        for status in (400, 401, 403, 429, 500, 503):
+            with self.subTest(status=status):
+                self.solicitud.apellidos = f'Prueba{status}'
+                session = Mock()
+                session.post.return_value.status_code = status
+                session.post.return_value.json.return_value = payload_pn(hc=None, tx='20', informacion=False)
+                crear_session.return_value = session
+                resultado = obtener_evaluacion_datacredito_prestador(self.solicitud, solicitado_por=self.usuario)
+                repetido = obtener_evaluacion_datacredito_prestador(self.solicitud, solicitado_por=self.usuario)
+                snapshot = ConsultaDatacreditoSnapshot.objects.get(pk=resultado.snapshot_id)
+                self.assertEqual(snapshot.codigo_http, status)
+                self.assertEqual(snapshot.codigo_funcional, 'TX20')
+                self.assertEqual(snapshot.estado, 'ERROR_TRANSITORIO' if status in (401, 429, 500, 503) else 'ERROR_PERMANENTE')
+                self.assertEqual(snapshot.error_tipo, 'HTTP_ERROR')
+                self.assertEqual(snapshot.resultado_normalizado, {})
+                self.assertEqual(resultado.snapshot_id, repetido.snapshot_id)
+                session.post.assert_called_once()
+
+    @patch('contractors.datacredito.adapter.consultar_midecisor_persona_natural')
+    def test_error_nuevo_y_finalizacion_tardia_no_modifican_historicos(self, cliente):
+        from contractors.services.datacredito_evaluacion import _finalizar_error
+
+        historico = ConsultaDatacreditoSnapshot.objects.create(
+            ambiente='uat', servicio='decisor', documento_hash='a' * 64,
+            fingerprint='a' * 64, estado='ERROR_PERMANENTE', codigo_http=None,
+            error_codigo='respuesta_funcional_no_exitosa', error_tipo='RESPUESTA_FUNCIONAL',
+            consultado_en=timezone.now(), vigente_hasta=timezone.now(),
+        )
+        antes = ConsultaDatacreditoSnapshot.objects.values().get(pk=historico.pk)
+        cliente.return_value = ResultadoMiDecisorRawSeguro(
+            status_code=200, codigo_funcional='TX20',
+            raw_sanitizado=payload_pn(hc=None, tx='20', informacion=False),
+        )
+        nuevo = obtener_evaluacion_datacredito_prestador(self.solicitud, solicitado_por=self.usuario)
+        _finalizar_error(historico, solicitud=self.solicitud, usuario=self.usuario,
+                         estado='ERROR_TRANSITORIO', codigo='nuevo', tipo='NUEVO',
+                         codigo_http=202, codigo_funcional='TX23')
+        self.assertNotEqual(str(historico.pk), nuevo.snapshot_id)
+        self.assertEqual(ConsultaDatacreditoSnapshot.objects.values().get(pk=historico.pk), antes)
+        cliente.assert_called_once()
+
+    @patch('contractors.datacredito.adapter.consultar_midecisor_persona_natural')
+    def test_codigos_invalidos_no_persisten_datos_libres(self, cliente):
+        from integrations.datacredito.decisor_client import _codigo_funcional_midecisor
+
+        payload = payload_pn(hc='documento-sintetico', tx='token-sintetico')
+        cliente.return_value = ResultadoMiDecisorRawSeguro(
+            status_code=200, codigo_funcional=_codigo_funcional_midecisor(payload),
+            raw_sanitizado=payload,
+        )
+        resultado = obtener_evaluacion_datacredito_prestador(self.solicitud, solicitado_por=self.usuario)
+        snapshot = ConsultaDatacreditoSnapshot.objects.get(pk=resultado.snapshot_id)
+        self.assertEqual(snapshot.codigo_http, 200)
+        self.assertEqual(snapshot.codigo_funcional, '')
+        self.assertEqual(snapshot.resultado_normalizado, {})
+        self.assertEqual(snapshot.error_tipo, 'RESPUESTA_INVALIDA')
+
+    @patch('contractors.datacredito.adapter.consultar_midecisor_persona_natural')
+    def test_sin_informacion_coherente_o_contradictoria_se_persisten_distintas(self, cliente):
+        for contradiccion in (False, True):
+            with self.subTest(contradiccion=contradiccion):
+                self.solicitud.apellidos = f'Prueba{contradiccion}'
+                payload = payload_pn(informacion=False)
+                if contradiccion:
+                    payload['content']['respuesta']['informacionRiesgo'] = {'conInformacion': True, 'score': '853'}
+                cliente.return_value = ResultadoMiDecisorRawSeguro(
+                    status_code=200, codigo_funcional='HC13_TX02', raw_sanitizado=payload,
+                )
+                resultado = obtener_evaluacion_datacredito_prestador(self.solicitud, solicitado_por=self.usuario)
+                snapshot = ConsultaDatacreditoSnapshot.objects.get(pk=resultado.snapshot_id)
+                self.assertEqual(snapshot.estado, 'ERROR_PERMANENTE' if contradiccion else 'SIN_INFORMACION')
+                self.assertEqual(snapshot.codigo_http, 200)
+                self.assertEqual(snapshot.codigo_funcional, 'HC13_TX02')
+                if contradiccion:
+                    self.assertEqual(snapshot.error_codigo, 'respuesta_funcional_inconsistente')
+                    self.assertEqual(snapshot.resultado_normalizado, {})
+                else:
+                    self.assertIsNone(resultado.resultado_normalizado.score_externo)
+                    self.assertEqual(snapshot.error_codigo, '')
+
+    @patch('contractors.datacredito.adapter.consultar_midecisor_persona_natural')
+    def test_error_parseando_datos_no_pierde_http_ni_codigo_funcional(self, cliente):
+        payload = payload_pn()
+        payload['content']['respuesta']['informacionRiesgo'] = {}
+        payload['score'] = 'NaN'
+        cliente.return_value = ResultadoMiDecisorRawSeguro(
+            status_code=200, codigo_funcional='HC13_TX02', raw_sanitizado=payload,
+        )
+        resultado = obtener_evaluacion_datacredito_prestador(self.solicitud, solicitado_por=self.usuario)
+        repetido = obtener_evaluacion_datacredito_prestador(self.solicitud, solicitado_por=self.usuario)
+        snapshot = ConsultaDatacreditoSnapshot.objects.get(pk=resultado.snapshot_id)
+        self.assertEqual(snapshot.estado, 'ERROR_PERMANENTE')
+        self.assertEqual(snapshot.codigo_http, 200)
+        self.assertEqual(snapshot.codigo_funcional, 'HC13_TX02')
+        self.assertEqual(snapshot.error_codigo, 'respuesta_funcional_indeterminada')
+        self.assertEqual(snapshot.error_tipo, 'RESPUESTA_INVALIDA')
+        self.assertEqual(snapshot.resultado_normalizado, {})
+        self.assertEqual(resultado.snapshot_id, repetido.snapshot_id)
+        cliente.assert_called_once()
 
     def _resultado_proveedor(self, servicio='decisor'):
         return ResultadoProveedorDatacreditoPrestador(

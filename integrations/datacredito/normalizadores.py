@@ -1,6 +1,7 @@
 from collections.abc import Mapping
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
+import re
 
 from integrations.datacredito.dto import (
     ESTADO_APELLIDO_NO_COINCIDE,
@@ -38,6 +39,15 @@ COMPORTAMIENTO_PAGO = {
 CODIGOS_MORA_SEVERA = {'3', '4', '5', '6', 'C', 'D'}
 VERSION_NORMALIZADOR = 'datacredito-normalizado-v3'
 
+MIDECISOR_ERRORES = {
+    'SOLICITUD_INVALIDA': ('solicitud_funcional_invalida', 'ERROR_SOLICITUD'),
+    'CONSULTA_FALLIDA': ('consulta_funcional_fallida', 'RESPUESTA_FUNCIONAL'),
+    'RESPUESTA_INCONSISTENTE': ('respuesta_funcional_inconsistente', 'RESPUESTA_INVALIDA'),
+    'ALCANCE_PN_NO_CONFIRMADO': ('tx17_pn_no_confirmado', 'RESPUESTA_INVALIDA'),
+    ESTADO_ERROR_TEMPORAL: ('excepcion_interna_proveedor', 'ERROR_PROVEEDOR'),
+    ESTADO_ERROR_TECNICO: ('respuesta_funcional_indeterminada', 'RESPUESTA_INVALIDA'),
+}
+
 # Tabla 41 del manual HDC: pago total/canceladas; no inferir cierre por saldo cero.
 HDC_CUENTAS_CERRADAS = {'03', '08', '09', '11', '12', '13', '15', '16', '17'}
 HDC_CUENTAS_VIGENTES = {'01', '02', '05', '06', '14'}
@@ -71,9 +81,33 @@ def normalizar_midecisor_pn(raw):
     info_transaccion = _path(content, 'infoTransaccion') or {}
     codigos = _codigos_midecisor(info_transaccion)
     con_informacion = _normalizar_bool(_path(validacion, 'conInformacion'))
-    codigo_hc = codigos.get('HC') or _buscar_valor(datos, ('HC', 'responseCode', 'response_code', 'codigoRespuesta'))
+    codigo_hc = codigos.get('HC')
     codigo_tx = codigos.get('TX')
-    estado = _estado_midecisor(codigo_hc=codigo_hc, codigo_tx=codigo_tx, con_informacion=con_informacion)
+    estado = _estado_midecisor(
+        codigo_hc=codigo_hc, codigo_tx=codigo_tx, con_informacion=con_informacion,
+        status=_path(datos, 'status'), status_content=_path(content, 'status'),
+        estructura_valida=(
+            isinstance(content, Mapping) and isinstance(info_transaccion, Mapping)
+            and not codigos.get('_invalido')
+        ),
+        validacion_presente=(
+            isinstance(validacion, Mapping) and 'conInformacion' in validacion
+            and _modulos_midecisor_validos(respuesta)
+        ),
+        contiene_informacion=_midecisor_contiene_informacion(respuesta),
+    )
+    error_codigo, error_tipo = MIDECISOR_ERRORES.get(estado, (None, None))
+    if estado != ESTADO_EXITOSA_CON_INFORMACION:
+        return ResultadoDatacreditoNormalizado(
+            disponible=False, fuente=FUENTE_MIDECISOR, servicio=FUENTE_MIDECISOR,
+            estado=estado, con_informacion=con_informacion,
+            codigo_respuesta=codigo_hc, response_code=codigo_hc,
+            requiere_revision_manual=True, error_tipo=error_tipo,
+            metadata_segura={
+                'estado': estado, 'codigo_hc': codigo_hc, 'codigo_tx': codigo_tx,
+                'error_codigo': error_codigo,
+            },
+        )
     score = _entero(_path(riesgo, 'score') if riesgo else _buscar_valor(datos, ('score', 'puntaje', 'scoreDecisor')))
     score_normalizado = _normalizar_score(score)
     viabilidad = _valor_limpio(_path(riesgo, 'viabilidad') if riesgo else _buscar_valor(datos, ('viabilidad', 'viable')))
@@ -125,7 +159,7 @@ def normalizar_midecisor_pn(raw):
         requiere_revision_cumplimiento=requiere_cumplimiento,
         bloqueo_automatico=False,
         requiere_revision_manual=requiere_manual,
-        error_tipo=None if disponible else _error_tipo_desde_estado(estado),
+        error_tipo=error_tipo,
         alertas_resumen=alertas_resumen,
         metadata_segura={
             'fuente': FUENTE_MIDECISOR,
@@ -133,6 +167,7 @@ def normalizar_midecisor_pn(raw):
             'estado': estado,
             'codigo_hc': str(codigo_hc) if codigo_hc is not None else None,
             'codigo_tx': str(codigo_tx) if codigo_tx is not None else None,
+            'error_codigo': error_codigo,
             'score_detectado': score is not None,
             'cantidad_alertas': len(alertas) if isinstance(alertas, list) else 0,
             'requiere_revision_cumplimiento': requiere_cumplimiento,
@@ -344,24 +379,116 @@ def _path(datos, *claves):
 
 def _codigos_midecisor(info_transaccion):
     codigos = {}
-    for item in (info_transaccion or {}).get('codigosRespuesta') or []:
-        if isinstance(item, Mapping):
-            clave = item.get('clave')
-            valor = item.get('valor')
-            if clave:
-                codigos[str(clave)] = str(valor) if valor is not None else None
+    items = _path(info_transaccion, 'codigosRespuesta')
+    if not isinstance(items, list):
+        return {'_invalido': True}
+    for item in items:
+        if not isinstance(item, Mapping) or not isinstance(item.get('clave'), str):
+            codigos['_invalido'] = True
+            continue
+        clave = item['clave'].strip().upper()
+        if clave not in {'HC', 'TX'}:
+            continue
+        valor = _normalizar_codigo_midecisor(item.get('valor'))
+        if valor is None or (clave in codigos and codigos[clave] != valor):
+            codigos['_invalido'] = True
+        elif clave not in codigos:
+            codigos[clave] = valor
     return codigos
 
 
-def _estado_midecisor(*, codigo_hc, codigo_tx, con_informacion):
-    codigo_hc = str(codigo_hc) if codigo_hc is not None else None
-    codigo_tx = str(codigo_tx) if codigo_tx is not None else None
-    if codigo_hc == '13' and con_informacion is not False:
-        return ESTADO_EXITOSA_CON_INFORMACION
-    if codigo_hc == '09' and codigo_tx == '07' and con_informacion is False:
-        return ESTADO_IDENTIFICACION_NO_ENCONTRADA
-    if con_informacion is False:
-        return ESTADO_EXITOSA_SIN_INFORMACION
+def _normalizar_codigo_midecisor(valor):
+    if isinstance(valor, bool) or not isinstance(valor, (str, int)):
+        return None
+    texto = str(valor).strip()
+    return texto.zfill(2) if re.fullmatch(r'[0-9]{1,2}', texto) else None
+
+
+def _midecisor_contiene_informacion(respuesta):
+    def contiene(valor):
+        if isinstance(valor, Mapping):
+            for clave, dato in valor.items():
+                if clave == 'conInformacion' and dato is not None and _normalizar_bool(dato) is not False:
+                    return True
+                if clave in {'score', 'puntaje', 'scoreDecisor', 'viabilidad', 'ratingRecaudos'} and _normalizar_ausente(dato) is not None:
+                    return True
+                if clave in {'saldoActual', 'saldoMora', 'valorCuota', 'creditosVigentes',
+                             'creditosCerrados', 'montoSugerido', 'ingreso',
+                             'porcentajeDeuda', 'porcentajeCuotaVsIngreso'}:
+                    importe = _decimal(dato)
+                    if _normalizar_ausente(dato) is not None and (
+                        importe is None or not importe.is_finite() or importe != 0
+                    ):
+                        return True
+                if contiene(dato):
+                    return True
+        elif isinstance(valor, list) and valor:
+            return True
+        return False
+
+    return isinstance(respuesta, Mapping) and any(
+        contiene(valor) for clave, valor in respuesta.items() if clave != 'validacion'
+    )
+
+
+def _modulos_midecisor_validos(respuesta):
+    if not isinstance(respuesta, Mapping):
+        return False
+    for nombre in ('validacion', 'informacionRiesgo', 'comportamientoCrediticio', 'endeudamiento'):
+        if respuesta.get(nombre) is not None and not isinstance(respuesta[nombre], Mapping):
+            return False
+    indicadores = _path(respuesta, 'comportamientoCrediticio', 'indicadoresValores')
+    if indicadores is not None and not isinstance(indicadores, Mapping):
+        return False
+    for modulo, claves in (
+        ('informacionRiesgo', ('score', 'montoSugerido')),
+        ('endeudamiento', ('ingreso',)),
+    ):
+        for clave in claves:
+            dato = _normalizar_ausente(_path(respuesta, modulo, clave))
+            if dato is not None:
+                valor = _decimal(dato)
+                if valor is None or not valor.is_finite():
+                    return False
+    for clave in ('saldoActual', 'saldoMora', 'valorCuota', 'creditosVigentes',
+                  'creditosCerrados', 'porcentajeDeuda'):
+        dato = _normalizar_ausente(_path(indicadores, clave))
+        if dato is not None:
+            valor = _decimal(dato)
+            if valor is None or not valor.is_finite():
+                return False
+    return True
+
+
+def _estado_midecisor(*, codigo_hc, codigo_tx, con_informacion, status=None,
+                     status_content=None, estructura_valida=True,
+                     validacion_presente=True, contiene_informacion=False):
+    if not estructura_valida:
+        return ESTADO_ERROR_TECNICO
+    # Manual MiDecisor, p. 12: TX describes the transaction, not creditworthiness.
+    if codigo_tx == '23':
+        return ESTADO_ERROR_TEMPORAL
+    if codigo_tx in {'20', '21', '22', '24', '25'}:
+        return 'SOLICITUD_INVALIDA'
+    if codigo_tx in {f'{numero:02d}' for numero in range(9, 17)}:
+        return 'CONSULTA_FALLIDA'
+    if codigo_tx == '17':
+        # The documented scope is company validation; PN needs confirmation.
+        return 'ALCANCE_PN_NO_CONFIRMADO'
+    if codigo_tx not in {f'{numero:02d}' for numero in range(1, 9)}:
+        return ESTADO_ERROR_TECNICO
+    status = ' '.join(status.split()).upper() if isinstance(status, str) else ''
+    status_content = ' '.join(status_content.split()).upper() if isinstance(status_content, str) else ''
+    if status != 'ACCEPTED' or status_content != '202 ACCEPTED':
+        return 'RESPUESTA_INCONSISTENTE'
+    if not validacion_presente or con_informacion is None:
+        return ESTADO_ERROR_TECNICO
+    if codigo_hc == '13':
+        if con_informacion is True:
+            return ESTADO_EXITOSA_CON_INFORMACION
+        if not contiene_informacion:
+            return ESTADO_EXITOSA_SIN_INFORMACION
+        return 'RESPUESTA_INCONSISTENTE'
     return ESTADO_ERROR_TECNICO
 
 

@@ -159,6 +159,7 @@ def obtener_evaluacion_datacredito_prestador(
             codigo='proveedor_no_disponible' if transitorio else 'peticion_rechazada',
             tipo=str(exc.error_tipo or exc.__class__.__name__)[:80],
             codigo_http=exc.http_status,
+            codigo_funcional=exc.codigo_funcional if servicio == 'decisor' else None,
         )
     except (TypeError, ValueError):
         return _finalizar_error(
@@ -179,8 +180,10 @@ def obtener_evaluacion_datacredito_prestador(
             solicitud=solicitud,
             usuario=solicitado_por,
             estado=proveedor.estado_snapshot,
-            codigo='respuesta_funcional_no_exitosa',
-            tipo='RESPUESTA_FUNCIONAL',
+            codigo=proveedor.error_codigo or 'respuesta_funcional_no_exitosa',
+            tipo=proveedor.error_tipo or 'RESPUESTA_FUNCIONAL',
+            codigo_http=proveedor.codigo_http if servicio == 'decisor' else None,
+            codigo_funcional=proveedor.codigo_funcional if servicio == 'decisor' else None,
         )
 
     # A worker whose lease was recovered must never overwrite the recovery result.
@@ -425,7 +428,8 @@ def _bloquear_fingerprint(fingerprint):
 
 
 @transaction.atomic
-def _finalizar_error(snapshot, *, solicitud, usuario, estado, codigo, tipo, codigo_http=None):
+def _finalizar_error(snapshot, *, solicitud, usuario, estado, codigo, tipo, codigo_http=None,
+                     codigo_funcional=None):
     _bloquear_fingerprint(snapshot.fingerprint)
     snapshot = ConsultaDatacreditoSnapshot.objects.select_for_update().get(pk=snapshot.pk)
     if snapshot.estado != ConsultaDatacreditoSnapshot.Estado.EN_PROCESO:
@@ -435,12 +439,13 @@ def _finalizar_error(snapshot, *, solicitud, usuario, estado, codigo, tipo, codi
     snapshot.error_codigo = codigo
     snapshot.error_tipo = tipo
     snapshot.codigo_http = codigo_http
+    snapshot.codigo_funcional = codigo_funcional or ''
     snapshot.resultado_normalizado = {}
     snapshot.consultado_en = ahora
     snapshot.vigente_hasta = ahora
     snapshot.save(update_fields=[
         'estado', 'error_codigo', 'error_tipo', 'resultado_normalizado',
-        'consultado_en', 'vigente_hasta', 'codigo_http', 'updated_at',
+        'consultado_en', 'vigente_hasta', 'codigo_http', 'codigo_funcional', 'updated_at',
     ])
     _registrar_timeline_snapshot(
         solicitud,
