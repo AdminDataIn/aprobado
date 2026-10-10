@@ -28,9 +28,6 @@
         <div class="simulador-text-content">
           <span class="simulador-eyebrow">PRESTADORES DE SERVICIOS</span>
           <h1>SIMULA TU CRÉDITO</h1>
-          <button type="submit" class="simulador-cta-button simulador-submit simulador-register-cta"
-                  form="simulator-form" data-register-application
-                  {% if not puede_registrar %}disabled{% endif %}>Continuar con esta simulación</button>
         </div>
 
         <div class="simulador-card">
@@ -111,12 +108,11 @@
                 La simulación es informativa. La aprobación estará sujeta al análisis documental, validación de identidad, evaluación de riesgo y consulta ante centrales de información.
                 {% if configuracion_simulador.texto_nota_simulacion %}{{ configuracion_simulador.texto_nota_simulacion }}{% else %}Los valores son estimados y están sujetos al análisis de riesgo y la validación documental.{% endif %}
               </p>
-              <button type="submit" class="simulador-cta-button simulador-submit" form="simulator-form" data-register-application {% if not puede_registrar %}disabled{% endif %}>Continuar con esta simulación</button>
             </div>
           </form>
           <div class="simulador-sticky-cta">
             <span data-selection-summary></span>
-            <button type="submit" class="cp-button" form="simulator-form" data-register-application {% if not puede_registrar %}disabled{% endif %}>Continuar</button>
+            <button type="submit" class="cp-button simulador-submit" form="simulator-form" data-register-application {% if not puede_registrar %}disabled{% endif %}>Confirmar condiciones y enviar solicitud</button>
           </div>
         </div>
       </div>
@@ -156,6 +152,7 @@ document.addEventListener('DOMContentLoaded', function () {
   let timer;
   let requestNumber = 0;
   let activeController = null;
+  let submitting = false;
 
   function updateSlider(input, tooltip, progress, formatter) {
     const min = Number(input.min);
@@ -185,6 +182,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
   async function calculate() {
+    if (submitting) return;
     updateLabels();
     const current = ++requestNumber;
     if (activeController) activeController.abort();
@@ -200,7 +198,7 @@ document.addEventListener('DOMContentLoaded', function () {
         body: JSON.stringify({solicitud_id:form.dataset.applicationId, monto:amount.value, plazo_meses:term.value})
       });
       const data = await response.json();
-      if (current !== requestNumber) return;
+      if (current !== requestNumber || submitting) return;
       if (!response.ok || !data.ok) throw new Error(data.error || 'No fue posible calcular la simulación.');
       paint(data.resultado);
       status.textContent = '';
@@ -213,6 +211,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
   function schedule() {
+    if (submitting) return;
     updateLabels();
     ++requestNumber;
     if (activeController) activeController.abort();
@@ -224,7 +223,14 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   amount.addEventListener('input', schedule);
   term.addEventListener('input', schedule);
-  form.addEventListener('submit', function () {
+  form.addEventListener('submit', function (event) {
+    if (submitting) {
+      event.preventDefault();
+      return;
+    }
+    submitting = true;
+    clearTimeout(timer);
+    if (activeController) activeController.abort();
     updateLabels();
     if (registerButton) {
       registerButton.disabled = true;

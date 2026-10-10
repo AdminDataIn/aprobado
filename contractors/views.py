@@ -14,7 +14,7 @@ from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from contractors.forms import (
     ConsentimientoCentralesForm,
@@ -33,10 +33,9 @@ from contractors.services.capacidad_contractual import (
     evaluar_capacidad_contractual_preliminar,
     obtener_configuracion_simulador_prestador,
     obtener_configuracion_publica_simulador_prestador,
-    obtener_version_politica_simulador,
     simular_credito_prestador_informativo,
-    snapshot_configuracion_financiera,
 )
+from contractors.services.confirmacion_simulacion import confirmar_condiciones_simulacion
 from contractors.services.analisis_contractual_seguro import analizar_contrato_seguro
 from contractors.services.horizonte_simulacion import horizonte_para_solicitud, plazo_maximo_respaldado
 from contractors.validators import documento_numerico
@@ -52,7 +51,6 @@ from contractors.services.solicitud import (
 from contractors.services.evaluacion_audit import (
     ESTADOS_CON_EVALUACION,
     invalidar_evaluacion_si_cambiaron_datos,
-    marcar_evaluacion_pendiente,
     registrar_solicitud_creada,
 )
 from contractors.services.evaluacion_versionado import construir_version_datos
@@ -698,6 +696,30 @@ def simular_prestador_view(request):
         return redirect('contractors:solicitar')
 
     solicitud = _obtener_solicitud_del_usuario(solicitud_id, request.user)
+    error_confirmacion = None
+    if request.method == 'POST':
+        try:
+            confirmacion = confirmar_condiciones_simulacion(
+                solicitud=solicitud, usuario=request.user,
+                monto=request.POST.get('monto'), plazo_meses=request.POST.get('plazo_meses'),
+            )
+        except ValidationError as exc:
+            if getattr(exc, 'code', None) == 'otra_solicitud_en_proceso':
+                messages.error(request, exc.messages[0])
+                return redirect('contractors:mi_credito')
+            error_confirmacion = exc
+        else:
+            if confirmacion.reutilizada:
+                messages.info(request, 'Estas condiciones ya estaban registradas. Consulta el estado de tu solicitud.')
+            else:
+                messages.success(
+                    request,
+                    'Tu solicitud fue registrada para validación. El siguiente paso es el análisis '
+                    'de riesgo y validación documental.',
+                    extra_tags='solicitud-registrada-modal',
+                )
+            return redirect('contractors:mi_credito')
+        solicitud.refresh_from_db()
     documentos_cargados = _solicitud_tiene_documentos_obligatorios(solicitud)
     progreso_documental = calcular_progreso_documental(solicitud)
     configuracion = obtener_configuracion_simulador_prestador()
@@ -735,93 +757,14 @@ def simular_prestador_view(request):
         horizonte=horizonte,
     )
 
-    if request.method == 'POST' and form.is_valid():
-        if not documentos_cargados:
-            form.add_error(None, 'Completa los documentos obligatorios antes de registrar la solicitud.')
-        if not analisis_habilita_simulacion:
-            form.add_error(None, 'El análisis contractual debe estar vigente antes de registrar la solicitud.')
-        if not form.non_field_errors():
-            resultado = simular_credito_prestador_informativo(
-                monto=form.cleaned_data['monto'],
-                plazo_meses=form.cleaned_data['plazo_meses'],
-                configuracion=configuracion,
-            )
-            with transaction.atomic():
-                bloquear_solicitante(request.user)
-                if solicitud_en_proceso(request.user, excluir=solicitud.pk):
-                    messages.error(request, 'Ya tienes otra solicitud en proceso. Puedes consultar este registro sin enviarlo a evaluación.')
-                    return redirect('contractors:mi_credito')
-                solicitud_bloqueada = ContractorApplication.objects.select_for_update().get(
-                    pk=solicitud.pk,
-                    usuario=request.user,
-                )
-                try:
-                    resultado = simular_credito_prestador_informativo(
-                        monto=form.cleaned_data['monto'], plazo_meses=form.cleaned_data['plazo_meses'],
-                        configuracion=configuracion, solicitud=solicitud_bloqueada,
-                    )
-                except ValidationError as exc:
-                    messages.error(request, '; '.join(exc.messages))
-                    return redirect(f"{reverse('contractors:simular')}?solicitud_id={solicitud.id}")
-                version_anterior, _ = construir_version_datos(solicitud_bloqueada)
-                estado_anterior = solicitud_bloqueada.estado
-                solicitud_bloqueada.monto_solicitado = resultado.monto_solicitado
-                solicitud_bloqueada.plazo_meses = resultado.plazo_meses
-                snapshot_financiero = snapshot_configuracion_financiera(configuracion)
-                solicitud_bloqueada.version_configuracion_financiera_simulacion = (
-                    snapshot_financiero['version']
-                )
-                solicitud_bloqueada.version_politica_simulacion = (
-                    obtener_version_politica_simulador(configuracion)
-                )
-                solicitud_bloqueada.monto_simulado = resultado.monto_solicitado
-                solicitud_bloqueada.plazo_simulado_meses = resultado.plazo_meses
-                solicitud_bloqueada.tasa_mensual_simulacion = snapshot_financiero['tasa_mensual']
-                solicitud_bloqueada.monto_maximo_configuracion_simulacion = (
-                    snapshot_financiero['monto_maximo']
-                )
-                solicitud_bloqueada.plazo_maximo_configuracion_simulacion = (
-                    snapshot_financiero['plazo_maximo_meses']
-                )
-                solicitud_bloqueada.simulada_en = timezone.now()
-                solicitud_bloqueada.metadata_analisis_contractual = {
-                    **solicitud_bloqueada.metadata_analisis_contractual,
-                    'simulacion_guardada': {
-                        **_resultado_simulacion_json(resultado),
-                        'version': snapshot_financiero['version'],
-                    },
-                }
-                solicitud_bloqueada.save(update_fields=[
-                    'monto_solicitado', 'plazo_meses',
-                    'version_configuracion_financiera_simulacion',
-                    'version_politica_simulacion',
-                    'monto_simulado', 'plazo_simulado_meses',
-                    'tasa_mensual_simulacion',
-                    'monto_maximo_configuracion_simulacion',
-                    'plazo_maximo_configuracion_simulacion', 'simulada_en', 'updated_at',
-                    'metadata_analisis_contractual',
-                ])
-                if estado_anterior in ESTADOS_CON_EVALUACION:
-                    invalidar_evaluacion_si_cambiaron_datos(
-                        solicitud_bloqueada,
-                        version_anterior=version_anterior,
-                        usuario=request.user,
-                        campos=['monto_solicitado', 'plazo_meses'],
-                        motivo='simulacion_actualizada',
-                    )
-                else:
-                    marcar_evaluacion_pendiente(
-                        solicitud_bloqueada,
-                        usuario=request.user,
-                        motivo='simulacion_registrada',
-                    )
-            messages.success(
-                request,
-                'Tu solicitud fue registrada para validación. El siguiente paso es el análisis '
-                'de riesgo y validación documental.',
-                extra_tags='solicitud-registrada-modal',
-            )
-            return redirect('contractors:mi_credito')
+    if error_confirmacion is not None:
+        form.is_valid()
+        if hasattr(error_confirmacion, 'error_dict'):
+            for campo, errores in error_confirmacion.error_dict.items():
+                if campo == '__all__' or campo not in form.errors:
+                    form.add_error(campo if campo in form.fields else None, errores)
+        else:
+            form.add_error(None, error_confirmacion)
 
     return render(
         request,
@@ -909,6 +852,7 @@ def _resultado_simulacion_json(resultado):
 
 @login_required
 def mi_credito_prestador_view(request):
+    from contractors.services.estado_evaluacion import construir_seguimiento_evaluacion
     solicitudes = (
         ContractorApplication.objects
         .filter(usuario=request.user)
@@ -943,6 +887,10 @@ def mi_credito_prestador_view(request):
             'solicitudes_anteriores': solicitudes_con_progreso[1:],
             'estados_publicos': estados_publicos,
             'estado_publico_principal': estado_publico_principal,
+            'seguimiento_evaluacion': (
+                construir_seguimiento_evaluacion(solicitud_principal[0], estado_publico=estado_publico_principal)
+                if solicitud_principal else None
+            ),
             'validacion_contratante': confirmacion.get_estado_display() if confirmacion else 'Pendiente',
             'requiere_consentimiento_centrales': bool(
                 solicitud_principal and obtener_autorizacion_datacredito_vigente(solicitud_principal[0]) is None
@@ -957,6 +905,17 @@ def mi_credito_prestador_view(request):
             ),
         },
     )
+
+
+@login_required
+@require_GET
+def estado_evaluacion_prestador_view(request, solicitud_id):
+    from contractors.services.estado_evaluacion import construir_seguimiento_evaluacion
+    solicitud = _obtener_solicitud_del_usuario(solicitud_id, request.user)
+    respuesta = JsonResponse(construir_seguimiento_evaluacion(solicitud))
+    respuesta['Cache-Control'] = 'private, no-store, max-age=0'
+    respuesta['Pragma'] = 'no-cache'
+    return respuesta
 
 
 @login_required

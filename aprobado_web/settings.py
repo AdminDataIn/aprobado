@@ -534,7 +534,17 @@ CELERY_ENABLE_UTC = False
 
 CELERY_TASK_ROUTES = {
     'gestion_creditos.tasks.procesar_ocr_documental_task': {'queue': 'ocr_documental'},
+    'contractors.tasks.evaluar_solicitud_prestador_task': {'queue': 'celery'},
+    'contractors.tasks.publicar_evaluaciones_pendientes_task': {'queue': 'celery'},
 }
+
+# Separate authorization to dispatch automatically; never enables provider flags.
+PRESTADORES_AUTO_EVALUACION_ENABLED = os.environ.get('PRESTADORES_AUTO_EVALUACION_ENABLED', 'False').lower() == 'true'
+PRESTADORES_EVALUACION_ACTOR_ID = os.environ.get('PRESTADORES_EVALUACION_ACTOR_ID', '')
+PRESTADORES_EVALUACION_DISPATCH_BATCH = 25
+PRESTADORES_EVALUACION_PUBLICATION_BACKOFF_SECONDS = 60
+PRESTADORES_EVALUACION_DELIVERY_SECONDS = 300
+PRESTADORES_EVALUACION_LEASE_SECONDS = 900
 
 # Configuración de Celery Beat (tareas programadas)
 if DJANGO_CELERY_BEAT_AVAILABLE:

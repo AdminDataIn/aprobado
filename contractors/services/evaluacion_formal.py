@@ -52,6 +52,8 @@ def evaluar_solicitud_prestador(
     justificacion=None,
     nuevo_intento=False,
     inicio_operacion=None,
+    contexto_esperado=None,
+    reserva_operativa=None,
 ):
     inicio_operacion = inicio_operacion or timezone.now()
     _validar_actor(solicitado_por)
@@ -85,6 +87,8 @@ def evaluar_solicitud_prestador(
         modo_datacredito=modo_datacredito,
         nuevo_intento=nuevo_intento,
         inicio_operacion=inicio_operacion,
+        contexto_esperado=contexto_esperado,
+        reserva_operativa=reserva_operativa,
         servicios_consulta=(
             tuple(servicio for servicio, aplica in (
                 ('decisor', politica.requiere_midecisor or (politica.peso_midecisor or 0) > 0),
@@ -167,11 +171,32 @@ def _iniciar_evaluacion(
     version_configuracion_financiera, modo_datacredito,
     nuevo_intento=False, inicio_operacion=None,
     servicios_consulta=None,
+    contexto_esperado=None,
+    reserva_operativa=None,
 ):
     inicio_operacion = inicio_operacion or timezone.now()
     solicitud_bloqueada = ContractorApplication.objects.select_for_update().get(pk=solicitud.pk)
     version_datos, snapshot_entrada = construir_version_datos(solicitud_bloqueada)
     contexto = _contexto_consulta(solicitud_bloqueada, servicios_consulta)
+    if reserva_operativa is not None:
+        from contractors.models import EvaluacionPrestadorJob
+        job = EvaluacionPrestadorJob.objects.select_for_update().get(pk=reserva_operativa[0])
+        if (job.solicitud_id != solicitud_bloqueada.pk or job.actor_id != getattr(usuario, 'pk', None)
+                or job.estado != job.Estado.EN_EJECUCION or job.generacion != reserva_operativa[1]
+                or not job.lease_hasta or job.lease_hasta <= timezone.now()
+                or job.contexto != contexto_esperado):
+            raise ValidationError('La reserva operativa de la evaluacion no esta vigente.')
+    if contexto_esperado is not None:
+        from django.contrib.auth import get_user_model
+        from contractors.services.orquestacion_evaluacion import construir_contexto_job
+        actor_vigente = get_user_model().objects.get(pk=usuario.pk)
+        actual = construir_contexto_job(solicitud_bloqueada, actor_vigente)
+        if (actual != contexto_esperado or actual['version_datos'] != version_datos
+                or actual['version_politica'] != version_politica
+                or actual['version_score'] != version_score
+                or actual['version_financiera'] != version_configuracion_financiera
+                or actual['contexto_consulta'] != contexto):
+            raise ValidationError('El contexto autorizado de la evaluacion cambio.')
     snapshot_entrada['contexto_consulta'] = contexto
     clave = construir_clave_idempotencia(
         solicitud=solicitud_bloqueada,

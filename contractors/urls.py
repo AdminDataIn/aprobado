@@ -34,6 +34,7 @@ urlpatterns = [
     path('simular/', views.simular_prestador_view, name='simular'),
     path('simular/calcular/', views.calcular_simulacion_prestador_view, name='calcular_simulacion'),
     path('mi-credito/', views.mi_credito_prestador_view, name='mi_credito'),
+    path('mi-credito/solicitud/<int:solicitud_id>/estado/', views.estado_evaluacion_prestador_view, name='estado_evaluacion'),
     path(
         'mi-credito/solicitud/<int:solicitud_id>/condiciones/',
         views.condiciones_solicitud_prestador_view,

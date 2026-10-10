@@ -1635,13 +1635,11 @@ class PortalMinimoPrestadoresTest(TestCase):
             'validación de identidad, evaluación de riesgo y consulta ante centrales de información.',
         )
         self.assertContains(response, 'form="simulator-form" data-register-application')
-        self.assertContains(response, '>Continuar con esta simulación</button>', count=2)
+        self.assertContains(response, '>Confirmar condiciones y enviar solicitud</button>', count=1)
+        self.assertNotContains(response, '>Continuar con esta simulación</button>')
         self.assertContains(response, '<form method="post"', count=1)
         contenido = response.content.decode('utf-8')
-        self.assertLess(
-            contenido.index('data-register-application'),
-            contenido.index('<div class="simulador-card">'),
-        )
+        self.assertEqual(contenido.count('data-register-application '), 1)
         self.assertContains(response, 'setTimeout(calculate, 150)')
         self.assertContains(response, 'new AbortController()')
         self.assertContains(response, "amount.addEventListener('input', schedule)")

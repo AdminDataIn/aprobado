@@ -38,7 +38,7 @@ progress = {'cargados':4, 'total':4, 'porcentaje':100}
 state = {'etiqueta':'Evaluacion en curso','titulo':'Estamos validando tu informacion.','detalle':'Te avisaremos del siguiente paso.','accion':'CONDICIONES','accion_etiqueta':'Ver detalle','tono':'neutral'}
 current = (application,progress,state)
 history = [(previous,progress,state)]
-dashboard = render_to_string('contractors/mi_credito_prestador.html', {'solicitud_principal':current,'solicitudes_anteriores':history,'timeline_publico_principal':{'etapa_actual':4,'total_etapas':4,'eventos':[]}})
+dashboard = render_to_string('contractors/mi_credito_prestador.html', {'solicitud_principal':current,'solicitudes_anteriores':history,'seguimiento_evaluacion':{'mensaje':'Recibimos tu solicitud. La evaluacion esta pendiente','etiqueta':'Evaluacion pendiente','detalle':'Te informaremos del siguiente paso.','continuar_seguimiento':False,'procesando':False},'timeline_publico_principal':{'etapa_actual':4,'total_etapas':4,'eventos':[]}})
 print(json.dumps({'html':html,'results':results,'dashboard':dashboard}))
 `], {encoding:'utf8', env:{...process.env, PYTHONIOENCODING:'utf-8'}});
 }
@@ -111,11 +111,12 @@ for (const width of [390, 1280]) {
       assert.ok(box.y >= 0 && box.y + box.height <= 845);
       const text = await page.locator('[data-selection-summary]').boundingBox();
       const button = await page.locator('.simulador-sticky-cta button').boundingBox();
-      assert.ok(text.x + text.width <= button.x - 8);
+      assert.ok(text.y + text.height <= button.y);
     }
     await page.screenshot({path:path.join(os.tmpdir(), `p04g-simulador-${width}.png`), fullPage:true});
     const buttons = page.locator('[data-register-application]');
-    assert.equal(await buttons.count(), 3);
+    assert.equal(await buttons.count(), 1);
+    assert.equal(await buttons.first().textContent(), 'Confirmar condiciones y enviar solicitud');
     for (const button of await buttons.all()) assert.equal(await button.getAttribute('form'), 'simulator-form');
     await (width < 640 ? page.locator('.simulador-sticky-cta button') : buttons.first()).click();
     await page.waitForLoadState();

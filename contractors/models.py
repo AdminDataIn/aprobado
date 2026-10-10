@@ -285,6 +285,39 @@ class IngresoNetoVerificadoPrestador(models.Model):
         return f'Solicitud {self.solicitud_id} / ingreso v{self.version}'
 
 
+class EvaluacionPrestadorJob(models.Model):
+    """Durable delivery state, separate from immutable credit evaluation evidence."""
+
+    class Estado(models.TextChoices):
+        PENDIENTE_PUBLICACION = 'PENDIENTE_PUBLICACION', 'Pendiente de publicacion'
+        ENCOLADA = 'ENCOLADA', 'Encolada'
+        EN_EJECUCION = 'EN_EJECUCION', 'En ejecucion'
+        FINALIZADA = 'FINALIZADA', 'Finalizada'
+        REQUIERE_REVISION = 'REQUIERE_REVISION', 'Requiere revision'
+        SUSPENDIDA_OPERATIVA = 'SUSPENDIDA_OPERATIVA', 'Suspendida'
+        OBSOLETA = 'OBSOLETA', 'Obsoleta'
+
+    solicitud = models.ForeignKey(ContractorApplication, on_delete=models.PROTECT, related_name='evaluacion_jobs')
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='+')
+    clave_contexto = models.CharField(max_length=64, unique=True)
+    contexto = models.JSONField(default=dict)
+    estado = models.CharField(max_length=24, choices=Estado.choices, default=Estado.PENDIENTE_PUBLICACION)
+    codigo_operativo = models.CharField(max_length=64, blank=True)
+    intentos_publicacion = models.PositiveIntegerField(default=0)
+    proxima_publicacion = models.DateTimeField()
+    publicada_en = models.DateTimeField(null=True, blank=True)
+    iniciada_en = models.DateTimeField(null=True, blank=True)
+    finalizada_en = models.DateTimeField(null=True, blank=True)
+    lease_hasta = models.DateTimeField(null=True, blank=True)
+    generacion = models.PositiveIntegerField(default=0)
+    auditoria = models.ForeignKey('PredecisionPrestadorAudit', on_delete=models.PROTECT, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['estado', 'proxima_publicacion'], name='prest_job_dispatch_idx')]
+
+
 class PredecisionPrestadorAudit(models.Model):
     class EstadoEjecucion(models.TextChoices):
         PENDIENTE = 'PENDIENTE', 'Pendiente'

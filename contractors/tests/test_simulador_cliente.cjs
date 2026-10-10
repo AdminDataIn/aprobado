@@ -91,3 +91,12 @@ test('respuesta tardia nunca pisa el ultimo monto ni borra una cuota vigente', a
   assert.match(actual, /300,00/);
   assert.equal(h.elements['simulador-monto-hidden'].value, '3000000');
 });
+
+test('doble submit se bloquea sin publicar dos confirmaciones', () => {
+  const h = harness();
+  let prevented = 0;
+  h.elements['simulator-form'].submit({preventDefault() {prevented++;}});
+  h.elements['simulator-form'].submit({preventDefault() {prevented++;}});
+  assert.equal(prevented, 1);
+  assert.equal(h.requests[0].options.signal.aborted, true);
+});

@@ -17,10 +17,13 @@
         </header>
 
         <section class="cp-dashboard-hero" aria-labelledby="application-status-title">
-          <div>
-            <span class="cp-status-badge status-tone-{{ estado_publico.tono }}">{{ estado_publico.etiqueta }}</span>
-            <h1 id="application-status-title">{{ estado_publico.titulo }}</h1>
-            <p>{{ estado_publico.detalle }}</p>
+          <div{% if seguimiento_evaluacion %} data-evaluation-tracking
+                 data-state-url="{% url 'contractors:estado_evaluacion' solicitud.id %}"
+                 data-poll="{{ seguimiento_evaluacion.continuar_seguimiento|yesno:'true,false' }}" aria-live="polite"{% endif %}>
+            <span class="cp-status-badge status-tone-{{ estado_publico.tono }}" data-evaluation-label>{{ seguimiento_evaluacion.etiqueta|default:estado_publico.etiqueta }}</span>
+            <h1 id="application-status-title" data-evaluation-message>{{ seguimiento_evaluacion.mensaje|default:estado_publico.titulo }}</h1>
+            <p data-evaluation-detail>{{ seguimiento_evaluacion.detalle|default:estado_publico.detalle }}</p>
+            {% if seguimiento_evaluacion %}<span class="cp-evaluation-spinner" data-evaluation-spinner{% if not seguimiento_evaluacion.procesando %} hidden{% endif %} aria-hidden="true"></span>{% endif %}
             <div class="cp-financial-highlight">
               <div><small>Monto solicitado</small><strong>{% if solicitud.monto_solicitado %}${{ solicitud.monto_solicitado|floatformat:0|intcomma }}{% else %}Pendiente{% endif %}</strong></div>
               <div><small>Plazo</small><strong>{{ solicitud.plazo_meses|default:'Por definir' }}{% if solicitud.plazo_meses %} meses{% endif %}</strong></div>
@@ -156,3 +159,4 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 {% endblock %}
+{% block extra_js %}<script src="{% static 'js/seguimiento_evaluacion_prestador.js' %}?v=1" defer></script>{% endblock %}
