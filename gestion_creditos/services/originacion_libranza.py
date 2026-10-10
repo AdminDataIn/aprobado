@@ -71,6 +71,14 @@ def originar_libranza_desde_expediente(
     _exigir_actor_originacion(actor)
     _validar_expediente(dto, clave_idempotencia)
 
+    # This entry point also accepts direct callers with an older, already-built DTO.
+    from contractors.models import AprobacionInternaPrestador
+    from contractors.services.expediente_originacion import construir_expediente_originacion_prestador
+
+    gate = AprobacionInternaPrestador.objects.select_for_update().get(
+        pk=dto.aprobacion_interna_id,
+    )
+
     origen = _obtener_o_crear_origen_bloqueado(
         gate_id=dto.aprobacion_interna_id,
         gate_version=dto.version_datos,
@@ -95,6 +103,17 @@ def originar_libranza_desde_expediente(
         raise OriginacionEnProceso('La originacion tiene enlaces parciales y requiere revision.')
     if origen.estado != OrigenCreditoPrestador.Estado.EN_PROCESO:
         raise ValidationError('El origen no esta disponible para ser procesado.')
+
+    vigente = construir_expediente_originacion_prestador(gate)
+    if (
+        vigente.version_datos != dto.version_datos
+        or vigente.componentes_financieros.calcular_hash() != dto.componentes_financieros.calcular_hash()
+        or vigente.usuario_id != dto.usuario_id or vigente.empresa_id != dto.empresa_id
+        or vigente.monto_autorizado != dto.monto_autorizado
+        or vigente.plazo_autorizado != dto.plazo_autorizado
+    ):
+        raise ValidationError('El expediente no corresponde a la oferta financiera vigente.')
+    dto = vigente
 
     componentes = dto.componentes_financieros
     credito = Credito.objects.create(

@@ -16,8 +16,11 @@ from contractors.services.datacredito_evaluacion import (
     VERSION_FINGERPRINT,
     VERSION_NORMALIZADOR,
     _validar_modo,
+    construir_fingerprint_datacredito,
+    evidencia_uso_snapshot,
     obtener_evaluacion_datacredito_prestador,
 )
+from contractors.services.autorizacion_datacredito import obtener_autorizacion_datacredito_vigente
 from contractors.services.centrales_riesgo import obtener_evaluacion_centrales_prestador
 from contractors.services.evaluacion_timeline import registrar_evento_timeline_prestador
 from contractors.services.evaluacion_versionado import (
@@ -26,6 +29,7 @@ from contractors.services.evaluacion_versionado import (
 )
 from contractors.services.predecision import evaluar_predecision_formal_prestador
 from integrations.models import ConsultaDatacreditoSnapshot
+from integrations.datacredito.settings import obtener_configuracion_datacredito
 
 
 MODO_EVALUACION_FORMAL = 'FORMAL_READ_ONLY_V2'
@@ -81,6 +85,12 @@ def evaluar_solicitud_prestador(
         modo_datacredito=modo_datacredito,
         nuevo_intento=nuevo_intento,
         inicio_operacion=inicio_operacion,
+        servicios_consulta=(
+            tuple(servicio for servicio, aplica in (
+                ('decisor', politica.requiere_midecisor or (politica.peso_midecisor or 0) > 0),
+                ('historial', politica.requiere_hdcplus or (politica.peso_hdcplus or 0) > 0),
+            ) if aplica) if politica and politica.usa_fuentes_duales else None
+        ),
     )
     if inicio.reutilizada or inicio.en_proceso:
         if inicio.reutilizada:
@@ -156,10 +166,13 @@ def _iniciar_evaluacion(
     *, solicitud, usuario, version_politica, version_score, configuracion_financiera,
     version_configuracion_financiera, modo_datacredito,
     nuevo_intento=False, inicio_operacion=None,
+    servicios_consulta=None,
 ):
     inicio_operacion = inicio_operacion or timezone.now()
     solicitud_bloqueada = ContractorApplication.objects.select_for_update().get(pk=solicitud.pk)
     version_datos, snapshot_entrada = construir_version_datos(solicitud_bloqueada)
+    contexto = _contexto_consulta(solicitud_bloqueada, servicios_consulta)
+    snapshot_entrada['contexto_consulta'] = contexto
     clave = construir_clave_idempotencia(
         solicitud=solicitud_bloqueada,
         version_datos=version_datos,
@@ -183,6 +196,8 @@ def _iniciar_evaluacion(
             estado_ejecucion=PredecisionPrestadorAudit.EstadoEjecucion.EN_PROCESO,
         ).order_by('-created_at', '-pk').first()
     requiere_reconfirmacion = False
+    contexto_cambiado = False
+    vencida = False
     if existente:
         if existente.estado_ejecucion == existente.EstadoEjecucion.EN_PROCESO:
             segundos = max(
@@ -202,24 +217,41 @@ def _iniciar_evaluacion(
         legacy_id = (existente.snapshot_salida.get('datacredito') or {}).get('snapshot_id')
         if legacy_id:
             ids.add(str(legacy_id))
+        fuentes = list(ConsultaDatacreditoSnapshot.objects.filter(pk__in=ids))
+        contexto_anterior = existente.snapshot_entrada.get('contexto_consulta')
+        contexto_cambiado = (
+            contexto_anterior != contexto if contexto_anterior is not None
+            else not _contexto_historico_compatible(existente, fuentes, contexto)
+        )
+        # Errors are terminal diagnostics, not usable credit sources with an extended TTL.
         vencida = (
             existente.estado_ejecucion == existente.EstadoEjecucion.COMPLETADA
-            and bool(ids) and ConsultaDatacreditoSnapshot.objects.filter(
-                pk__in=ids, vigente_hasta__gt=timezone.now(),
-                estado__in=[ConsultaDatacreditoSnapshot.Estado.EXITOSO,
-                            ConsultaDatacreditoSnapshot.Estado.SIN_INFORMACION],
-            ).count() != len(ids)
+            and (len(fuentes) != len(ids) or any(
+                fuente.estado not in {
+                    ConsultaDatacreditoSnapshot.Estado.ERROR_TRANSITORIO,
+                    ConsultaDatacreditoSnapshot.Estado.ERROR_PERMANENTE,
+                } and (
+                    fuente.estado not in {
+                        ConsultaDatacreditoSnapshot.Estado.EXITOSO,
+                        ConsultaDatacreditoSnapshot.Estado.SIN_INFORMACION,
+                    } or not fuente.vigente_hasta or fuente.vigente_hasta <= timezone.now()
+                ) for fuente in fuentes
+            ))
         )
         # A concurrent retry may already have finished while this caller waited.
-        if nuevo_intento and (
+        if nuevo_intento and not contexto_cambiado and (
             existente.iniciada_en >= inicio_operacion
             or (existente.finalizada_en and existente.finalizada_en >= inicio_operacion)
         ):
             return ResultadoEvaluacionFormalPrestador(auditoria=existente, reutilizada=True)
-        if not nuevo_intento and (
+        if not nuevo_intento and not contexto_cambiado and (
             (modo_datacredito != FORZAR_CONSULTA and not vencida) or (
                 existente.estado_ejecucion == existente.EstadoEjecucion.COMPLETADA and not vencida
                 and existente.error_codigo != 'fuentes_evaluacion_vencidas'
+                and not any(fuente.estado in {
+                    ConsultaDatacreditoSnapshot.Estado.ERROR_TRANSITORIO,
+                    ConsultaDatacreditoSnapshot.Estado.ERROR_PERMANENTE,
+                } for fuente in fuentes)
             )
         ):
             return ResultadoEvaluacionFormalPrestador(auditoria=existente, reutilizada=True)
@@ -230,7 +262,8 @@ def _iniciar_evaluacion(
     if solicitud_bloqueada.estado not in {
         ContractorApplication.Estado.EVALUACION_PENDIENTE,
         ContractorApplication.Estado.EN_REVISION_MANUAL,
-    } and not (existente and vencida and solicitud_bloqueada.estado == ContractorApplication.Estado.EVALUACION_COMPLETADA):
+    } and not (existente and (vencida or contexto_cambiado)
+               and solicitud_bloqueada.estado == ContractorApplication.Estado.EVALUACION_COMPLETADA):
         raise ValidationError('La solicitud no esta pendiente ni habilitada para reintento.')
 
     auditoria = PredecisionPrestadorAudit.objects.create(
@@ -274,6 +307,34 @@ def _iniciar_evaluacion(
     )
 
 
+def _contexto_consulta(solicitud, servicios=None):
+    autorizacion = obtener_autorizacion_datacredito_vigente(solicitud)
+    contexto = {'autorizacion_id': autorizacion.pk if autorizacion else None, 'fingerprints': {}}
+    if autorizacion is not None:
+        configuracion = obtener_configuracion_datacredito()
+        servicios = servicios if servicios is not None else (configuracion.default_service,)
+        contexto['fingerprints'] = {
+            servicio: construir_fingerprint_datacredito(
+                solicitud=solicitud, servicio=servicio,
+                autorizacion=autorizacion, configuracion=configuracion,
+            ) for servicio in servicios
+        }
+    return contexto
+
+
+def _contexto_historico_compatible(auditoria, fuentes, contexto):
+    # Legacy evidence is checked in place, never rewritten or backfilled.
+    usos = auditoria.snapshot_salida.get('usos_snapshots', {})
+    for fuente in fuentes:
+        if contexto['fingerprints'].get(fuente.servicio) != fuente.fingerprint:
+            return False
+        uso = usos.get(fuente.servicio) or {}
+        autorizacion_id = uso.get('autorizacion_id', fuente.autorizacion_referencia)
+        if str(autorizacion_id) != str(contexto['autorizacion_id']):
+            return False
+    return True
+
+
 @transaction.atomic
 def _finalizar_evaluacion(
     *, auditoria, predecision, datacredito=None, centrales=None, usuario
@@ -283,7 +344,11 @@ def _finalizar_evaluacion(
     if auditoria_bloqueada.estado_ejecucion != auditoria_bloqueada.EstadoEjecucion.EN_PROCESO:
         return ResultadoEvaluacionFormalPrestador(auditoria=auditoria_bloqueada, reutilizada=True)
     version_actual, _ = construir_version_datos(solicitud)
-    if version_actual != auditoria_bloqueada.version_datos:
+    contexto = auditoria_bloqueada.snapshot_entrada.get('contexto_consulta')
+    if version_actual != auditoria_bloqueada.version_datos or (
+        contexto is not None
+        and contexto != _contexto_consulta(solicitud, tuple(contexto['fingerprints']))
+    ):
         auditoria_bloqueada.estado_ejecucion = PredecisionPrestadorAudit.EstadoEjecucion.ERROR_CONTROLADO
         auditoria_bloqueada.resultado = PredecisionPrestadorAudit.Resultado.ERROR_CONTROLADO
         auditoria_bloqueada.razones = ['Los datos cambiaron durante la evaluacion.']
@@ -374,6 +439,24 @@ def _finalizar_evaluacion(
             'datacredito': _snapshot_datacredito_allowlist(datacredito),
         }
         auditoria_bloqueada.error_codigo = getattr(datacredito, 'error_codigo', '') or ''
+    # Bind this evaluation to its own consent, without changing source snapshots.
+    autorizacion = obtener_autorizacion_datacredito_vigente(solicitud)
+    usos = {}
+    resultados = (centrales.decisor, centrales.historial) if centrales else (datacredito,)
+    for resultado in resultados:
+        if not resultado or resultado.estado not in {
+            ConsultaDatacreditoSnapshot.Estado.EXITOSO,
+            ConsultaDatacreditoSnapshot.Estado.SIN_INFORMACION,
+        } or not resultado.snapshot_id:
+            continue
+        try:
+            snapshot = ConsultaDatacreditoSnapshot.objects.filter(pk=resultado.snapshot_id).first()
+        except (ValidationError, ValueError):
+            snapshot = None
+        evidencia = evidencia_uso_snapshot(snapshot, solicitud=solicitud, autorizacion=autorizacion)
+        if evidencia:
+            usos[snapshot.servicio] = evidencia
+    auditoria_bloqueada.snapshot_salida['usos_snapshots'] = usos
     auditoria_bloqueada.error_etapa = (
         'datacredito' if auditoria_bloqueada.error_codigo else ''
     )

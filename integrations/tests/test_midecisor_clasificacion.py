@@ -177,6 +177,69 @@ class MiDecisorClasificacionTest(SimpleTestCase):
                 self.assertEqual(normalizar_midecisor_pn(payload_pn(hc=hc)).estado, 'ERROR_TECNICO')
         self.assertEqual(normalizar_midecisor_pn(payload_pn(hc='09', tx='07', informacion=False)).estado, 'ERROR_TECNICO')
 
+    def test_hc14_tx05_pendiente_de_respaldo_contractual_pn(self):
+        for informacion in (True, False, None):
+            with self.subTest(informacion=informacion):
+                payload = payload_pn(hc='14', tx='05', informacion=informacion)
+                payload['content']['respuesta']['informacionRiesgo'] = {
+                    'conInformacion': informacion,
+                    'score': '853' if informacion is True else None,
+                }
+                resultado = normalizar_midecisor_pn(payload)
+                self.assertEqual(resultado.estado, 'ERROR_TECNICO')
+                self.assertEqual(resultado.metadata_segura['error_codigo'], 'respuesta_funcional_indeterminada')
+                self.assertEqual(resultado.error_tipo, 'RESPUESTA_INVALIDA')
+                self.assertEqual(resultado.metadata_segura['codigo_hc'], '14')
+                self.assertEqual(resultado.metadata_segura['codigo_tx'], '05')
+                self.assertFalse(resultado.disponible)
+                self.assertTrue(resultado.requiere_revision_manual)
+                self.assertIsNone(resultado.score)
+
+    def test_hc14_con_informacion_no_neutraliza_tx_fallido(self):
+        casos = [(str(tx), 'CONSULTA_FALLIDA') for tx in range(9, 17)] + [
+            ('17', 'ALCANCE_PN_NO_CONFIRMADO'),
+            ('20', 'SOLICITUD_INVALIDA'), ('21', 'SOLICITUD_INVALIDA'),
+            ('22', 'SOLICITUD_INVALIDA'), ('23', 'ERROR_TEMPORAL'),
+            ('24', 'SOLICITUD_INVALIDA'), ('25', 'SOLICITUD_INVALIDA'),
+            (None, 'ERROR_TECNICO'), ('', 'ERROR_TECNICO'), ('99', 'ERROR_TECNICO'),
+        ]
+        for tx, estado in casos:
+            with self.subTest(tx=tx):
+                resultado = normalizar_midecisor_pn(payload_pn(hc='14', tx=tx))
+                self.assertEqual(resultado.estado, estado)
+                self.assertFalse(resultado.disponible)
+                self.assertTrue(resultado.requiere_revision_manual)
+                self.assertIsNone(resultado.score)
+
+    def test_hc14_tx05_incompleto_o_contradictorio_no_habilita_informacion(self):
+        casos = []
+        for informacion in (False, None):
+            payload = payload_pn(hc='14', tx='05', informacion=informacion)
+            payload['content']['respuesta']['informacionRiesgo'] = {'conInformacion': True, 'score': '853'}
+            casos.append(payload)
+        for informacion in (False, None):
+            payload = payload_pn(hc='14', tx='05')
+            payload['content']['respuesta']['informacionRiesgo']['conInformacion'] = informacion
+            casos.append(payload)
+        for modulo in ('validacion', 'informacionRiesgo'):
+            payload = payload_pn(hc='14', tx='05')
+            del payload['content']['respuesta'][modulo]
+            casos.append(payload)
+        for score in (None, '', 'invalido', 'NaN', 'Infinity', '-2', '1001', '853.5'):
+            payload = payload_pn(hc='14', tx='05')
+            payload['content']['respuesta']['informacionRiesgo']['score'] = score
+            casos.append(payload)
+        payload = payload_pn(hc='14', tx='05')
+        payload['status'] = 'PRECONDITION_FAILED'
+        casos.append(payload)
+        for index, payload in enumerate(casos):
+            with self.subTest(caso=index):
+                resultado = normalizar_midecisor_pn(payload)
+                self.assertNotIn(resultado.estado, {'EXITOSA_CON_INFORMACION', 'EXITOSA_SIN_INFORMACION'})
+                self.assertFalse(resultado.disponible)
+                self.assertTrue(resultado.requiere_revision_manual)
+                self.assertIsNone(resultado.score)
+
     def test_estructuras_invalidas_y_codigos_duplicados_no_lanzan_excepcion(self):
         casos = [None, [], {}, {'content': []}, {'content': {'infoTransaccion': []}}]
         for codigos in (None, {}, ['invalido'], [{'clave': 'TX', 'valor': '02'}, {'clave': 'TX', 'valor': '20'}]):

@@ -4,6 +4,8 @@ import json
 import tempfile
 from unittest.mock import patch
 
+from dateutil.relativedelta import relativedelta
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -42,6 +44,8 @@ from contractors.services.expediente_originacion import (
     construir_expediente_originacion_prestador,
 )
 from contractors.services.originacion import originar_credito_prestador_desde_gate
+from contractors.services.ingreso_neto import registrar_ingreso_neto
+from contractors.services.politica_financiera_prestador import PARAMETROS, VERSION
 from contractors.services.formalizacion import (
     enviar_formalizacion_prestador_a_firma,
     preparar_formalizacion_credito_prestador,
@@ -133,7 +137,10 @@ class AprobacionInternaPrestadorTest(TestCase):
     def setUp(self):
         self.directorio_media = tempfile.TemporaryDirectory()
         self.addCleanup(self.directorio_media.cleanup)
-        self.override_media = override_settings(MEDIA_ROOT=self.directorio_media.name)
+        self.override_media = override_settings(
+            MEDIA_ROOT=self.directorio_media.name,
+            PRIVATE_DOCUMENTS_ROOT=self.directorio_media.name,
+        )
         self.override_media.enable()
         self.addCleanup(self.override_media.disable)
         User = get_user_model()
@@ -141,6 +148,7 @@ class AprobacionInternaPrestadorTest(TestCase):
         self.analista = User.objects.create_user(
             'analista-gate', password='test', is_staff=True
         )
+        self._otorgar(self.analista, 'can_verify_contractor_net_income')
         self.lector = User.objects.create_user('lector-gate', password='test', is_staff=True)
         self.empresa = Empresa.objects.create(nombre='Empresa Gate', convenio_activo=True)
         self.configuracion = self._crear_configuracion()
@@ -1676,16 +1684,13 @@ class AprobacionInternaPrestadorTest(TestCase):
 
         return ConfiguracionSimuladorPrestador.objects.create(
             nombre='Configuracion gate',
-            version='financiera-gate-v1',
+            version=VERSION,
             activo=True,
-            monto_minimo=Decimal('1000000'),
-            monto_maximo=Decimal('10000000'),
-            plazo_minimo_meses=3,
-            plazo_maximo_meses=8,
-            tasa_mensual=Decimal('2.2000'),
+            **PARAMETROS,
         )
 
     def _crear_solicitud(self):
+        inicio = timezone.localdate().replace(day=1)
         solicitud = ContractorApplication.objects.create(
             usuario=self.solicitante,
             empresa=self.empresa,
@@ -1697,12 +1702,14 @@ class AprobacionInternaPrestadorTest(TestCase):
             correo='gate@example.com',
             direccion='Direccion gate',
             cargo='Consultoria',
-            fecha_inicio_contrato=timezone.localdate(),
-            fecha_fin_contrato=timezone.localdate() + timedelta(days=240),
+            fecha_inicio_contrato=inicio,
+            fecha_fin_contrato=inicio + relativedelta(months=8) - timedelta(days=1),
             valor_total_contrato=Decimal('50000000'),
             valor_pagado_contrato=Decimal('2000000'),
             valor_pendiente_cobrar=Decimal('48000000'),
             forma_pago=ContractorApplication.FormaPago.MENSUAL,
+            duracion_contrato_meses=8,
+            evidencia_forma_pago='Ocho pagos mensuales dentro de los primeros cinco dias habiles del mes siguiente.',
             valor_mensual_contractual=Decimal('6000000'),
             monto_solicitado=Decimal('3000000'),
             plazo_meses=6,
@@ -1738,6 +1745,13 @@ class AprobacionInternaPrestadorTest(TestCase):
                 uploaded_by=self.solicitante,
                 metadata_captura={'source': 'camera'} if tipo.startswith('CEDULA') else {},
             )
+        registrar_ingreso_neto(
+            solicitud=solicitud, actor=self.analista, monto='6000000',
+            fecha_corte=timezone.localdate(), vigente_hasta=timezone.localdate() + timedelta(days=30),
+            documentos=[solicitud.documentos.get(tipo_documento='CERTIFICADO_BANCARIO')],
+            observacion='Evidencia sintetica para probar gates con oferta real',
+        )
+        solicitud.refresh_from_db()
         return solicitud
 
     def _crear_snapshot(self):
@@ -1765,6 +1779,7 @@ class AprobacionInternaPrestadorTest(TestCase):
             estado_ejecucion=PredecisionPrestadorAudit.EstadoEjecucion.COMPLETADA,
             resultado=PredecisionPrestadorAudit.Resultado.PREAPROBADO_READ_ONLY,
             score=Decimal('900'),
+            cuota_mensual_hdc=Decimal('0'),
             version_score=self.politica.version_score,
             version_politica=self.politica.version_politica,
             version_configuracion_financiera=self.configuracion.version,
@@ -1779,10 +1794,16 @@ class AprobacionInternaPrestadorTest(TestCase):
                 'monto_maximo_sugerido': '3000000.00',
                 'plazo_maximo_sugerido': 6,
                 'score_resultado': {
+                    'score_final': '900',
+                    'version_score': self.politica.version_score,
+                    'version_politica': self.politica.version_politica,
+                    'requiere_revision_manual': False,
+                    'bloqueos': [],
                     'banda': 'PREMIUM',
                     'monto_maximo_sugerido': '3000000.00',
                     'plazo_maximo_sugerido': 6,
                     'variables_calculadas': {
+                        'obligaciones_mensuales': '0',
                         'capacidad_monto_teorica': '6000000.00',
                         'meses_restantes_contrato': 7,
                     },
@@ -1805,3 +1826,5 @@ class AprobacionInternaPrestadorTest(TestCase):
 
     def _otorgar(self, usuario, *codenames):
         usuario.user_permissions.add(*Permission.objects.filter(codename__in=codenames))
+        for atributo in ('_perm_cache', '_user_perm_cache', '_group_perm_cache'):
+            usuario.__dict__.pop(atributo, None)

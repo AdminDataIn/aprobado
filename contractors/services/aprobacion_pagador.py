@@ -12,6 +12,7 @@ from contractors.models import (
 )
 from contractors.services.evaluacion_timeline import registrar_evento_timeline_prestador
 from contractors.services.evaluacion_versionado import construir_version_datos
+from contractors.services.oferta_financiera import validar_oferta_financiera_gate
 from contractors.services.validacion_contractual import validar_contrato_prestador
 
 
@@ -40,6 +41,7 @@ def crear_o_reutilizar_aprobacion_pagador(gate, *, actor=None):
     )
     if gate.estado != AprobacionInternaPrestador.Estado.APROBADA_PARA_ORIGINAR:
         raise ValidationError('La aprobación interna aún no habilita al pagador.')
+    validar_oferta_financiera_gate(gate)
     version_actual, _ = construir_version_datos(gate.solicitud)
     if version_actual != gate.version_datos:
         raise ValidationError('Los datos cambiaron después de la aprobación interna.')
@@ -115,6 +117,8 @@ def _decidir_aprobacion_pagador_prestador_transaccional(
     }:
         raise ValidationError('La decisión del pagador no es válida.')
     if aprobacion.estado == decision:
+        if decision == AprobacionPagadorPrestador.Estado.APROBADO:
+            validar_oferta_financiera_gate(aprobacion.aprobacion_interna)
         return ResultadoAprobacionPagadorPrestador(aprobacion, True)
     if aprobacion.estado != AprobacionPagadorPrestador.Estado.PENDIENTE:
         raise ValidationError('La aprobación del pagador ya tiene una decisión final.')
@@ -135,6 +139,9 @@ def _decidir_aprobacion_pagador_prestador_transaccional(
         for campo in CONFIRMACIONES_REQUERIDAS
     }
     if decision == AprobacionPagadorPrestador.Estado.APROBADO:
+        if aprobacion.aprobacion_interna.estado != AprobacionInternaPrestador.Estado.APROBADA_PARA_ORIGINAR:
+            raise ValidationError('La aprobacion interna no esta vigente.')
+        validar_oferta_financiera_gate(aprobacion.aprobacion_interna)
         faltantes = [campo for campo, confirmado in valores.items() if not confirmado]
         if faltantes:
             raise ValidationError(

@@ -1,10 +1,15 @@
+from datetime import datetime, time, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 
 from gestion_creditos.credit_services import activar_credito
 from gestion_creditos.models import Credito, CuotaAmortizacion
+from gestion_creditos.services.costo_originacion_libranza import (
+    FECHA_INICIO_V2, requiere_snapshot_originacion_libranza,
+)
 
 
 class RegresionActivacionLibranzaTradicionalTest(TestCase):
@@ -20,6 +25,14 @@ class RegresionActivacionLibranzaTradicionalTest(TestCase):
             plazo=12,
             tasa_interes=Decimal('1.90'),
         )
+        # This regression covers the historical 10% fallback, not a new origination.
+        fecha_historica = timezone.make_aware(datetime.combine(
+            FECHA_INICIO_V2 - timedelta(days=1), time(hour=12),
+        ))
+        Credito.objects.filter(pk=credito.pk).update(fecha_solicitud=fecha_historica)
+        credito.refresh_from_db()
+        self.assertLess(timezone.localdate(credito.fecha_solicitud), FECHA_INICIO_V2)
+        self.assertFalse(requiere_snapshot_originacion_libranza(credito))
         capital = Decimal('1119000.00')
         tasa = Decimal('0.019')
         factor = (tasa * (Decimal('1') + tasa) ** 12) / (

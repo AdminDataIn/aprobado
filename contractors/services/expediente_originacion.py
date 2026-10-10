@@ -8,6 +8,7 @@ from contractors.models import (
     ConfiguracionSimuladorPrestador,
 )
 from contractors.services.aprobacion_pagador import validar_aprobacion_pagador_vigente
+from contractors.services.oferta_financiera import validar_oferta_financiera_gate
 from contractors.services.evaluacion_versionado import construir_version_datos
 from gestion_creditos.services.condiciones_financieras import (
     ComponentesFinancierosCredito,
@@ -68,6 +69,7 @@ def construir_expediente_originacion_prestador(gate):
     if gate.auditoria_predecision.version_datos != gate.version_datos:
         raise ValidationError('La aprobacion no coincide con su auditoria de predecision.')
     validar_aprobacion_pagador_vigente(gate)
+    validar_oferta_financiera_gate(gate)
     configuracion = ConfiguracionSimuladorPrestador.objects.filter(
         version=gate.version_configuracion_financiera,
     ).first()

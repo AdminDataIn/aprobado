@@ -13,7 +13,7 @@ from contractors.datacredito.dto import (
     ResultadoConsultaDatacreditoPrestador,
     ResultadoNormalizadoDatacreditoPrestador,
 )
-from contractors.models import TimelinePrestador
+from contractors.models import AutorizacionConsultaDatacreditoPrestador, TimelinePrestador
 from contractors.services.autorizacion_datacredito import (
     obtener_autorizacion_datacredito_vigente,
 )
@@ -36,6 +36,7 @@ FORZAR_CONSULTA = 'FORZAR_CONSULTA'
 SOLO_CACHE = 'SOLO_CACHE'
 MODOS_VALIDOS = {REUTILIZAR_SI_VIGENTE, FORZAR_CONSULTA, SOLO_CACHE}
 VERSION_FINGERPRINT = 'datacredito-fingerprint-v3'
+VERSION_USO_SNAPSHOT = 'prestadores-uso-snapshot-v1'
 
 ESTADO_AUTORIZACION_REQUERIDA = 'AUTORIZACION_REQUERIDA'
 ESTADO_NO_CONFIGURADO = 'NO_CONFIGURADO'
@@ -85,14 +86,10 @@ def obtener_evaluacion_datacredito_prestador(
     if modo != FORZAR_CONSULTA:
         snapshot = _buscar_snapshot_reutilizable(fingerprint)
         if snapshot is not None:
-            _registrar_timeline_snapshot(
-                solicitud,
-                snapshot,
-                TimelinePrestador.TipoEvento.DATACREDITO_REUTILIZADO,
-                solicitado_por,
-                reutilizado=True,
+            return _resultado_reutilizado(
+                snapshot, solicitud=solicitud, autorizacion=autorizacion,
+                usuario=solicitado_por,
             )
-            return _resultado_desde_snapshot(snapshot, reutilizado=True)
     if modo == SOLO_CACHE:
         return _resultado_controlado(
             estado=ESTADO_SIN_CACHE,
@@ -112,7 +109,10 @@ def obtener_evaluacion_datacredito_prestador(
         inicio_operacion=inicio_operacion,
     )
     if snapshot_en_proceso.estado != ConsultaDatacreditoSnapshot.Estado.EN_PROCESO:
-        return _resultado_desde_snapshot(snapshot_en_proceso, reutilizado=True)
+        return _resultado_reutilizado(
+            snapshot_en_proceso, solicitud=solicitud, autorizacion=autorizacion,
+            usuario=solicitado_por,
+        )
     if getattr(snapshot_en_proceso, '_reserva_existente', False):
         return _resultado_desde_snapshot(snapshot_en_proceso, reutilizado=True)
 
@@ -281,6 +281,84 @@ def construir_fingerprint_datacredito(
         ensure_ascii=True,
     )
     return hashlib.sha256(serializado.encode('utf-8')).hexdigest()
+
+
+def evidencia_uso_snapshot(snapshot, *, solicitud, autorizacion):
+    """Same holder, legal purpose and query; origin evidence is never reassigned."""
+    if snapshot is None or autorizacion is None:
+        return None
+    solicitud = type(solicitud).objects.get(pk=solicitud.pk)
+    actual = obtener_autorizacion_datacredito_vigente(solicitud)
+    if (
+        actual is None or actual.pk != autorizacion.pk
+        or autorizacion.solicitud_id != solicitud.pk
+        or autorizacion.usuario_id != solicitud.usuario_id
+        or snapshot.estado not in {
+            ConsultaDatacreditoSnapshot.Estado.EXITOSO,
+            ConsultaDatacreditoSnapshot.Estado.SIN_INFORMACION,
+        }
+        or not snapshot.vigente_hasta or snapshot.vigente_hasta <= timezone.now()
+        or not str(snapshot.autorizacion_referencia).isdigit()
+        or snapshot.servicio not in ConsultaDatacreditoSnapshot.Servicio.values
+    ):
+        return None
+    origen = AutorizacionConsultaDatacreditoPrestador.objects.filter(
+        pk=snapshot.autorizacion_referencia, usuario_id=autorizacion.usuario_id,
+        autorizada=True, version_texto=autorizacion.version_texto,
+        texto_hash=autorizacion.texto_hash,
+        solicitud__usuario_id=autorizacion.usuario_id,
+        solicitud__autoriza_consulta_centrales=True,
+    ).first()
+    if origen is None:
+        return None
+    configuracion = obtener_configuracion_datacredito()
+    if not secreto_documental_valido(configuracion.document_hash_secret):
+        return None
+    try:
+        esperado = construir_fingerprint_datacredito(
+            solicitud=solicitud, servicio=snapshot.servicio,
+            autorizacion=autorizacion, configuracion=configuracion,
+        )
+    except (DatacreditoConfigError, ValueError, TypeError):
+        return None
+    if (
+        snapshot.fingerprint != esperado
+        or snapshot.ambiente != configuracion.environment
+        or snapshot.documento_hash != _hmac_documento(
+            solicitud.numero_documento, configuracion.document_hash_secret,
+        )
+    ):
+        return None
+    return {
+        'version': VERSION_USO_SNAPSHOT,
+        'finalidad': 'evaluacion_solicitud_prestador',
+        'solicitud_id': solicitud.pk,
+        'autorizacion_id': autorizacion.pk,
+        'autorizacion_origen_id': origen.pk,
+        'snapshot_id': str(snapshot.pk),
+        'servicio': snapshot.servicio,
+        'fingerprint': snapshot.fingerprint,
+        'version_texto': autorizacion.version_texto,
+        'texto_hash': autorizacion.texto_hash,
+    }
+
+
+def _resultado_reutilizado(snapshot, *, solicitud, autorizacion, usuario):
+    if snapshot.estado in {
+        ConsultaDatacreditoSnapshot.Estado.EXITOSO,
+        ConsultaDatacreditoSnapshot.Estado.SIN_INFORMACION,
+    }:
+        if evidencia_uso_snapshot(snapshot, solicitud=solicitud, autorizacion=autorizacion) is None:
+            # Do not silently create another billable consultation for an ineligible hit.
+            return _resultado_controlado(
+                estado='NO_EVALUABLE', servicio=snapshot.servicio,
+                error_codigo='reutilizacion_no_autorizada',
+            )
+        _registrar_timeline_snapshot(
+            solicitud, snapshot, TimelinePrestador.TipoEvento.DATACREDITO_REUTILIZADO,
+            usuario, reutilizado=True,
+        )
+    return _resultado_desde_snapshot(snapshot, reutilizado=True)
 
 
 def _validar_actor(solicitud, usuario):

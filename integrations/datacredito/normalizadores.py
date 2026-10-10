@@ -74,10 +74,6 @@ def normalizar_midecisor_pn(raw):
     content = _path(datos, 'content') or {}
     respuesta = _path(content, 'respuesta') or {}
     validacion = _path(respuesta, 'validacion') or {}
-    riesgo = _path(respuesta, 'informacionRiesgo') or {}
-    endeudamiento = _path(respuesta, 'endeudamiento') or {}
-    comportamiento = _path(respuesta, 'comportamientoCrediticio') or {}
-    indicadores = _path(comportamiento, 'indicadoresValores') or {}
     info_transaccion = _path(content, 'infoTransaccion') or {}
     codigos = _codigos_midecisor(info_transaccion)
     con_informacion = _normalizar_bool(_path(validacion, 'conInformacion'))
@@ -108,6 +104,22 @@ def normalizar_midecisor_pn(raw):
                 'error_codigo': error_codigo,
             },
         )
+    return _extraer_campos_midecisor_pn(
+        datos, estado=estado, con_informacion=con_informacion,
+        codigo_hc=codigo_hc, codigo_tx=codigo_tx,
+    )
+
+
+def _extraer_campos_midecisor_pn(datos, *, estado, con_informacion, codigo_hc, codigo_tx):
+    # Shared projection only; authorization/classification remain at the caller.
+    content = _path(datos, 'content') or {}
+    respuesta = _path(content, 'respuesta') or {}
+    riesgo = _path(respuesta, 'informacionRiesgo') or {}
+    endeudamiento = _path(respuesta, 'endeudamiento') or {}
+    comportamiento = _path(respuesta, 'comportamientoCrediticio') or {}
+    indicadores = _path(comportamiento, 'indicadoresValores') or {}
+    info_transaccion = _path(content, 'infoTransaccion') or {}
+    error_codigo, error_tipo = MIDECISOR_ERRORES.get(estado, (None, None))
     score = _entero(_path(riesgo, 'score') if riesgo else _buscar_valor(datos, ('score', 'puntaje', 'scoreDecisor')))
     score_normalizado = _normalizar_score(score)
     viabilidad = _valor_limpio(_path(riesgo, 'viabilidad') if riesgo else _buscar_valor(datos, ('viabilidad', 'viable')))

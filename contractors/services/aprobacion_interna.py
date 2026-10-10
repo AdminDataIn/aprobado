@@ -22,6 +22,9 @@ from contractors.services.autorizacion_datacredito import (
 )
 from contractors.services.evaluacion_timeline import registrar_evento_timeline_prestador
 from contractors.services.evaluacion_versionado import construir_version_datos
+from contractors.services.oferta_financiera import (
+    calcular_oferta_evaluada, exigir_oferta_viable, validar_oferta_financiera_gate,
+)
 from contractors.services.revision_manual import ESTADOS_REVISION_ACTIVA
 from contractors.services.validacion_contractual import validar_contrato_prestador
 from integrations.models import ConsultaDatacreditoSnapshot
@@ -55,12 +58,13 @@ def crear_o_reutilizar_aprobacion_interna(auditoria, *, actor):
     existente = AprobacionInternaPrestador.objects.filter(
         auditoria_predecision=auditoria
     ).first()
-    if existente:
-        return existente, False
-
     solicitud = ContractorApplication.objects.select_for_update().get(
         pk=auditoria.solicitud_id
     )
+    if existente:
+        if existente.estado in ESTADOS_GATE_ACTIVO:
+            validar_oferta_financiera_gate(existente)
+        return existente, False
     activo = AprobacionInternaPrestador.objects.filter(
         solicitud=solicitud,
         estado__in=ESTADOS_GATE_ACTIVO,
@@ -122,6 +126,7 @@ def iniciar_analisis_aprobacion_interna(gate, *, actor):
     gate = _bloquear_gate(gate.pk)
     if gate.estado != AprobacionInternaPrestador.Estado.PENDIENTE:
         raise ValidationError('La aprobacion interna no esta pendiente de analisis.')
+    validar_oferta_financiera_gate(gate)
     anterior = gate.estado
     gate.estado = AprobacionInternaPrestador.Estado.EN_ANALISIS
     gate.save(update_fields=['estado', 'updated_at'])
@@ -151,13 +156,13 @@ def aprobar_para_originar(
     }:
         raise ValidationError('La aprobacion interna no esta disponible para decidir.')
 
-    motivos = _motivos_revalidacion(gate)
+    motivos, detalle_revalidacion = _motivos_revalidacion(gate)
     if motivos:
         return _devolver_gate_a_revision(
             gate,
             actor=actor,
             motivo=motivos[0],
-            comentario='La revalidacion previa a originacion detecto cambios controlados.',
+            comentario=detalle_revalidacion,
         )
 
     monto = _decimal(monto_autorizado, gate.monto_autorizado)
@@ -166,6 +171,10 @@ def aprobar_para_originar(
         raise ValidationError('El monto autorizado debe ser positivo y no superar el evaluado.')
     if plazo <= 0 or plazo > gate.plazo_maximo_evaluado:
         raise ValidationError('El plazo autorizado debe ser positivo y no superar el evaluado.')
+    # A shorter term can invalidate affordability even within the historic maxima.
+    gate.monto_autorizado = monto
+    gate.plazo_autorizado = plazo
+    validar_oferta_financiera_gate(gate)
 
     anterior = gate.estado
     gate.estado = AprobacionInternaPrestador.Estado.APROBADA_PARA_ORIGINAR
@@ -345,6 +354,12 @@ def _validar_gate(solicitud, auditoria):
     if errores:
         raise ValidationError(errores)
     limites = _extraer_limites(auditoria, solicitud, politica, configuracion, contrato)
+    oferta = exigir_oferta_viable(calcular_oferta_evaluada(
+        solicitud, auditoria, politica=politica,
+        monto=limites['monto_evaluado'], plazo=limites['plazo_evaluado'],
+    ))
+    limites['monto_evaluado'] = oferta.monto
+    limites['plazo_evaluado'] = oferta.plazo
     return ValidacionGatePrestador(
         politica=politica,
         configuracion_financiera=configuracion,
@@ -432,8 +447,11 @@ def _motivos_revalidacion(gate):
             ('subsanacion', AprobacionInternaPrestador.Motivo.SUBSANACION_PENDIENTE),
         )
         motivos = [motivo for texto, motivo in reglas if texto in textos]
-        return motivos or [AprobacionInternaPrestador.Motivo.OTRA_VALIDACION_CONTROLADA]
-    return []
+        return (
+            motivos or [AprobacionInternaPrestador.Motivo.OTRA_VALIDACION_CONTROLADA],
+            'Revalidacion previa a originacion: ' + ' '.join(exc.messages),
+        )
+    return [], ''
 
 
 def _devolver_gate_a_revision(gate, *, actor, motivo, comentario):
@@ -497,7 +515,7 @@ def _obtener_snapshots_datacredito(auditoria, autorizacion, politica):
         if not requeridos.issubset(servicios_presentes):
             return None
         for snapshot, servicio in referencias:
-            if not _snapshot_vigente(snapshot, autorizacion, servicio=servicio):
+            if not _snapshot_vigente(snapshot, autorizacion, auditoria=auditoria, servicio=servicio):
                 return None
             snapshots.append(snapshot)
         return tuple(snapshots)
@@ -512,19 +530,31 @@ def _obtener_snapshots_datacredito(auditoria, autorizacion, politica):
         snapshot = ConsultaDatacreditoSnapshot.objects.filter(pk=snapshot_id).first()
     except (ValidationError, ValueError):
         return None
-    if not _snapshot_vigente(snapshot, autorizacion):
+    if not _snapshot_vigente(snapshot, autorizacion, auditoria=auditoria):
         return None
     return (snapshot,)
 
 
-def _snapshot_vigente(snapshot, autorizacion, *, servicio=None):
-    return bool(
+def _snapshot_vigente(snapshot, autorizacion, *, auditoria, servicio=None):
+    vigente = bool(
         snapshot is not None
         and snapshot.estado == ConsultaDatacreditoSnapshot.Estado.EXITOSO
         and snapshot.vigente_hasta > timezone.now()
-        and snapshot.autorizacion_referencia == str(autorizacion.pk)
         and (servicio is None or snapshot.servicio == servicio)
     )
+    if not vigente:
+        return False
+    salida = auditoria.snapshot_salida or {}
+    if 'usos_snapshots' not in salida:
+        # Legacy audits do not prove cross-application reuse; never backfill them.
+        return snapshot.autorizacion_referencia == str(autorizacion.pk)
+    from contractors.services.datacredito_evaluacion import evidencia_uso_snapshot
+
+    esperado = evidencia_uso_snapshot(
+        snapshot, solicitud=auditoria.solicitud, autorizacion=autorizacion,
+    )
+    usos = salida['usos_snapshots']
+    return bool(esperado and isinstance(usos, dict) and usos.get(snapshot.servicio) == esperado)
 
 
 def _bloquear_gate(gate_id):
