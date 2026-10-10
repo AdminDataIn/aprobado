@@ -75,6 +75,54 @@ test('periodicidad no identificada es vacia pero una eleccion explicita se conse
   assert.equal(field.value, 'QUINCENAL');
 });
 
+test('asset versionado evita API cacheada sin refreshDerivedBalance', async t => {
+  const page = await browser.newPage();
+  t.after(() => page.close());
+  const html = renderedForm();
+  const current = fs.readFileSync(script, 'utf8');
+  // Model the API served before 05c2169 under the unchanged p04e1-1 URL.
+  const legacy = current.replace('const api = { fillEmpty, missingFields, refreshDerivedBalance };',
+    'const api = { fillEmpty, missingFields };');
+  assert.notEqual(legacy, current);
+  const fields = Object.fromEntries(Object.entries({
+    valor_total_contrato: '1000000.37', valor_pagado_contrato: '0',
+    valor_pendiente_cobrar: '1000000.37',
+  }).map(([name, value]) => [name, {valor: value, encontrado: true, editable: true,
+    etiqueta: name, fuente: name === 'valor_pendiente_cobrar' ? 'DERIVADO_DETERMINISTICAMENTE' : 'CONTRATO'}]));
+  await page.route('**/*', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/solicitar/') return route.fulfill({contentType: 'text/html', body: html});
+    if (url.pathname === '/legacy/') return route.fulfill({contentType: 'text/html',
+      body: html.replace(/contract_reconciliation\.js\?v=[^"']+/, 'contract_reconciliation.js?v=p04e1-1')});
+    if (url.pathname.includes('contrato/analizar')) return route.fulfill({json: {success: true, campos_extraidos: fields}});
+    if (url.pathname.endsWith('/contract_reconciliation.js')) return route.fulfill({contentType: 'application/javascript',
+      body: url.searchParams.get('v') === 'p04e1-1' ? legacy : current});
+    if (url.pathname.startsWith('/static/')) {
+      const file = path.resolve(__dirname, '../../../static', url.pathname.slice(8));
+      if (fs.existsSync(file)) return route.fulfill({path: file});
+    }
+    return route.fulfill({status: 404, body: ''});
+  });
+  async function analyze(pathname) {
+    await page.goto('https://contratistas.localhost' + pathname);
+    await page.locator('#id_contrato_actual').setInputFiles({name: 'sintetico.pdf', mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4 synthetic cache regression')});
+    await page.locator('#id_autoriza_analisis_contractual_asistido').check();
+    await page.locator('#analizar_contrato_button').click();
+    await page.waitForFunction(() => !document.querySelector('#analizar_contrato_button').disabled);
+  }
+  await analyze('/legacy/');
+  assert.match(await page.locator('#contract_ai_status').textContent(), /refreshDerivedBalance is not a function/);
+  await analyze('/solicitar/');
+  assert.equal(await page.evaluate(() => typeof ContractReconciliation.refreshDerivedBalance), 'function');
+  assert.match(await page.locator('#contract_ai_result').textContent(), /Le\u00edmos tu contrato/);
+  await page.evaluate(() => {
+    const paid = document.querySelector('#id_valor_pagado_contrato');
+    paid.value = '100000.10'; paid.dispatchEvent(new Event('input', {bubbles: true}));
+  });
+  assert.equal(await page.locator('[name="valor_pendiente_cobrar"]').inputValue(), '900000.27');
+});
+
 for (const mobile of [false, true]) {
   test(`UAT precarga antes de calcular faltantes (${mobile ? 'mobile' : 'desktop'})`, async t => {
     const page = await browser.newPage({viewport: {width: mobile ? 390 : 1280, height:844}, isMobile:mobile, hasTouch:mobile});
