@@ -120,7 +120,7 @@ def _extraer_campos_midecisor_pn(datos, *, estado, con_informacion, codigo_hc, c
     indicadores = _path(comportamiento, 'indicadoresValores') or {}
     info_transaccion = _path(content, 'infoTransaccion') or {}
     error_codigo, error_tipo = MIDECISOR_ERRORES.get(estado, (None, None))
-    score = _entero(_path(riesgo, 'score') if riesgo else _buscar_valor(datos, ('score', 'puntaje', 'scoreDecisor')))
+    score = _entero(_path(riesgo, 'score'))
     score_normalizado = _normalizar_score(score)
     viabilidad = _valor_limpio(_path(riesgo, 'viabilidad') if riesgo else _buscar_valor(datos, ('viabilidad', 'viable')))
     monto_sugerido = _entero(_path(riesgo, 'montoSugerido') if riesgo else _buscar_valor(datos, ('montoSugerido', 'monto_sugerido', 'valorAprobado', 'cupo')))
@@ -452,6 +452,19 @@ def _modulos_midecisor_validos(respuesta):
     indicadores = _path(respuesta, 'comportamientoCrediticio', 'indicadoresValores')
     if indicadores is not None and not isinstance(indicadores, Mapping):
         return False
+    pagos = _path(respuesta, 'comportamientoCrediticio', 'comportamientoPago')
+    if pagos is not None and not isinstance(pagos, Mapping):
+        return False
+    for modulo in (
+        respuesta.get('informacionRiesgo'), respuesta.get('endeudamiento'),
+        respuesta.get('comportamientoCrediticio'), indicadores, pagos,
+    ):
+        if isinstance(modulo, Mapping) and 'conInformacion' in modulo:
+            flag = modulo['conInformacion']
+            if flag is not None and not isinstance(flag, bool):
+                return False
+            if flag is not True and _midecisor_contiene_informacion({'modulo': modulo}):
+                return False
     for modulo, claves in (
         ('informacionRiesgo', ('score', 'montoSugerido')),
         ('endeudamiento', ('ingreso',)),
@@ -461,6 +474,13 @@ def _modulos_midecisor_validos(respuesta):
             if dato is not None:
                 valor = _decimal(dato)
                 if valor is None or not valor.is_finite():
+                    return False
+                # The downstream score contract is an integer in 0..1000. Never
+                # turn an invalid provider value into a usable score by truncation.
+                if clave == 'score' and (
+                    isinstance(dato, bool) or (isinstance(dato, str) and ',' in dato)
+                    or valor != valor.to_integral_value() or not 0 <= valor <= 1000
+                ):
                     return False
     for clave in ('saldoActual', 'saldoMora', 'valorCuota', 'creditosVigentes',
                   'creditosCerrados', 'porcentajeDeuda'):

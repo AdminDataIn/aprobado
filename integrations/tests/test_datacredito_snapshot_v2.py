@@ -566,8 +566,7 @@ class DatacreditoSnapshotV2Test(TestCase):
     @patch('contractors.datacredito.adapter.consultar_midecisor_persona_natural')
     def test_error_parseando_datos_no_pierde_http_ni_codigo_funcional(self, cliente):
         payload = payload_pn()
-        payload['content']['respuesta']['informacionRiesgo'] = {}
-        payload['score'] = 'NaN'
+        payload['content']['respuesta']['informacionRiesgo']['score'] = 'NaN'
         cliente.return_value = ResultadoMiDecisorRawSeguro(
             status_code=200, codigo_funcional='HC13_TX02', raw_sanitizado=payload,
         )

@@ -1,4 +1,5 @@
 from unittest.mock import Mock, patch
+from types import SimpleNamespace
 
 from django.test import SimpleTestCase, override_settings
 
@@ -7,7 +8,7 @@ from integrations.datacredito.decisor_client import (
     _codigo_funcional_midecisor,
     consultar_midecisor_persona_natural,
 )
-from integrations.datacredito.dto import EntradaMiDecisor, TokenDatacredito
+from integrations.datacredito.dto import EntradaMiDecisor, ResultadoMiDecisorRawSeguro, TokenDatacredito
 from integrations.datacredito.exceptions import DatacreditoProviderError
 from integrations.datacredito.normalizadores import normalizar_midecisor_pn
 from integrations.tests.test_datacredito_proxy import CONFIGURACION_HTTP_PRUEBA
@@ -257,6 +258,115 @@ class MiDecisorClasificacionTest(SimpleTestCase):
         self.assertIsNone(_buscar_response_code(payload))
         resultado = normalizar_midecisor_pn(payload)
         self.assertNotIn('sintetico', str(resultado.metadata_segura))
+
+    def test_score_fraccionario_ambiguo_o_fuera_de_limite_no_se_trunca(self):
+        for score in ('667.9', '1000.1', '-2', '1001', '6,67', '1,000', True):
+            with self.subTest(score=score):
+                payload = payload_pn()
+                payload['content']['respuesta']['informacionRiesgo']['score'] = score
+                resultado = normalizar_midecisor_pn(payload)
+                self.assertEqual(resultado.estado, 'ERROR_TECNICO')
+                self.assertFalse(resultado.disponible)
+                self.assertIsNone(resultado.score)
+                self.assertTrue(resultado.requiere_revision_manual)
+
+    def test_score_entero_normalizable_conserva_compatibilidad(self):
+        for score in ('667', ' 667 ', 667, '667.0', 0, 1000):
+            with self.subTest(score=score):
+                payload = payload_pn()
+                payload['content']['respuesta']['informacionRiesgo']['score'] = score
+                resultado = normalizar_midecisor_pn(payload)
+                self.assertEqual(resultado.estado, 'EXITOSA_CON_INFORMACION')
+                self.assertEqual(resultado.score, int(float(score)))
+                self.assertFalse(resultado.requiere_revision_manual)
+
+    def test_score_ausente_o_sentinela_no_inventa_puntaje(self):
+        for score in (None, '', '-', '-1', -1):
+            with self.subTest(score=score):
+                payload = payload_pn()
+                payload['content']['respuesta']['informacionRiesgo']['score'] = score
+                resultado = normalizar_midecisor_pn(payload)
+                self.assertIsNone(resultado.score)
+                self.assertTrue(resultado.requiere_revision_manual)
+
+    def test_score_fuera_de_informacion_riesgo_no_es_fuente_crediticia(self):
+        for clave in ('score', 'puntaje', 'scoreDecisor'):
+            with self.subTest(clave=clave):
+                payload = payload_pn()
+                payload['content']['respuesta']['informacionRiesgo'] = {}
+                payload['content']['respuesta']['sugerencias'] = {clave: '900'}
+                resultado = normalizar_midecisor_pn(payload)
+                self.assertIsNone(resultado.score)
+                self.assertIsNone(resultado.score_midecisor)
+                self.assertTrue(resultado.requiere_revision_manual)
+
+    def test_modulo_sin_informacion_no_puede_aportar_datos_crediticios(self):
+        for modulo, datos in (
+            ('informacionRiesgo', {'score': '667'}),
+            ('endeudamiento', {'ingreso': '5000000'}),
+            ('comportamientoCrediticio', {'indicadoresValores': {'saldoMora': '50'}}),
+        ):
+            for flag in (False, None, 'true', 1):
+                with self.subTest(modulo=modulo, flag=flag):
+                    payload = payload_pn()
+                    payload['content']['respuesta'][modulo] = {'conInformacion': flag, **datos}
+                    resultado = normalizar_midecisor_pn(payload)
+                    self.assertEqual(resultado.estado, 'ERROR_TECNICO')
+                    self.assertFalse(resultado.disponible)
+                    self.assertIsNone(resultado.score)
+
+    def test_indicadores_sin_informacion_no_aportan_saldo(self):
+        payload = payload_pn()
+        payload['content']['respuesta']['comportamientoCrediticio'] = {
+            'conInformacion': True,
+            'indicadoresValores': {'conInformacion': False, 'saldoMora': '50'},
+        }
+        self.assertEqual(normalizar_midecisor_pn(payload).estado, 'ERROR_TECNICO')
+
+    def test_comportamiento_sin_informacion_no_aporta_vector(self):
+        payload = payload_pn()
+        payload['content']['respuesta']['comportamientoCrediticio'] = {
+            'conInformacion': True,
+            'comportamientoPago': {
+                'conInformacion': False,
+                'vectorComportamiento': [{'comportamiento': '3'}],
+            },
+        }
+        self.assertEqual(normalizar_midecisor_pn(payload).estado, 'ERROR_TECNICO')
+
+    def test_submodulos_sin_informacion_con_null_siguen_siendo_validos(self):
+        payload = payload_pn()
+        payload['content']['respuesta'].update({
+            'endeudamiento': {'conInformacion': False, 'ingreso': None},
+            'comportamientoCrediticio': {
+                'conInformacion': True,
+                'indicadoresValores': {'conInformacion': False, 'saldoMora': None},
+                'comportamientoPago': {'conInformacion': False, 'vectorComportamiento': None},
+            },
+        })
+        resultado = normalizar_midecisor_pn(payload)
+        self.assertEqual(resultado.estado, 'EXITOSA_CON_INFORMACION')
+        self.assertEqual(resultado.score, 853)
+        self.assertIsNone(resultado.saldo_mora)
+
+    def test_adapter_no_entrega_score_invalido_al_motor(self):
+        from contractors.datacredito.adapter import consultar_proveedor_datacredito_prestador
+
+        solicitud = SimpleNamespace(apellidos='SINTETICO', tipo_documento='CC', numero_documento='000000')
+        for score, flag in (('667.9', True), ('667', False)):
+            with self.subTest(score=score, flag=flag):
+                payload = payload_pn()
+                payload['content']['respuesta']['informacionRiesgo'].update(score=score, conInformacion=flag)
+                raw = ResultadoMiDecisorRawSeguro(
+                    status_code=200, codigo_funcional='HC13_TX02', raw_sanitizado=payload,
+                )
+                with patch('contractors.datacredito.adapter.consultar_midecisor_persona_natural', return_value=raw):
+                    resultado = consultar_proveedor_datacredito_prestador(solicitud, servicio='decisor')
+                self.assertEqual(resultado.estado_snapshot, 'ERROR_PERMANENTE')
+                self.assertIsNone(resultado.resultado_normalizado.score_externo)
+                self.assertEqual(resultado.codigo_http, 200)
+                self.assertEqual(resultado.codigo_funcional, 'HC13_TX02')
+                self.assertEqual(resultado.error_tipo, 'RESPUESTA_INVALIDA')
 
 
 @override_settings(**CONFIGURACION_HTTP_PRUEBA)
