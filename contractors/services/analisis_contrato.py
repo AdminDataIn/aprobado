@@ -109,12 +109,20 @@ def analizar_contrato_fallback(documento, *, texto_pdf=None, motivo='') -> Resul
         cargo = _buscar(texto, r'servicios\s+profesionales\s+como\s+([^,;.]{2,160})')
     fecha_inicio = _buscar_fecha(texto, ('fecha de inicio', 'inicio del contrato', 'fecha inicio', 'inicia el'))
     fecha_fin = _buscar_fecha(texto, ('fecha de terminación', 'fecha de terminacion', 'fecha de finalización', 'fin del contrato', 'fecha fin', 'fecha terminación', 'fecha terminacion'))
+    if fecha_inicio is None or fecha_fin is None:
+        inicio_narrativo, fin_narrativo = _buscar_intervalo_fechas(texto)
+        fecha_inicio = fecha_inicio or inicio_narrativo
+        fecha_fin = fecha_fin or fin_narrativo
     valor_total = _buscar_valor(texto, ('valor total del contrato', 'valor del contrato', 'valor total contrato', 'valor total'))
     if valor_total is None:
         valor_total = _importe(_buscar(texto, r'valor\s+total\s+del\s+(?:presente\s+)?contrato\s+(?:ser[aá]|es)\s+de\s*:[^\d$]{0,180}\$\s*([\d.,]+)'))
+    if valor_total is None:
+        valor_total = _importe(_buscar(texto, r'valor\s+total\s+de(?:\s+prueba\s+de)?\s*\$\s*([\d.,]+)'))
     honorarios = _buscar_valor(texto, ('honorarios mensuales', 'valor mensual', 'mensualidad'))
     if honorarios is None:
         honorarios = _importe(_buscar(texto, r'pagos?\s+mensuales\s+de\s*:?\s*\$\s*([\d.,]+)'))
+    if honorarios is None:
+        honorarios = _importe(_buscar(texto, r'honorarios\s+de\s*\$\s*([\d.,]+)\s*(?:COP\s+)?mensuales\b'))
     pagado = _buscar_valor(texto, ('valor pagado', 'total pagado', 'pagos realizados'))
     if pagado is None and re.search(r'\bno\s+se\s+registra\s+ning[uú]n\s+pago\s+efectuado\b', texto, re.I):
         pagado = Decimal('0')
@@ -198,6 +206,22 @@ def _buscar_valor(texto, etiquetas):
             if importe is not None:
                 return importe
     return None
+
+
+def _buscar_intervalo_fechas(texto):
+    meses = dict(zip(('enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+                     'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'), range(1, 13)))
+    fecha = (r'(?:\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}-\d{2}-\d{2}|'
+             r'\d{1,2}\s+de\s+(?:' + '|'.join(meses) + r')\s+de\s+\d{4})')
+    intervalos = set(re.findall(r'\bdesde\s+el\s+(' + fecha + r')\s+hasta\s+el\s+('
+                               + fecha + r')', re.sub(r'\s+', ' ', texto.lower())))
+    # Multiple intervals may be renewals or amendments; require human reconciliation.
+    if len(intervalos) != 1:
+        return None, None
+    inicio, fin = next(iter(intervalos))
+    inicio = _buscar_fecha('inicio: ' + inicio, ('inicio',))
+    fin = _buscar_fecha('fin: ' + fin, ('fin',))
+    return (inicio, fin) if inicio and fin else (None, None)
 
 
 def _importe(valor):

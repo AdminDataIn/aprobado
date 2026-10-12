@@ -9,7 +9,7 @@ from contractors.services.analisis_contrato import ResultadoAnalisisContrato, an
 from contractors.services.analisis_contrato_ia import _normalizar
 from contractors.services.analisis_contractual_seguro import analizar_contrato_seguro
 from contractors.services.extraccion_campos import derivar_pendiente, ESQUEMA, datos_canonicos
-from contractors.tests.contrato_uat_fixture import pdf_uat
+from contractors.tests.contrato_uat_fixture import pdf_uat, pdf_uat_calendario
 from gestion_creditos.models import Empresa
 
 
@@ -17,6 +17,47 @@ from gestion_creditos.models import Empresa
 class ExtraccionContratoUATTest(TestCase):
     def setUp(self):
         self.empresa = Empresa.objects.create(nombre='PRUEBAS DATAIN', nit='999888777', convenio_activo=True)
+
+    def test_pdf_narrativo_extrae_explicitos_sin_inventar_calendario_o_pagado(self):
+        archivo = pdf_uat_calendario()
+        texto, error = leer_texto_pdf(archivo)
+        self.assertFalse(error)
+        self.assertIn('PRUEBA - SIN', texto)
+        resultado = analizar_contrato_fallback(archivo)
+        for campo, esperado in {
+            'fecha_inicio_contrato': date(2026, 7, 1),
+            'fecha_fin_contrato': date(2027, 6, 30),
+            'duracion_meses_contrato': 12,
+            'valor_mensual_o_honorarios': Decimal('7000000'),
+            'valor_total_contrato': Decimal('84000000'),
+            'forma_pago': 'MENSUAL',
+        }.items():
+            with self.subTest(campo=campo):
+                self.assertEqual(getattr(resultado, campo), esperado)
+        self.assertIsNone(resultado.valor_pagado_estimado)
+        self.assertIsNone(resultado.valor_pendiente_estimado)
+        from gestion_creditos.services.horizonte_contractual import extraer_regla_pago
+        self.assertIsNone(extraer_regla_pago(resultado.evidencia_forma_pago))
+
+    def test_ia_no_puede_aportar_calendario_ausente_del_pdf(self):
+        ia = ResultadoAnalisisContrato(fuente='openai', forma_pago='MENSUAL',
+            evidencia_forma_pago='pago el ultimo dia del mes')
+        with patch('contractors.services.analisis_contractual_seguro.analizar_contrato_con_openai', return_value=ia):
+            resultado = analizar_contrato_seguro(
+                solicitud=SimpleNamespace(numero_documento='123456789'), documento=pdf_uat_calendario())
+        from gestion_creditos.services.horizonte_contractual import extraer_regla_pago
+        self.assertIsNone(extraer_regla_pago(resultado.datos['evidencia_forma_pago']))
+
+    def test_fecha_narrativa_invalida_o_ambigua_no_se_adivina(self):
+        for texto in (
+            'desde el 31 de febrero de 2026 hasta el 30 de junio de 2027',
+            'desde el 01 de julio de 2026 hasta el 30 de junio de 2027; '
+            'desde el 01 de agosto de 2026 hasta el 31 de julio de 2027',
+        ):
+            with self.subTest(texto=texto):
+                resultado = analizar_contrato_fallback(None, texto_pdf=texto)
+                self.assertIsNone(resultado.fecha_inicio_contrato)
+                self.assertIsNone(resultado.fecha_fin_contrato)
 
     def test_pdf_textual_extrae_todos_los_hechos_reportados(self):
         archivo = pdf_uat()

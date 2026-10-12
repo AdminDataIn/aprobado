@@ -367,7 +367,8 @@ def _contexto_continuidad_solicitud(request, form, solicitud, *, paso_error_gene
         )
         analisis_vigente = not error
     return {
-        'paso_activo': errores[0]['paso'] if errores else 1,
+        'paso_activo': errores[0]['paso'] if errores else (
+            2 if solicitud and request.method == 'GET' and request.GET.get('revisar_contrato') == '1' else 1),
         'errores_solicitud': errores,
         'documentos_guardados': documentos_guardados,
         'captura_recuperada': bool(sesion_documental),

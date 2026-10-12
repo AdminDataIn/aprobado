@@ -337,8 +337,8 @@ class SolicitudPrestadorForm(ConsentimientoCentralesMixin, forms.ModelForm):
             'direccion': forms.TextInput(attrs={'class': 'campo', 'placeholder': 'Ej. Calle 10 # 20-30, Bogotá'}),
             'cargo': forms.TextInput(attrs={'class': 'campo', 'placeholder': 'Cargo o servicio prestado'}),
             'tipo_contrato': forms.Select(attrs={'class': 'campo'}),
-            'fecha_inicio_contrato': forms.DateInput(attrs={'class': 'campo', 'type': 'date'}),
-            'fecha_fin_contrato': forms.DateInput(attrs={'class': 'campo', 'type': 'date'}),
+            'fecha_inicio_contrato': forms.DateInput(format='%Y-%m-%d', attrs={'class': 'campo', 'type': 'date'}),
+            'fecha_fin_contrato': forms.DateInput(format='%Y-%m-%d', attrs={'class': 'campo', 'type': 'date'}),
             'duracion_contrato_meses': forms.NumberInput(attrs={
                 'class': 'campo', 'min': 1, 'placeholder': 'Ej. 8',
             }),

@@ -2158,6 +2158,117 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(Credito.objects.count(), creditos_antes)
         self.assertEqual(CreditoLibranza.objects.count(), creditos_libranza_antes)
 
+    def _payload_calendario_uat(self, *, adenda='', solicitud=None):
+        from contractors.tests.contrato_uat_fixture import pdf_uat_calendario
+        from contractors.services.politica_financiera_prestador import VERSION, PARAMETROS
+        self.client.force_login(self.usuario)
+        for campo, valor in PARAMETROS.items():
+            setattr(self.configuracion_simulador, campo, valor)
+        self.configuracion_simulador.version = VERSION
+        self.configuracion_simulador.save()
+        archivo = pdf_uat_calendario(adenda=adenda)
+        contenido = archivo.read()
+        analisis = self._analizar_contrato_transitorio(contenido)
+        self.assertEqual(analisis.status_code, 200)
+        self.assertTrue(analisis.json()['success'])
+        payload = self._payload_solicitud()
+        payload.update({campo: evidencia['valor'] for campo, evidencia in
+                        analisis.json()['campos_extraidos'].items()
+                        if evidencia['editable'] and evidencia['encontrado']})
+        # A synthetic participant explicitly declares these; they are not inferred from dates.
+        payload.update(valor_pagado_contrato='0', valor_pendiente_cobrar='84000000',
+                       contrato_actual=SimpleUploadedFile('contrato.pdf', contenido,
+                                                         content_type='application/pdf'))
+        if solicitud:
+            payload['solicitud_id'] = solicitud.pk
+        else:
+            payload.update(
+                sesion_documental_id=str(sesion_finalizada(self.usuario, 'PRESTADORES').pk),
+                certificado_bancario=SimpleUploadedFile('banco.pdf', b'%PDF-1.4 sintetico',
+                                                        content_type='application/pdf'))
+        return payload
+
+    @patch('django.utils.timezone.localdate')
+    def test_calendario_uat_sin_adenda_bloquea_y_reabre_documentos(self, fecha):
+        from datetime import date
+        fecha.return_value = date(2026, 10, 11)
+        response = self.client.post('/solicitar/', self._payload_calendario_uat(), HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 302)
+        solicitud = ContractorApplication.objects.get()
+        response = self.client.get(response['Location'], HTTP_HOST=self.host)
+        self.assertContains(response, 'Falta una regla precisa de fecha de pago contractual.')
+        self.assertContains(response, 'adenda')
+        self.assertNotContains(response, 'id="simulator-form"')
+        response = self.client.get(f'/solicitar/?solicitud_id={solicitud.pk}&revisar_contrato=1', HTTP_HOST=self.host)
+        self.assertEqual(response.context['paso_activo'], 2)
+        self.assertContains(response, 'value="2026-07-01"')
+        self.assertContains(response, 'value="2027-06-30"')
+        response = self.client.post('/simular/calcular/', {'solicitud_id': solicitud.pk,
+            'monto': '1000000', 'plazo_meses': 8}, content_type='application/json', HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Credito.objects.exists())
+        self.assertFalse(solicitud.auditorias_predecision.exists())
+
+    @patch('django.utils.timezone.localdate')
+    def test_calendario_uat_adenda_reanalizada_y_persistida_habilita_simulacion(self, fecha):
+        from datetime import date
+        fecha.return_value = date(2026, 10, 11)
+        self.client.post('/solicitar/', self._payload_calendario_uat(), HTTP_HOST=self.host)
+        solicitud = ContractorApplication.objects.get()
+        hash_anterior = solicitud.metadata_analisis_contractual['archivo_hash_sha256']
+        payload = self._payload_calendario_uat(solicitud=solicitud, adenda=(
+            '\nADENDA SINTETICA: Cada pago se realiza dentro de los primeros cinco (5) '
+            'dias habiles del mes siguiente al periodo causado.'))
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 302, response.context and response.context['form'].errors)
+        solicitud.refresh_from_db()
+        self.assertEqual(ContractorApplication.objects.count(), 1)
+        self.assertNotEqual(solicitud.metadata_analisis_contractual['archivo_hash_sha256'], hash_anterior)
+        self.assertIn('primeros cinco', solicitud.evidencia_forma_pago)
+        response = self.client.get(response['Location'], HTTP_HOST=self.host)
+        self.assertTrue(response.context['puede_registrar'])
+        self.assertContains(response, 'id="simulator-form"')
+        for plazo, estado in ((8, 200), (9, 400)):
+            response = self.client.post('/simular/calcular/', {'solicitud_id': solicitud.pk,
+                'monto': '1000000', 'plazo_meses': plazo}, content_type='application/json', HTTP_HOST=self.host)
+            self.assertEqual(response.status_code, estado, response.content)
+        fecha.return_value = date(2027, 5, 1)
+        response = self.client.post('/simular/calcular/', {'solicitud_id': solicitud.pk,
+            'monto': '1000000', 'plazo_meses': 8}, content_type='application/json', HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Credito.objects.exists())
+        self.assertFalse(solicitud.auditorias_predecision.exists())
+
+    def test_calendario_uat_fecha_invertida_conserva_error_y_correccion_manual(self):
+        payload = self._payload_calendario_uat()
+        payload['fecha_fin_contrato'] = '2026-06-30'
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('fecha_fin_contrato', response.context['form'].errors)
+        self.assertFalse(ContractorApplication.objects.exists())
+        payload['fecha_fin_contrato'] = '2027-06-30'
+        payload['contrato_actual'].seek(0)
+        payload['certificado_bancario'].seek(0)
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 302, response.context and response.context['form'].errors)
+        self.assertEqual(ContractorApplication.objects.get().fecha_fin_contrato.isoformat(), '2027-06-30')
+
+    def test_calendario_uat_correccion_manual_exige_confirmacion_y_no_se_sobrescribe(self):
+        payload = self._payload_calendario_uat()
+        payload['valor_mensual_contractual'] = '6500000'
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Revisa las diferencias')
+        token = response.context['form']['reconciliacion_token'].value()
+        payload.update(confirma_discrepancias='on', reconciliacion_token=token)
+        payload['contrato_actual'].seek(0)
+        payload['certificado_bancario'].seek(0)
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 302, response.context and response.context['form'].errors)
+        solicitud = ContractorApplication.objects.get()
+        self.assertEqual(solicitud.valor_mensual_contractual, Decimal('6500000'))
+        self.assertTrue(solicitud.metadata_analisis_contractual['reconciliacion']['confirmada'])
+
     def _payload_solicitud(self):
         return {
             'consentimiento_centrales': crear_confirmacion_consentimiento(self.usuario),

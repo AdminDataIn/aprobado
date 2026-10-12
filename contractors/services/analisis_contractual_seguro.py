@@ -86,8 +86,11 @@ def analizar_contrato_seguro(*, solicitud, documento):
 
     resultado = derivar_pendiente(resultado)
     calendario = evidencia_calendario_en_texto(texto_pdf)
-    if resultado.forma_pago == 'MENSUAL' and calendario:
-        resultado = replace(resultado, evidencia_forma_pago=f'Pagos mensuales; {calendario}')
+    if resultado.forma_pago == 'MENSUAL':
+        # A payment date must be backed by PDF text, not by provider-generated prose.
+        evidencia_pago = (f'Pagos mensuales; {calendario}' if calendario else
+                          'Pagos mensuales (sin fecha de pago contractual identificada)')
+        resultado = replace(resultado, evidencia_forma_pago=evidencia_pago)
     advertencias = list(advertencias_previas) + list(resultado.advertencias)
     bloqueos = []
     documento_detectado = _solo_digitos(resultado.documento_contratista)

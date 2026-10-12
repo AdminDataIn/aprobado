@@ -21,7 +21,8 @@
         <div class="simulador-configuracion-ausente" role="alert">
           <strong>Revisa el calendario contractual</strong>
           <p>{{ horizonte_contractual.motivo|default:'El calendario contractual no respalda las fechas de las cuotas de un plazo simulable.' }}</p>
-          <a href="{% url 'contractors:solicitar' %}?solicitud_id={{ solicitud.id|unlocalize }}">Revisar contrato</a>
+          <p>La periodicidad mensual no determina el d&iacute;a de pago. Revisa las fechas y la cl&aacute;usula de pago de tu contrato. Si falta, solicita una adenda y carga un &uacute;nico PDF con el contrato y la adenda; vuelve a analizarlo y confirma los datos. No se asumir&aacute;n fechas ni pagos recibidos.</p>
+          <a href="{% url 'contractors:solicitar' %}?solicitud_id={{ solicitud.id|unlocalize }}&amp;revisar_contrato=1">Revisar contrato</a>
         </div>
       {% elif configuracion_simulador %}
       <div class="simulador-hero">

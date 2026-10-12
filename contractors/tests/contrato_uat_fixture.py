@@ -40,3 +40,25 @@ Fecha de terminación:
 def pdf_uat():
     contenido = HTML(string='<div style="white-space:pre-wrap">' + escape(TEXTO_UAT) + '</div>').write_pdf()
     return SimpleUploadedFile('contrato-sintetico-uat.pdf', contenido, content_type='application/pdf')
+
+
+TEXTO_UAT_CALENDARIO = '''CONTRATO DE PRUEBA DE PRESTACION DE SERVICIOS
+Contratante: Empresa Convenio
+Contratista: Ana Maria Perez Gomez
+Documento: 123456789
+Objeto: Asesoria juridica
+HONORARIOS
+El CONTRATANTE pagara a la CONTRATISTA honorarios de $7.000.000 COP mensuales, para un valor total de
+prueba de $84.000.000 COP por doce (12) meses, previa presentacion de la cuenta de cobro correspondiente.
+DURACION
+La duracion simulada sera de doce (12) meses, desde el 01 de julio de 2026 hasta el 30 de junio de 2027,
+fechas tomadas del documento de referencia.
+'''
+
+
+def pdf_uat_calendario(*, adenda=''):
+    html = ('<div style="position:fixed;top:15px">PRUEBA - SIN VALIDEZ</div>'
+            '<div style="white-space:pre-wrap;margin-top:50px">'
+            + escape(TEXTO_UAT_CALENDARIO + adenda) + '</div>')
+    return SimpleUploadedFile('contrato-calendario-sintetico.pdf', HTML(string=html).write_pdf(),
+                              content_type='application/pdf')
