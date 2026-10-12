@@ -108,6 +108,44 @@ class HorizonteProdTest(SimpleTestCase):
                       evidencia_calendario='pago el ultimo dia del mes')
         self.assertEqual(h.flujos[0].fecha_pago, date(2028, 2, 29))
 
+    def test_dia_fijo_mes_siguiente_no_se_convierte_en_dia_habil(self):
+        from gestion_creditos.services.horizonte_contractual import extraer_regla_pago, evidencia_calendario_en_texto
+        for texto in ('pago el dia cinco (5) del mes siguiente',
+                      'PAGO EL DÍA CINCO (5) DE CADA MES\nSIGUIENTE',
+                      'pago el dia 5 del mes siguiente'):
+            with self.subTest(texto=texto):
+                evidencia = evidencia_calendario_en_texto(texto)
+                self.assertEqual(extraer_regla_pago(evidencia), ('DIA_MES_SIGUIENTE', 5))
+                h = horizonte(inicio=date(2026, 7, 1), fin=date(2027, 6, 30),
+                              evidencia_calendario=evidencia, corte=date(2026, 10, 12))
+                self.assertTrue(h.disponible, h.motivo)
+                self.assertEqual(len(h.flujos), 12)
+                self.assertEqual(h.flujos[0].fecha_pago, date(2026, 8, 5))
+                self.assertEqual(h.flujos[-1].fecha_pago, date(2027, 7, 5))
+                self.assertEqual(h.flujos[2].fecha_pago, date(2026, 10, 5))
+                self.assertTrue(any(f.fecha_pago.weekday() >= 5 for f in h.flujos))
+                self.assertIsNone(h.valor_pagado_actual_verificado)
+
+    def test_dia_fijo_incompleto_invalido_o_contradictorio_no_inventa(self):
+        for texto in ('pagos mensuales', 'pago el dia del mes siguiente',
+                      'pago el dia cinco (6) del mes siguiente',
+                      'pago el dia 0 del mes siguiente', 'pago el dia 32 del mes siguiente',
+                      'pago el dia 5 del mes siguiente; pago el dia 6 del mes siguiente',
+                      'pago el dia 5 del mes siguiente; primeros cinco (5) dias habiles del mes siguiente',
+                      'pago el dia 5 del mes siguiente; pago el ultimo dia del mes',
+                      'primer pago: 05/08/2026; ultimo pago: 05/07/2027'):
+            with self.subTest(texto=texto):
+                h = horizonte(evidencia_calendario=texto)
+                self.assertFalse(h.disponible)
+                self.assertFalse(h.flujos)
+
+    def test_dia_fijo_inexistente_no_se_recorta_a_fin_de_mes(self):
+        h = horizonte(1, inicio=date(2027, 1, 1), fin=date(2027, 1, 31),
+                      evidencia_calendario='pago el dia 31 del mes siguiente')
+        self.assertFalse(h.disponible)
+        self.assertIn('inexistente', h.motivo)
+        self.assertFalse(h.flujos)
+
     def test_json_y_componentes_prod(self):
         datos = json.loads(ARCHIVO.read_text(encoding='utf-8'))
         self.assertEqual(datos.pop('version'), VERSION)

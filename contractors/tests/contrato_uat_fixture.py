@@ -62,3 +62,19 @@ def pdf_uat_calendario(*, adenda=''):
             + escape(TEXTO_UAT_CALENDARIO + adenda) + '</div>')
     return SimpleUploadedFile('contrato-calendario-sintetico.pdf', HTML(string=html).write_pdf(),
                               content_type='application/pdf')
+
+
+def pdf_uat_calendario_v2():
+    # Relevant v2 clauses, with the existing wholly synthetic identity.
+    texto = TEXTO_UAT_CALENDARIO.replace(
+        'El CONTRATANTE pagara a la CONTRATISTA honorarios de $7.000.000 COP mensuales, para un valor total de\n'
+        'prueba de $84.000.000 COP por doce (12) meses, previa presentacion de la cuenta de cobro correspondiente.',
+        'Los honorarios simulados para esta prueba son de $7.000.000 COP mensuales, por un valor total de '
+        '$84.000.000 COP por doce (12) meses.',
+    )
+    texto += ('\nFORMA DE PAGO\nEl contratante pagara honorarios mensuales de SIETE MILLONES DE PESOS '
+              '($7.000.000 COP), el dia cinco (5) de cada mes\nsiguiente al periodo causado.\n'
+              'El primer pago corresponde al periodo de julio de 2026 y vence el 5 de agosto de 2026. '
+              'El ultimo pago corresponde al periodo de junio de 2027 y vence el 5 de julio de 2027.')
+    contenido = HTML(string='<div style="white-space:pre-wrap">' + escape(texto) + '</div>').write_pdf()
+    return SimpleUploadedFile('contrato-v2-sintetico.pdf', contenido, content_type='application/pdf')

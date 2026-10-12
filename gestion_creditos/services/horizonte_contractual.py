@@ -11,6 +11,12 @@ import holidays
 from dateutil.relativedelta import relativedelta
 
 
+PATRON_DIA_MES_SIGUIENTE = (
+    r'\bd[ií]a (\d{1,2}|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)'
+    r'(?: \((\d{1,2})\))? (?:de cada|del) mes siguiente\b'
+)
+
+
 @dataclass(frozen=True)
 class FlujoContractual:
     inicio: date
@@ -78,7 +84,8 @@ def evidencia_calendario_en_texto(texto):
     texto = re.sub(r'\s+', ' ', str(texto or ''))
     patron = (r'primeros (?:\d{1,2}|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)'
               r'(?: \(\d{1,2}\))? d[ií]as h[aá]biles del mes siguiente'
-              r'|pagos? (?:el )?[uú]ltimo d[ií]a (?:de cada|del) mes')
+              r'|pagos? (?:el )?[uú]ltimo d[ií]a (?:de cada|del) mes'
+              r'|' + PATRON_DIA_MES_SIGUIENTE)
     return '; '.join(m.group(0) for m in re.finditer(patron, texto, re.I))[:400]
 
 
@@ -90,18 +97,24 @@ def extraer_regla_pago(texto):
                'seis': 6, 'siete': 7, 'ocho': 8, 'nueve': 9, 'diez': 10}
     patron = r'primeros (\d{1,2}|' + '|'.join(numeros) + r')(?: \((\d{1,2})\))? dias habiles del mes siguiente'
     matches = list(re.finditer(patron, texto))
-    dias = set()
-    for match in matches:
-        valor = numeros.get(match[1]) or int(match[1])
-        if match[2] and int(match[2]) != valor:
-            return None
-        dias.add(valor)
+    fijos = list(re.finditer(PATRON_DIA_MES_SIGUIENTE, texto))
     fin_mes = re.search(r'(?:pago|pagos) (?:el )?ultimo dia (?:de cada|del) mes', texto)
-    if matches and fin_mes:
+    if sum(bool(regla) for regla in (matches, fijos, fin_mes)) > 1:
         return None
-    if len(dias) == 1 and 1 <= next(iter(dias)) <= 15:
-        return ('HABILES_MES_SIGUIENTE', next(iter(dias)))
-    if not matches and fin_mes:
+    for coincidencias, tipo, limite in (
+        (matches, 'HABILES_MES_SIGUIENTE', 15), (fijos, 'DIA_MES_SIGUIENTE', 31),
+    ):
+        dias = set()
+        for match in coincidencias:
+            valor = numeros.get(match[1]) or int(match[1])
+            if (match[2] and int(match[2]) != valor) or not 1 <= valor <= limite:
+                return None
+            dias.add(valor)
+        if len(dias) > 1:
+            return None
+        if dias:
+            return (tipo, next(iter(dias)))
+    if fin_mes:
         return ('FIN_MES', 0)
     return None
 
@@ -114,6 +127,9 @@ def _festivos(anio):
 def _fecha_pago(fin, regla):
     if regla[0] == 'FIN_MES':
         return fin
+    if regla[0] == 'DIA_MES_SIGUIENTE':
+        siguiente = fin + timedelta(days=1)
+        return date(siguiente.year, siguiente.month, regla[1])
     dia = fin + timedelta(days=1)
     restantes = regla[1]
     while True:
@@ -148,5 +164,9 @@ def calcular_horizonte_contractual(*, inicio, fin, periodicidad, valor_periodico
     for indice in range(cantidad):
         comienzo = inicio + relativedelta(months=indice)
         cierre = comienzo + relativedelta(months=1) - timedelta(days=1)
-        flujos.append(FlujoContractual(comienzo, cierre, _fecha_pago(cierre, regla), Decimal(str(valor_periodico))))
+        try:
+            fecha_pago = _fecha_pago(cierre, regla)
+        except ValueError:
+            return HorizonteContractual(**valores, motivo='La regla contractual contiene una fecha de pago inexistente.')
+        flujos.append(FlujoContractual(comienzo, cierre, fecha_pago, Decimal(str(valor_periodico))))
     return HorizonteContractual(**valores, flujos=tuple(flujos))

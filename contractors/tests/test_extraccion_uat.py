@@ -9,7 +9,7 @@ from contractors.services.analisis_contrato import ResultadoAnalisisContrato, an
 from contractors.services.analisis_contrato_ia import _normalizar
 from contractors.services.analisis_contractual_seguro import analizar_contrato_seguro
 from contractors.services.extraccion_campos import derivar_pendiente, ESQUEMA, datos_canonicos
-from contractors.tests.contrato_uat_fixture import pdf_uat, pdf_uat_calendario
+from contractors.tests.contrato_uat_fixture import pdf_uat, pdf_uat_calendario, pdf_uat_calendario_v2
 from gestion_creditos.models import Empresa
 
 
@@ -58,6 +58,27 @@ class ExtraccionContratoUATTest(TestCase):
                 resultado = analizar_contrato_fallback(None, texto_pdf=texto)
                 self.assertIsNone(resultado.fecha_inicio_contrato)
                 self.assertIsNone(resultado.fecha_fin_contrato)
+
+    def test_pdf_v2_extrae_honorarios_repetidos_y_calendario_documental(self):
+        from gestion_creditos.services.horizonte_contractual import extraer_regla_pago
+        resultado = analizar_contrato_fallback(pdf_uat_calendario_v2())
+        self.assertEqual(resultado.fecha_inicio_contrato, date(2026, 7, 1))
+        self.assertEqual(resultado.fecha_fin_contrato, date(2027, 6, 30))
+        self.assertEqual(resultado.valor_mensual_o_honorarios, Decimal('7000000'))
+        self.assertEqual(resultado.valor_total_contrato, Decimal('84000000'))
+        self.assertEqual(extraer_regla_pago(resultado.evidencia_forma_pago), ('DIA_MES_SIGUIENTE', 5))
+        self.assertIsNone(resultado.valor_pagado_estimado)
+        self.assertIsNone(resultado.valor_pendiente_estimado)
+        seguro = analizar_contrato_seguro(solicitud=SimpleNamespace(numero_documento='123456789'),
+                                         documento=pdf_uat_calendario_v2())
+        self.assertEqual(seguro.metadata['campos_extraidos']['valor_mensual_contractual']['valor'], '7000000')
+        self.assertEqual(extraer_regla_pago(seguro.metadata['forma_pago_contractual']['evidencia']),
+                         ('DIA_MES_SIGUIENTE', 5))
+
+    def test_honorarios_narrativos_discrepantes_no_se_eligen_arbitrariamente(self):
+        texto = ('Los honorarios simulados para esta prueba son de $7.000.000 COP mensuales. '
+                 'Honorarios mensuales de SEIS MILLONES DE PESOS ($6.000.000 COP).')
+        self.assertIsNone(analizar_contrato_fallback(None, texto_pdf=texto).valor_mensual_o_honorarios)
 
     def test_pdf_textual_extrae_todos_los_hechos_reportados(self):
         archivo = pdf_uat()

@@ -7,11 +7,11 @@ const os = require('node:os');
 const {spawn} = require('node:child_process');
 const {webkit} = require('playwright');
 
-test('WebKit movil: calendario ausente -> contrato/adenda -> simulacion Django', {timeout: 240000}, async t => {
+async function verifyContractualCalendar(t, variant) {
   const root = path.resolve(__dirname, '../../..');
   const python = process.env.DJANGO_TEST_PYTHON || path.join(root, 'venv/Scripts/python.exe');
   const bridge = spawn(python, ['-u', path.join(__dirname, 'calendario_django_bridge.py')], {
-    cwd: root, env: {...process.env, PYTHONIOENCODING: 'utf-8'}, stdio: ['pipe', 'pipe', 'inherit'],
+    cwd: root, env: {...process.env, CALENDAR_VARIANT: variant, PYTHONIOENCODING: 'utf-8'}, stdio: ['pipe', 'pipe', 'inherit'],
   });
   const pending = [];
   const responses = [];
@@ -158,7 +158,13 @@ test('WebKit movil: calendario ausente -> contrato/adenda -> simulacion Django',
   assert.equal(await page.locator('[data-register-application]').count(), 1);
   assert.deepEqual(errors, []);
   assert.deepEqual(await request({integrity: true}), {applications: 1, documents: 4,
-    credits: 0, audits: 0, snapshots: 0, simulation_registered: false});
+    credits: 0, audits: 0, snapshots: 0, simulation_registered: false,
+    regla_pago: [variant === 'dia_fijo' ? 'DIA_MES_SIGUIENTE' : 'HABILES_MES_SIGUIENTE', 5]});
   const screenshot = process.env.CALENDAR_SCREENSHOT;
   if (screenshot) await page.screenshot({path: screenshot, fullPage: true});
-});
+}
+
+for (const variant of ['habiles', 'dia_fijo']) {
+  test('WebKit movil: calendario ausente -> contrato actualizado -> simulacion Django (' + variant + ')',
+    {timeout: 240000}, t => verifyContractualCalendar(t, variant));
+}

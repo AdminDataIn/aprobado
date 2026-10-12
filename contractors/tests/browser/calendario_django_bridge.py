@@ -61,7 +61,7 @@ def main():
         from django.test.runner import DiscoverRunner
         from contractors.models import ContractorApplication
         from contractors.tests.test_portal_minimo_prestadores import PortalMinimoPrestadoresTest
-        from contractors.tests.contrato_uat_fixture import pdf_uat_calendario
+        from contractors.tests.contrato_uat_fixture import pdf_uat_calendario, pdf_uat_calendario_v2
         runner = DiscoverRunner(verbosity=0, interactive=False)
         with redirect_stdout(sys.stderr):
             runner.setup_test_environment()
@@ -79,9 +79,10 @@ def main():
             response = case.client.post('/solicitar/', case._payload_calendario_uat(), HTTP_HOST=case.host)
             assert response.status_code == 302
             solicitud = ContractorApplication.objects.get()
-        adenda = pdf_uat_calendario(adenda=(
+        adenda = (pdf_uat_calendario_v2() if os.environ.get('CALENDAR_VARIANT') == 'dia_fijo'
+                  else pdf_uat_calendario(adenda=(
             '\nADENDA SINTETICA: Cada pago se realiza dentro de los primeros cinco (5) '
-            'dias habiles del mes siguiente al periodo causado.'))
+            'dias habiles del mes siguiente al periodo causado.')))
         emit({'ready': True, 'solicitud_id': solicitud.pk,
               'adenda': base64.b64encode(adenda.read()).decode('ascii')})
         for line in sys.stdin:
@@ -91,11 +92,13 @@ def main():
             if command.get('integrity'):
                 from gestion_creditos.models import Credito
                 from integrations.models import ConsultaDatacreditoSnapshot
+                from gestion_creditos.services.horizonte_contractual import extraer_regla_pago
                 solicitud.refresh_from_db()
                 emit({'applications': ContractorApplication.objects.count(),
                       'documents': solicitud.documentos.count(), 'credits': Credito.objects.count(),
                       'audits': solicitud.auditorias_predecision.count(),
                       'snapshots': ConsultaDatacreditoSnapshot.objects.count(),
+                      'regla_pago': extraer_regla_pago(solicitud.evidencia_forma_pago),
                       'simulation_registered': solicitud.simulada_en is not None})
                 continue
             try:

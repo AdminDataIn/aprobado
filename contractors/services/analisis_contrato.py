@@ -123,6 +123,16 @@ def analizar_contrato_fallback(documento, *, texto_pdf=None, motivo='') -> Resul
         honorarios = _importe(_buscar(texto, r'pagos?\s+mensuales\s+de\s*:?\s*\$\s*([\d.,]+)'))
     if honorarios is None:
         honorarios = _importe(_buscar(texto, r'honorarios\s+de\s*\$\s*([\d.,]+)\s*(?:COP\s+)?mensuales\b'))
+    importes_mensuales = {honorarios} if honorarios is not None else set()
+    for patron in (
+        r'\bhonorarios(?:\s+[a-záéíóúñ]+){0,14}\s+(?:son|ser[aá]n)\s+de\s*\$\s*([\d.,]+)\s*(?:COP\s+)?mensuales\b',
+        r'\bhonorarios\s+mensuales\s+de\s+[a-záéíóúñ\s]{1,100}\(\s*\$\s*([\d.,]+)\s*(?:COP\s*)?\)',
+    ):
+        for valor in re.findall(patron, re.sub(r'\s+', ' ', texto), re.I):
+            importe = _importe(valor)
+            if importe is not None:
+                importes_mensuales.add(importe)
+    honorarios = next(iter(importes_mensuales)) if len(importes_mensuales) == 1 else None
     pagado = _buscar_valor(texto, ('valor pagado', 'total pagado', 'pagos realizados'))
     if pagado is None and re.search(r'\bno\s+se\s+registra\s+ning[uú]n\s+pago\s+efectuado\b', texto, re.I):
         pagado = Decimal('0')

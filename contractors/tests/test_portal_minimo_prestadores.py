@@ -2158,7 +2158,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(Credito.objects.count(), creditos_antes)
         self.assertEqual(CreditoLibranza.objects.count(), creditos_libranza_antes)
 
-    def _payload_calendario_uat(self, *, adenda='', solicitud=None):
+    def _payload_calendario_uat(self, *, adenda='', solicitud=None, archivo=None):
         from contractors.tests.contrato_uat_fixture import pdf_uat_calendario
         from contractors.services.politica_financiera_prestador import VERSION, PARAMETROS
         self.client.force_login(self.usuario)
@@ -2166,7 +2166,7 @@ class PortalMinimoPrestadoresTest(TestCase):
             setattr(self.configuracion_simulador, campo, valor)
         self.configuracion_simulador.version = VERSION
         self.configuracion_simulador.save()
-        archivo = pdf_uat_calendario(adenda=adenda)
+        archivo = archivo or pdf_uat_calendario(adenda=adenda)
         contenido = archivo.read()
         analisis = self._analizar_contrato_transitorio(contenido)
         self.assertEqual(analisis.status_code, 200)
@@ -2268,6 +2268,58 @@ class PortalMinimoPrestadoresTest(TestCase):
         solicitud = ContractorApplication.objects.get()
         self.assertEqual(solicitud.valor_mensual_contractual, Decimal('6500000'))
         self.assertTrue(solicitud.metadata_analisis_contractual['reconciliacion']['confirmada'])
+
+    @patch('django.utils.timezone.localdate')
+    def test_calendario_v2_reanalizado_persiste_dia_fijo_hasta_simulacion(self, fecha):
+        from datetime import date
+        from contractors.tests.contrato_uat_fixture import pdf_uat_calendario_v2
+        from contractors.services.horizonte_simulacion import horizonte_para_solicitud
+        from gestion_creditos.services.horizonte_contractual import extraer_regla_pago
+        fecha.return_value = date(2026, 10, 12)
+        self.client.post('/solicitar/', self._payload_calendario_uat(), HTTP_HOST=self.host)
+        solicitud = ContractorApplication.objects.get()
+        hash_previo = solicitud.metadata_analisis_contractual['archivo_hash_sha256']
+        payload = self._payload_calendario_uat(solicitud=solicitud, archivo=pdf_uat_calendario_v2())
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 302, response.context and response.context['form'].errors)
+        solicitud.refresh_from_db()
+        self.assertEqual(ContractorApplication.objects.count(), 1)
+        self.assertEqual(solicitud.documentos.count(), 4)
+        self.assertNotEqual(solicitud.metadata_analisis_contractual['archivo_hash_sha256'], hash_previo)
+        self.assertEqual(solicitud.valor_mensual_contractual, Decimal('7000000'))
+        self.assertEqual(extraer_regla_pago(solicitud.evidencia_forma_pago), ('DIA_MES_SIGUIENTE', 5))
+        self.assertEqual(solicitud.evidencia_forma_pago,
+                         solicitud.metadata_analisis_contractual['forma_pago_contractual']['evidencia'])
+        h = horizonte_para_solicitud(solicitud, self.configuracion_simulador)
+        self.assertTrue(h.disponible, h.motivo)
+        self.assertEqual(h.flujos[0].fecha_pago, date(2026, 8, 5))
+        self.assertEqual(h.fecha_ultimo_flujo_contractual, date(2027, 7, 5))
+        self.assertContains(self.client.get(response['Location'], HTTP_HOST=self.host), 'id="simulator-form"')
+        for plazo, estado in ((8, 200), (9, 400)):
+            response = self.client.post('/simular/calcular/', {'solicitud_id': solicitud.pk,
+                'monto': '1000000', 'plazo_meses': plazo}, content_type='application/json', HTTP_HOST=self.host)
+            self.assertEqual(response.status_code, estado)
+        self.assertFalse(Credito.objects.exists())
+        self.assertFalse(solicitud.auditorias_predecision.exists())
+
+    def test_calendario_v2_conserva_honorarios_manuales_confirmados_y_evidencia(self):
+        from contractors.tests.contrato_uat_fixture import pdf_uat_calendario_v2
+        from gestion_creditos.services.horizonte_contractual import extraer_regla_pago
+        payload = self._payload_calendario_uat(archivo=pdf_uat_calendario_v2())
+        payload['valor_mensual_contractual'] = '6500000'
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(ContractorApplication.objects.exists())
+        payload.update(confirma_discrepancias='on',
+                       reconciliacion_token=response.context['form']['reconciliacion_token'].value())
+        payload['contrato_actual'].seek(0)
+        payload['certificado_bancario'].seek(0)
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 302)
+        solicitud = ContractorApplication.objects.get()
+        self.assertEqual(solicitud.valor_mensual_contractual, Decimal('6500000'))
+        self.assertTrue(solicitud.metadata_analisis_contractual['reconciliacion']['confirmada'])
+        self.assertEqual(extraer_regla_pago(solicitud.evidencia_forma_pago), ('DIA_MES_SIGUIENTE', 5))
 
     def _payload_solicitud(self):
         return {
