@@ -1,3 +1,6 @@
+from collections.abc import Mapping
+from dataclasses import replace
+
 from django.utils import timezone
 
 from contractors.datacredito.dto import (
@@ -69,6 +72,15 @@ def consultar_proveedor_datacredito_prestador(solicitud, *, servicio):
     else:
         estado = ConsultaDatacreditoSnapshot.Estado.ERROR_PERMANENTE
     resultado = _proyectar_resultado_allowlist(normalizado, servicio=servicio)
+    if servicio == 'decisor' and estado == ConsultaDatacreditoSnapshot.Estado.EXITOSO:
+        # Persist only module integrity, not raw or free provider messages.
+        modulo = respuesta.raw_sanitizado
+        for clave in ('content', 'respuesta', 'endeudamiento'):
+            modulo = modulo.get(clave) if isinstance(modulo, Mapping) else None
+        resultado = replace(resultado, ingreso_estimado_modulo_valido=bool(
+            isinstance(modulo, Mapping) and modulo.get('conInformacion') is True
+            and modulo.get('msjExcepcion') in (None, '')
+        ))
     return ResultadoProveedorDatacreditoPrestador(
         estado_snapshot=estado,
         resultado_normalizado=resultado,

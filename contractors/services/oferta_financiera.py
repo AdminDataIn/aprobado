@@ -8,7 +8,7 @@ from django.utils import timezone
 from contractors.models import ContractorApplication, PredecisionPrestadorAudit
 from contractors.score.dto import ResultadoScorePrestador
 from contractors.services.horizonte_simulacion import horizonte_para_solicitud
-from contractors.services.ingreso_neto import obtener_ingreso_neto_vigente
+from contractors.services.ingreso_evaluable import resolver_ingreso_evaluable
 from contractors.services.politica_financiera_prestador import OfertaCalculada, preparar_oferta
 
 
@@ -47,9 +47,21 @@ def calcular_oferta_evaluada(solicitud, auditoria, *, politica, monto, plazo):
         if horizonte is None or not horizonte.disponible:
             return OfertaCalculada(banda=score.banda or '', estado='NO_EVALUABLE',
                                   motivo='El horizonte contractual no permite evaluar una oferta vigente.')
+        from contractors.datacredito.dto import ResultadoConsultaDatacreditoPrestador
+        decisor = ResultadoConsultaDatacreditoPrestador(
+            estado=auditoria.estado_midecisor, servicio='decisor',
+            snapshot_id=str(auditoria.snapshot_midecisor_id) if auditoria.snapshot_midecisor_id else None,
+        )
+        ingreso = resolver_ingreso_evaluable(solicitud, politica, decisor=decisor, corte=corte)
+        from contractors.services.politica_ingreso_publicacion import ingreso_automatico_aplica
+        if ingreso_automatico_aplica(solicitud, politica) and (
+                ingreso is None or Decimal(str(variables.get('ingreso_evaluable'))) != ingreso.monto
+                or variables.get('ingreso_evaluable_fuente') != ingreso.fuente):
+            return OfertaCalculada(banda=score.banda or '', estado='NO_EVALUABLE',
+                                  motivo='El ingreso evaluable cambio; requiere nueva evaluacion.')
         return preparar_oferta(
             score=score, politica=politica,
-            ingreso_neto=obtener_ingreso_neto_vigente(solicitud, corte=corte),
+            ingreso_neto=ingreso,
             obligaciones_mensuales=auditoria.cuota_mensual_hdc,
             monto_solicitado=monto, plazo_solicitado=plazo,
             horizonte=horizonte, configuracion=configuracion, corte=corte,

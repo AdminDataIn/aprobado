@@ -22,9 +22,18 @@ def construir_snapshot_entrada_evaluacion(solicitud):
         '-aceptada_en', '-id'
     ).first()
     ingreso_neto = snapshot_ingreso_neto(solicitud)
+    from contractors.models import ConfiguracionScorePrestador
+    from contractors.services.politica_ingreso_publicacion import ingreso_automatico_aplica
+    asociada = ConfiguracionScorePrestador.objects.filter(
+        version_politica=solicitud.version_politica_simulacion,
+    ).first()
+    politica_ingreso = ({'version_politica': asociada.version_politica,
+                         'politica_ingreso_evaluable': asociada.politica_ingreso_evaluable}
+                        if ingreso_automatico_aplica(solicitud, asociada) else None)
     return {
         'solicitud_id': solicitud.id,
         **({'ingreso_neto_verificado': ingreso_neto} if ingreso_neto else {}),
+        **({'politica_ingreso_evaluable': politica_ingreso} if politica_ingreso else {}),
         'empresa_id': solicitud.empresa_id,
         'documento_hash': _hmac_documento(solicitud.numero_documento),
         'documento_enmascarado': _enmascarar_documento(solicitud.numero_documento),

@@ -117,8 +117,12 @@ class OrquestacionEvaluacionTest(FixtureOrquestacion, TestCase):
         self.assertIsNone(self.reservar())
 
     def test_politica_y_simulacion_deben_seguir_vigentes(self):
-        self.politica.activa = False
-        self.politica.save(update_fields=['activa'])
+        from contractors.score.politica import obtener_politica_score_activa
+        legacy = obtener_politica_score_activa()
+        self.solicitud.version_politica_simulacion = legacy.version_politica
+        self.solicitud.save(update_fields=['version_politica_simulacion'])
+        legacy.activa = False
+        legacy.save(update_fields=['activa'])
         self.assertIsNone(self.reservar())
 
     def test_broker_caido_no_revierte_confirmacion_y_dispatcher_recupera(self):
@@ -257,9 +261,13 @@ class OrquestacionEvaluacionTest(FixtureOrquestacion, TestCase):
         self.assertFalse(PredecisionPrestadorAudit.objects.exists())
 
     def test_cambio_politica_antes_ejecucion_suspendido(self):
+        from contractors.score.politica import obtener_politica_score_activa
+        legacy = obtener_politica_score_activa()
+        self.solicitud.version_politica_simulacion = legacy.version_politica
+        self.solicitud.save(update_fields=['version_politica_simulacion'])
         job = self.reservar()
-        self.politica.activa = False
-        self.politica.save(update_fields=['activa'])
+        legacy.activa = False
+        legacy.save(update_fields=['activa'])
         self.assertEqual(ejecutar_job(job.pk), 'SUSPENDIDA_OPERATIVA')
         self.assertFalse(PredecisionPrestadorAudit.objects.exists())
 
@@ -314,7 +322,8 @@ class OrquestacionEvaluacionTest(FixtureOrquestacion, TestCase):
         with self.proveedores():
             ejecutar_job(job.pk)
         job.refresh_from_db()
-        self.assertEqual(self.oferta(job.auditoria).estado, 'SIN_OFERTA')
+        self.assertEqual(self.oferta(job.auditoria).estado, 'NO_EVALUABLE')
+        self.assertEqual(job.auditoria.resultado, 'REQUIERE_REVISION_MANUAL')
         with self.assertRaises(ValidationError):
             crear_o_reutilizar_aprobacion_interna(job.auditoria, actor=self.staff)
         self.assertFalse(self.solicitud.aprobaciones_internas.exists())

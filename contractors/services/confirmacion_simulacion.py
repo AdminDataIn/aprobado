@@ -74,12 +74,20 @@ def confirmar_condiciones_simulacion(*, solicitud, usuario, monto, plazo_meses):
         configuracion=configuracion, solicitud=solicitud,
     )
     version_anterior, _ = construir_version_datos(solicitud)
+    from contractors.services.politica_ingreso_publicacion import obtener_politica_para_solicitud
+    politica = obtener_politica_para_solicitud(solicitud)
+    if politica and politica.politica_ingreso_evaluable:
+        if politica.configuracion_financiera_id != configuracion.pk:
+            raise ValidationError('La politica adoptada no corresponde a la configuracion financiera.')
+        version_politica = politica.version_politica
+    else:
+        version_politica = obtener_version_politica_simulador(configuracion)
     estado_anterior = solicitud.estado
     snapshot = snapshot_configuracion_financiera(configuracion)
     solicitud.monto_solicitado = solicitud.monto_simulado = resultado.monto_solicitado
     solicitud.plazo_meses = solicitud.plazo_simulado_meses = resultado.plazo_meses
     solicitud.version_configuracion_financiera_simulacion = snapshot['version']
-    solicitud.version_politica_simulacion = obtener_version_politica_simulador(configuracion)
+    solicitud.version_politica_simulacion = version_politica
     solicitud.tasa_mensual_simulacion = snapshot['tasa_mensual']
     solicitud.monto_maximo_configuracion_simulacion = snapshot['monto_maximo']
     solicitud.plazo_maximo_configuracion_simulacion = snapshot['plazo_maximo_meses']

@@ -30,6 +30,7 @@ class ResultadoNormalizadoDatacreditoPrestador:
     obligaciones_incompletas: int | None = None
     version_normalizador: str = ''
     ingreso_estimado_midecisor: str | None = None
+    ingreso_estimado_modulo_valido: bool | None = None
 
     def como_dict(self):
         resultado = asdict(self)

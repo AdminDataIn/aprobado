@@ -59,7 +59,8 @@ def evaluar_solicitud_prestador(
     _validar_actor(solicitado_por)
     _validar_modo(modo_datacredito, solicitado_por, justificacion)
     try:
-        politica = obtener_politica_score_activa()
+        from contractors.services.politica_ingreso_publicacion import obtener_politica_para_solicitud
+        politica = obtener_politica_para_solicitud(solicitud)
         version_politica = politica.version_politica if politica else VERSION_SIN_POLITICA
         version_score = politica.version_score if politica else VERSION_SCORE_SIN_POLITICA
     except PoliticaScoreNoDisponible as exc:
@@ -161,6 +162,7 @@ def evaluar_solicitud_prestador(
         predecision=predecision,
         datacredito=datacredito,
         centrales=centrales,
+        politica=politica,
         usuario=solicitado_por,
     )
 
@@ -176,6 +178,10 @@ def _iniciar_evaluacion(
 ):
     inicio_operacion = inicio_operacion or timezone.now()
     solicitud_bloqueada = ContractorApplication.objects.select_for_update().get(pk=solicitud.pk)
+    from contractors.services.politica_ingreso_publicacion import obtener_politica_para_solicitud
+    efectiva = obtener_politica_para_solicitud(solicitud_bloqueada)
+    if efectiva is not None and efectiva.version_politica != version_politica:
+        raise ValidationError('La politica de la solicitud cambio antes de reservar la evaluacion.')
     version_datos, snapshot_entrada = construir_version_datos(solicitud_bloqueada)
     contexto = _contexto_consulta(solicitud_bloqueada, servicios_consulta)
     if reserva_operativa is not None:
@@ -362,7 +368,7 @@ def _contexto_historico_compatible(auditoria, fuentes, contexto):
 
 @transaction.atomic
 def _finalizar_evaluacion(
-    *, auditoria, predecision, datacredito=None, centrales=None, usuario
+    *, auditoria, predecision, datacredito=None, centrales=None, usuario, politica=None
 ):
     solicitud = ContractorApplication.objects.select_for_update().get(pk=auditoria.solicitud_id)
     auditoria_bloqueada = PredecisionPrestadorAudit.objects.select_for_update().get(pk=auditoria.pk)
@@ -464,6 +470,21 @@ def _finalizar_evaluacion(
             'datacredito': _snapshot_datacredito_allowlist(datacredito),
         }
         auditoria_bloqueada.error_codigo = getattr(datacredito, 'error_codigo', '') or ''
+    if politica is not None and politica.politica_ingreso_evaluable:
+        from contractors.services.ingreso_evaluable import resolver_ingreso_evaluable
+        ingreso = resolver_ingreso_evaluable(
+            solicitud, politica, decisor=centrales.decisor if centrales else datacredito,
+        )
+        auditoria_bloqueada.snapshot_salida['ingreso_evaluable'] = {
+            'estado': 'DETERMINADO' if ingreso else 'NO_DETERMINABLE',
+            'fuente': ingreso.fuente if ingreso else 'NO_DETERMINABLE',
+            'monto': format(ingreso.monto, 'f') if ingreso else None,
+            'registro_id': ingreso.registro_id if ingreso else None,
+            'version': ingreso.version if ingreso else None,
+            'vigente_hasta': ingreso.vigente_hasta.isoformat() if ingreso and ingreso.vigente_hasta else None,
+            'evidencia': ingreso.evidencia if ingreso else {},
+            'requiere_validacion_documental': not ingreso or ingreso.fuente != 'MANUAL_VERIFICADA',
+        }
     # Bind this evaluation to its own consent, without changing source snapshots.
     autorizacion = obtener_autorizacion_datacredito_vigente(solicitud)
     usos = {}

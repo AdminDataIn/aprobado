@@ -282,6 +282,8 @@ def cancelar_aprobacion_interna(gate, *, actor, motivo, comentario_interno):
 
 
 def _validar_gate(solicitud, auditoria):
+    from contractors.services.ingreso_evaluable import exigir_ingreso_documental_para_originacion
+    exigir_ingreso_documental_para_originacion(solicitud)
     errores = []
     if auditoria.solicitud_id != solicitud.id:
         errores.append('La auditoria no corresponde a la solicitud.')
@@ -318,7 +320,8 @@ def _validar_gate(solicitud, auditoria):
         errores.append('El contrato ya no habilita capacidad automatica vigente.')
 
     try:
-        politica = obtener_politica_score_activa()
+        from contractors.services.politica_ingreso_publicacion import obtener_politica_para_solicitud
+        politica = obtener_politica_para_solicitud(solicitud)
     except PoliticaScoreNoDisponible:
         politica = None
     if politica is None:

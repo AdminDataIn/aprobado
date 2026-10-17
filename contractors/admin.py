@@ -299,6 +299,7 @@ class ConfiguracionScorePrestadorAdmin(admin.ModelAdmin):
             'score_premium_min', 'score_alta_min', 'score_media_min',
             'score_entrada_min', 'cuota_ingreso_maxima',
             'tolerancia_ingreso_contractual',
+            'politica_ingreso_evaluable',
             'monto_maximo_politica', 'plazo_maximo_politica',
             'tasa_mensual_referencia', 'mora_bloqueo_dias',
             'consultas_recientes_revision', 'accion_exceso_capacidad',

@@ -1804,6 +1804,8 @@ class AprobacionInternaPrestadorTest(TestCase):
                     'plazo_maximo_sugerido': 6,
                     'variables_calculadas': {
                         'obligaciones_mensuales': '0',
+                        'ingreso_evaluable': '6000000',
+                        'ingreso_evaluable_fuente': 'MANUAL_VERIFICADA',
                         'capacidad_monto_teorica': '6000000.00',
                         'meses_restantes_contrato': 7,
                     },

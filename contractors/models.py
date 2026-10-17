@@ -1487,6 +1487,7 @@ class ConfiguracionScorePrestador(models.Model):
         REVISION_MANUAL = 'REVISION_MANUAL', 'Enviar a revision manual'
         NO_EVALUABLE = 'NO_EVALUABLE', 'Marcar como no evaluable'
 
+    politica_ingreso_evaluable = models.JSONField(default=dict, db_default={}, blank=True)
     nombre = models.CharField(max_length=120)
     version = models.CharField(max_length=80, unique=True)
     activa = models.BooleanField(default=False)
@@ -1608,6 +1609,9 @@ class ConfiguracionScorePrestador(models.Model):
 
     def clean(self):
         super().clean()
+        from contractors.politica_ingresos import validar_politica_ingreso
+        if self.politica_ingreso_evaluable != {}:
+            validar_politica_ingreso(self.politica_ingreso_evaluable)
         if self.usa_fuentes_duales:
             if self.peso_midecisor is None or self.peso_hdcplus is None:
                 raise ValidationError(
@@ -1685,11 +1689,19 @@ class ConfiguracionScorePrestador(models.Model):
         if not self.pk:
             return
         anterior = type(self).objects.filter(pk=self.pk).first()
-        if anterior is None or not PredecisionPrestadorAudit.objects.filter(
-            version_politica=anterior.version_politica
-        ).exists():
+        publicada = bool(anterior and CambioPoliticaScorePrestadorAudit.objects.filter(
+            politica_nueva=anterior, snapshot_nuevo__ingreso_publicado=True,
+        ).exists())
+        if publicada and any(getattr(anterior, c) != getattr(self, c)
+                             for c in ('fecha_vigencia_desde', 'fecha_vigencia_hasta')):
+            raise ValidationError('La vigencia publicada requiere una nueva version de politica.')
+        if anterior is None or not (
+            PredecisionPrestadorAudit.objects.filter(version_politica=anterior.version_politica).exists()
+            or publicada
+        ):
             return
         campos_semanticos = (
+            'politica_ingreso_evaluable',
             'version', 'peso_datacredito', 'peso_capacidad', 'peso_comportamiento',
             'peso_riesgo', 'peso_referencias', 'score_premium_min', 'score_alta_min',
             'score_media_min', 'score_entrada_min', 'cuota_ingreso_maxima',
@@ -1848,9 +1860,12 @@ class BandaScorePrestador(models.Model):
             raise ValidationError('El rango de score se solapa con otra banda configurada.')
         if self.pk:
             anterior = type(self).objects.select_related('configuracion').filter(pk=self.pk).first()
-            if anterior and PredecisionPrestadorAudit.objects.filter(
-                version_politica=anterior.configuracion.version_politica
-            ).exists():
+            if anterior and (
+                PredecisionPrestadorAudit.objects.filter(version_politica=anterior.configuracion.version_politica).exists()
+                or CambioPoliticaScorePrestadorAudit.objects.filter(
+                    politica_nueva_id=anterior.configuracion_id, snapshot_nuevo__ingreso_publicado=True,
+                ).exists()
+            ):
                 campos = (
                     'nombre', 'score_min', 'score_max', 'monto_maximo',
                     'plazo_maximo', 'resultado', 'orden',

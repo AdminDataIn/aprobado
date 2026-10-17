@@ -18,6 +18,7 @@ from contractors.services.centrales_riesgo import (
     ESTADO_REVISION_MANUAL,
 )
 from integrations.models import ConsultaDatacreditoSnapshot
+from contractors.services.politica_ingreso_publicacion import politica_habilitada_para_solicitud
 
 
 RESULTADO_PREAPROBABLE = 'PREAPROBABLE'
@@ -156,7 +157,7 @@ def _evaluar_predecision_fuente_unica(*, solicitud, politica, datacredito):
             razones=('La evaluacion requiere un snapshot DataCredito exitoso y vigente.',),
         )
     if (
-        not politica.activa
+        not politica_habilitada_para_solicitud(solicitud, politica)
         or not politica.configuracion_financiera_id
         or not politica.configuracion_financiera.activo
         or not politica.configuracion_financiera.version
@@ -257,7 +258,7 @@ def _evaluar_predecision_dual(*, solicitud, politica, centrales):
             razones=('No existe autorizacion DataCredito vigente para esta evaluacion.',),
         )
     if (
-        not politica.activa
+        not politica_habilitada_para_solicitud(solicitud, politica)
         or not politica.configuracion_financiera_id
         or not politica.configuracion_financiera.activo
         or not politica.configuracion_financiera.version

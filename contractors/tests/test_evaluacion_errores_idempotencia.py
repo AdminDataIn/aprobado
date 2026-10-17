@@ -73,9 +73,9 @@ class EvaluacionErroresIdempotenciaTest(ComprobacionesRepeticion, FixturePipelin
     def test_exito_repetido_conserva_evidencia_p1a_y_control_oferta_p0(self):
         self.verificar_ingreso('100000')
         auditoria = self.evaluar()
-        self.assertEqual(auditoria.resultado, 'PREAPROBADO_READ_ONLY')
+        self.assertEqual(auditoria.resultado, 'REQUIERE_REVISION_MANUAL')
         self.assertEqual(len(auditoria.snapshot_salida['usos_snapshots']), 2)
-        self.assertEqual(self.oferta(auditoria).estado, 'SIN_OFERTA')
+        self.assertEqual(self.oferta(auditoria).estado, 'NO_EVALUABLE')
         self.repetir_sin_consulta(auditoria)
         with self.assertRaises(ValidationError):
             crear_o_reutilizar_aprobacion_interna(auditoria, actor=self.staff)
@@ -196,7 +196,8 @@ class EvaluacionErroresIdempotenciaTest(ComprobacionesRepeticion, FixturePipelin
 
     def test_nueva_solicitud_no_reutiliza_auditoria_de_la_anterior(self):
         anterior = self.evaluar(timeout=True)
-        otra = self.nueva_solicitud_autorizada()
+        # The recent provider error prevents adopting v2, not creating a legacy audit.
+        otra = self.nueva_solicitud_autorizada(adoptar=False)
         self.solicitud = otra
         nueva = self.evaluar_contexto_cambiado(anterior)
         self.assertEqual(nueva.auditoria.solicitud_id, otra.pk)

@@ -20,7 +20,7 @@ def construir_componentes_score(solicitud, politica, datacredito):
     normalizado = datacredito.resultado_normalizado if datacredito else None
     datacredito_componente = componente_datacredito(normalizado, politica)
     capacidad_componente, variables_capacidad = componente_capacidad(
-        solicitud, normalizado, politica
+        solicitud, normalizado, politica, decisor=datacredito
     )
     comportamiento_componente = componente_comportamiento(solicitud, politica)
     riesgo_componente, bloqueos_riesgo = componente_riesgo(
@@ -71,6 +71,7 @@ def construir_componentes_score_dual(solicitud, politica, centrales):
         solicitud,
         normalizado_hdc,
         politica,
+        decisor=decisor,
     )
     riesgo_componente, bloqueos_riesgo = componente_riesgo(
         solicitud,
@@ -151,7 +152,12 @@ def componente_hdc(normalizado, politica):
     )
 
 
-def componente_capacidad(solicitud, normalizado, politica, usar_carga_total=False):
+def componente_capacidad(solicitud, normalizado, politica, usar_carga_total=False, *, decisor=None):
+    from contractors.services.politica_financiera_prestador import VERSION
+    from contractors.services.politica_ingreso_publicacion import ingreso_automatico_aplica
+    if (getattr(politica.configuracion_financiera, 'version', None) == VERSION
+            and ingreso_automatico_aplica(solicitud, politica)):
+        return componente_capacidad_dual(solicitud, normalizado, politica, decisor=decisor)
     faltantes = []
     validacion_contractual = validar_contrato_prestador(solicitud)
     meses_restantes = validacion_contractual.meses_financiables
@@ -256,7 +262,10 @@ def componente_capacidad(solicitud, normalizado, politica, usar_carga_total=Fals
     ), variables
 
 
-def componente_capacidad_dual(solicitud, normalizado, politica):
+def componente_capacidad_dual(solicitud, normalizado, politica, *, decisor=None):
+    from contractors.services.ingreso_evaluable import resolver_ingreso_evaluable
+    from contractors.services.politica_ingreso_publicacion import ingreso_automatico_aplica
+    automatica = ingreso_automatico_aplica(solicitud, politica)
     validacion = validar_contrato_prestador(solicitud)
     ingreso = calcular_ingreso_contractual_mensual(
         solicitud,
@@ -268,7 +277,10 @@ def componente_capacidad_dual(solicitud, normalizado, politica):
     )
     monto = _decimal(solicitud.monto_solicitado)
     plazo = solicitud.plazo_meses
-    faltantes = list(ingreso.bloqueos)
+    evaluable = resolver_ingreso_evaluable(solicitud, politica, decisor=decisor) if automatica else None
+    faltantes = list(validacion.bloqueos if automatica else ingreso.bloqueos)
+    if automatica and evaluable is None:
+        faltantes.append('ingreso:NO_DETERMINABLE')
     if cuota_existente is None:
         faltantes.append('HDCPlus no entrego la cuota mensual existente.')
     if monto is None or monto <= 0 or not plazo:
@@ -292,6 +304,10 @@ def componente_capacidad_dual(solicitud, normalizado, politica):
         'capacidad_disponible': None,
         'capacidad_monto_teorica': None,
     }
+    if automatica:
+        variables.update(ingreso_evaluable=evaluable.monto if evaluable else None,
+                         ingreso_evaluable_fuente=evaluable.fuente if evaluable else 'NO_DETERMINABLE',
+                         ingreso_evaluable_evidencia=evaluable.evidencia if evaluable else {})
     if faltantes:
         return ComponenteScorePrestador(
             nombre='capacidad',
@@ -309,7 +325,7 @@ def componente_capacidad_dual(solicitud, normalizado, politica):
         configuracion=politica.configuracion_financiera,
     )
     carga = calcular_carga_financiera_prestador(
-        ingreso_contractual=ingreso.ingreso_mensual,
+        ingreso_contractual=evaluable.monto if automatica else ingreso.ingreso_mensual,
         cuota_existente=cuota_existente,
         cuota_nueva=simulacion.cuota_mensual,
     )

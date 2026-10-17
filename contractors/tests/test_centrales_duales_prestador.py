@@ -77,6 +77,13 @@ class CentralesDualesPrestadorTest(TestCase):
         self.politica.full_clean()
         self.politica.save(update_fields=['activa', 'updated_at'])
         self.solicitud = self._crear_solicitud()
+        from contractors.services.ingreso_neto import registrar_ingreso_neto
+        registrar_ingreso_neto(
+            solicitud=self.solicitud, actor=self.staff, monto=Decimal('6000000'),
+            fecha_corte=timezone.localdate(), vigente_hasta=timezone.localdate() + timedelta(days=30),
+            documentos=[self.solicitud.documentos.get(tipo_documento='CONTRATO')],
+            observacion='Neto mensual verificado en fixture sintetico dual',
+        )
         self.snapshot_decisor = self._crear_snapshot('decisor', 'a')
         self.snapshot_hdc = self._crear_snapshot('historial', 'b')
 

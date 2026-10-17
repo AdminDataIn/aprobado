@@ -1,5 +1,5 @@
 """Oferta PROD v1 sobre score existente y bandas persistidas; no consulta centrales."""
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import date
 from decimal import Decimal
 
@@ -38,6 +38,7 @@ class IngresoNetoValido:
     version: int | None = None
     solicitud_id: int | None = None
     registro_id: int | None = None
+    evidencia: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,8 @@ class OfertaCalculada:
     ingreso_neto_version: int | None = None
     ingreso_neto_fuente: str = ''
     ingreso_neto_vigente_hasta: date | None = None
+    ingreso_evaluable_evidencia: dict = field(default_factory=dict)
+    habilitada_para_originacion: bool = False
 
     @property
     def capacidad_crediticia_oferta(self):
@@ -111,7 +114,7 @@ def preparar_oferta(*, score, politica, ingreso_neto, obligaciones_mensuales, mo
     contexto.update(banda=banda.nombre, banda_id=banda.pk,
                     monto_maximo_banda=banda.monto_maximo, plazo_maximo_banda=banda.plazo_maximo)
     if ingreso_neto is None:
-        return OfertaCalculada(estado='NO_EVALUABLE', motivo='Falta ingreso neto valido para riesgo; no se infiere del contrato.', **contexto)
+        return OfertaCalculada(estado='NO_EVALUABLE', motivo='Ingreso evaluable NO_DETERMINABLE; requiere revision manual.', **contexto)
     if (not isinstance(ingreso_neto, IngresoNetoValido) or not ingreso_neto.fuente.strip()
             or not ingreso_neto.fecha_corte or ingreso_neto.fecha_corte > corte):
         raise ValidationError('Se requiere ingreso neto valido con fuente y fecha de corte.')
@@ -120,10 +123,15 @@ def preparar_oferta(*, score, politica, ingreso_neto, obligaciones_mensuales, mo
         if not ingreso_para_oferta_vigente(ingreso_neto, corte=corte, solicitud_id=solicitud_id):
             return OfertaCalculada(estado='NO_EVALUABLE', motivo='Ingreso manual vencido, modificado o invalidado.', **contexto)
     else:
-        raise ValidationError('Solo se admite ingreso neto manual verificado.')
+        if ingreso_neto.fuente not in {'CONTRATO_ESTIMADO', 'MIDECISOR_ESTIMADO'}:
+            raise ValidationError('Fuente de ingreso evaluable no admitida.')
+        from contractors.services.ingreso_evaluable import ingreso_evaluable_vigente
+        if not ingreso_evaluable_vigente(ingreso_neto, solicitud_id=solicitud_id, politica=politica, corte=corte):
+            return OfertaCalculada(estado='NO_EVALUABLE', motivo='Ingreso estimado sin evidencia vigente.', **contexto)
     contexto.update(ingreso_neto_registro_id=ingreso_neto.registro_id,
                     ingreso_neto_version=ingreso_neto.version, ingreso_neto_fuente=ingreso_neto.fuente,
-                    ingreso_neto_vigente_hasta=ingreso_neto.vigente_hasta)
+                    ingreso_neto_vigente_hasta=ingreso_neto.vigente_hasta,
+                    ingreso_evaluable_evidencia=ingreso_neto.evidencia)
     ingreso = Decimal(str(ingreso_neto.monto))
     if obligaciones_mensuales is None:
         return OfertaCalculada(estado='NO_EVALUABLE', motivo='Carga mensual HDC incompleta.', **contexto)
@@ -167,6 +175,7 @@ def preparar_oferta(*, score, politica, ingreso_neto, obligaciones_mensuales, mo
     return OfertaCalculada(
         monto=Decimal(inferior)/100, plazo=plazo, cuota=cuota(inferior), cuota_maxima=limite,
         estado='OFERTA_CALCULADA', fecha_ultima_cuota_credito=fecha_ultima_cuota_proyectada(corte, plazo),
+        habilitada_para_originacion=ingreso_neto.fuente == FUENTE,
         **contexto,
     )
 
@@ -174,6 +183,18 @@ def preparar_oferta(*, score, politica, ingreso_neto, obligaciones_mensuales, mo
 def oferta_con_ingreso_vigente(oferta, solicitud, *, corte=None):
     """Historical offers remain readable, but never reusable with a stale income version."""
     from contractors.services.ingreso_neto import obtener_ingreso_neto_vigente
+    if oferta.ingreso_neto_fuente in {'CONTRATO_ESTIMADO', 'MIDECISOR_ESTIMADO'}:
+        from contractors.score.politica import obtener_politica_score_activa
+        from contractors.datacredito.dto import ResultadoConsultaDatacreditoPrestador
+        from contractors.services.ingreso_evaluable import resolver_ingreso_evaluable
+        evidencia = oferta.ingreso_evaluable_evidencia
+        sid = evidencia.get('snapshot_id')
+        decisor = ResultadoConsultaDatacreditoPrestador(estado='EXITOSO', servicio='decisor', snapshot_id=sid) if sid else None
+        from contractors.services.politica_ingreso_publicacion import obtener_politica_para_solicitud
+        politica = obtener_politica_para_solicitud(solicitud)
+        ingreso = resolver_ingreso_evaluable(solicitud, politica, decisor=decisor, corte=corte) if politica else None
+        return bool(oferta.estado == 'OFERTA_CALCULADA' and ingreso
+                    and ingreso.evidencia == evidencia and ingreso.fuente == oferta.ingreso_neto_fuente)
     ingreso = obtener_ingreso_neto_vigente(solicitud, corte=corte)
     return bool(oferta.estado == 'OFERTA_CALCULADA'
                 and ingreso and oferta.ingreso_neto_registro_id == ingreso.registro_id

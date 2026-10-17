@@ -37,6 +37,7 @@ def construir_snapshot_politica_score(politica):
         'version': politica.version,
         'version_score': politica.version_score,
         'version_politica': politica.version_politica,
+        'politica_ingreso_evaluable': dict(politica.politica_ingreso_evaluable),
         'activa': politica.activa,
         'vigencia': {
             'desde': _serializar(politica.fecha_vigencia_desde),
@@ -110,6 +111,8 @@ def _activar_bajo_bloqueo(*, politica_id, actor, motivo):
     objetivo = next((item for item in politicas if item.pk == politica_id), None)
     if objetivo is None:
         raise ValidationError({'politica_id': 'La politica seleccionada no existe.'})
+    if objetivo.politica_ingreso_evaluable:
+        raise ValidationError('La politica de ingreso requiere publicacion y adopcion por solicitud, no activacion global.')
 
     activas = [item for item in politicas if item.activa]
     if len(activas) > 1:

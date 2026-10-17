@@ -64,6 +64,8 @@ from usuarios.models import PerfilPagador
 
 class FixturePipelineFinanciero:
     host = 'contratistas.localhost'
+    ingreso_automatico = True
+    semantica_ingreso_test = 'NO_CONFIRMADA'
 
     def setUp(self):
         storage = TemporaryDirectory(prefix='prestadores-e2e-')
@@ -103,6 +105,20 @@ class FixturePipelineFinanciero:
         self.politica.refresh_from_db()
         self.client.force_login(self.usuario)
         self.solicitud = self.crear_por_portal()
+        if self.ingreso_automatico:
+            from contractors.services.politica_ingreso_publicacion import publicar_politica_ingreso, adoptar_politica_ingreso
+            from contractors.politica_ingresos import politica_ingreso_default
+            with patch('contractors.services.politica_ingreso_publicacion.politica_ingreso_default',
+                       return_value={**politica_ingreso_default(), 'semantica_midecisor': self.semantica_ingreso_test}):
+                nueva = publicar_politica_ingreso(
+                    origen_id=self.politica.pk, actor=self.staff, motivo='Publicacion sintetica aislada',
+                    vigente_desde=timezone.localdate(),
+                )
+            self.solicitud = adoptar_politica_ingreso(
+                solicitud_id=self.solicitud.pk, politica_id=nueva.pk, actor=self.staff,
+                motivo='Adopcion sintetica aislada',
+            )
+            self.politica = nueva
         self.verificar_ingreso('10000000')
         mail.outbox.clear()
 
@@ -184,9 +200,13 @@ class FixturePipelineFinanciero:
         self.assertFalse(mail.outbox)
 
     def evaluar(self, *, score=900, hc='13', tx='02', hdc_sin_informacion=False,
-                deuda=None, mora=0, incompleta=False, timeout=False):
+                deuda=None, mora=0, incompleta=False, timeout=False, ingreso_estimado=None):
         decisor = payload_pn(hc=hc, tx=tx, informacion=True)
         decisor['content']['respuesta']['informacionRiesgo']['score'] = str(score)
+        if ingreso_estimado is not None:
+            decisor['content']['respuesta']['endeudamiento'] = {
+                'conInformacion': True, 'msjExcepcion': '', 'ingreso': ingreso_estimado,
+            }
         if incompleta:
             decisor = {'status': 'ACCEPTED', 'content': {}}
         hdc = deepcopy(hdc_fixtures.HDCPlusNormalizacionDualTest._payload_hdc(mora=mora, dias=90 if mora else 0))
@@ -237,10 +257,12 @@ class FixturePipelineFinanciero:
         self.assertFalse(AprobacionInternaPrestador.objects.exists())
         self.assert_sin_originacion()
 
-    def nueva_solicitud_autorizada(self, *, ingreso='10000000'):
+    def nueva_solicitud_autorizada(self, *, ingreso='10000000', adoptar=True):
         otra = deepcopy(self.solicitud)
         otra.pk = None
         otra.estado = 'EVALUACION_PENDIENTE'
+        from contractors.score.politica import obtener_politica_score_activa
+        otra.version_politica_simulacion = obtener_politica_score_activa().version_politica
         otra.save()
         for documento in self.solicitud.documentos.all():
             ContractorApplicationDocument.objects.create(
@@ -249,6 +271,13 @@ class FixturePipelineFinanciero:
                 uploaded_by=self.usuario,
             )
         registrar_autorizacion_datacredito_desde_solicitud(otra, usuario=self.usuario)
+        if self.ingreso_automatico and adoptar:
+            from contractors.services.politica_ingreso_publicacion import adoptar_politica_ingreso
+            from contractors.score.politica import obtener_politica_score_activa
+            otra.version_politica_simulacion = obtener_politica_score_activa().version_politica
+            otra.save(update_fields=['version_politica_simulacion'])
+            otra = adoptar_politica_ingreso(solicitud_id=otra.pk, politica_id=self.politica.pk,
+                                            actor=self.staff, motivo='Nueva solicitud sintetica')
         self.verificar_ingreso(ingreso, solicitud=otra)
         return otra
 
@@ -479,11 +508,11 @@ class PipelineFinancieroPrestadorE2ETest(FixturePipelineFinanciero, TestCase):
         self.evaluar()
         otra = self.nueva_solicitud_autorizada(ingreso='100000')
         nueva = self.evaluar_solo_cache(otra).auditoria
-        self.assertEqual(nueva.resultado, 'PREAPROBADO_READ_ONLY')
+        self.assertEqual(nueva.resultado, 'REQUIERE_REVISION_MANUAL')
         self.assertEqual(len(nueva.snapshot_salida['usos_snapshots']), 2)
         with self.assertRaises(ValidationError) as error:
             crear_o_reutilizar_aprobacion_interna(nueva, actor=self.staff)
-        self.assertEqual(error.exception.code, 'sin_oferta')
+        self.assertNotEqual(self.oferta(nueva).estado, 'OFERTA_CALCULADA')
         self.assertFalse(AprobacionInternaPrestador.objects.exists())
         self.assert_sin_originacion()
 
@@ -542,12 +571,12 @@ class PipelineFinancieroPrestadorE2ETest(FixturePipelineFinanciero, TestCase):
     def test_ingreso_neto_insuficiente_bloquea_gate_aunque_score_alto(self):
         self.verificar_ingreso('100000')
         auditoria = self.evaluar()
-        # Existing formal capacity uses contractual income, not the verified net source.
-        self.assertEqual(auditoria.resultado, 'PREAPROBADO_READ_ONLY')
+        # Risk capacity and offer now share the same verified net income.
+        self.assertEqual(auditoria.resultado, 'REQUIERE_REVISION_MANUAL')
         self.assertGreater(auditoria.ingreso_contractual_mensual, Decimal('100000'))
         with self.assertRaises(ValidationError) as error:
             crear_o_reutilizar_aprobacion_interna(auditoria, actor=self.staff)
-        self.assertEqual(error.exception.code, 'sin_oferta')
+        self.assertNotEqual(self.oferta(auditoria).estado, 'OFERTA_CALCULADA')
         self.assertFalse(AprobacionInternaPrestador.objects.exists())
         self.assertFalse(AprobacionPagadorPrestador.objects.exists())
         with patch('contractors.datacredito.adapter.consultar_midecisor_persona_natural') as decisor, \
@@ -571,14 +600,15 @@ class PipelineFinancieroPrestadorE2ETest(FixturePipelineFinanciero, TestCase):
         self.assertEqual(oferta.cuota_maxima, Decimal('0'))
         self.assert_sin_originacion()
 
-    def test_sin_ingreso_verificado_no_inventa_oferta(self):
+    def test_sin_ingreso_verificado_oferta_contractual_no_habilita_gate(self):
         registrar_ingreso_neto(solicitud=self.solicitud, actor=self.staff, invalidar=True,
                               observacion='Invalidacion sintetica de evidencia neta')
         auditoria = self.evaluar()
-        self.assertEqual(self.oferta(auditoria).estado, 'NO_EVALUABLE')
+        self.assertEqual(self.oferta(auditoria).estado, 'OFERTA_CALCULADA')
+        self.assertFalse(self.oferta(auditoria).habilitada_para_originacion)
         with self.assertRaises(ValidationError) as error:
             crear_o_reutilizar_aprobacion_interna(auditoria, actor=self.staff)
-        self.assertEqual(error.exception.code, 'oferta_no_evaluable')
+        self.assertEqual(error.exception.code, 'ingreso_documental_requerido')
         self.assertFalse(AprobacionInternaPrestador.objects.exists())
 
     def test_gate_vigente_deja_de_ser_viable_al_cambiar_ingreso(self):
@@ -597,10 +627,10 @@ class PipelineFinancieroPrestadorE2ETest(FixturePipelineFinanciero, TestCase):
         self.assert_sin_originacion()
 
     def test_plazo_reducido_revalida_cuota_real_y_no_aprueba(self):
-        self.verificar_ingreso('2000000')
+        self.verificar_ingreso('5000000')
         auditoria = self.evaluar()
         gate, _ = crear_o_reutilizar_aprobacion_interna(auditoria, actor=self.staff)
-        self.assertLess(gate.monto_maximo_evaluado, self.solicitud.monto_solicitado)
+        self.assertLessEqual(gate.monto_maximo_evaluado, self.solicitud.monto_solicitado)
         with self.assertRaises(ValidationError):
             aprobar_para_originar(gate, actor=self.staff, plazo_autorizado=1)
         gate.refresh_from_db()

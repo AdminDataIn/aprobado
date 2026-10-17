@@ -279,7 +279,7 @@ class OfertaProdIntegradaTest(TestCase):
         self.assertEqual((r.banda_id, r.monto, r.plazo), (banda.pk, Decimal('4200000'), 3))
         self.assertEqual(score.score_final, Decimal('800'))
 
-    def test_sin_neto_no_evaluable_no_usa_valor_contractual(self):
+    def test_sin_dto_ingreso_no_infiere_importe_desde_variables_score(self):
         score = self.score_del_motor(900)
         score = replace(score, variables_calculadas={
             **score.variables_calculadas,
@@ -288,7 +288,7 @@ class OfertaProdIntegradaTest(TestCase):
         })
         r = self.oferta(score, ingreso_neto=None)
         self.assertEqual((r.estado, r.monto, r.plazo), ('NO_EVALUABLE', 0, 0))
-        self.assertIn('no se infiere', r.motivo)
+        self.assertIn('NO_DETERMINABLE', r.motivo)
 
     def test_capacidades_separadas_no_recalibra_score(self):
         score = self.score_del_motor(900)
@@ -371,6 +371,12 @@ class OfertaProdIntegradaTest(TestCase):
                       'monto_simulado', 'plazo_simulado_meses', 'tasa_mensual_simulacion',
                       'monto_maximo_configuracion_simulacion', 'plazo_maximo_configuracion_simulacion'):
             setattr(solicitud, campo, getattr(self.solicitud, campo))
+        from contractors.models import ContractorApplicationDocument
+        documento = ContractorApplicationDocument.objects.create(
+            solicitud=solicitud, uploaded_by=usuario, tipo_documento='CONTRATO',
+            archivo=self.evidencia.archivo.name,
+        )
+        ingreso = ingreso_neto_test(solicitud, self.analista, documento, '100000000', corte=date(2026, 8, 1))
         self.politica.peso_midecisor = self.politica.peso_datacredito
         self.politica.peso_hdcplus = Decimal('0')
         from contractors.datacredito.dto import ResultadoCentralesPrestador
@@ -383,11 +389,13 @@ class OfertaProdIntegradaTest(TestCase):
         )
         with patch('contractors.services.validacion_contractual.date') as fecha, patch(
             'contractors.score.componentes.obtener_autorizacion_datacredito_vigente', return_value=object(),
-        ), patch('contractors.datacredito.adapter.consultar_proveedor_datacredito_prestador') as proveedor:
+        ), patch('contractors.datacredito.adapter.consultar_proveedor_datacredito_prestador') as proveedor, \
+             patch('django.utils.timezone.localdate', return_value=date(2026, 8, 1)):
             fecha.today.return_value = date(2026, 8, 1)
             score = evaluar_score_prestador(solicitud, self.politica, centrales)
             self.assertEqual(score.banda, 'PREMIUM')
-            r = self.oferta(score, obligaciones_mensuales=Decimal('1000000'))
+            r = self.oferta(score, ingreso_neto=ingreso, solicitud_id=solicitud.pk,
+                            obligaciones_mensuales=Decimal('1000000'))
             proveedor.assert_not_called()
         self.assertEqual((r.estado, r.monto, r.plazo), ('OFERTA_CALCULADA', Decimal('10000000'), 8))
         self.assertEqual(r.banda_id, self.politica.bandas.get(nombre='PREMIUM').pk)

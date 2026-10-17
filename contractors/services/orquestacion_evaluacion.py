@@ -47,7 +47,8 @@ def validar_readiness(solicitud, actor):
     if (not solicitud.simulada_en or not solicitud_tiene_documentos_obligatorios(solicitud)
             or solicitud.estado_analisis_contractual not in {'COMPLETADO', 'CON_ADVERTENCIAS', 'NO_DISPONIBLE'}):
         raise EvaluacionNoDisponible('solicitud_incompleta')
-    politica = obtener_politica_score_activa()
+    from contractors.services.politica_ingreso_publicacion import obtener_politica_para_solicitud
+    politica = obtener_politica_para_solicitud(solicitud)
     financiera = obtener_configuracion_simulador_prestador()
     if (not politica or not financiera or politica.configuracion_financiera_id != financiera.pk
             or solicitud.version_configuracion_financiera_simulacion != financiera.version
