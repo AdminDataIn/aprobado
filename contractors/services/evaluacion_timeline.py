@@ -2,6 +2,8 @@ from contractors.models import TimelinePrestador
 
 
 CLAVES_METADATA_PERMITIDAS = {
+    'causas', 'decision_contexto', 'version_decision', 'politica_decision_hash',
+    'vigente_hasta', 'snapshot_ids',
     'auditoria_id',
     'campos',
     'estado_ejecucion',

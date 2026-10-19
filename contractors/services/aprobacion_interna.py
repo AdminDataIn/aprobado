@@ -50,6 +50,9 @@ class ValidacionGatePrestador:
 @transaction.atomic
 def crear_o_reutilizar_aprobacion_interna(auditoria, *, actor):
     _exigir_permiso(actor, 'contractors.can_decide_contractor_internal_approval')
+    solicitud = ContractorApplication.objects.select_for_update().get(
+        pk=auditoria.solicitud_id
+    )
     auditoria = (
         PredecisionPrestadorAudit.objects.select_for_update()
         .select_related('solicitud', 'solicitud__empresa')
@@ -58,9 +61,6 @@ def crear_o_reutilizar_aprobacion_interna(auditoria, *, actor):
     existente = AprobacionInternaPrestador.objects.filter(
         auditoria_predecision=auditoria
     ).first()
-    solicitud = ContractorApplication.objects.select_for_update().get(
-        pk=auditoria.solicitud_id
-    )
     if existente:
         if existente.estado in ESTADOS_GATE_ACTIVO:
             validar_oferta_financiera_gate(existente)
@@ -356,6 +356,8 @@ def _validar_gate(solicitud, auditoria):
 
     if errores:
         raise ValidationError(errores)
+    from contractors.services.decision_definitiva import validar_mandato_gate
+    validar_mandato_gate(auditoria)
     limites = _extraer_limites(auditoria, solicitud, politica, configuracion, contrato)
     oferta = exigir_oferta_viable(calcular_oferta_evaluada(
         solicitud, auditoria, politica=politica,
@@ -561,6 +563,8 @@ def _snapshot_vigente(snapshot, autorizacion, *, auditoria, servicio=None):
 
 
 def _bloquear_gate(gate_id):
+    solicitud_id = AprobacionInternaPrestador.objects.values_list('solicitud_id', flat=True).get(pk=gate_id)
+    ContractorApplication.objects.select_for_update().get(pk=solicitud_id)
     return (
         AprobacionInternaPrestador.objects.select_for_update()
         .select_related('solicitud', 'solicitud__empresa', 'auditoria_predecision')

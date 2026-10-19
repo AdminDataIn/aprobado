@@ -65,8 +65,12 @@ def _campos_clon(modelo, excluir):
 
 @transaction.atomic
 def publicar_politica_ingreso(*, origen_id, actor, motivo, vigente_desde,
-                             descuento='25.00'):
+                             descuento='25.00', version_destino=VERSION_INGRESO):
     _exigir_actor_autorizado(actor)
+    from contractors.politica_decision import VERSION_POLITICA, definicion_decision, huella_reglas
+    if version_destino not in {VERSION_INGRESO, VERSION_POLITICA}:
+        raise ValidationError('La version de destino no esta definida en codigo.')
+    decision = definicion_decision() if version_destino == VERSION_POLITICA else None
     if not isinstance(vigente_desde, date) or not str(motivo or '').strip():
         raise ValidationError('Publicacion requiere vigencia explicita y motivo.')
     politicas = list(ConfiguracionScorePrestador.objects.select_for_update().order_by('pk'))
@@ -90,12 +94,12 @@ def publicar_politica_ingreso(*, origen_id, actor, motivo, vigente_desde,
                                       'descuento_contractual_porcentaje': descuento})
     campos = _campos_clon(ConfiguracionScorePrestador, {'id', 'created_at', 'updated_at'})
     valores = {k: deepcopy(getattr(origen, k)) for k in campos}
-    valores.update(version=VERSION_INGRESO, version_politica=VERSION_INGRESO,
-                   nombre='Prestadores ingreso evaluable v2', activa=False,
+    valores.update(version=version_destino, version_politica=version_destino,
+                   nombre=('Prestadores decision V3' if decision else 'Prestadores ingreso evaluable v2'), activa=False,
                    fecha_vigencia_desde=vigente_desde, politica_ingreso_evaluable=reglas)
     # A fresh statement sees a concurrent publisher that committed while we waited.
-    nueva = ConfiguracionScorePrestador.objects.filter(version=VERSION_INGRESO).first()
-    if ConfiguracionScorePrestador.objects.filter(version_politica=VERSION_INGRESO).exclude(version=VERSION_INGRESO).exists():
+    nueva = ConfiguracionScorePrestador.objects.filter(version=version_destino).first()
+    if ConfiguracionScorePrestador.objects.filter(version_politica=version_destino).exclude(version=version_destino).exists():
         raise ValidationError('La identidad de politica ya pertenece a otra version.')
     if nueva:
         if any(getattr(nueva, k) != v for k, v in valores.items()):
@@ -116,6 +120,11 @@ def publicar_politica_ingreso(*, origen_id, actor, motivo, vigente_desde,
         raise ValidationError('Las bandas publicadas no corresponden al origen.')
     validar_politica_score_completa(nueva)
     snapshot = {'ingreso_publicado': True, 'politica': construir_snapshot_politica_score(nueva)}
+    if decision:
+        snapshot.update(decision_sha256=huella_reglas(decision), reglas_decision=decision)
+        previa = CambioPoliticaScorePrestadorAudit.objects.filter(politica_nueva=nueva).first()
+        if previa and previa.snapshot_nuevo.get('decision_sha256') != huella_reglas(decision):
+            raise ValidationError('La normativa publicada cambio; requiere una nueva version.')
     clave = sha256(json.dumps(snapshot, sort_keys=True, default=str).encode()).hexdigest()
     CambioPoliticaScorePrestadorAudit.objects.get_or_create(
         clave_idempotencia=clave, defaults=dict(

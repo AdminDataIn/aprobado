@@ -10,6 +10,7 @@ from contractors.services.politica_ingreso_publicacion import (
     VERSION_INGRESO, adoptar_politica_ingreso, publicar_politica_ingreso,
 )
 from contractors.services.politica_score import _exigir_actor_autorizado
+from contractors.politica_decision import VERSION_POLITICA
 
 
 class Command(BaseCommand):
@@ -22,6 +23,7 @@ class Command(BaseCommand):
         parser.add_argument('--origen-id', type=int)
         parser.add_argument('--vigente-desde', help='Fecha explicita YYYY-MM-DD para publicar.')
         parser.add_argument('--descuento', default='25.00')
+        parser.add_argument('--version-destino', choices=(VERSION_INGRESO, VERSION_POLITICA), default=VERSION_INGRESO)
         parser.add_argument('--solicitud-id', type=int)
         parser.add_argument('--politica-id', type=int)
         modo = parser.add_mutually_exclusive_group()
@@ -64,6 +66,7 @@ class Command(BaseCommand):
         nueva = publicar_politica_ingreso(
             origen_id=origen.pk, actor=actor, motivo=options['motivo'],
             vigente_desde=fecha, descuento=options['descuento'],
+            version_destino=options['version_destino'],
         )
         self.stdout.write(f'estado=PUBLICADA_INACTIVA politica_id={nueva.pk}')
 
@@ -75,8 +78,8 @@ class Command(BaseCommand):
         if not actor.has_perm('contractors.can_evaluate_contractor_application'):
             raise PermissionDenied
         politica = ConfiguracionScorePrestador.objects.get(pk=options['politica_id'])
-        if (politica.version != VERSION_INGRESO
-                or politica.version_politica != VERSION_INGRESO):
+        if (politica.version not in {VERSION_INGRESO, VERSION_POLITICA}
+                or politica.version_politica != politica.version):
             raise CommandError('estado=POLITICA_NO_CORRESPONDE')
         solicitud = ContractorApplication.objects.get(pk=options['solicitud_id'])
         if not options['aplicar']:

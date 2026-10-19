@@ -100,7 +100,7 @@ def evaluar_solicitud_prestador(
     if inicio.reutilizada or inicio.en_proceso:
         if inicio.reutilizada:
             _crear_revisiones_operativas(inicio.auditoria, solicitado_por)
-        return inicio
+        return _integrar_decision_final(inicio, solicitado_por)
 
     auditoria = inicio.auditoria
     if inicio.requiere_reconfirmacion:
@@ -157,7 +157,7 @@ def evaluar_solicitud_prestador(
             estado_ejecucion=PredecisionPrestadorAudit.EstadoEjecucion.ERROR_CONTROLADO,
         )
 
-    return _finalizar_evaluacion(
+    resultado = _finalizar_evaluacion(
         auditoria=auditoria,
         predecision=predecision,
         datacredito=datacredito,
@@ -165,6 +165,16 @@ def evaluar_solicitud_prestador(
         politica=politica,
         usuario=solicitado_por,
     )
+    return _integrar_decision_final(resultado, solicitado_por)
+
+
+def _integrar_decision_final(resultado, actor):
+    from contractors.politica_decision import VERSION_POLITICA
+    if (actor is not None and not resultado.en_proceso
+            and resultado.auditoria.version_politica == VERSION_POLITICA):
+        from contractors.services.decision_definitiva import decidir_solicitud_prestador
+        decidir_solicitud_prestador(resultado.auditoria, actor=actor)
+    return resultado
 
 
 @transaction.atomic
@@ -589,6 +599,12 @@ def _registrar_cierre_timeline(solicitud, auditoria, usuario):
 
 def _crear_revisiones_operativas(auditoria, usuario):
     from contractors.services.revision_manual import crear_revisiones_para_auditoria
+    from contractors.politica_decision import VERSION_POLITICA
+    if auditoria.version_politica == VERSION_POLITICA:
+        from contractors.services.decision_definitiva import consultar_decision_vigente, RECHAZADO
+        decision = consultar_decision_vigente(auditoria)
+        if decision and decision.resultado == RECHAZADO:
+            return []
 
     return crear_revisiones_para_auditoria(auditoria, usuario=usuario)
 

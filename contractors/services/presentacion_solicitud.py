@@ -215,6 +215,13 @@ def construir_estado_publico_solicitud(solicitud):
                 tono='favorable',
             )
 
+    if solicitud.estado == ContractorApplication.Estado.NO_APROBADO:
+        return _estado(
+            'NO_APROBADO',
+            'La solicitud no puede continuar en este momento.',
+            'Puedes comunicarte con nuestro equipo para conocer los canales de atencion.',
+            tono='advertencia',
+        )
     if solicitud.estado == ContractorApplication.Estado.EVALUACION_PENDIENTE:
         return _estado(
             'EVALUACION_PENDIENTE',
