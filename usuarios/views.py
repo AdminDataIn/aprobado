@@ -578,6 +578,11 @@ def _build_landing_backers():
             'logo_path': 'images/respaldos/datain.png',
             'descripcion': 'Respaldo tecnológico y desarrollo de software.',
         },
+        {
+            'nombre': 'Fenalco Meta',
+            'logo_path': 'images/respaldos/fenalco-meta.png',
+            'descripcion': 'Seccional de la Federación Nacional de Comerciantes Empresarios en el departamento del Meta, dedicada a representar, defender y fortalecer los sectores del comercio, los servicios y el turismo en la región.',
+        },
     ]
     return [respaldo for respaldo in respaldos if finders.find(respaldo['logo_path'])]
 

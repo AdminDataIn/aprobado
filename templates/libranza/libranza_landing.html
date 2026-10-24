@@ -423,15 +423,15 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
     <section class="libranza-backers-section" id="quienes-nos-respaldan">
         <div class="libranza-container">
             <div class="libranza-backers-head">
-                <span class="libranza-eyebrow">Quiénes nos respaldan</span>
-                <h2 class="libranza-section-title">Respaldo institucional para operar con confianza</h2>
+                <span class="libranza-eyebrow">Nuestro ecosistema</span>
+                <h2 class="libranza-section-title">Conoce nuestro ecosistema</h2>
                 <p class="libranza-section-description" style="margin-bottom:0;max-width:760px;">Tecnología, información y garantías que fortalecen nuestro proceso.</p>
             </div>
             {% if landing_backers %}
-            <div class="libranza-backers-grid" aria-label="Entidades que respaldan a Aprobado">
+            <div class="libranza-backers-grid" aria-label="Organizaciones de nuestro ecosistema">
                 {% for backer in landing_backers %}
                 <div class="libranza-backer-card">
-                    <img src="{% static backer.logo_path %}" alt="{{ backer.nombre }}" class="libranza-backer-logo" loading="lazy">
+                    <img src="{% static backer.logo_path %}" alt="{{ backer.nombre }}" class="libranza-backer-logo{% if backer.nombre == 'Fenalco Meta' %} libranza-backer-logo--square{% endif %}" loading="lazy">
                     <strong>{{ backer.nombre }}</strong>
                     <small>{{ backer.descripcion }}</small>
                 </div>
@@ -1013,7 +1013,7 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
 
     .libranza-backers-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 1rem;
         margin-top: 2rem;
     }
@@ -1044,6 +1044,12 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
         font-size: 1rem;
     }
 
+    .libranza-backer-logo--square {
+        width: 120px;
+        height: 120px;
+        max-width: 100%;
+    }
+
     .libranza-backer-card small {
         color: #64748b;
         font-size: 0.78rem;
@@ -1072,6 +1078,12 @@ El acceso de cuenta queda disponible desde el CTA "Iniciar sesión".
             height: 340px;
         }
 
+        .libranza-backers-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 600px) {
         .libranza-backers-grid {
             grid-template-columns: 1fr;
         }

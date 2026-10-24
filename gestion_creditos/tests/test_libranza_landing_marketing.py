@@ -63,7 +63,7 @@ class LibranzaLandingMarketingTests(TestCase):
         self.assertContains(response, 'https://contratistas.aprobado.com.co/solicitar/')
         self.assertContains(response, 'Presencia nacional')
         self.assertContains(response, 'maps/colombia.geo.json')
-        self.assertContains(response, 'Quiénes nos respaldan')
+        self.assertContains(response, 'Conoce nuestro ecosistema')
         self.assertContains(response, 'Seguros SURA')
         self.assertNotContains(response, 'Testimonios')
         self.assertNotContains(response, 'Solicitar adelanto')
@@ -79,6 +79,16 @@ class LibranzaLandingMarketingTests(TestCase):
         self.assertContains(response, 'FiGarantías')
         self.assertContains(response, 'Orinoco TIC')
         self.assertContains(response, 'Seguros SURA')
+
+    def test_fenalco_se_agrega_sin_cambiar_el_orden_ni_afirmar_alianza_formal(self):
+        response = self.client.get(reverse('libranza:landing'))
+        self.assertEqual([item['nombre'] for item in response.context['landing_backers']], [
+            'DataCrédito Experian', 'FiGarantías', 'Orinoco TIC', 'Seguros SURA', 'DATAIN', 'Fenalco Meta',
+        ])
+        self.assertContains(response, 'images/respaldos/fenalco-meta.png')
+        self.assertContains(response, 'alt="Fenalco Meta"')
+        self.assertContains(response, 'Seccional de la Federación Nacional de Comerciantes Empresarios')
+        self.assertNotContains(response, 'Nuestro ecosistema de aliados')
 
     def test_logo_acepta_proporcion_estrecha_y_svg(self):
         empresa_svg = Empresa(
