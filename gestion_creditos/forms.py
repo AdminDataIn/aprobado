@@ -309,6 +309,9 @@ class CreditoLibranzaForm(forms.ModelForm):
             raise forms.ValidationError('La empresa seleccionada no tiene convenio activo.')
         if empresa.tipo_empresa == Empresa.TipoEmpresa.MARKETPLACE_EXTERNA:
             raise forms.ValidationError('La empresa seleccionada no pertenece al canal de convenio de libranza.')
+        if not self.instance.pk or self.instance.empresa_id != empresa.pk:
+            from gestion_creditos.services.restriccion_empresa import validar_nueva_solicitud
+            validar_nueva_solicitud(empresa.pk, 'LIBRANZA')
         return empresa
 
     def clean_cedula_frontal(self):

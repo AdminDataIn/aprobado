@@ -2,6 +2,7 @@ from .common import *
 from .common import _rate_limit_simple
 from usuarios.product_flow import solicitante_credito_required
 from django.core.exceptions import PermissionDenied
+from gestion_creditos.services.restriccion_empresa import EmpresaRestringida, restriccion_vigente
 from gestion_creditos.services.captura_documental import preparar_identidad_formulario, consumir_documentos
 from gestion_creditos.services.libranza_rules import LIBRANZA_MONTO_MAXIMO
 from gestion_creditos.services.costo_originacion_libranza import (
@@ -64,14 +65,15 @@ def solicitud_credito_libranza_view(request):
                     # El parsing de certificado se ejecuta después del save para reutilizar
                     # el FileField persistido y dejar trazabilidad para una futura fase OCR.
                     procesar_certificado_bancario(credito_libranza_detalle)
-            except (IntegrityError, CostoOriginacionLibranzaError) as exc:
+            except (IntegrityError, CostoOriginacionLibranzaError, EmpresaRestringida) as exc:
                 mensaje = (
                     exc.messages[0]
-                    if isinstance(exc, CostoOriginacionLibranzaError)
+                    if isinstance(exc, (CostoOriginacionLibranzaError, EmpresaRestringida))
                     else 'Ya existe una solicitud registrada con esta cedula. No es posible crear una nueva solicitud.'
                 )
                 form.add_error(
-                    None if isinstance(exc, CostoOriginacionLibranzaError) else 'cedula',
+                    'empresa' if isinstance(exc, EmpresaRestringida) else (
+                        None if isinstance(exc, CostoOriginacionLibranzaError) else 'cedula'),
                     mensaje,
                 )
                 if is_ajax:
@@ -222,6 +224,10 @@ def buscar_empresas_convenio_view(request):
                 'nombre': empresa.nombre,
                 'razon_social': empresa.razon_social,
                 'nit': empresa.nit,
+                'mensaje_restriccion': (
+                    restriccion.mensaje_publico
+                    if (restriccion := restriccion_vigente(empresa.pk, 'LIBRANZA')) else ''
+                ),
             }
             for empresa in empresas
         ]

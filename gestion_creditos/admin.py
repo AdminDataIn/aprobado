@@ -1,5 +1,6 @@
 ﻿from django.contrib import admin, messages
 from django import forms
+from . import admin_restricciones  # Register the permission-controlled lifecycle.
 from gestion_creditos.document_widgets import DocumentosPrivadosAdminMixin
 from gestion_creditos.services.documentos_privados import url_documento
 from django.contrib.admin.helpers import ActionForm

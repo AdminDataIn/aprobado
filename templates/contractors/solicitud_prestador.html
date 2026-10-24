@@ -590,6 +590,17 @@
 
     function confirmarEmpresa(id, nombre) {
       if (!selectEmpresa) return;
+      const opcion = Array.from(selectEmpresa.options).find((item) => item.value === String(id));
+      if (opcion && opcion.dataset.restriccion) {
+        selectEmpresa.value = '';
+        if (indicadorEmpresa) indicadorEmpresa.classList.remove('visible');
+        if (empresaSeleccionada) empresaSeleccionada.style.display = 'none';
+        if (helperEmpresa) {
+          helperEmpresa.textContent = opcion.dataset.restriccion;
+          helperEmpresa.classList.add('is-error');
+        }
+        return;
+      }
       selectEmpresa.value = id;
       if (inputEmpresa) {
         inputEmpresa.value = nombre;

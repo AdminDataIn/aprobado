@@ -456,42 +456,47 @@ def solicitar_prestador_view(request):
                 form.add_error(None, error_analisis)
                 paso_error_general = 4 if hasattr(form, 'reconciliacion') else 2
             if not error_analisis:
-                with transaction.atomic():
-                    solicitud = form.save(commit=False)
-                    es_nueva = not solicitud.pk
-                    solicitud.usuario = request.user
-                    if not solicitud.pk:
-                        solicitud.estado = ContractorApplication.Estado.DOCUMENTOS_PENDIENTES
-                    solicitud.save()
-                    guardar_documentos_formulario(
-                        solicitud=solicitud,
-                        cleaned_data=form.cleaned_data,
-                        usuario=request.user,
-                        metadata_documentos=_metadata_documentos_desde_sesion(sesion_documental),
-                    )
-                    _aplicar_evidencia_analisis(solicitud, evidencia)
-                    solicitud.save()
-                    if sesion_documental:
-                        consumir_documentos(sesion=sesion_documental, actor=request.user, solicitud=solicitud)
-                    actualizar_estado_documental(solicitud)
-                    registrar_autorizacion_datacredito_desde_solicitud(
-                        solicitud,
-                        usuario=request.user,
-                        request=request,
-                    )
-                    if es_nueva:
-                        registrar_solicitud_creada(solicitud, usuario=request.user)
-                    else:
-                        invalidar_evaluacion_si_cambiaron_datos(
-                            solicitud,
-                            version_anterior=version_anterior,
+                from gestion_creditos.services.restriccion_empresa import EmpresaRestringida
+                try:
+                    with transaction.atomic():
+                        solicitud = form.save(commit=False)
+                        es_nueva = not solicitud.pk
+                        solicitud.usuario = request.user
+                        if not solicitud.pk:
+                            solicitud.estado = ContractorApplication.Estado.DOCUMENTOS_PENDIENTES
+                        solicitud.save()
+                        guardar_documentos_formulario(
+                            solicitud=solicitud,
+                            cleaned_data=form.cleaned_data,
                             usuario=request.user,
-                            campos=['empresa', 'datos_contractuales', 'autorizaciones'],
-                            motivo='formulario_actualizado',
+                            metadata_documentos=_metadata_documentos_desde_sesion(sesion_documental),
                         )
-                request.session.pop(CLAVE_SESION_ANALISIS_CONTRATO, None)
-                messages.success(request, 'Información y documentos guardados. Continúa con la simulación.')
-                return redirect(f'{reverse("contractors:simular")}?solicitud_id={solicitud.id}')
+                        _aplicar_evidencia_analisis(solicitud, evidencia)
+                        solicitud.save()
+                        if sesion_documental:
+                            consumir_documentos(sesion=sesion_documental, actor=request.user, solicitud=solicitud)
+                        actualizar_estado_documental(solicitud)
+                        registrar_autorizacion_datacredito_desde_solicitud(
+                            solicitud,
+                            usuario=request.user,
+                            request=request,
+                        )
+                        if es_nueva:
+                            registrar_solicitud_creada(solicitud, usuario=request.user)
+                        else:
+                            invalidar_evaluacion_si_cambiaron_datos(
+                                solicitud,
+                                version_anterior=version_anterior,
+                                usuario=request.user,
+                                campos=['empresa', 'datos_contractuales', 'autorizaciones'],
+                                motivo='formulario_actualizado',
+                            )
+                except EmpresaRestringida as exc:
+                    form.add_error('empresa', exc)
+                else:
+                    request.session.pop(CLAVE_SESION_ANALISIS_CONTRATO, None)
+                    messages.success(request, 'Información y documentos guardados. Continúa con la simulación.')
+                    return redirect(f'{reverse("contractors:simular")}?solicitud_id={solicitud.id}')
     else:
         form = SolicitudPrestadorForm(instance=solicitud_existente, usuario=request.user)
 

@@ -1081,6 +1081,11 @@ MODIFICAR:
             if (!empresaHiddenInput || !empresaBusquedaInput) {
                 return;
             }
+            if (empresa.mensaje_restriccion) {
+                empresaHiddenInput.value = '';
+                setCompanyState('is-invalid', empresa.mensaje_restriccion);
+                return;
+            }
             empresaHiddenInput.value = empresa.id;
             empresaBusquedaInput.value = empresa.razon_social || empresa.nombre;
             setCompanyState('is-selected', 'Empresa validada correctamente. Continuaremos con esa empresa.');
@@ -1112,6 +1117,7 @@ MODIFICAR:
                 button.className = 'company-search-option';
                 button.dataset.id = empresa.id;
                 button.dataset.nombre = nombreVisible;
+                button.dataset.restriccion = empresa.mensaje_restriccion || '';
                 nombre.textContent = nombreVisible;
                 detalle.textContent = `${empresa.nombre}${empresa.nit ? ` · NIT ${empresa.nit}` : ''}`;
                 button.append(nombre, detalle);
@@ -1131,7 +1137,8 @@ MODIFICAR:
             seleccionarEmpresa({
                 id: option.dataset.id,
                 nombre: option.dataset.nombre,
-                razon_social: option.dataset.nombre
+                razon_social: option.dataset.nombre,
+                mensaje_restriccion: option.dataset.restriccion
             });
             return true;
         }

@@ -263,6 +263,48 @@ class Empresa(models.Model):
         return self.tipo_empresa in {self.TipoEmpresa.MARKETPLACE_EXTERNA, self.TipoEmpresa.MIXTA}
 
 
+class RestriccionEmpresa(models.Model):
+    class Producto(models.TextChoices):
+        LIBRANZA = 'LIBRANZA', 'Libranza'
+        PRESTADORES = 'PRESTADORES', 'Prestadores'
+
+    empresa = models.ForeignKey(Empresa, on_delete=models.PROTECT, related_name='restricciones_solicitudes')
+    producto = models.CharField(max_length=24, choices=Producto.choices)
+    motivo_interno = models.TextField()
+    mensaje_publico = models.CharField(max_length=300)
+    inicio = models.DateTimeField(default=timezone.now)
+    vence_en = models.DateTimeField(null=True, blank=True)
+    umbral_mora_dias = models.PositiveSmallIntegerField(default=90, validators=[MinValueValidator(1)])
+    creada_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='+')
+    creada_en = models.DateTimeField(auto_now_add=True)
+    levantada_en = models.DateTimeField(null=True, blank=True)
+    levantada_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='+', null=True, blank=True)
+    motivo_levantamiento = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-creada_en', '-pk']
+        permissions = [('manage_company_restrictions', 'Puede restringir y levantar nuevas solicitudes por empresa')]
+        indexes = [models.Index(fields=['empresa', 'producto', 'inicio'], name='restric_empresa_producto_idx')]
+
+    def clean(self):
+        super().clean()
+        if not self.motivo_interno.strip() or not self.mensaje_publico.strip():
+            raise ValidationError('Indica motivo interno y mensaje publico.')
+        if self.vence_en and self.inicio and self.vence_en <= self.inicio:
+            raise ValidationError({'vence_en': 'El vencimiento debe ser posterior al inicio.'})
+
+    def save(self, *args, **kwargs):
+        if not getattr(self, '_gestion_por_servicio', False):
+            raise ValidationError('Gestiona la restriccion mediante el servicio autorizado.')
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('Las restricciones conservan su historial; utiliza levantamiento.')
+
+    def __str__(self):
+        return f'Restriccion {self.pk} / empresa {self.empresa_id} / {self.producto}'
+
+
 class DocumentoEmpresa(models.Model):
     class TipoDocumento(models.TextChoices):
         RUT = 'RUT', 'RUT'
@@ -1279,6 +1321,20 @@ class CreditoLibranza(models.Model):
     class Meta:
         verbose_name = 'Detalle de Libranza'
         verbose_name_plural = 'Detalles de Libranza'
+
+    def save(self, *args, **kwargs):
+        campos = kwargs.get('update_fields')
+        actualiza_empresa = campos is None or bool({'empresa', 'empresa_id'}.intersection(campos))
+        anterior = (type(self).objects.filter(pk=self.pk).values_list('empresa_id', flat=True).first()
+                    if self.pk and actualiza_empresa else None)
+        if not self.es_prestador_servicios and (
+                self._state.adding or (actualiza_empresa and anterior != self.empresa_id)):
+            from gestion_creditos.services.restriccion_empresa import validar_nueva_solicitud
+            with transaction.atomic():
+                Empresa.objects.select_for_update().get(pk=self.empresa_id)
+                validar_nueva_solicitud(self.empresa_id, RestriccionEmpresa.Producto.LIBRANZA)
+                return super().save(*args, **kwargs)
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Detalle Libranza - {self.nombre_completo} ({self.credito.numero_credito})"

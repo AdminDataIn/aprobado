@@ -49,6 +49,11 @@ def confirmar_condiciones_simulacion(*, solicitud, usuario, monto, plazo_meses):
             and solicitud.plazo_meses == solicitud.plazo_simulado_meses == plazo):
         return ConfirmacionSimulacion(reutilizada=True)
 
+    from gestion_creditos.models import Empresa
+    from gestion_creditos.services.restriccion_empresa import validar_nueva_solicitud
+    Empresa.objects.select_for_update().get(pk=solicitud.empresa_id)
+    validar_nueva_solicitud(solicitud.empresa_id, 'PRESTADORES', creada_en=solicitud.created_at)
+
     if solicitud.estado not in {
         solicitud.Estado.BORRADOR, solicitud.Estado.DOCUMENTOS_PENDIENTES,
         solicitud.Estado.DOCUMENTOS_CARGADOS, solicitud.Estado.EVALUACION_PENDIENTE,

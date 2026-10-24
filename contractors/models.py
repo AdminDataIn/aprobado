@@ -4,7 +4,7 @@ from pathlib import Path
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q
 
 from gestion_creditos.models import Empresa
@@ -223,6 +223,19 @@ class ContractorApplication(models.Model):
 
     def __str__(self):
         return f'{self.nombres} {self.apellidos} - {self.numero_documento}'
+
+    def save(self, *args, **kwargs):
+        campos = kwargs.get('update_fields')
+        actualiza_empresa = campos is None or bool({'empresa', 'empresa_id'}.intersection(campos))
+        anterior = (type(self).objects.filter(pk=self.pk).values_list('empresa_id', flat=True).first()
+                    if self.pk and actualiza_empresa else None)
+        if self._state.adding or (actualiza_empresa and anterior != self.empresa_id):
+            from gestion_creditos.services.restriccion_empresa import validar_nueva_solicitud
+            with transaction.atomic():
+                Empresa.objects.select_for_update().get(pk=self.empresa_id)
+                validar_nueva_solicitud(self.empresa_id, 'PRESTADORES')
+                return super().save(*args, **kwargs)
+        return super().save(*args, **kwargs)
 
     @property
     def nombre_completo(self):

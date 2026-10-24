@@ -104,6 +104,24 @@ class MontoContratoField(forms.DecimalField):
         return f'{entero_formateado},{decimales}' if decimales else entero_formateado
 
 
+class EmpresaSolicitudSelect(forms.Select):
+    def __init__(self, *args, solicitud=None, **kwargs):
+        self.solicitud = solicitud
+        super().__init__(*args, **kwargs)
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex, attrs)
+        empresa = getattr(value, 'instance', None)
+        if empresa:
+            from gestion_creditos.services.restriccion_empresa import restriccion_vigente
+            creada = (self.solicitud.created_at if self.solicitud and self.solicitud.pk
+                      and self.solicitud.empresa_id == empresa.pk else None)
+            regla = restriccion_vigente(empresa.pk, 'PRESTADORES', creada_en=creada)
+            if regla:
+                option['attrs'].update(disabled=True, **{'data-restriccion': regla.mensaje_publico})
+        return option
+
+
 class SimulacionPrestadorForm(forms.Form):
     monto = forms.DecimalField(
         label='Monto solicitado',
@@ -378,6 +396,7 @@ class SolicitudPrestadorForm(ConsentimientoCentralesMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.metadata_contractual = getattr(self, 'metadata_contractual', {})
+        self.fields['empresa'].widget = EmpresaSolicitudSelect(attrs={'class': 'campo'}, solicitud=self.instance)
         self.fields['empresa'].queryset = Empresa.objects.filter(
             convenio_activo=True,
         ).order_by('nombre')
@@ -398,6 +417,14 @@ class SolicitudPrestadorForm(ConsentimientoCentralesMixin, forms.ModelForm):
             existe = tipo_documento in documentos_existentes
             self.fields[campo].required = not existe
             self.fields[campo].widget.attrs['data-existing'] = 'true' if existe else 'false'
+
+    def clean_empresa(self):
+        empresa = self.cleaned_data['empresa']
+        from gestion_creditos.services.restriccion_empresa import validar_nueva_solicitud
+        misma = self.instance and self.instance.pk and self.instance.empresa_id == empresa.pk
+        validar_nueva_solicitud(empresa.pk, 'PRESTADORES',
+                               creada_en=self.instance.created_at if misma else None)
+        return empresa
 
     def clean(self):
         cleaned_data = super().clean()

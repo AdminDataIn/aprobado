@@ -4,6 +4,7 @@ from .common import _build_capacidad_descuento_context
 from django.http import QueryDict
 from gestion_creditos.models import CuotaAmortizacion, DetalleContablePago, ReestructuracionCredito
 from gestion_creditos.forms import ComprobantePagoExistenteForm
+from gestion_creditos.services.restriccion_empresa import EmpresaRestringida
 from gestion_creditos.services.admin_dashboard_filters import parse_admin_dashboard_filters
 from gestion_creditos.services.admin_excel_report import (
     AdminExcelReportError,
@@ -445,7 +446,7 @@ def admin_libranza_special_case_originate_view(request, audit_id):
                     f'Credito especial {result.credito.numero_credito} creado en revision.',
                 )
                 return redirect('gestion:credito_detalle', credito_id=result.credito.id)
-            except SpecialCaseOriginationError as exc:
+            except (SpecialCaseOriginationError, EmpresaRestringida) as exc:
                 form.add_error(None, str(exc))
     else:
         form = SpecialCaseLibranzaOriginationForm()
