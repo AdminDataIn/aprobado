@@ -161,7 +161,7 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
                     self.assertContains(response, atributo)
                 self.assertNotContains(response, 'type="file"')
                 self.assertContains(response, 'captura_documental.js?v=p04a-1')
-                self.assertContains(response, 'captura_quality.js?v=id01cd-1')
+                self.assertContains(response, 'captura_quality.js?v=id01d-2')
                 self.assertContains(response, 'jsfeat-0.0.8.min.js')
                 self.assertFalse(Credito.objects.exists())
                 self.assertFalse(CreditoLibranza.objects.exists())

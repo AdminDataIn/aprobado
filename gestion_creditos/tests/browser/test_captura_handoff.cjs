@@ -362,7 +362,8 @@ for (const width of [320, 768]) {
 
 async function cameraSetup(t, opts = {}) {
   const context = await browser.newContext({viewport: {width: opts.width || 390, height: opts.height || 844},
-    permissions: ['camera'], ...(opts.touch ? {isMobile: true, hasTouch: true} : {})});
+    permissions: ['camera'], ...(opts.touch ? {isMobile: true, hasTouch: true} : {}),
+    ...(opts.android ? {userAgent: 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36'} : {})});
   t.after(() => context.close());
   const page = await context.newPage(), requests = [], errors = [], logs = [];
   await page.addInitScript({content: `window.drawDocumentFixture = ${drawDocument.toString()};`});
@@ -392,6 +393,7 @@ async function cameraSetup(t, opts = {}) {
         if (nativeMode === 'delayed') await new Promise(resolve => { window.allowPhoto = resolve; });
         const canvas = document.createElement('canvas'); canvas.width = photoWidth; canvas.height = photoHeight;
         const ctx = canvas.getContext('2d'); ctx.fillStyle = '#08a4a4'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        if (qualityScene) window.drawDocumentFixture(canvas, qualityScene);
         let blob = await new Promise(resolve => encode.call(canvas, resolve, 'image/jpeg', .96));
         canvas.width = canvas.height = 0;
         if (largeBytes) blob = new Blob([blob, new Uint8Array(8 * 1024 * 1024)], {type: 'image/jpeg'});
@@ -675,6 +677,29 @@ for (const [qualityScene, reason] of [['sharp', null], ['white-card', null], ['d
     if (process.env.HANDOFF_SCREENSHOTS) await ui.page.screenshot({path: path.join(process.env.HANDOFF_SCREENSHOTS, `quality-${qualityScene}.png`)});
   });
 }
+for (const nativeMode of [undefined, 'fail', 'success']) {
+  for (const qualityScene of ['low-contrast', 'rotated', 'outside']) {
+    test(`ID01D Android emulado quality y transporte: ${nativeMode || 'fallback'} / ${qualityScene}`, async t => {
+      const ui = await cameraSetup(t, {android: true, touch: true, nativeMode, qualityScene,
+        photoWidth: 1080, photoHeight: 1920});
+      await ui.openCamera(); await ui.photo();
+      const result = await ui.page.evaluate(() => cameraStats.quality);
+      assert.equal(result.decision, qualityScene === 'outside' ? 'reject' : 'pass');
+      assert.equal('diagnostics' in result, false);
+      if (qualityScene === 'outside') {
+        assert.equal(await ui.page.locator('[data-usar-foto]').isEnabled(), false);
+        await ui.page.locator('[data-usar-foto]').evaluate(el => el.dispatchEvent(new Event('click')));
+        assert.equal(ui.requests.some(r => r.name === 'FRONTAL'), false);
+      } else {
+        await ui.accept(); await ui.waitStep('ready');
+        assert.equal(ui.requests.filter(r => r.name === 'FRONTAL').length, 1);
+      }
+      assert.equal(await ui.page.evaluate(() => cameraStats.nativeCalls), nativeMode ? 1 : 0);
+      assert.deepEqual(ui.errors, []);
+    });
+  }
+}
+
 test('quality gate falla tecnicamente: revision manual explicita y sin bloqueo total', async t => {
   const ui = await cameraSetup(t, {qualityScene: 'sharp'}); await ui.openCamera();
   await ui.page.evaluate(() => { window.jsfeat = undefined; });
