@@ -19,6 +19,8 @@ common_urlpatterns = [
     # Webhooks/APIs publicas
     path("webhook/wompi/events/", gestion_views.wompi_webhook_view, name="wompi_webhook"),
     path("api/webhooks/zapsign/", gestion_views.zapsign_webhook_view, name="zapsign_webhook"),
+    path("api/webhooks/zapsign/prestadores/", gestion_views.zapsign_prestadores_webhook_view,
+         name="zapsign_prestadores_webhook"),
     path("api/pagares/download/<str:token>/", descargar_pagare_publico, name="descargar_pagare_publico"),
 
     # Autenticacion

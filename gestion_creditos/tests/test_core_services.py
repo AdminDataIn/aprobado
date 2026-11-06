@@ -229,12 +229,13 @@ class PagosMasivosCSVServiceTest(TestCase):
         self.assertIn("monto_invalido", errores[1])
 
 
-@override_settings(ZAPSIGN_WEBHOOK_SECRET='test-secret', ZAPSIGN_WEBHOOK_HEADER='X-ZapSign-Secret')
+@override_settings(ZAPSIGN_WEBHOOK_SECRET='test-secret', ZAPSIGN_WEBHOOK_HEADER='X-ZapSign-Secret',
+                   ZAPSIGN_API_TOKEN='token-api-sintetico')
 class ZapSignWebhookViewTest(TestCase):
     """Pruebas para el webhook robusto de ZapSign."""
 
     def setUp(self):
-        self.user = User.objects.create_user(username='zapsign_user', password='123')
+        self.user = User.objects.create_user(username='zapsign_user', password='123', email='firma@example.invalid')
         self.credito = Credito.objects.create(
             usuario=self.user,
             linea=Credito.LineaCredito.EMPRENDIMIENTO,
@@ -260,12 +261,16 @@ class ZapSignWebhookViewTest(TestCase):
         headers = {}
         if secret is not None:
             headers['HTTP_X_ZAPSIGN_SECRET'] = secret
-        return self.client.post(
-            self.url,
-            data=json.dumps(payload),
-            content_type='application/json',
-            **headers
-        )
+        remoto = {
+            'token': payload.get('token'), 'status': payload.get('status'),
+            'signers': [{'token': 'firmante-sintetico', 'email': self.user.email,
+                         'status': 'signed', 'signed_at': timezone.now().isoformat()}],
+        }
+        with patch('gestion_creditos.services.zapsign_client.ZapSignClient.consultar_documento',
+                   return_value=remoto):
+            return self.client.post(
+                self.url, data=json.dumps(payload), content_type='application/json', **headers,
+            )
 
     def test_webhook_rechaza_secret_invalido(self):
         payload = {
@@ -277,10 +282,7 @@ class ZapSignWebhookViewTest(TestCase):
         response = self._post(payload, secret='bad-secret')
         self.assertEqual(response.status_code, 403)
 
-        log = ZapSignWebhookLog.objects.latest('received_at')
-        self.assertFalse(log.signature_valid)
-        self.assertFalse(log.processed)
-        self.assertIn('Secret', log.error_message)
+        self.assertFalse(ZapSignWebhookLog.objects.exists())
 
     @patch(
         'gestion_creditos.services.zapsign_client.descargar_pdf_firmado_pagare',

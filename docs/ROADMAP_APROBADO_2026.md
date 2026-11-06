@@ -8,6 +8,30 @@
 
 **Proyecto:** Aprobado / Project_aprobado / WhatsApp Platform
 
+## Adenda focal 26/10/2026: firma Prestadores y deuda legacy
+
+### P1 - Hardening de webhooks historicos ZapSign Libranza/Legacy
+
+**Estado: PENDIENTE.** Alcance: autenticacion obligatoria, secretos propios,
+actualizacion coordinada de los dos webhooks existentes, conciliacion de
+reintentos y validacion operativa. No modificar/eliminar/recrear esos webhooks
+durante el P0 Prestadores; sus IDs no bloquean el cierre de Prestadores.
+
+Excepcion temporal autorizada por el Project Manager: solo Libranza/Legacy,
+en /api/webhooks/zapsign/, conserva recepcion cuando su secreto esta AUSENTE.
+Un secreto presente, vacio o invalido NO habilita compatibilidad; si es valido,
+header ausente/incorrecto se rechaza. Los eventos admitidos sin secreto se auditan
+con signature_valid=False y autenticacion=legacy_sin_secreto; no se afirman
+autenticados. El riesgo residual de recepcion no autenticada queda abierto como P1.
+Se conservan verificacion remota, propiedad persistida, locks e idempotencia.
+
+Prestadores P0 mantiene /api/webhooks/zapsign/prestadores/, secreto exclusivo
+obligatorio y sin fallback. Solo se prepara/despliega su configuracion y se crean
+sus dos hooks en una ventana autorizada. Cuatro hooks educativos intactos; sin
+cambios de scoring, politica, originacion o decisiones. El ajuste y regresiones
+se validan localmente; esta adenda NO acredita despliegue ni cierre E2E real.
+Historial y otros checkpoints se conservan, sin integrar cambios de otros worktrees.
+
 ### APROBADO-03 P0-2.2 — Purga documental periodica (2026-09-23)
 
 - Implementado en codigo, sin commit/push/deploy. Se reutiliza app.conf.beat_schedule

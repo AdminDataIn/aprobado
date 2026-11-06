@@ -211,13 +211,18 @@ class ZapSignClient:
             response = requests.get(
                 endpoint,
                 headers=self._get_headers(),
-                timeout=10
+                timeout=10,
+                allow_redirects=False,
             )
 
             response.raise_for_status()
+            if response.status_code != 200:
+                raise ZapSignAPIError('Respuesta no exitosa al verificar documento')
             data = response.json()
+            if not isinstance(data, dict):
+                raise ZapSignAPIError('Respuesta invalida al verificar documento')
 
-            logger.info("Estado de documento ZapSign consultado: %s", data.get('status'))
+            logger.info("Verificacion de documento ZapSign recibida")
             return data
 
         except requests.exceptions.HTTPError as e:

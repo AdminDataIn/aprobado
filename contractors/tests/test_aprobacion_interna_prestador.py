@@ -1128,7 +1128,7 @@ class AprobacionInternaPrestadorTest(TestCase):
             Credito.EstadoCredito.PENDIENTE_FIRMA,
         )
 
-    @override_settings(ZAPSIGN_WEBHOOK_SECRET='secreto-webhook')
+    @override_settings(ZAPSIGN_PRESTADORES_WEBHOOK_SECRET='secreto-webhook')
     @patch('gestion_creditos.credit_services.iniciar_proceso_desembolso')
     @patch('gestion_creditos.credit_services.activar_credito')
     def test_webhook_prestador_ignora_credito_anulado_sin_efectos_financieros(
@@ -1148,7 +1148,7 @@ class AprobacionInternaPrestadorTest(TestCase):
         )
 
         respuesta = self.client.post(
-            '/api/webhooks/zapsign/',
+            '/api/webhooks/zapsign/prestadores/',
             data=json.dumps({
                 'token': 'documento-prestador-anulado',
                 'event': 'doc_signed',
@@ -1185,16 +1185,25 @@ class AprobacionInternaPrestadorTest(TestCase):
         activar_credito.assert_not_called()
         iniciar_desembolso.assert_not_called()
 
-    @override_settings(ZAPSIGN_WEBHOOK_SECRET='secreto-webhook')
-    def test_webhook_prestador_guarda_resumen_sanitizado_y_no_token(self):
+    @override_settings(ZAPSIGN_PRESTADORES_WEBHOOK_SECRET='secreto-webhook', ZAPSIGN_API_TOKEN='api-sintetica')
+    @patch('gestion_creditos.services.zapsign_client.ZapSignClient.consultar_documento')
+    def test_webhook_prestador_guarda_resumen_sanitizado_y_no_token(self, consulta):
         formalizacion = self._formalizacion_con_identidad()
         enviar_formalizacion_prestador_a_firma(
             formalizacion,
             actor=self.analista,
             cliente=ClienteFirmaPrueba(token='token-webhook-prestador'),
         )
+        consulta.return_value = {
+            'token': 'token-webhook-prestador', 'external_id': formalizacion.clave_idempotencia,
+            'status': 'signed', 'signers': [{
+                'token': 'firmante-sintetico', 'status': 'signed',
+                'email': formalizacion.credito_libranza.correo_electronico,
+                'signed_at': timezone.now().isoformat(),
+            }],
+        }
         respuesta = self.client.post(
-            '/api/webhooks/zapsign/',
+            '/api/webhooks/zapsign/prestadores/',
             data=json.dumps({
                 'token': 'token-webhook-prestador',
                 'event': 'doc_signed',
@@ -1213,7 +1222,7 @@ class AprobacionInternaPrestadorTest(TestCase):
         log = ZapSignWebhookLog.objects.get()
         self.assertTrue(log.doc_token.startswith('sha256:'))
         self.assertNotIn('token-webhook-prestador', str(log.__dict__))
-        self.assertEqual(set(log.payload), {'event', 'status'})
+        self.assertEqual(set(log.payload), {'event', 'status', 'receptor', 'producto', 'resultado'})
         self.assertEqual(log.headers, {})
 
     def test_perfil_pagador_no_puede_preparar_aunque_tenga_permisos(self):

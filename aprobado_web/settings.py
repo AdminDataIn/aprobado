@@ -489,8 +489,11 @@ else:
 # Configuración de ZapSign (Firma Electrónica de Pagarés)
 # ========================
 ZAPSIGN_API_TOKEN = os.environ.get('ZAPSIGN_API_TOKEN', '')
-ZAPSIGN_WEBHOOK_SECRET = os.environ.get('ZAPSIGN_WEBHOOK_SECRET', '')
+# Absence permits the approved legacy exception; an explicit empty value does not.
+ZAPSIGN_WEBHOOK_SECRET = os.environ.get('ZAPSIGN_WEBHOOK_SECRET')
 ZAPSIGN_WEBHOOK_HEADER = os.environ.get('ZAPSIGN_WEBHOOK_HEADER', 'X-ZapSign-Secret')
+ZAPSIGN_PRESTADORES_WEBHOOK_SECRET = os.environ.get('ZAPSIGN_PRESTADORES_WEBHOOK_SECRET', '')
+ZAPSIGN_PRESTADORES_WEBHOOK_HEADER = os.environ.get('ZAPSIGN_PRESTADORES_WEBHOOK_HEADER', 'X-ZapSign-Secret')
 ZAPSIGN_ENVIRONMENT = os.environ.get('ZAPSIGN_ENVIRONMENT', 'sandbox')  # 'sandbox' o 'production'
 ZAPSIGN_AUTH_MODE = os.environ.get('ZAPSIGN_AUTH_MODE', 'assinaturaTela')
 ZAPSIGN_SEND_AUTOMATIC_EMAIL = env_bool('ZAPSIGN_SEND_AUTOMATIC_EMAIL', True)
