@@ -646,6 +646,54 @@ class PortalMinimoPrestadoresTest(TestCase):
         response = self.client.get(f'/simular/?solicitud_id={solicitud.pk}', HTTP_HOST=self.host)
         self.assertEqual(response.status_code, 404)
 
+    def test_reemplazo_analizado_en_edicion_conserva_a_hasta_confirmar_b(self):
+        from contractors.tests.contrato_uat_fixture import pdf_uat_calendario
+
+        solicitud = self._crear_solicitud_completa_continuidad()
+        meta_a = solicitud.metadata_analisis_contractual
+        fecha_a = solicitud.fecha_analisis_contractual
+        archivos_a = dict(solicitud.documentos.values_list('tipo_documento', 'archivo'))
+        contenido = pdf_uat_calendario().read()
+        def nuevo():
+            return SimpleUploadedFile('reemplazo.pdf', contenido, content_type='application/pdf')
+        analisis = self.client.post(f'/solicitud/{solicitud.pk}/contrato/analizar/',
+                                    {'contrato_actual': nuevo()}, HTTP_HOST=self.host)
+        self.assertEqual(analisis.status_code, 200)
+        payload = self._payload_solicitud()
+        payload.update(solicitud_id=solicitud.pk, contrato_actual=nuevo(), empresa='')
+        invalido = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertIn('empresa', invalido.context['form'].errors)
+        solicitud.refresh_from_db()
+        self.assertEqual(solicitud.metadata_analisis_contractual, meta_a)
+        self.assertEqual(solicitud.fecha_analisis_contractual, fecha_a)
+        self.assertEqual(dict(solicitud.documentos.values_list('tipo_documento', 'archivo')), archivos_a)
+        payload.update(empresa=self.empresa.pk)
+        del payload['contrato_actual']
+        omitido = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertContains(omitido, 'El reemplazo analizado no se ha guardado.')
+        payload['contrato_actual'] = nuevo()
+        revision = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertContains(revision, 'Revisa las diferencias y confirma')
+        payload.update(confirma_discrepancias='on',
+                       reconciliacion_token=revision.context['form']['reconciliacion_token'].value(),
+                       contrato_actual=SimpleUploadedFile('reemplazo.pdf', contenido + b'\n%otra-version'))
+        cambiado = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertContains(cambiado, 'El contrato cambió después del análisis.')
+        solicitud.refresh_from_db()
+        self.assertEqual(solicitud.metadata_analisis_contractual, meta_a)
+        payload['contrato_actual'] = nuevo()
+        confirmado = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(confirmado.status_code, 302)
+        solicitud.refresh_from_db()
+        self.assertTrue(solicitud.metadata_analisis_contractual['reconciliacion']['confirmada'])
+        self.assertEqual(solicitud.metadata_analisis_contractual['archivo_hash_sha256'],
+                         hashlib.sha256(contenido).hexdigest())
+        with solicitud.documentos.get(tipo_documento='CONTRATO').archivo.open('rb') as guardado:
+            self.assertEqual(guardado.read(), contenido)
+        self.assertEqual(dict(solicitud.documentos.exclude(tipo_documento='CONTRATO')
+                              .values_list('tipo_documento', 'archivo')),
+                         {k: v for k, v in archivos_a.items() if k != 'CONTRATO'})
+
     def test_continuidad_reemplazo_posterior_invalida_analisis_anterior(self):
         solicitud = self._crear_solicitud_completa_continuidad()
         response = self._cargar_documento(solicitud, 'CONTRATO', 'posterior.pdf', b'%PDF-1.4 otra version')
@@ -1213,7 +1261,7 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertContains(response, 'id="contract_analysis_spinner"')
         self.assertContains(response, 'Analizando...')
         self.assertContains(response, 'Estamos revisando el contrato. Esto puede tardar unos segundos.')
-        self.assertContains(response, 'Contrato cargado correctamente')
+        self.assertContains(response, 'PDF seleccionado, todavía sin guardar')
         self.assertContains(response, 'contract-analysis-summary')
         self.assertContains(response, 'contract-analysis-warnings')
         self.assertContains(response, 'contract-analysis-blocks')

@@ -673,7 +673,7 @@
       const icono = estado.querySelector('.status-icon');
       if (valorEstado) {
         valorEstado.textContent = campo.id === 'id_contrato_actual'
-          ? 'Contrato cargado correctamente'
+          ? (archivo ? 'PDF seleccionado, todavía sin guardar' : 'Contrato guardado en la solicitud')
           : 'OK';
       }
       if (icono) icono.textContent = '✓';
@@ -870,6 +870,11 @@
       if (!botonAnalizarContrato) return;
       const habilitado = !analisisContratoEnCurso && contratoDisponible() && autorizacionAnalisis && autorizacionAnalisis.checked;
       botonAnalizarContrato.disabled = !habilitado;
+      if (!analisisContratoEnCurso) {
+        botonAnalizarContrato.textContent = campoContrato?.files?.length
+          ? 'Analizar PDF seleccionado'
+          : (campoContrato?.dataset.existing === 'true' ? 'Analizar contrato guardado' : 'Analizar contrato');
+      }
       if (estadoAnalisisContrato && !habilitado && !analisisContratoEnCurso) {
         estadoAnalisisContrato.textContent = 'Carga el contrato y autoriza el análisis para continuar.';
       }
@@ -958,9 +963,11 @@
       window.ContractReconciliation.refreshDerivedBalance(formulario, data.campos_extraidos || {});
     }
 
+    let revisionAnalisis = 0;
     async function ejecutarAnalisisContrato() {
       if (!botonAnalizarContrato || botonAnalizarContrato.disabled || analisisContratoEnCurso) return;
       analisisContratoEnCurso = true;
+      const revision = revisionAnalisis;
       botonAnalizarContrato.disabled = true;
       botonAnalizarContrato.textContent = 'Analizando...';
       if (spinnerAnalisisContrato) spinnerAnalisisContrato.hidden = false;
@@ -992,6 +999,8 @@
           },
         });
         const respuestaAnalisis = await analisis.json();
+        if (revision !== revisionAnalisis) return;
+        if (!analisis.ok) throw new Error(respuestaAnalisis.error || 'No se pudo analizar el contrato.');
         if (estadoAnalisisContrato) estadoAnalisisContrato.textContent = 'Validando información...';
         if (analisis.ok && respuestaAnalisis.success && !respuestaAnalisis.bloqueos?.length) aplicarSugerenciasContrato(respuestaAnalisis);
         renderizarResultadoAnalisis(respuestaAnalisis);
@@ -1007,6 +1016,7 @@
             analisisContratoValido = true;
             estadoAnalisisContrato.textContent = 'Datos detectados desde el contrato. Revísalos antes de continuar.';
           }
+          if (archivo && analisisContratoValido) estadoAnalisisContrato.textContent += ' El PDF seleccionado aún no se ha guardado.';
         }
       } catch (error) {
         analisisContratoValido = false;
@@ -1020,17 +1030,22 @@
     }
 
     if (campoContrato) campoContrato.addEventListener('change', function () {
+      revisionAnalisis++;
       analisisContratoValido = false;
       if (resultadoAnalisisContrato) resultadoAnalisisContrato.innerHTML = '';
       actualizarBotonAnalisis();
-      if (estadoAnalisisContrato) estadoAnalisisContrato.textContent = 'Contrato cargado. Debes analizarlo antes de continuar.';
+      if (estadoAnalisisContrato) estadoAnalisisContrato.textContent = campoContrato.files.length
+        ? 'PDF seleccionado, todavía sin guardar. Analízalo antes de continuar.'
+        : 'No hay un PDF nuevo seleccionado.';
     });
     if (autorizacionAnalisis) autorizacionAnalisis.addEventListener('change', function () {
+      revisionAnalisis++;
       if (!autorizacionAnalisis.checked) analisisContratoValido = false;
       actualizarBotonAnalisis();
     });
     const campoNumeroDocumento = document.getElementById('id_numero_documento');
     if (campoNumeroDocumento) campoNumeroDocumento.addEventListener('input', function () {
+      revisionAnalisis++;
       analisisContratoValido = false;
     });
     if (botonAnalizarContrato) botonAnalizarContrato.addEventListener('click', ejecutarAnalisisContrato);

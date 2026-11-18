@@ -118,7 +118,8 @@ async function verifyContractualCalendar(t, variant) {
   });
   await page.goto('https://contratistas.localhost/simular/?solicitud_id=' + fixture.solicitud_id);
   assert.match(await page.locator('main').textContent(), /Falta una regla precisa/);
-  assert.equal(await page.locator('#simulator-form').count(), 0);
+  assert.match(await page.locator('h1').textContent(), /ESTIMACIÓN INFORMATIVA/);
+  assert.equal(await page.locator('[data-register-application]').isDisabled(), true);
   await page.getByRole('link', {name: 'Revisar contrato'}).click();
   await page.locator('#step-2.active').waitFor();
   assert.equal(await page.locator('#id_fecha_inicio_contrato').inputValue(), '2026-07-01');
@@ -142,6 +143,7 @@ async function verifyContractualCalendar(t, variant) {
     error: analysis.error, bloqueos: analysis.bloqueos}));
   assert.equal(analysis.campos_extraidos.valor_mensual_contractual.valor, '7000000');
   assert.equal(analysis.campos_extraidos.valor_pagado_contrato.encontrado, false);
+  assert.match(await page.locator('#contract_ai_status').textContent(), /PDF seleccionado aún no se ha guardado/);
   assert.equal(await page.locator('#id_fecha_fin_contrato').inputValue(), '2027-06-29');
   await page.locator('#step-2 [data-next-step="3"]').click();
   await page.locator('#step-3 [data-next-step="4"]').click();

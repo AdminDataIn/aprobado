@@ -157,6 +157,8 @@ def analizar_contrato_prestador_view(request, solicitud_id=None):
         documento=documento,
     )
     evidencia = {
+        'solicitud_id': solicitud_id,
+        'reemplazo_pendiente': solicitud is not None and 'contrato_actual' in request.FILES,
         'archivo_hash_sha256': hash_archivo,
         'estado': resultado.estado,
         'analizado_en': timezone.now().isoformat(),
@@ -164,9 +166,18 @@ def analizar_contrato_prestador_view(request, solicitud_id=None):
         'documento_hash': _hash_documento(numero_documento),
         'metadata_segura': resultado.metadata,
     }
-    if solicitud is not None:
+    # Uploaded replacements belong to the session until the complete form commits.
+    if solicitud is not None and not evidencia['reemplazo_pendiente']:
         with transaction.atomic():
             solicitud = _obtener_solicitud_del_usuario(solicitud.pk, request.user, bloquear=True)
+            vigente = solicitud.documentos.filter(tipo_documento='CONTRATO').first()
+            try:
+                hash_vigente = _hash_archivo(vigente.archivo) if vigente and vigente.archivo else ''
+            except OSError:
+                hash_vigente = ''
+            if hash_vigente != hash_archivo:
+                return JsonResponse({'success': False, 'error': 'El contrato guardado cambió. Analízalo nuevamente.'},
+                                    status=409)
             version_anterior = construir_version_datos(solicitud)[0]
             solicitud.estado_analisis_contractual = resultado.estado
             solicitud.metadata_analisis_contractual = {
@@ -234,7 +245,8 @@ def _hash_documento(numero_documento):
 
 
 def _validar_evidencia_analisis(*, request, form, solicitud):
-    archivo = form.cleaned_data.get('contrato_actual')
+    # Invalid uploads disappear from cleaned_data; never reconcile against the old PDF instead.
+    archivo = request.FILES.get('contrato_actual')
     return _evidencia_contractual_vigente(
         request=request, archivo=archivo,
         numero_documento=form.cleaned_data.get('numero_documento'), solicitud=solicitud,
@@ -242,6 +254,11 @@ def _validar_evidencia_analisis(*, request, form, solicitud):
 
 
 def _evidencia_contractual_vigente(*, request, archivo, numero_documento, solicitud):
+    evidencia_sesion = request.session.get(CLAVE_SESION_ANALISIS_CONTRATO) or {}
+    if evidencia_sesion.get('solicitud_id') not in (None, getattr(solicitud, 'pk', None)):
+        evidencia_sesion = {}
+    if archivo is None and evidencia_sesion.get('reemplazo_pendiente'):
+        return {}, 'El reemplazo analizado no se ha guardado. Selecciona otra vez el mismo PDF o analiza el contrato guardado.'
     if archivo is None and solicitud is not None:
         contrato = solicitud.documentos.filter(
             tipo_documento=ContractorApplicationDocument.TipoDocumento.CONTRATO,
@@ -255,7 +272,6 @@ def _evidencia_contractual_vigente(*, request, archivo, numero_documento, solici
     except OSError:
         return {}, 'El archivo del contrato no esta disponible. Cargalo y analizalo nuevamente.'
     hash_documento = _hash_documento(numero_documento)
-    evidencia_sesion = request.session.get(CLAVE_SESION_ANALISIS_CONTRATO) or {}
     evidencia_modelo = {}
     if solicitud is not None and solicitud.metadata_analisis_contractual:
         evidencia_modelo = {
@@ -505,7 +521,7 @@ def solicitar_prestador_view(request):
                     form.add_error('empresa', exc)
                 else:
                     request.session.pop(CLAVE_SESION_ANALISIS_CONTRATO, None)
-                    messages.success(request, 'Información y documentos guardados. Continúa con la simulación.')
+                    messages.success(request, 'Información y documentos guardados. El análisis corresponde al contrato guardado. Continúa con la simulación.')
                     return redirect(f'{reverse("contractors:simular")}?solicitud_id={solicitud.id}')
     else:
         form = SolicitudPrestadorForm(instance=solicitud_existente, usuario=request.user)
