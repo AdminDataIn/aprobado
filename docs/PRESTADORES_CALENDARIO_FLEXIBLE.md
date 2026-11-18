@@ -37,6 +37,18 @@ el PDF contiene evidencia admisible. No hay migraciones ni backfill.
 
 ## Seguridad operativa
 
+Se admiten tambien enunciados completos equivalentes, por ejemplo:
+\`Los periodos mensuales se contaran por aniversario desde la fecha de inicio.\`
+\`Cada mensualidad corresponde al periodo comprendido entre aniversarios contractuales.\`
+\`El pago se realizara al cierre de cada periodo mensual.\`
+\`Los honorarios se pagaran el ultimo dia de cada periodo.\`
+\`Se pagara cinco (5) dias calendario despues de terminado cada periodo.\`
+Los dias en palabras o cifras de 1 a 99 se normalizan al mismo
+desplazamiento; si se indican ambos, deben coincidir. \`A periodo vencido\` por si solo,
+\`dentro de cinco dias\` y plazos contados desde una aprobacion sin fecha no fijan
+un vencimiento. El reconocimiento de enunciados completos no generaliza a
+cualquier redaccion contractual ni sustituye la lectura documental.
+
 - Las reglas nuevas se extraen del texto del PDF, no de campos del navegador ni
   de texto inferido por IA. Volver a analizar no basta: el usuario debe confirmar
   el contrato por el flujo vigente; el servidor contrasta el hash del archivo

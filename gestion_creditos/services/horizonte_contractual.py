@@ -20,7 +20,53 @@ PATRON_DIA_MES_SIGUIENTE = (
 _ANIVERSARIO = 'calendario: periodos mensuales por aniversario contractual'
 _AJUSTE_ANIVERSARIO = 'ajuste de aniversario: ultimo dia del mes sin cambiar el dia ancla'
 _PAGO_CIERRE = r'pago: (?:al cierre|([1-9][0-9]?) dias calendario despues del cierre) de cada periodo'
-_PATRON_CLAUSULAS = rf'(?:^|(?<=[.;]))\s*({_ANIVERSARIO}|{_AJUSTE_ANIVERSARIO}|{_PAGO_CIERRE})(?=[.;]|$)'
+_CALENDARIO_CONFLICTIVO = 'calendario flexible con clausulas incompatibles'
+_NUMEROS = dict(zip('uno dos tres cuatro cinco seis siete ocho nueve diez'.split(), range(1, 11)))
+_DIAS_ESCRITOS = {
+    **_NUMEROS, 'un': 1,
+    **dict(zip('once doce trece catorce quince dieciseis diecisiete dieciocho diecinueve veinte '
+               'veintiuno veintidos veintitres veinticuatro veinticinco veintiseis veintisiete veintiocho veintinueve'
+               .split(), range(11, 30))),
+    'veintiun': 21,
+}
+for _decena, _valor in zip('treinta cuarenta cincuenta sesenta setenta ochenta noventa'.split(), range(30, 100, 10)):
+    _DIAS_ESCRITOS[_decena] = _valor
+    _DIAS_ESCRITOS.update({f'{_decena} y {unidad}': _valor + n
+                           for unidad, n in _NUMEROS.items() if n < 10})
+_DIAS_PATRON = '|'.join(_DIAS_ESCRITOS)
+_VARIANTE_ANIVERSARIO = re.compile(
+    r'(?:los )?periodos mensuales se (?:contaran|computaran|calcularan) por aniversario'
+    r'(?: mensual| contractual)? (?:desde|a partir de) la fecha de inicio(?: del contrato)?'
+    r'|cada mensualidad corresponde(?:ra)? al periodo comprendido entre'
+    r' (?:dos )?aniversarios contractuales(?: consecutivos)?'
+)
+_PREFIJO_PAGO = (
+    r'(?:el pago se (?:realizara|efectuara|hara)|los honorarios se pagaran|'
+    r'el contratante pagara|se pagara)\s*,?\s+'
+)
+_CADA_PERIODO = r'cada periodo(?: mensual)?(?: de servicio)?'
+_VARIANTE_CIERRE = re.compile(
+    rf'{_PREFIJO_PAGO}(?:a periodo vencido,?\s+)?(?:al cierre|el ultimo dia) de {_CADA_PERIODO}'
+)
+_VARIANTE_DIAS = re.compile(
+    rf'{_PREFIJO_PAGO}(?P<numero>[1-9][0-9]?|{_DIAS_PATRON})'
+    r'(?:\s*\(\s*(?P<cifra>[0-9]{1,2})\s*\))?'
+    rf' dias? calendario (?:despues de (?:terminado|finalizado|cerrado) {_CADA_PERIODO}'
+    rf'|(?:despues|a partir) del cierre de {_CADA_PERIODO})'
+)
+_CONTEXTO_FLEXIBLE = re.compile(r'\b(?:aniversarios?|dia ancla|cada periodo|periodo vencido)\b')
+_CONDICION_O_NEGACION = re.compile(
+    r'\b(?:no|nunca|salvo|excepto|si|siempre que|a menos que|sujeto a|previa aprobacion|'
+    r'previa aceptacion|dentro de)\b'
+)
+_ANCLA_ALTERNATIVA = re.compile(
+    r'\b(?:dia ancla|aniversario(?: mensual| contractual)?)\b.*\b(?:dia \d+|dias? habiles?)\b'
+    r'|\bdia \d+\b.*\b(?:dia ancla|aniversario(?: mensual| contractual)?)\b'
+)
+_CONDICION_CONTINUACION = re.compile(
+    r'^(?:salvo|excepto|siempre que|a menos que|sujeto a|previa aprobacion|previa aceptacion|'
+    r'si se (?:aprueba|acepta|presenta))\b'
+)
 _PATRON_PERIODO = (
     r'(\d{4}-\d{2}-\d{2}) a (\d{4}-\d{2}-\d{2});\s*'
     r'vence (\d{4}-\d{2}-\d{2});\s*valor cop ([1-9][0-9]{0,11}(?:\.[0-9]{2})?)'
@@ -98,6 +144,42 @@ def _sin_tildes(texto):
                    if not unicodedata.combining(c))
 
 
+def _clausulas_flexibles(texto):
+    """Accept whole statements; normalize known equivalents, not isolated keywords."""
+    texto = re.sub(r'\s+', ' ', _sin_tildes(texto))
+    reglas = []
+    incompatible = False
+    anterior_es_regla = False
+    for frase in re.split(r'[.;!]', texto):
+        frase = re.sub(r'\s*:\s*', ': ', frase.strip())
+        if not frase:
+            continue
+        cantidad_previa = len(reglas)
+        if frase == _CALENDARIO_CONFLICTIVO:
+            incompatible = True
+        elif frase in (_ANIVERSARIO, _AJUSTE_ANIVERSARIO) or re.fullmatch(_PAGO_CIERRE, frase):
+            reglas.append(frase)
+        elif _VARIANTE_ANIVERSARIO.fullmatch(frase):
+            reglas.append(_ANIVERSARIO)
+        elif _VARIANTE_CIERRE.fullmatch(frase):
+            reglas.append('pago: al cierre de cada periodo')
+        elif dias := _VARIANTE_DIAS.fullmatch(frase):
+            numero, cifra = dias['numero'], dias['cifra']
+            valor = int(numero) if numero.isdecimal() else _DIAS_ESCRITOS[numero]
+            if cifra is not None and valor != int(cifra):
+                return (_CALENDARIO_CONFLICTIVO,)
+            reglas.append(f'pago: {valor} dias calendario despues del cierre de cada periodo')
+        elif (_CONTEXTO_FLEXIBLE.search(frase) and _CONDICION_O_NEGACION.search(frase)
+              or _ANCLA_ALTERNATIVA.search(frase)
+              or anterior_es_regla and _CONDICION_CONTINUACION.search(frase)):
+            incompatible = True
+        anterior_es_regla = len(reglas) > cantidad_previa
+    if incompatible and (_ANIVERSARIO in reglas or any(r.startswith('pago:') for r in reglas)
+                         or _CALENDARIO_CONFLICTIVO in texto):
+        return (_CALENDARIO_CONFLICTIVO,)
+    return tuple(dict.fromkeys(reglas))
+
+
 def periodos_documentados_en_texto(texto):
     """Return None for no schedule, and [] for a declared but unreadable schedule."""
     lineas = _sin_tildes(texto).splitlines()
@@ -124,8 +206,8 @@ def marcador_periodos_documentados(periodos):
 def usa_calendario_flexible(evidencia):
     texto = str(evidencia or '')
     return texto.startswith(_PREFIJO_DETALLE) or any(
-        m[1] == _ANIVERSARIO or m[1].startswith('pago:')
-        for m in re.finditer(_PATRON_CLAUSULAS, _sin_tildes(texto))
+        regla in (_ANIVERSARIO, _CALENDARIO_CONFLICTIVO) or regla.startswith('pago:')
+        for regla in _clausulas_flexibles(texto)
     )
 
 
@@ -136,7 +218,7 @@ def evidencia_calendario_en_texto(texto):
               r'|pagos? (?:el )?[uú]ltimo d[ií]a (?:de cada|del) mes'
               r'|' + PATRON_DIA_MES_SIGUIENTE)
     legado = '; '.join(m.group(0) for m in re.finditer(patron, texto, re.I))[:400]
-    clausulas = list(dict.fromkeys(m[1] for m in re.finditer(_PATRON_CLAUSULAS, _sin_tildes(texto))))
+    clausulas = _clausulas_flexibles(texto)
     if not clausulas:
         return legado
     evidencia = '; '.join([*clausulas, *([legado] if legado else [])])
@@ -146,14 +228,14 @@ def evidencia_calendario_en_texto(texto):
 
 def extraer_regla_pago(texto):
     texto = re.sub(r'\s+', ' ', _sin_tildes(texto))
-    numeros = {'uno': 1, 'dos': 2, 'tres': 3, 'cuatro': 4, 'cinco': 5,
-               'seis': 6, 'siete': 7, 'ocho': 8, 'nueve': 9, 'diez': 10}
-    patron = r'primeros (\d{1,2}|' + '|'.join(numeros) + r')(?: \((\d{1,2})\))? dias habiles del mes siguiente'
+    clausulas = _clausulas_flexibles(texto)
+    if _CALENDARIO_CONFLICTIVO in clausulas:
+        return None
+    patron = r'primeros (\d{1,2}|' + '|'.join(_NUMEROS) + r')(?: \((\d{1,2})\))? dias habiles del mes siguiente'
     matches = list(re.finditer(patron, texto))
     fijos = list(re.finditer(PATRON_DIA_MES_SIGUIENTE, texto))
     fin_mes = re.search(r'(?:pago|pagos) (?:el )?ultimo dia (?:de cada|del) mes', texto)
-    cierres = {int(m[2] or 0) for m in re.finditer(_PATRON_CLAUSULAS, texto)
-               if m[1].startswith('pago:')}
+    cierres = {int(m[1] or 0) for regla in clausulas if (m := re.fullmatch(_PAGO_CIERRE, regla))}
     if len(cierres) > 1 or sum(bool(regla) for regla in (matches, fijos, fin_mes, cierres)) > 1:
         return None
     if cierres:
@@ -163,7 +245,7 @@ def extraer_regla_pago(texto):
     ):
         dias = set()
         for match in coincidencias:
-            valor = numeros.get(match[1]) or int(match[1])
+            valor = _NUMEROS.get(match[1]) or int(match[1])
             if (match[2] and int(match[2]) != valor) or not 1 <= valor <= limite:
                 return None
             dias.add(valor)
@@ -245,7 +327,9 @@ def calcular_horizonte_contractual(*, inicio, fin, periodicidad, valor_periodico
         return HorizonteContractual(**valores, flujos=flujos, motivo='' if flujos else
                                     'El calendario documentado no concilia vigencia, vencimientos o importes.')
 
-    clausulas = {m[1] for m in re.finditer(_PATRON_CLAUSULAS, _sin_tildes(evidencia))}
+    clausulas = _clausulas_flexibles(evidencia)
+    if _CALENDARIO_CONFLICTIVO in clausulas:
+        return HorizonteContractual(**valores, motivo='Las clausulas del calendario contractual son incompatibles.')
     aniversario = _ANIVERSARIO in clausulas
     alineado = inicio.day == 1 and fin.day == calendar.monthrange(fin.year, fin.month)[1]
     if not alineado and not aniversario:

@@ -27,6 +27,17 @@ CORTE = date(2026, 11, 18)
 ANIVERSARIO = 'Calendario: periodos mensuales por aniversario contractual.'
 AJUSTE = 'Ajuste de aniversario: ultimo dia del mes sin cambiar el dia ancla.'
 PAGO = 'Pago: al cierre de cada periodo.'
+ANIVERSARIOS_NATURALES = (
+    'Los per\u00edodos mensuales se contar\u00e1n por aniversario desde la fecha de inicio.',
+    'Cada mensualidad corresponde al per\u00edodo comprendido entre aniversarios contractuales.',
+)
+PAGOS_CIERRE_NATURALES = (
+    'El pago se realizar\u00e1 al cierre de cada periodo mensual.',
+    'Los honorarios se pagar\u00e1n el \u00faltimo d\u00eda de cada per\u00edodo.',
+    'Se pagar\u00e1 a per\u00edodo vencido, el \u00faltimo d\u00eda de cada per\u00edodo mensual.',
+)
+PAGO_DIAS_NATURAL = 'Se pagar\u00e1 cinco (5) d\u00edas calendario despu\u00e9s de terminado cada per\u00edodo.'
+PAGO_CINCO_DIAS = 'Pago: 5 dias calendario despues del cierre de cada periodo.'
 DETALLE = (
     'Calendario de pagos documentado:\n'
     'Periodo documentado: 2026-11-18 a 2026-11-30; vence 2026-12-05; valor COP 7800000.00.\n'
@@ -54,6 +65,60 @@ class CalendarioFlexibleTest(SimpleTestCase):
         self.assertEqual((h.periodos_causados, h.periodos_exigibles), (0, 0))
         self.assertIsNone(h.valor_pagado_actual_verificado)
 
+    def test_variantes_generan_los_mismos_doce_flujos(self):
+        original_cierre = horizonte(duracion_meses=12)
+        original_dias = horizonte(clausulas=f'{ANIVERSARIO} {PAGO_CINCO_DIAS}', duracion_meses=12)
+        for aniversario in ANIVERSARIOS_NATURALES:
+            for pago, esperado in (
+                *((pago, original_cierre) for pago in PAGOS_CIERRE_NATURALES),
+                (PAGO_DIAS_NATURAL, original_dias),
+                ('EL PAGO SE EFECTUARA 5 DIAS CALENDARIO A PARTIR DEL CIERRE DE CADA PERIODO MENSUAL;',
+                 original_dias),
+                ('Se pagara, cinco( 5 ) dias calendario despues de finalizado cada periodo!',
+                 original_dias),
+            ):
+                with self.subTest(aniversario=aniversario, pago=pago):
+                    resultado = horizonte(clausulas=f'{aniversario}\n {pago}', duracion_meses=12)
+                    self.assertEqual(resultado, esperado)
+                    self.assertEqual(resultado.periodos_totales, 12)
+
+        evidencia = evidencia_calendario_en_texto(f'{ANIVERSARIO} {PAGO} {PAGOS_CIERRE_NATURALES[0]}')
+        self.assertEqual(evidencia, evidencia_calendario_en_texto(f'{ANIVERSARIO} {PAGO}'))
+        for dias, escrito in ((1, 'un'), (15, 'quince'), (22, 'veintid\u00f3s'), (30, 'treinta'), (35, 'treinta y cinco')):
+            with self.subTest(dias=dias):
+                actual = horizonte(clausulas=f'{ANIVERSARIOS_NATURALES[0]} '
+                                   f'Se pagara {escrito} ({dias}) dias calendario despues de terminado cada periodo.')
+                esperado = horizonte(clausulas=f'{ANIVERSARIO} '
+                                     f'Pago: {dias} dias calendario despues del cierre de cada periodo.')
+                self.assertTrue(actual.disponible)
+                self.assertEqual(actual, esperado)
+
+    def test_variantes_no_resuelven_ambiguedad_negacion_o_contradiccion(self):
+        aniversario = ANIVERSARIOS_NATURALES[0]
+        cierre = PAGOS_CIERRE_NATURALES[1]
+        for texto in (
+            f'{aniversario} Se pagara a periodo vencido.',
+            f'{aniversario} El pago se realizara al cierre de cada periodo?',
+            f'{aniversario} Se pagara dentro de cinco dias calendario despues del cierre de cada periodo.',
+            f'{aniversario} Se pagara cinco dias calendario despues de aprobado el informe.',
+            f'{aniversario} Se pagara al cierre de cada periodo si se acepta el informe.',
+            f'{aniversario} {cierre[:-1]}; previa aceptacion del informe.',
+            f'{aniversario} Los honorarios no se pagaran el ultimo dia de cada periodo.',
+            f'No se usaran aniversarios contractuales. {aniversario} {cierre}',
+            f'{aniversario} {cierre} No se pagara el ultimo dia de cada periodo.',
+            f'{aniversario} {cierre} El aniversario contractual sera el dia 19.',
+            f'{aniversario} {cierre} El dia 19 sera el aniversario contractual.',
+            f'{aniversario} {cierre} {PAGO_DIAS_NATURAL}',
+            f'{aniversario} Se pagara cinco (6) dias calendario despues de terminado cada periodo.',
+        ):
+            with self.subTest(texto=texto):
+                h = horizonte(clausulas=texto, duracion_meses=12)
+                self.assertFalse(h.disponible)
+                self.assertEqual(h.flujos, ())
+        for fin, cantidad in (('2027-11-16', 12), ('2027-11-17', 13)):
+            self.assertFalse(horizonte(fin=fin, clausulas=f'{aniversario} {cierre}',
+                                       duracion_meses=cantidad).disponible)
+
     def test_ancla_29_30_31_no_acumula_recorte(self):
         for inicio, fin, esperado in (
             ('2026-01-29', '2026-04-28', [29, 28, 29]),
@@ -67,6 +132,9 @@ class CalendarioFlexibleTest(SimpleTestCase):
                 self.assertEqual(h.flujos[-1].fin, date.fromisoformat(fin))
                 for actual, siguiente in zip(h.flujos, h.flujos[1:]):
                     self.assertEqual(actual.fin + timedelta(days=1), siguiente.inicio)
+                variante = f'{ANIVERSARIOS_NATURALES[0]} {PAGOS_CIERRE_NATURALES[0]}'
+                self.assertFalse(horizonte(inicio, fin, variante, duracion_meses=3).disponible)
+                self.assertEqual(horizonte(inicio, fin, f'{variante} {AJUSTE}', duracion_meses=3), h)
 
     def test_bisiesto_al_no_bisiesto_y_diferir_pago_no_es_causacion(self):
         h = horizonte('2028-02-29', '2029-02-27',
@@ -213,11 +281,24 @@ class CalendarioFlexiblePrestadorTest(FixtureConfirmacion, TestCase):
         self.solicitud.metadata_analisis_contractual['forma_pago_contractual']['periodos_documentados_v1'][0][3] = '7800001'
         self.assertFalse(horizonte_para_solicitud(self.solicitud, self.configuracion, corte=CORTE).disponible)
 
+    def test_pdf_variantes_confirma_condiciones_una_vez(self, _fecha):
+        evidencia, _ = self.analizar(f'{ANIVERSARIOS_NATURALES[1]}\n{PAGO_DIAS_NATURAL}')
+        self.assertTrue(self.calcular().json()['solo_informativa'])
+        self.confirmar_evidencia(evidencia)
+        h = horizonte_para_solicitud(self.solicitud, self.configuracion, corte=CORTE)
+        self.assertEqual(h.flujos, horizonte(clausulas=f'{ANIVERSARIO} {PAGO_CINCO_DIAS}').flujos)
+        self.assertEqual(h.periodos_totales, 12)
+        self.assertFalse(self.calcular().json()['solo_informativa'])
+        self.assertEqual(self.client.post('/simular/', self.payload, HTTP_HOST=self.host).status_code, 302)
+        confirmada = self.evidencia()
+        self.assertEqual(self.client.post('/simular/', self.payload, HTTP_HOST=self.host).status_code, 302)
+        self.assertEqual(self.evidencia(), confirmada)
+
     @skipUnless(os.environ.get('PRESTADORES_CALENDARIO_BROWSER'), 'Requiere Playwright local')
     def test_browser_distingue_estimacion_y_envio(self, _fecha):
         pendiente = self.pagina().content.decode()
         estimacion = self.calcular().json()
-        evidencia, _ = self.analizar(f'{ANIVERSARIO}\n{PAGO}')
+        evidencia, _ = self.analizar(f'{ANIVERSARIOS_NATURALES[0]}\n{PAGOS_CIERRE_NATURALES[0]}')
         self.confirmar_evidencia(evidencia)
         confirmado = self.pagina().content.decode()
         calculo = self.calcular().json()
