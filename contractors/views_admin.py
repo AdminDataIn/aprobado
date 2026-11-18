@@ -93,6 +93,7 @@ def bandeja_prestadores_view(request):
     )
     revisiones = (
         RevisionManualPrestador.objects
+        .filter(solicitud__archivo_operativo__isnull=True)
         .select_related(
             'solicitud', 'solicitud__empresa', 'solicitud__usuario',
             'auditoria_predecision', 'asignado_a',
@@ -114,7 +115,7 @@ def bandeja_prestadores_view(request):
         'monto_hasta': request.GET.get('monto_hasta', '').strip(),
     }
     solicitudes_pendientes = (
-        ContractorApplication.objects
+        ContractorApplication.objects.activas()
         .filter(estado__in={
             ContractorApplication.Estado.EVALUACION_PENDIENTE,
             ContractorApplication.Estado.EN_EVALUACION,
@@ -180,6 +181,7 @@ def bandeja_prestadores_view(request):
 
     aprobaciones = (
         AprobacionInternaPrestador.objects
+        .filter(solicitud__archivo_operativo__isnull=True)
         .select_related(
             'solicitud', 'solicitud__empresa', 'auditoria_predecision',
             'creada_por', 'decidida_por',
@@ -216,6 +218,7 @@ def bandeja_prestadores_view(request):
     )
     candidatos_gate_qs = (
         PredecisionPrestadorAudit.objects
+        .filter(solicitud__archivo_operativo__isnull=True)
         .filter(
             resultado=PredecisionPrestadorAudit.Resultado.PREAPROBADO_READ_ONLY,
             estado_ejecucion=PredecisionPrestadorAudit.EstadoEjecucion.COMPLETADA,
@@ -283,6 +286,7 @@ def bandeja_prestadores_view(request):
 @permiso_interno_requerido('contractors.can_view_contractor_review_queue')
 def detalle_prestador_view(request, solicitud_id):
     solicitud = _obtener_solicitud_staff(solicitud_id)
+    archivo = getattr(solicitud, 'archivo_operativo', None)
     documentos = {documento.tipo_documento: documento for documento in solicitud.documentos.all()}
     etiquetas = dict(ContractorApplicationDocument.TipoDocumento.choices)
     estado_documentos = [
@@ -325,6 +329,7 @@ def detalle_prestador_view(request, solicitud_id):
         'contractors/admin_detalle_prestador.html',
         {
             'solicitud': solicitud,
+            'archivo': archivo,
             'documento_enmascarado': _enmascarar_documento(solicitud.numero_documento),
             'estado_documentos': estado_documentos,
             'documentos_pendientes': [
@@ -345,7 +350,7 @@ def detalle_prestador_view(request, solicitud_id):
             'estado_evaluacion': _construir_estado_evaluacion(solicitud, auditoria),
             'autorizacion_datacredito_vigente': autorizacion_datacredito is not None,
             'puede_ejecutar_evaluacion': bool(
-                solicitud.estado == ContractorApplication.Estado.EVALUACION_PENDIENTE
+                not archivo and solicitud.estado == ContractorApplication.Estado.EVALUACION_PENDIENTE
                 and request.user.has_perm(
                     'contractors.can_evaluate_contractor_application'
                 )
@@ -358,9 +363,9 @@ def detalle_prestador_view(request, solicitud_id):
             'usuarios_asignables': usuarios_asignables_revision(),
             'tipos_subsanacion': RequerimientoSubsanacionPrestador.Tipo.choices,
             'resultados_revision': RevisionManualPrestador.Resultado.choices,
-            'puede_asignar': request.user.has_perm('contractors.can_assign_contractor_review'),
-            'puede_resolver': request.user.has_perm('contractors.can_resolve_contractor_review'),
-            'puede_solicitar': request.user.has_perm('contractors.can_request_contractor_correction'),
+            'puede_asignar': not archivo and request.user.has_perm('contractors.can_assign_contractor_review'),
+            'puede_resolver': not archivo and request.user.has_perm('contractors.can_resolve_contractor_review'),
+            'puede_solicitar': not archivo and request.user.has_perm('contractors.can_request_contractor_correction'),
             'puede_ver_score': puede_ver_score,
             'aprobacion_interna': aprobacion_interna,
             'aprobacion_pagador': aprobacion_pagador,
@@ -371,13 +376,14 @@ def detalle_prestador_view(request, solicitud_id):
             'puede_ver_aprobacion': request.user.has_perm(
                 'contractors.can_view_contractor_internal_approval'
             ),
-            'puede_decidir_aprobacion': request.user.has_perm(
+            'puede_decidir_aprobacion': not archivo and request.user.has_perm(
                 'contractors.can_decide_contractor_internal_approval'
             ),
-            'puede_cerrar_aprobacion': request.user.has_perm(
+            'puede_cerrar_aprobacion': not archivo and request.user.has_perm(
                 'contractors.can_close_contractor_internal_approval'
             ),
             'puede_originar': bool(
+                not archivo and
                 aprobacion_interna
                 and aprobacion_interna.estado
                 == AprobacionInternaPrestador.Estado.APROBADA_PARA_ORIGINAR
@@ -461,7 +467,7 @@ def detalle_prestador_view(request, solicitud_id):
                 )
             ),
             'puede_crear_aprobacion': bool(
-                auditoria
+                not archivo and auditoria
                 and auditoria.resultado
                 == PredecisionPrestadorAudit.Resultado.PREAPROBADO_READ_ONLY
                 and aprobacion_interna is None

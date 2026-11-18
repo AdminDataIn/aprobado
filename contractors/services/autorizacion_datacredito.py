@@ -79,7 +79,8 @@ def registrar_autorizacion_datacredito_desde_solicitud(solicitud, *, usuario, re
     if request is not None:
         validar_confirmacion_consentimiento(request.POST.get('consentimiento_centrales'), usuario)
     # Serialize acceptance with ownership/authorization edits on the same request.
-    solicitud = type(solicitud).objects.select_for_update().get(pk=solicitud.pk)
+    from contractors.services.archivo_solicitud import bloquear_solicitud_activa
+    solicitud = bloquear_solicitud_activa(solicitud.pk)
     if solicitud.usuario_id != usuario.pk or not solicitud.autoriza_consulta_centrales:
         raise PermissionDenied('La solicitud no permite registrar esta autorizacion.')
     autorizacion, _ = AutorizacionConsultaDatacreditoPrestador.objects.get_or_create(
@@ -103,6 +104,7 @@ def obtener_autorizacion_datacredito_vigente(solicitud):
         not configuracion.configurada
         or not solicitud.autoriza_consulta_centrales
         or not solicitud.usuario_id
+        or not type(solicitud).objects.activas().filter(pk=solicitud.pk).exists()
     ):
         return None
     return (

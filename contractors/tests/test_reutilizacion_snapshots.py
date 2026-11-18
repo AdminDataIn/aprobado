@@ -70,6 +70,19 @@ class ReutilizacionSnapshotTest(FixtureSnapshot, TestCase):
     def test_sin_autorizacion_no_reutiliza(self):
         self.assertEqual(self.consultar().estado, 'AUTORIZACION_REQUERIDA')
 
+    def test_archivo_del_origen_bloquea_reutilizacion_y_preserva_evidencia(self):
+        from contractors.services.archivo_solicitud import archivar_solicitud_prestador
+
+        actor = get_user_model().objects.create_superuser(username='archivista-sintetico')
+        archivar_solicitud_prestador(solicitud_id=self.solicitud.pk, actor=actor, motivo='Cierre de prueba')
+        self.assertIsNone(obtener_autorizacion_datacredito_vigente(self.solicitud))
+        self.assertEqual(self.consultar().estado, 'AUTORIZACION_REQUERIDA')
+        nueva_autorizacion = self.aceptar()
+        self.assertNotEqual(nueva_autorizacion.pk, self.autorizacion.pk)
+        self.assertIsNone(servicio.evidencia_uso_snapshot(self.snapshot, solicitud=self.otra,
+                                                          autorizacion=nueva_autorizacion))
+        self.assertEqual(self.consultar().estado, 'SIN_CACHE')
+
     def test_consentimiento_retirado_no_reutiliza(self):
         self.aceptar()
         self.otra.autoriza_consulta_centrales = False

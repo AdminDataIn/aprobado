@@ -144,7 +144,8 @@ def adoptar_politica_ingreso(*, solicitud_id, politica_id, actor, motivo):
     if not str(motivo or '').strip():
         raise ValidationError('La adopcion requiere motivo.')
     politica = ConfiguracionScorePrestador.objects.select_for_update().get(pk=politica_id)
-    solicitud = ContractorApplication.objects.select_for_update().get(pk=solicitud_id)
+    from contractors.services.archivo_solicitud import bloquear_solicitud_activa
+    solicitud = bloquear_solicitud_activa(solicitud_id)
     if ingreso_automatico_aplica(solicitud, politica):
         return solicitud
     if (not politica.politica_ingreso_evaluable or not _publicada(politica)

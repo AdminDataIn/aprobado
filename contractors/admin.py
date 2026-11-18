@@ -9,6 +9,7 @@ from django.http import HttpResponseRedirect
 from django.urls import reverse
 
 from contractors.models import (
+    ArchivoSolicitudPrestador,
     AprobacionInternaPrestador,
     AprobacionPagadorPrestador,
     AutorizacionConsultaDatacreditoPrestador,
@@ -31,10 +32,13 @@ from contractors.services.politica_score import (
     activar_politica_score_prestador,
 )
 from contractors.services.ingreso_neto import exigir_verificador, registrar_ingreso_neto
+from contractors.services.archivo_solicitud import (
+    SolicitudArchivada, archivar_solicitud_prestador, bloquear_solicitud_activa, exigir_archivista,
+)
 
 
 class VerificarIngresoNetoForm(forms.Form):
-    solicitud = forms.ModelChoiceField(queryset=ContractorApplication.objects.all())
+    solicitud = forms.ModelChoiceField(queryset=ContractorApplication.objects.activas())
     accion = forms.ChoiceField(choices=IngresoNetoVerificadoPrestador.Accion.choices)
     monto = forms.DecimalField(max_digits=14, decimal_places=2, min_value=0.01, required=False)
     fecha_corte = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'))
@@ -115,6 +119,32 @@ class ContractorApplicationDocumentInline(DocumentosPrivadosAdminMixin, admin.Ta
         return super().formfield_for_dbfield(db_field, request, **kwargs)
 
 
+class EstadoArchivoFiltro(admin.SimpleListFilter):
+    title = 'Archivo operativo'
+    parameter_name = 'archivo'
+
+    def lookups(self, request, model_admin):
+        return [('archivadas', 'Archivadas'), ('todas', 'Todas (incluye historico)')]
+
+    def queryset(self, request, queryset):
+        if self.value() == 'archivadas':
+            return queryset.filter(archivo_operativo__isnull=False)
+        if self.value() == 'todas':
+            return queryset
+        return queryset.activas()
+
+
+class MotivoArchivoForm(forms.Form):
+    motivo = forms.CharField(max_length=500, widget=forms.Textarea)
+
+
+def _bloquear_edicion_solicitud(solicitud_id):
+    try:
+        bloquear_solicitud_activa(solicitud_id)
+    except SolicitudArchivada as exc:
+        raise PermissionDenied('La solicitud archivada es de solo lectura.') from exc
+
+
 @admin.register(ContractorApplication)
 class ContractorApplicationAdmin(admin.ModelAdmin):
     list_display = [
@@ -124,9 +154,10 @@ class ContractorApplicationAdmin(admin.ModelAdmin):
         'empresa',
         'usuario',
         'estado',
+        'fecha_archivo',
         'created_at',
     ]
-    list_filter = ['estado', 'empresa', 'escenario_credito', 'created_at']
+    list_filter = [EstadoArchivoFiltro, 'estado', 'empresa', 'escenario_credito', 'created_at']
     search_fields = [
         'nombres',
         'apellidos',
@@ -136,9 +167,70 @@ class ContractorApplicationAdmin(admin.ModelAdmin):
         'usuario__username',
         'empresa__nombre',
     ]
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'fecha_archivo', 'actor_archivo', 'motivo_archivo']
     inlines = [ContractorApplicationDocumentInline]
-    actions = ['ejecutar_evaluacion_formal']
+    actions = ['ejecutar_evaluacion_formal', 'archivar']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('archivo_operativo__actor')
+
+    @admin.display(description='Archivada en')
+    def fecha_archivo(self, obj):
+        archivo = getattr(obj, 'archivo_operativo', None)
+        return archivo.archivada_en if archivo else None
+
+    @admin.display(description='Archivada por')
+    def actor_archivo(self, obj):
+        archivo = getattr(obj, 'archivo_operativo', None)
+        return archivo.actor if archivo else None
+
+    @admin.display(description='Motivo de archivo')
+    def motivo_archivo(self, obj):
+        archivo = getattr(obj, 'archivo_operativo', None)
+        return archivo.motivo if archivo else None
+
+    def has_change_permission(self, request, obj=None):
+        return (not getattr(obj, 'archivo_operativo', None)
+                and super().has_change_permission(request, obj))
+
+    def has_delete_permission(self, request, obj=None):
+        return (not getattr(obj, 'archivo_operativo', None)
+                and super().has_delete_permission(request, obj))
+
+    def save_model(self, request, obj, form, change):
+        if change:
+            _bloquear_edicion_solicitud(obj.pk)
+        super().save_model(request, obj, form, change)
+
+    def has_archive_permission(self, request):
+        try:
+            exigir_archivista(request.user)
+        except PermissionDenied:
+            return False
+        return super().has_view_permission(request)
+
+    @admin.action(permissions=['archive'], description='Archivar una solicitud')
+    def archivar(self, request, queryset):
+        if not self.has_archive_permission(request):
+            raise PermissionDenied
+        ids = list(queryset.values_list('pk', flat=True)[:2])
+        if len(ids) != 1:
+            self.message_user(request, 'Selecciona una sola solicitud para archivar.', messages.ERROR)
+            return None
+        form = MotivoArchivoForm(request.POST if 'confirmar_archivo' in request.POST else None)
+        if form.is_bound and form.is_valid():
+            try:
+                _, creado = archivar_solicitud_prestador(
+                    solicitud_id=ids[0], actor=request.user, motivo=form.cleaned_data['motivo'])
+            except ValidationError as exc:
+                form.add_error(None, exc)
+            else:
+                self.message_user(request, 'Solicitud archivada.' if creado else 'La solicitud ya estaba archivada.')
+                return HttpResponseRedirect(reverse('admin:contractors_contractorapplication_change', args=ids))
+        return TemplateResponse(request, 'admin/contractors/confirmar_archivo.html', {
+            **self.admin_site.each_context(request), 'title': 'Confirmar archivo operativo',
+            'solicitud_id': ids[0], 'form': form, 'action_checkbox_name': ACTION_CHECKBOX_NAME,
+        })
 
     def get_actions(self, request):
         actions = super().get_actions(request)
@@ -167,7 +259,7 @@ class ContractorApplicationAdmin(admin.ModelAdmin):
                 contexto,
             )
         evaluadas = reutilizadas = errores = 0
-        for solicitud in queryset.order_by('id'):
+        for solicitud in queryset.activas().order_by('id'):
             try:
                 resultado = evaluar_solicitud_prestador(
                     solicitud,
@@ -195,6 +287,28 @@ class ContractorApplicationDocumentAdmin(DocumentosPrivadosAdminMixin, admin.Mod
     list_filter = ['tipo_documento', 'created_at']
     search_fields = ['solicitud__numero_documento', 'solicitud__nombres', 'solicitud__apellidos']
     readonly_fields = ['created_at', 'updated_at']
+
+    def has_change_permission(self, request, obj=None):
+        return (not obj or not hasattr(obj.solicitud, 'archivo_operativo')) and super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        return (not obj or not hasattr(obj.solicitud, 'archivo_operativo')) and super().has_delete_permission(request, obj)
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        actions.pop('delete_selected', None)
+        return actions
+
+    def save_model(self, request, obj, form, change):
+        if change:
+            anterior = type(obj).objects.values_list('solicitud_id', flat=True).get(pk=obj.pk)
+            _bloquear_edicion_solicitud(anterior)
+        _bloquear_edicion_solicitud(obj.solicitud_id)
+        super().save_model(request, obj, form, change)
+
+    def delete_model(self, request, obj):
+        _bloquear_edicion_solicitud(obj.solicitud_id)
+        super().delete_model(request, obj)
 
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         if db_field.name == 'archivo':

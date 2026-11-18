@@ -5,6 +5,7 @@
   <p class="eyebrow">Detalle interno Aprobado</p>
   <h1>Solicitud #{{ solicitud.id }}</h1>
   <p>{{ solicitud.nombre_completo }} - {{ solicitud.empresa.nombre }}</p>
+  {% if archivo %}<p>Archivada el {{ archivo.archivada_en }}. Expediente de solo consulta.</p>{% endif %}
 </section>
 
 <main class="contenedor">

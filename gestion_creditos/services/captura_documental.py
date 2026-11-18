@@ -32,6 +32,13 @@ def _evento(sesion, actor, evento):
     Evento.objects.create(sesion=sesion, actor=actor if getattr(actor, 'is_authenticated', False) else None, evento=evento)
 
 
+def _bloquear_solicitud_asociada(sesiones):
+    solicitud_id = sesiones.values_list('solicitud_id', flat=True).first()
+    if solicitud_id:
+        from contractors.services.archivo_solicitud import bloquear_solicitud_activa
+        bloquear_solicitud_activa(solicitud_id)
+
+
 def _auditada(funcion):
     @wraps(funcion)
     @sensitive_variables()
@@ -42,18 +49,21 @@ def _auditada(funcion):
             actor = kwargs.get('actor')
             with transaction.atomic():
                 sesion = None
-                if getattr(actor, 'is_authenticated', False):
-                    try:
-                        sesion = Sesion.objects.select_for_update().filter(
-                            pk=kwargs.get('sesion_id'), usuario=actor).first()
-                    except (ValidationError, ValueError):
-                        pass
-                elif kwargs.get('grant'):
-                    try:
-                        sesion = Sesion.objects.select_for_update().filter(
-                            pk=kwargs.get('sesion_id'), capture_grant_hash=_hash(kwargs['grant'])).first()
-                    except (ValidationError, ValueError):
-                        pass
+                from contractors.services.archivo_solicitud import SolicitudArchivada
+                try:
+                    candidatas = Sesion.objects.filter(pk=kwargs.get('sesion_id'))
+                    if getattr(actor, 'is_authenticated', False):
+                        candidatas = candidatas.filter(usuario=actor)
+                    elif kwargs.get('grant'):
+                        candidatas = candidatas.filter(capture_grant_hash=_hash(kwargs['grant']))
+                    else:
+                        candidatas = candidatas.none()
+                    _bloquear_solicitud_asociada(candidatas)
+                    sesion = candidatas.select_for_update().first()
+                except SolicitudArchivada:
+                    raise PermissionDenied('Captura no disponible.') from None
+                except (ValidationError, ValueError):
+                    pass
                 if sesion and _vencio_en_proceso(sesion):
                     sesion.estado = Sesion.Estado.EXPIRADA
                     _invalidar_grant(sesion)
@@ -69,7 +79,7 @@ def _auditada(funcion):
     return ejecutar
 
 
-def _contexto(actor, producto, solicitud_id):
+def _contexto(actor, producto, solicitud_id, *, bloquear=False):
     _actor(actor)
     if producto not in Sesion.Producto.values:
         raise ValidationError('Producto documental invalido.')
@@ -77,9 +87,12 @@ def _contexto(actor, producto, solicitud_id):
         raise ValidationError('Contexto documental invalido.')
     if solicitud_id:
         from contractors.models import ContractorApplication
-        solicitud = ContractorApplication.objects.filter(pk=solicitud_id, usuario=actor).first()
+        solicitud = ContractorApplication.objects.activas().filter(pk=solicitud_id, usuario=actor).first()
         if not solicitud:
             raise PermissionDenied('Solicitud no disponible.')
+        if bloquear:
+            from contractors.services.archivo_solicitud import bloquear_solicitud_activa
+            solicitud = bloquear_solicitud_activa(solicitud.pk)
         if solicitud.estado in {'PENDIENTE_FIRMA', 'FIRMADO', 'APROBADO_POR_PAGADOR', 'NO_APROBADO'}:
             raise ValidationError('La solicitud no admite nuevas capturas.')
         return solicitud
@@ -87,7 +100,7 @@ def _contexto(actor, producto, solicitud_id):
 
 
 def _obtener(sesion_id, actor, producto, solicitud_id=None, *, lock=True):
-    _contexto(actor, producto, solicitud_id)
+    _contexto(actor, producto, solicitud_id, bloquear=lock)
     qs = Sesion.objects.select_for_update(of=('self',)) if lock else Sesion.objects
     try:
         sesion = qs.get(pk=sesion_id, usuario=actor, producto=producto, solicitud_id=solicitud_id, proposito='CEDULA')
@@ -119,6 +132,13 @@ def _invalidar_grant(sesion):
 
 def _sesion_delegada(sesion_id, producto, solicitud_id):
     try:
+        if producto == Sesion.Producto.PRESTADORES and solicitud_id:
+            from contractors.services.archivo_solicitud import bloquear_solicitud_activa
+            from contractors.models import ContractorApplication
+            try:
+                bloquear_solicitud_activa(solicitud_id)
+            except ContractorApplication.DoesNotExist as exc:
+                raise PermissionDenied('Captura no disponible.') from exc
         sesion = Sesion.objects.select_for_update(of=('self',)).select_related('usuario').get(
             pk=sesion_id, producto=producto, solicitud_id=solicitud_id, proposito='CEDULA')
     except (Sesion.DoesNotExist, ValidationError, ValueError, TypeError) as exc:
@@ -173,7 +193,7 @@ def _autorizar_grant(*, sesion_id, producto, grant, solicitud_id=None):
 @_auditada
 @transaction.atomic
 def crear_sesion(*, actor, producto, solicitud_id=None):
-    solicitud = _contexto(actor, producto, solicitud_id)
+    solicitud = _contexto(actor, producto, solicitud_id, bloquear=True)
     token = secrets.token_urlsafe(32)
     sesion = Sesion.objects.create(
         usuario=actor, producto=producto, solicitud=solicitud, token_hash=_hash(token),
@@ -364,6 +384,9 @@ def obtener_documentos_finalizados(*, sesion_id, actor, producto, solicitud_id=N
 def consumir_documentos(*, sesion, actor, credito=None, solicitud=None):
     if not transaction.get_connection().in_atomic_block:
         raise RuntimeError('Se requiere una transaccion de originacion.')
+    if sesion.producto == Sesion.Producto.PRESTADORES and solicitud and solicitud.usuario_id == actor.pk:
+        from contractors.services.archivo_solicitud import bloquear_solicitud_activa
+        bloquear_solicitud_activa(solicitud.pk)
     sesion = _obtener(sesion.pk, actor, sesion.producto, sesion.solicitud_id)
     _vigente(sesion)
     if sesion.estado != Sesion.Estado.FINALIZADA:
@@ -429,12 +452,19 @@ def _evidencia_vinculada(sesion):
     # solicitud_id may be the initial capture context, not a definitive association.
     if sesion.utilizado_en or sesion.credito_id or sesion.eventos.filter(evento='VINCULACION').exists():
         return True
-    from contractors.models import ContractorApplicationDocument
+    from contractors.models import ArchivoSolicitudPrestador, ContractorApplicationDocument
+    if sesion.solicitud_id and ArchivoSolicitudPrestador.objects.filter(solicitud_id=sesion.solicitud_id).exists():
+        return True
     return ContractorApplicationDocument.objects.filter(metadata_captura__sesion_id=str(sesion.pk)).exists()
 
 
 def _purgar_sesion_expirada(pk, ahora, limite_finalizadas):
     with transaction.atomic():
+        from contractors.services.archivo_solicitud import SolicitudArchivada
+        try:
+            _bloquear_solicitud_asociada(Sesion.objects.filter(pk=pk))
+        except SolicitudArchivada:
+            return 0, False
         sesion = Sesion.objects.select_for_update().get(pk=pk)
         if sesion.estado == Sesion.Estado.UTILIZADA or _evidencia_vinculada(sesion):
             return 0, False

@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db import DatabaseError, transaction
 from django.utils import timezone
 
-from contractors.models import ContractorApplication, PredecisionPrestadorAudit
+from contractors.models import PredecisionPrestadorAudit
 from contractors.score.dto import ResultadoScorePrestador
 from contractors.services.horizonte_simulacion import horizonte_para_solicitud
 from contractors.services.ingreso_evaluable import resolver_ingreso_evaluable
@@ -101,9 +101,10 @@ def exigir_oferta_viable(oferta, *, monto=None, plazo=None):
 def validar_oferta_financiera_gate(gate):
     """Mandatory pre-origination fence, including direct payer/expediente callers."""
     from contractors.services.aprobacion_interna import _validar_gate
+    from contractors.services.archivo_solicitud import bloquear_solicitud_activa
 
     # Income/document services lock this same application before changing evidence.
-    solicitud = ContractorApplication.objects.select_for_update().get(pk=gate.solicitud_id)
+    solicitud = bloquear_solicitud_activa(gate.solicitud_id)
     gate.solicitud = solicitud
     auditoria = gate.auditoria_predecision
     validacion = _validar_gate(solicitud, auditoria)

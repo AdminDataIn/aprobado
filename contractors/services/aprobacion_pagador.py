@@ -34,6 +34,8 @@ class ResultadoAprobacionPagadorPrestador:
 
 @transaction.atomic
 def crear_o_reutilizar_aprobacion_pagador(gate, *, actor=None):
+    from contractors.services.archivo_solicitud import bloquear_solicitud_activa
+    bloquear_solicitud_activa(gate.solicitud_id)
     gate = (
         AprobacionInternaPrestador.objects.select_for_update()
         .select_related('solicitud', 'solicitud__empresa')
@@ -102,6 +104,8 @@ def _decidir_aprobacion_pagador_prestador_transaccional(
     confirmaciones=None,
 ):
     perfil = _exigir_pagador(actor)
+    from contractors.services.archivo_solicitud import bloquear_solicitud_activa
+    bloquear_solicitud_activa(aprobacion.solicitud_id)
     aprobacion = (
         AprobacionPagadorPrestador.objects.select_for_update()
         .select_related('solicitud', 'empresa', 'aprobacion_interna')

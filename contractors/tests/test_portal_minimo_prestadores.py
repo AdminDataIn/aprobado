@@ -191,6 +191,26 @@ class PortalMinimoPrestadoresTest(TestCase):
         self.assertEqual(len(evidencia.ip_hash), 64)
         self.assertNotEqual(evidencia.ip_hash, '192.0.2.10')
 
+    def test_archivada_no_impide_post_nuevo_del_mismo_documento(self):
+        from contractors.services.archivo_solicitud import archivar_solicitud_prestador
+
+        archivista = get_user_model().objects.create_superuser('archivo-portal-sintetico')
+        self.client.force_login(self.usuario)
+        payload = self._payload_solicitud_con_documentos()
+        anterior = self._crear_solicitud(self.usuario)
+        anterior.numero_documento = payload['numero_documento']
+        anterior.estado = 'EVALUACION_PENDIENTE'
+        anterior.save()
+        archivar_solicitud_prestador(solicitud_id=anterior.pk, actor=archivista, motivo='Cierre sintetico')
+
+        response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+        self.assertEqual(response.status_code, 302)
+        nueva = ContractorApplication.objects.activas().get(usuario=self.usuario)
+        self.assertEqual(nueva.numero_documento, anterior.numero_documento)
+        self.assertRedirects(response, f'/simular/?solicitud_id={nueva.pk}', fetch_redirect_response=False)
+        self.assertEqual(nueva.autorizaciones_datacredito.count(), 1)
+        self.assertFalse(nueva.auditorias_predecision.exists())
+
     def test_formulario_inicial_no_solicita_monto_plazo_y_continua_a_simulacion(self):
         self.client.force_login(self.usuario)
 

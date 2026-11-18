@@ -73,8 +73,12 @@ def originar_libranza_desde_expediente(
 
     # This entry point also accepts direct callers with an older, already-built DTO.
     from contractors.models import AprobacionInternaPrestador
+    from contractors.services.archivo_solicitud import bloquear_solicitud_activa
     from contractors.services.expediente_originacion import construir_expediente_originacion_prestador
 
+    solicitud_id = AprobacionInternaPrestador.objects.values_list('solicitud_id', flat=True).get(
+        pk=dto.aprobacion_interna_id)
+    bloquear_solicitud_activa(solicitud_id)
     gate = AprobacionInternaPrestador.objects.select_for_update().get(
         pk=dto.aprobacion_interna_id,
     )

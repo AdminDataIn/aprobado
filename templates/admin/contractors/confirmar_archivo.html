@@ -1,0 +1,12 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p>Solicitud #{{ solicitud_id }}. Se retirara de la operacion sin borrar documentos ni historial.</p>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <input type="hidden" name="action" value="archivar">
+  <input type="hidden" name="{{ action_checkbox_name }}" value="{{ solicitud_id }}">
+  <input type="hidden" name="confirmar_archivo" value="1">
+  <div class="submit-row"><input type="submit" class="default" value="Archivar solicitud"></div>
+</form>
+{% endblock %}

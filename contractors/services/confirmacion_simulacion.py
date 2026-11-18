@@ -6,7 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from contractors.forms import SimulacionPrestadorForm
-from contractors.models import ContractorApplication
+from contractors.services.archivo_solicitud import bloquear_solicitud_activa
 from contractors.services.capacidad_contractual import (
     obtener_configuracion_simulador_prestador,
     obtener_version_politica_simulador,
@@ -32,7 +32,7 @@ def confirmar_condiciones_simulacion(*, solicitud, usuario, monto, plazo_meses):
     if not getattr(usuario, 'is_authenticated', False):
         raise PermissionDenied('Debes iniciar sesion para confirmar condiciones.')
     bloquear_solicitante(usuario)
-    solicitud = ContractorApplication.objects.select_for_update().get(pk=solicitud.pk)
+    solicitud = bloquear_solicitud_activa(solicitud.pk)
     if solicitud.usuario_id != usuario.pk:
         raise PermissionDenied('No puedes confirmar otra solicitud.')
     monto = SimulacionPrestadorForm.base_fields['monto'].clean(monto)

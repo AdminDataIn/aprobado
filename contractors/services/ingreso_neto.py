@@ -25,7 +25,8 @@ def exigir_verificador(actor):
 def registrar_ingreso_neto(*, solicitud, actor, monto=None, fecha_corte=None,
                           vigente_hasta=None, documentos=(), observacion='', invalidar=False):
     exigir_verificador(actor)
-    solicitud = ContractorApplication.objects.select_for_update().get(pk=solicitud.pk)
+    from contractors.services.archivo_solicitud import bloquear_solicitud_activa
+    solicitud = bloquear_solicitud_activa(solicitud.pk)
     if solicitud.estado not in {
         solicitud.Estado.BORRADOR, solicitud.Estado.DOCUMENTOS_PENDIENTES,
         solicitud.Estado.DOCUMENTOS_CARGADOS, solicitud.Estado.EVALUACION_PENDIENTE,

@@ -34,6 +34,8 @@ class EvaluacionNoDisponible(ValidationError):
 
 
 def validar_readiness(solicitud, actor):
+    from contractors.services.archivo_solicitud import exigir_solicitud_activa
+    exigir_solicitud_activa(solicitud.pk)
     if not getattr(settings, 'PRESTADORES_AUTO_EVALUACION_ENABLED', False):
         raise EvaluacionNoDisponible('automatizacion_desactivada')
     if (actor is None or not actor.is_active

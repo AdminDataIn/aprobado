@@ -343,6 +343,33 @@ class PipelineFinancieroPrestadorE2ETest(FixturePipelineFinanciero, TestCase):
         self.assertIsNone(auditoria.score)
         self.assert_no_aprueba(auditoria)
 
+    def test_archivo_bloquea_originacion_con_dto_emitido_antes(self):
+        from contractors.services.archivo_solicitud import SolicitudArchivada, archivar_solicitud_prestador
+        from gestion_creditos.models import ProcesamientoOCRDocumental
+
+        gate, _ = crear_o_reutilizar_aprobacion_interna(self.evaluar(), actor=self.staff)
+        gate = aprobar_para_originar(gate, actor=self.staff, comentario_interno='Revision sintetica')
+        pagador = get_user_model().objects.create_user(username='pagador-archivo-sintetico')
+        PerfilPagador.objects.create(usuario=pagador, empresa=self.empresa)
+        pagador.user_permissions.add(Permission.objects.get(codename='can_decide_contractor_payer_approval'))
+        aprobacion = AprobacionPagadorPrestador.objects.get(aprobacion_interna=gate)
+        decidir_aprobacion_pagador_prestador(aprobacion, actor=pagador, decision='APROBADO',
+            confirmaciones={campo: True for campo in CONFIRMACIONES_REQUERIDAS})
+        dto = construir_expediente_originacion_prestador(gate)
+        archivista = get_user_model().objects.create_superuser('archivo-originacion-sintetico')
+        datos_archivo = dict(solicitud_id=self.solicitud.pk, actor=archivista, motivo='Cierre sintetico')
+        with self.assertRaisesMessage(ValidationError, 'OCR_EN_CURSO'):
+            archivar_solicitud_prestador(**datos_archivo)
+        # This fixture never dispatches its OCR task; model a reconciled terminal job.
+        ProcesamientoOCRDocumental.objects.filter(sesion__solicitud=self.solicitud).update(
+            estado='FALLIDO', finalizado_en=timezone.now())
+        archivar_solicitud_prestador(**datos_archivo)
+        with self.assertRaises(SolicitudArchivada):
+            originar_credito_prestador_desde_gate(gate, actor=self.staff)
+        with self.assertRaises(SolicitudArchivada):
+            originar_libranza_desde_expediente(dto, construir_clave_idempotencia_prestador(dto), self.staff)
+        self.assert_sin_originacion()
+
     def test_c_hc14_tx05_no_usa_shadow(self):
         auditoria = self.evaluar(score=667, hc='14', tx='05')
         snapshot = auditoria.snapshot_midecisor

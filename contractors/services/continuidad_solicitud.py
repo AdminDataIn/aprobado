@@ -16,5 +16,5 @@ def bloquear_solicitante(usuario):
 
 
 def solicitud_en_proceso(usuario, *, excluir=None):
-    return (ContractorApplication.objects.filter(usuario=usuario, estado__in=ESTADOS_EN_PROCESO)
+    return (ContractorApplication.objects.activas().filter(usuario=usuario, estado__in=ESTADOS_EN_PROCESO)
             .exclude(pk=excluir).order_by('-created_at', '-pk').first())

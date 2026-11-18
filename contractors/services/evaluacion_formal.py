@@ -187,7 +187,8 @@ def _iniciar_evaluacion(
     reserva_operativa=None,
 ):
     inicio_operacion = inicio_operacion or timezone.now()
-    solicitud_bloqueada = ContractorApplication.objects.select_for_update().get(pk=solicitud.pk)
+    from contractors.services.archivo_solicitud import bloquear_solicitud_activa
+    solicitud_bloqueada = bloquear_solicitud_activa(solicitud.pk)
     from contractors.services.politica_ingreso_publicacion import obtener_politica_para_solicitud
     efectiva = obtener_politica_para_solicitud(solicitud_bloqueada)
     if efectiva is not None and efectiva.version_politica != version_politica:

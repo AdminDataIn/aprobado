@@ -25,6 +25,7 @@ from contractors.forms import (
 )
 from contractors.models import (
     ContractorApplication,
+    ArchivoSolicitudPrestador,
     ContractorApplicationDocument,
     DOCUMENTOS_OBLIGATORIOS_PRESTADOR,
     RequerimientoSubsanacionPrestador,
@@ -163,30 +164,32 @@ def analizar_contrato_prestador_view(request, solicitud_id=None):
         'documento_hash': _hash_documento(numero_documento),
         'metadata_segura': resultado.metadata,
     }
+    if solicitud is not None:
+        with transaction.atomic():
+            solicitud = _obtener_solicitud_del_usuario(solicitud.pk, request.user, bloquear=True)
+            version_anterior = construir_version_datos(solicitud)[0]
+            solicitud.estado_analisis_contractual = resultado.estado
+            solicitud.metadata_analisis_contractual = {
+                **resultado.metadata,
+                'archivo_hash_sha256': hash_archivo,
+                'documento_hash': evidencia['documento_hash'],
+            }
+            solicitud.fecha_analisis_contractual = timezone.now()
+            solicitud.save(update_fields=[
+                'estado_analisis_contractual',
+                'metadata_analisis_contractual',
+                'fecha_analisis_contractual',
+                'updated_at',
+            ])
+            invalidar_evaluacion_si_cambiaron_datos(
+                solicitud,
+                version_anterior=version_anterior,
+                usuario=request.user,
+                campos=['analisis_contractual', 'contrato_hash_sha256'],
+                motivo='analisis_contractual_actualizado',
+            )
     request.session[CLAVE_SESION_ANALISIS_CONTRATO] = evidencia
     request.session.modified = True
-    if solicitud is not None:
-        version_anterior = construir_version_datos(solicitud)[0]
-        solicitud.estado_analisis_contractual = resultado.estado
-        solicitud.metadata_analisis_contractual = {
-            **resultado.metadata,
-            'archivo_hash_sha256': hash_archivo,
-            'documento_hash': evidencia['documento_hash'],
-        }
-        solicitud.fecha_analisis_contractual = timezone.now()
-        solicitud.save(update_fields=[
-            'estado_analisis_contractual',
-            'metadata_analisis_contractual',
-            'fecha_analisis_contractual',
-            'updated_at',
-        ])
-        invalidar_evaluacion_si_cambiaron_datos(
-            solicitud,
-            version_anterior=version_anterior,
-            usuario=request.user,
-            campos=['analisis_contractual', 'contrato_hash_sha256'],
-            motivo='analisis_contractual_actualizado',
-        )
     respuesta = resultado.respuesta_publica()
     datos_formulario = {campo: request.POST.get(campo, getattr(solicitud, campo, '') if solicitud else '')
                        for campo in SolicitudPrestadorForm.Meta.fields if campo != 'empresa'}
@@ -396,9 +399,11 @@ def solicitar_prestador_view(request):
             return redirect('contractors:mi_credito')
     solicitud_existente = None
     if solicitud_id:
-        solicitud_existente = _obtener_solicitud_del_usuario(solicitud_id, request.user)
         if request.method == 'POST':
             bloquear_solicitante(request.user)
+        solicitud_existente = _obtener_solicitud_del_usuario(
+            solicitud_id, request.user, bloquear=request.method == 'POST')
+        if request.method == 'POST':
             if solicitud_en_proceso(request.user, excluir=solicitud_existente.pk):
                 messages.error(request, 'Ya tienes otra solicitud en proceso. Este registro permanece disponible para consulta.')
                 return redirect('contractors:mi_credito')
@@ -576,9 +581,7 @@ def consentimiento_centrales_prestador_view(request, solicitud_id):
     if request.method == 'POST' and form.is_valid():
         try:
             with transaction.atomic():
-                solicitud = get_object_or_404(ContractorApplication.objects.select_for_update(),
-                    pk=solicitud.pk, usuario=request.user,
-                )
+                solicitud = _obtener_solicitud_del_usuario(solicitud.pk, request.user, bloquear=True)
                 version_anterior, _ = construir_version_datos(solicitud)
                 if not solicitud.autoriza_consulta_centrales:
                     solicitud.autoriza_consulta_centrales = True
@@ -613,10 +616,11 @@ def consentimiento_centrales_prestador_view(request, solicitud_id):
 @login_required
 @transaction.atomic
 def documentos_prestador_view(request, solicitud_id):
-    solicitud = _obtener_solicitud_del_usuario(solicitud_id, request.user)
-
     if request.method == 'POST':
         bloquear_solicitante(request.user)
+    solicitud = _obtener_solicitud_del_usuario(solicitud_id, request.user, bloquear=request.method == 'POST')
+
+    if request.method == 'POST':
         if solicitud_en_proceso(request.user, excluir=solicitud.pk):
             messages.error(request, 'Ya tienes otra solicitud en proceso. Este registro permanece disponible para consulta.')
             return redirect('contractors:mi_credito')
@@ -872,7 +876,7 @@ def _resultado_simulacion_json(resultado):
 def mi_credito_prestador_view(request):
     from contractors.services.estado_evaluacion import construir_seguimiento_evaluacion
     solicitudes = (
-        ContractorApplication.objects
+        ContractorApplication.objects.activas()
         .filter(usuario=request.user)
         .select_related('empresa')
         .prefetch_related(
@@ -997,12 +1001,15 @@ def atender_subsanacion_prestador_view(request, solicitud_id, requerimiento_id):
     )
 
 
-def _obtener_solicitud_del_usuario(solicitud_id, usuario):
+def _obtener_solicitud_del_usuario(solicitud_id, usuario, *, bloquear=False):
     try:
-        return ContractorApplication.objects.select_related('empresa', 'usuario').get(
-            id=solicitud_id,
-            usuario=usuario,
-        )
+        solicitudes = ContractorApplication.objects.select_related('empresa', 'usuario')
+        if bloquear:
+            solicitud = solicitudes.select_for_update(of=('self',)).get(id=solicitud_id, usuario=usuario)
+            if ArchivoSolicitudPrestador.objects.filter(solicitud=solicitud).exists():
+                raise ContractorApplication.DoesNotExist
+            return solicitud
+        return solicitudes.activas().get(id=solicitud_id, usuario=usuario)
     except (ContractorApplication.DoesNotExist, ValueError, TypeError) as exc:
         raise Http404('Solicitud no encontrada.') from exc
 

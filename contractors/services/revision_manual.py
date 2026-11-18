@@ -11,6 +11,7 @@ from contractors.models import (
     TimelinePrestador,
 )
 from contractors.services.evaluacion_timeline import registrar_evento_timeline_prestador
+from contractors.services.archivo_solicitud import bloquear_solicitud_activa
 
 
 ESTADOS_REVISION_ACTIVA = {
@@ -88,7 +89,7 @@ def crear_o_reutilizar_revision(
 ):
     if motivo not in RevisionManualPrestador.Motivo.values:
         raise ValidationError('El motivo de revision no esta permitido.')
-    solicitud = ContractorApplication.objects.select_for_update().get(pk=solicitud.pk)
+    solicitud = bloquear_solicitud_activa(solicitud.pk)
     existente = RevisionManualPrestador.objects.filter(
         solicitud=solicitud,
         motivo=motivo,
@@ -150,6 +151,7 @@ def asignar_revision(revision, *, actor, asignado_a=None):
 @transaction.atomic
 def iniciar_analisis_revision(revision, *, actor):
     _exigir_permiso(actor, 'contractors.can_resolve_contractor_review')
+    bloquear_solicitud_activa(revision.solicitud_id)
     revision = RevisionManualPrestador.objects.select_for_update().get(pk=revision.pk)
     if revision.estado not in {
         RevisionManualPrestador.Estado.ABIERTA,
@@ -277,6 +279,7 @@ def cancelar_revision(revision, *, actor, comentario_interno):
 
 @transaction.atomic
 def marcar_subsanacion_atendida(requerimiento, *, usuario):
+    bloquear_solicitud_activa(requerimiento.solicitud_id)
     requerimiento = RequerimientoSubsanacionPrestador.objects.select_for_update().get(
         pk=requerimiento.pk,
         solicitud__usuario=usuario,
@@ -423,6 +426,8 @@ def _resultado_para_subsanacion(tipo):
 
 
 def _bloquear_revision_activa(revision_id):
+    solicitud_id = RevisionManualPrestador.objects.values_list('solicitud_id', flat=True).get(pk=revision_id)
+    bloquear_solicitud_activa(solicitud_id)
     revision = RevisionManualPrestador.objects.select_for_update().select_related(
         'solicitud'
     ).get(pk=revision_id)

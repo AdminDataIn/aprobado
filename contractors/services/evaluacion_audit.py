@@ -123,11 +123,8 @@ def invalidar_evaluacion_si_cambiaron_datos(
 @transaction.atomic
 def iniciar_evaluacion_prestador(solicitud, usuario=None):
     _validar_actor(solicitud, usuario)
-    solicitud_bloqueada = (
-        ContractorApplication.objects.select_for_update()
-        .select_related('usuario', 'empresa')
-        .get(pk=solicitud.pk)
-    )
+    from contractors.services.archivo_solicitud import bloquear_solicitud_activa
+    solicitud_bloqueada = bloquear_solicitud_activa(solicitud.pk)
     version_datos, snapshot_entrada = construir_version_datos(solicitud_bloqueada)
     clave = construir_clave_idempotencia(
         solicitud=solicitud_bloqueada,

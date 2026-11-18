@@ -56,7 +56,9 @@ def encolar(procesamiento_id):
 
 @transaction.atomic
 def asegurar_procesamiento(sesion_id):
-    sesion = Sesion.objects.select_for_update().get(pk=sesion_id)
+    sesion = _sesion_ocr_bloqueada(sesion_id)
+    if sesion is None:
+        return None
     _bloquear_contexto(sesion)
     if sesion.estado not in {'FINALIZADA', 'UTILIZADA'}:
         return None
@@ -93,9 +95,23 @@ def _vigente(p, sesion):
 
 def _lock(procesamiento_id):
     sesion_id = OCR.objects.values_list('sesion_id', flat=True).get(pk=procesamiento_id)
-    sesion = Sesion.objects.select_for_update().get(pk=sesion_id)
+    sesion = _sesion_ocr_bloqueada(sesion_id)
+    if sesion is None:
+        return None, None
     _bloquear_contexto(sesion)
     return sesion, OCR.objects.select_for_update().get(pk=procesamiento_id)
+
+
+def _sesion_ocr_bloqueada(sesion_id):
+    from contractors.services.archivo_solicitud import SolicitudArchivada
+    from .captura_documental import _bloquear_solicitud_asociada
+
+    candidatas = Sesion.objects.filter(pk=sesion_id)
+    try:
+        _bloquear_solicitud_asociada(candidatas)
+    except SolicitudArchivada:
+        return None
+    return candidatas.select_for_update().get()
 
 
 def _bloquear_contexto(sesion):
@@ -103,9 +119,6 @@ def _bloquear_contexto(sesion):
         return
     if sesion.producto == 'LIBRANZA':
         CreditoLibranza.objects.select_for_update().filter(credito_id=sesion.credito_id).first()
-    else:
-        from contractors.models import ContractorApplication
-        ContractorApplication.objects.select_for_update().get(pk=sesion.solicitud_id)
 
 
 def _fallar(p, codigo):
@@ -120,6 +133,8 @@ def _fallar(p, codigo):
 def procesar(procesamiento_id):
     with transaction.atomic():
         sesion, p = _lock(procesamiento_id)
+        if p is None:
+            return
         if p.estado in TERMINALES or (p.estado == 'PROCESANDO' and p.reservado_hasta
                                      and p.reservado_hasta > timezone.now()):
             return
@@ -152,6 +167,8 @@ def procesar(procesamiento_id):
         error = 'OCR_ERROR_TECNICO'
     with transaction.atomic():
         sesion, actual = _lock(procesamiento_id)
+        if actual is None:
+            return
         if actual.token_ejecucion != token or actual.estado != 'PROCESANDO':
             return
         if not _vigente(actual, sesion):
@@ -180,8 +197,8 @@ def procesar(procesamiento_id):
 
 @transaction.atomic
 def sincronizar_comparacion_ocr(sesion_id):
-    sesion = Sesion.objects.select_for_update().get(pk=sesion_id)
-    if sesion.estado != 'UTILIZADA':
+    sesion = _sesion_ocr_bloqueada(sesion_id)
+    if sesion is None or sesion.estado != 'UTILIZADA':
         return
     if sesion.producto == 'LIBRANZA':
         context = CreditoLibranza.objects.select_for_update().filter(credito_id=sesion.credito_id).first()
@@ -192,7 +209,7 @@ def sincronizar_comparacion_ocr(sesion_id):
         number, doc_type = context.cedula, context.tipo_documento or 'CC'
     else:
         from contractors.models import ContractorApplication
-        context = ContractorApplication.objects.select_for_update().get(pk=sesion.solicitud_id)
+        context = ContractorApplication.objects.get(pk=sesion.solicitud_id)
         lookup = {'solicitud': context, 'libranza': None}
         sessions = Sesion.objects.filter(solicitud_id=sesion.solicitud_id, estado='UTILIZADA')
         number, doc_type = context.numero_documento, context.tipo_documento

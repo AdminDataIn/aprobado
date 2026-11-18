@@ -4,6 +4,7 @@ from django.core.exceptions import PermissionDenied
 from django.db import transaction
 
 from contractors.models import AprobacionInternaPrestador, TimelinePrestador
+from contractors.services.archivo_solicitud import SolicitudArchivada, bloquear_solicitud_activa
 from contractors.services.evaluacion_timeline import registrar_evento_timeline_prestador
 from contractors.services.aprobacion_pagador import validar_aprobacion_pagador_vigente
 from contractors.services.expediente_originacion import (
@@ -22,6 +23,8 @@ def originar_credito_prestador_desde_gate(gate, *, actor):
     _exigir_permiso(actor)
     try:
         with transaction.atomic():
+            solicitud_id = AprobacionInternaPrestador.objects.values_list('solicitud_id', flat=True).get(pk=gate.pk)
+            bloquear_solicitud_activa(solicitud_id)
             gate_bloqueado = (
                 AprobacionInternaPrestador.objects.select_for_update(of=('self',))
                 .select_related(
@@ -64,16 +67,20 @@ def originar_credito_prestador_desde_gate(gate, *, actor):
                 },
             )
             return resultado
+    except SolicitudArchivada:
+        raise
     except Exception:
         _registrar_error_controlado(gate, actor)
         raise
 
 
+@transaction.atomic
 def _registrar_error_controlado(gate, actor):
     try:
         gate_actual = AprobacionInternaPrestador.objects.select_related(
             'solicitud'
         ).get(pk=gate.pk)
+        bloquear_solicitud_activa(gate_actual.solicitud_id)
         _registrar_evento(
             gate_actual,
             TimelinePrestador.TipoEvento.ORIGINACION_ERROR_CONTROLADO,
@@ -84,6 +91,8 @@ def _registrar_error_controlado(gate, actor):
                 'estado': gate_actual.estado,
             },
         )
+    except SolicitudArchivada:
+        return
     except Exception:
         logger.exception(
             'No fue posible registrar el error de originacion para gate_id=%s',

@@ -11,7 +11,14 @@ from gestion_creditos.models import Empresa
 from gestion_creditos.storage import documentos_solicitud_storage
 
 
+class SolicitudPrestadorQuerySet(models.QuerySet):
+    def activas(self):
+        return self.filter(~models.Exists(ArchivoSolicitudPrestador.objects.filter(solicitud_id=models.OuterRef('pk'))))
+
+
 class ContractorApplication(models.Model):
+    objects = SolicitudPrestadorQuerySet.as_manager()
+
     class Estado(models.TextChoices):
         BORRADOR = 'BORRADOR', 'Borrador'
         DOCUMENTOS_PENDIENTES = 'DOCUMENTOS_PENDIENTES', 'Documentos pendientes'
@@ -240,6 +247,17 @@ class ContractorApplication(models.Model):
     @property
     def nombre_completo(self):
         return f'{self.nombres} {self.apellidos}'.strip()
+
+
+class ArchivoSolicitudPrestador(models.Model):
+    solicitud = models.OneToOneField(ContractorApplication, on_delete=models.PROTECT,
+                                    related_name='archivo_operativo')
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='+')
+    archivada_en = models.DateTimeField(auto_now_add=True)
+    motivo = models.CharField(max_length=500)
+
+    class Meta:
+        permissions = [('can_archive_contractor_application', 'Puede archivar solicitudes de prestadores')]
 
 
 class IngresoNetoVerificadoPrestador(models.Model):

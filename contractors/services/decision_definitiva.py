@@ -177,7 +177,8 @@ def _exclusion(auditoria, politica, reglas):
 @transaction.atomic
 def decidir_solicitud_prestador(auditoria, *, actor):
     _actor(actor)
-    solicitud = ContractorApplication.objects.select_for_update().get(pk=auditoria.solicitud_id)
+    from contractors.services.archivo_solicitud import bloquear_solicitud_activa
+    solicitud = bloquear_solicitud_activa(auditoria.solicitud_id)
     auditoria = PredecisionPrestadorAudit.objects.select_for_update().get(pk=auditoria.pk, solicitud=solicitud)
     politica, reglas, ingreso, fuentes, revisiones, causas, caducidad, contexto = _insumos(solicitud, auditoria)
     previo = _evento(solicitud, auditoria, contexto)

@@ -11,6 +11,7 @@ from contractors.services.evaluacion_audit import (
     invalidar_evaluacion_si_cambiaron_datos,
 )
 from contractors.services.evaluacion_versionado import construir_version_datos
+from contractors.services.archivo_solicitud import bloquear_solicitud_activa
 
 
 @transaction.atomic
@@ -18,6 +19,7 @@ def guardar_documento_prestador(
     *, solicitud, tipo_documento, archivo, usuario, metadata_captura=None,
     invalidar_evaluacion=True,
 ):
+    bloquear_solicitud_activa(solicitud.pk)
     debe_versionar = (
         invalidar_evaluacion
         and (

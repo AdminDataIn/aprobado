@@ -31,7 +31,7 @@ def aprobaciones_prestadores_view(request):
         raise PermissionDenied('No tienes permiso para ver aprobaciones de prestadores.')
     aprobaciones = (
         AprobacionPagadorPrestador.objects
-        .filter(empresa=perfil.empresa)
+        .filter(empresa=perfil.empresa, solicitud__archivo_operativo__isnull=True)
         .select_related('solicitud', 'empresa', 'aprobacion_interna')
         .order_by('-created_at', '-id')
     )
@@ -216,7 +216,7 @@ def _obtener_aprobacion_empresa(aprobacion_id, empresa_id):
     return get_object_or_404(
         AprobacionPagadorPrestador.objects.select_related(
             'solicitud', 'empresa', 'aprobacion_interna'
-        ),
+        ).filter(solicitud__archivo_operativo__isnull=True),
         pk=aprobacion_id,
         empresa_id=empresa_id,
     )

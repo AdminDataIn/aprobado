@@ -6,6 +6,8 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, connection, transaction
+from django.db.models import CharField
+from django.db.models.functions import Cast
 from django.utils import timezone
 
 from contractors.datacredito.adapter import consultar_proveedor_datacredito_prestador
@@ -14,6 +16,7 @@ from contractors.datacredito.dto import (
     ResultadoNormalizadoDatacreditoPrestador,
 )
 from contractors.models import AutorizacionConsultaDatacreditoPrestador, TimelinePrestador
+from contractors.services.archivo_solicitud import bloquear_solicitud_activa
 from contractors.services.autorizacion_datacredito import (
     obtener_autorizacion_datacredito_vigente,
 )
@@ -308,6 +311,7 @@ def evidencia_uso_snapshot(snapshot, *, solicitud, autorizacion):
         texto_hash=autorizacion.texto_hash,
         solicitud__usuario_id=autorizacion.usuario_id,
         solicitud__autoriza_consulta_centrales=True,
+        solicitud__archivo_operativo__isnull=True,
     ).first()
     if origen is None:
         return None
@@ -343,7 +347,12 @@ def evidencia_uso_snapshot(snapshot, *, solicitud, autorizacion):
     }
 
 
+@transaction.atomic
 def _resultado_reutilizado(snapshot, *, solicitud, autorizacion, usuario):
+    bloquear_solicitud_activa(solicitud.pk)
+    if not _snapshots_con_origen_no_archivado().filter(pk=snapshot.pk).exists():
+        return _resultado_controlado(estado='NO_EVALUABLE', servicio=snapshot.servicio,
+                                     error_codigo='origen_snapshot_archivado')
     if snapshot.estado in {
         ConsultaDatacreditoSnapshot.Estado.EXITOSO,
         ConsultaDatacreditoSnapshot.Estado.SIN_INFORMACION,
@@ -405,9 +414,16 @@ def _validar_configuracion(configuracion, servicio):
     return 'credenciales_datacredito_incompletas' if faltantes else ''
 
 
+def _snapshots_con_origen_no_archivado():
+    archivadas = AutorizacionConsultaDatacreditoPrestador.objects.filter(
+        solicitud__archivo_operativo__isnull=False,
+    ).annotate(referencia=Cast('pk', CharField())).values('referencia')
+    return ConsultaDatacreditoSnapshot.objects.exclude(autorizacion_referencia__in=archivadas)
+
+
 def _buscar_snapshot_reutilizable(fingerprint):
     return (
-        ConsultaDatacreditoSnapshot.objects.filter(
+        _snapshots_con_origen_no_archivado().filter(
             fingerprint=fingerprint,
             estado__in=[
                 ConsultaDatacreditoSnapshot.Estado.EXITOSO,
@@ -425,6 +441,7 @@ def _reservar_consulta(
     fingerprint, solicitado_por, modo=REUTILIZAR_SI_VIGENTE, inicio_operacion=None,
 ):
     with transaction.atomic():
+        bloquear_solicitud_activa(solicitud.pk)
         _bloquear_fingerprint(fingerprint)
         ahora = timezone.now()
         limite_proceso = ahora + timedelta(seconds=max(
@@ -437,7 +454,7 @@ def _reservar_consulta(
                 return reutilizable
         elif inicio_operacion is not None:
             # A concurrent explicit refresh that already finished satisfies this attempt.
-            finalizada_durante_operacion = ConsultaDatacreditoSnapshot.objects.filter(
+            finalizada_durante_operacion = _snapshots_con_origen_no_archivado().filter(
                 fingerprint=fingerprint, consultado_en__gte=inicio_operacion,
             ).exclude(estado=ConsultaDatacreditoSnapshot.Estado.EN_PROCESO).order_by('-consultado_en').first()
             if finalizada_durante_operacion is not None:
@@ -465,7 +482,7 @@ def _reservar_consulta(
         # A timeout/expired lease does not prove that the paid request was not processed.
         # All final errors require an explicitly authorized manual refresh, never a loop.
         if modo != FORZAR_CONSULTA:
-            error = ConsultaDatacreditoSnapshot.objects.filter(
+            error = _snapshots_con_origen_no_archivado().filter(
                 fingerprint=fingerprint,
                 estado__in=[ConsultaDatacreditoSnapshot.Estado.ERROR_TRANSITORIO,
                             ConsultaDatacreditoSnapshot.Estado.ERROR_PERMANENTE],

@@ -15,6 +15,8 @@ from contractors.services.solicitud import guardar_documento_prestador
 def atender_requerimiento_subsanacion(requerimiento, *, form, usuario):
     if requerimiento.solicitud.usuario_id != usuario.id:
         raise ValidationError('El requerimiento no pertenece al usuario autenticado.')
+    from contractors.services.archivo_solicitud import bloquear_solicitud_activa
+    bloquear_solicitud_activa(requerimiento.solicitud_id)
     if requerimiento.estado != RequerimientoSubsanacionPrestador.Estado.PENDIENTE:
         raise ValidationError('El requerimiento ya fue atendido o cerrado.')
 

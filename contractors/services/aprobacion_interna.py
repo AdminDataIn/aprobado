@@ -50,9 +50,8 @@ class ValidacionGatePrestador:
 @transaction.atomic
 def crear_o_reutilizar_aprobacion_interna(auditoria, *, actor):
     _exigir_permiso(actor, 'contractors.can_decide_contractor_internal_approval')
-    solicitud = ContractorApplication.objects.select_for_update().get(
-        pk=auditoria.solicitud_id
-    )
+    from contractors.services.archivo_solicitud import bloquear_solicitud_activa
+    solicitud = bloquear_solicitud_activa(auditoria.solicitud_id)
     auditoria = (
         PredecisionPrestadorAudit.objects.select_for_update()
         .select_related('solicitud', 'solicitud__empresa')
@@ -564,7 +563,8 @@ def _snapshot_vigente(snapshot, autorizacion, *, auditoria, servicio=None):
 
 def _bloquear_gate(gate_id):
     solicitud_id = AprobacionInternaPrestador.objects.values_list('solicitud_id', flat=True).get(pk=gate_id)
-    ContractorApplication.objects.select_for_update().get(pk=solicitud_id)
+    from contractors.services.archivo_solicitud import bloquear_solicitud_activa
+    bloquear_solicitud_activa(solicitud_id)
     return (
         AprobacionInternaPrestador.objects.select_for_update()
         .select_related('solicitud', 'solicitud__empresa', 'auditoria_predecision')
