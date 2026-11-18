@@ -21,14 +21,19 @@
         <div class="simulador-configuracion-ausente" role="alert">
           <strong>Revisa el calendario contractual</strong>
           <p>{{ horizonte_contractual.motivo|default:'El calendario contractual no respalda las fechas de las cuotas de un plazo simulable.' }}</p>
-          <p>La periodicidad mensual no determina el d&iacute;a de pago. Revisa las fechas y la cl&aacute;usula de pago de tu contrato. Si falta, solicita una adenda y carga un &uacute;nico PDF con el contrato y la adenda; vuelve a analizarlo y confirma los datos. No se asumir&aacute;n fechas ni pagos recibidos.</p>
+          {% if solo_informativa %}
+          <p>Solo puedes obtener una estimaci&oacute;n. No podr&aacute;s enviar la solicitud con estas condiciones hasta confirmar el calendario.</p>
+          {% endif %}
+          <p>Revisa que el PDF documente los periodos y sus vencimientos. Si corresponde una adenda, carga el contrato y la adenda en un &uacute;nico PDF, vuelve a analizarlo y confirma los datos. No se asumir&aacute;n fechas ni pagos recibidos.</p>
           <a href="{% url 'contractors:solicitar' %}?solicitud_id={{ solicitud.id|unlocalize }}&amp;revisar_contrato=1">Revisar contrato</a>
         </div>
-      {% elif configuracion_simulador %}
+      {% endif %}
+      {% if configuracion_simulador %}
+      {% if horizonte_disponible or solo_informativa %}
       <div class="simulador-hero">
         <div class="simulador-text-content">
           <span class="simulador-eyebrow">PRESTADORES DE SERVICIOS</span>
-          <h1>SIMULA TU CRÉDITO</h1>
+          <h1>{% if solo_informativa %}ESTIMACI&Oacute;N INFORMATIVA{% else %}SIMULA TU CRÉDITO{% endif %}</h1>
         </div>
 
         <div class="simulador-card">
@@ -117,6 +122,7 @@
           </div>
         </div>
       </div>
+      {% endif %}
       {% else %}
         <div class="simulador-configuracion-ausente" role="alert">
           <strong>Simulación temporalmente no disponible</strong>
@@ -154,6 +160,7 @@ document.addEventListener('DOMContentLoaded', function () {
   let requestNumber = 0;
   let activeController = null;
   let submitting = false;
+  let calculoInformativo = false;
 
   function updateSlider(input, tooltip, progress, formatter) {
     const min = Number(input.min);
@@ -202,8 +209,9 @@ document.addEventListener('DOMContentLoaded', function () {
       if (current !== requestNumber || submitting) return;
       if (!response.ok || !data.ok) throw new Error(data.error || 'No fue posible calcular la simulación.');
       paint(data.resultado);
-      status.textContent = '';
-      registerButtons.forEach(button => { button.disabled = form.dataset.canRegister !== 'true'; });
+      calculoInformativo = data.solo_informativa === true;
+      status.textContent = calculoInformativo ? 'Estimación sin calendario confirmado.' : '';
+      registerButtons.forEach(button => { button.disabled = calculoInformativo || form.dataset.canRegister !== 'true'; });
     } catch (error) {
       if (error.name === 'AbortError') return;
       if (current !== requestNumber) return;
@@ -225,7 +233,7 @@ document.addEventListener('DOMContentLoaded', function () {
   amount.addEventListener('input', schedule);
   term.addEventListener('input', schedule);
   form.addEventListener('submit', function (event) {
-    if (submitting) {
+    if (submitting || calculoInformativo || form.dataset.canRegister !== 'true') {
       event.preventDefault();
       return;
     }

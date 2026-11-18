@@ -2,7 +2,9 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation
 
-from gestion_creditos.services.horizonte_contractual import calcular_horizonte_contractual
+from gestion_creditos.services.horizonte_contractual import (
+    HorizonteContractual, calcular_horizonte_contractual, usa_calendario_flexible,
+)
 from contractors.services.politica_financiera_prestador import VERSION
 from gestion_creditos.services.libranza_rules import (
     calcular_primera_fecha_pago_libranza,
@@ -29,10 +31,33 @@ def plazo_maximo_respaldado(horizonte, plazo_maximo):
     return 0
 
 
+def admite_estimacion_sin_calendario(solicitud, horizonte):
+    return bool(horizonte and horizonte.pendiente_confirmacion and solicitud.fecha_fin_contrato
+                and solicitud.fecha_fin_contrato >= horizonte.corte)
+
+
 def horizonte_para_solicitud(solicitud, configuracion, *, corte=None):
     if configuracion is None or configuracion.version != VERSION:
         return None
-    extraido = (solicitud.metadata_analisis_contractual or {}).get('datos_sugeridos', {}).get('valor_pagado_estimado')
+    corte = corte or timezone.localdate()
+    metadata = solicitud.metadata_analisis_contractual or {}
+    pago = metadata.get('forma_pago_contractual') or {}
+    evidencia = solicitud.evidencia_forma_pago
+    periodos = pago.get('periodos_documentados_v1')
+    if usa_calendario_flexible(evidencia) or usa_calendario_flexible(pago.get('evidencia')):
+        from contractors.services.evaluacion_versionado import _hash_contrato_guardado
+
+        confirmado = metadata.get('archivo_hash_sha256')
+        if (not pago.get('calendario_confirmado_v1') or evidencia != pago.get('evidencia')
+                or not confirmado or confirmado != _hash_contrato_guardado(solicitud)):
+            return HorizonteContractual(corte=corte, pendiente_confirmacion=True,
+                motivo='Confirma el calendario flexible con el contrato vigente antes de registrar condiciones.')
+        fechas = pago.get('fechas_calendario_v1')
+        if periodos is None and (not fechas or not solicitud.fecha_inicio_contrato or not solicitud.fecha_fin_contrato
+                or fechas.get('inicio') != solicitud.fecha_inicio_contrato.isoformat()
+                or fechas.get('fin') != solicitud.fecha_fin_contrato.isoformat()):
+            return HorizonteContractual(corte=corte, motivo='Las fechas no coinciden con la vigencia del calendario documentado.')
+    extraido = metadata.get('datos_sugeridos', {}).get('valor_pagado_estimado')
     try:
         pagado_fuente = Decimal(str(extraido)) if extraido is not None and extraido != '' else None
         if pagado_fuente is not None and (not pagado_fuente.is_finite() or pagado_fuente < 0):
@@ -43,9 +68,11 @@ def horizonte_para_solicitud(solicitud, configuracion, *, corte=None):
     return calcular_horizonte_contractual(
         inicio=solicitud.fecha_inicio_contrato, fin=solicitud.fecha_fin_contrato,
         periodicidad=solicitud.forma_pago, valor_periodico=solicitud.valor_mensual_contractual,
-        evidencia_calendario=solicitud.evidencia_forma_pago,
+        evidencia_calendario=evidencia,
+        periodos_documentados=periodos,
+        valor_total_contractual=getattr(solicitud, 'valor_total_contrato', None),
         duracion_meses=solicitud.duracion_contrato_meses,
-        corte=corte or timezone.localdate(),
+        corte=corte,
         valor_pagado_al_corte_documento=pagado_fuente,
         valor_pagado_actual_declarado=solicitud.valor_pagado_contrato,
     )

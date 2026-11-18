@@ -137,9 +137,10 @@ class SimulacionPrestadorForm(forms.Form):
     def __init__(self, *args, **kwargs):
         configuracion = kwargs.pop('configuracion', None)
         horizonte = kwargs.pop('horizonte', None)
+        solo_informativa = kwargs.pop('solo_informativa', False)
         super().__init__(*args, **kwargs)
         self.error_horizonte = ''
-        if horizonte is not None:
+        if horizonte is not None and not solo_informativa:
             if not horizonte.disponible:
                 self.error_horizonte = horizonte.motivo
             elif not horizonte.periodos_futuros:
@@ -159,7 +160,9 @@ class SimulacionPrestadorForm(forms.Form):
         monto_maximo = Decimal(str(configuracion.monto_maximo))
         plazo_minimo = int(configuracion.plazo_minimo_meses)
         plazo_maximo = int(configuracion.plazo_maximo_meses)
-        if horizonte is not None:
+        if solo_informativa:
+            plazo_maximo = min(plazo_maximo, 8)
+        elif horizonte is not None:
             from contractors.services.horizonte_simulacion import plazo_maximo_respaldado
             plazo_maximo = plazo_maximo_respaldado(horizonte, min(plazo_maximo, 8))
             if plazo_maximo < plazo_minimo and not self.error_horizonte:

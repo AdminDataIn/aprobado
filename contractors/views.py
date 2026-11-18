@@ -37,7 +37,9 @@ from contractors.services.capacidad_contractual import (
 )
 from contractors.services.confirmacion_simulacion import confirmar_condiciones_simulacion
 from contractors.services.analisis_contractual_seguro import analizar_contrato_seguro
-from contractors.services.horizonte_simulacion import horizonte_para_solicitud, plazo_maximo_respaldado
+from contractors.services.horizonte_simulacion import (
+    admite_estimacion_sin_calendario, horizonte_para_solicitud, plazo_maximo_respaldado,
+)
 from contractors.validators import documento_numerico
 from contractors.services.reconciliacion_contractual import confirmar_reconciliacion, reconciliar
 from contractors.services.extraccion_campos import ESQUEMA
@@ -297,6 +299,9 @@ def _aplicar_evidencia_analisis(solicitud, evidencia):
     solicitud.metadata_analisis_contractual = metadata
     solicitud.fecha_analisis_contractual = timezone.now()
     forma_pago = metadata.get('forma_pago_contractual') or {}
+    if 'periodos_documentados_v1' in forma_pago or 'fechas_calendario_v1' in forma_pago:
+        forma_pago = {**forma_pago, 'calendario_confirmado_v1': True}
+        metadata['forma_pago_contractual'] = forma_pago
     solicitud.frecuencia_pago = str(forma_pago.get('frecuencia_pago') or '')[:120]
     solicitud.evidencia_forma_pago = str(forma_pago.get('evidencia') or '')[:500]
     try:
@@ -749,6 +754,8 @@ def simular_prestador_view(request):
     puede_registrar = bool(
         configuracion and documentos_cargados and analisis_habilita_simulacion and horizonte_disponible
     )
+    solo_informativa = bool(documentos_cargados and analisis_habilita_simulacion
+                           and admite_estimacion_sin_calendario(solicitud, horizonte))
     monto_inicial = solicitud.monto_solicitado or (
         configuracion.monto_minimo if configuracion else None
     )
@@ -761,6 +768,7 @@ def simular_prestador_view(request):
         initial=initial,
         configuracion=configuracion,
         horizonte=horizonte,
+        solo_informativa=solo_informativa,
     )
 
     if error_confirmacion is not None:
@@ -784,6 +792,7 @@ def simular_prestador_view(request):
             'puede_registrar': puede_registrar,
             'horizonte_contractual': horizonte,
             'horizonte_disponible': horizonte_disponible,
+            'solo_informativa': solo_informativa,
             'form': form,
             'configuracion_simulador': configuracion,
             'configuracion_publica_simulador': {
@@ -822,17 +831,20 @@ def calcular_simulacion_prestador_view(request):
             },
             status=503,
         )
+    horizonte = horizonte_para_solicitud(solicitud, configuracion)
+    solo_informativa = admite_estimacion_sin_calendario(solicitud, horizonte)
     form = SimulacionPrestadorForm(
         {
             'monto': payload.get('monto'),
             'plazo_meses': payload.get('plazo_meses'),
         },
         configuracion=configuracion,
-        horizonte=horizonte_para_solicitud(solicitud, configuracion),
+        horizonte=horizonte,
+        solo_informativa=solo_informativa,
     )
     if not form.is_valid():
         return JsonResponse(
-            {'ok': False, 'error': 'Selecciona un monto y plazo dentro de los rangos permitidos.'},
+            {'ok': False, 'error': form.error_horizonte or 'Selecciona un monto y plazo dentro de los rangos permitidos.'},
             status=400,
         )
     try:
@@ -840,11 +852,11 @@ def calcular_simulacion_prestador_view(request):
             monto=form.cleaned_data['monto'],
             plazo_meses=form.cleaned_data['plazo_meses'],
             configuracion=configuracion,
-            solicitud=solicitud,
+            solicitud=None if solo_informativa else solicitud,
         )
     except ValidationError as exc:
         return JsonResponse({'ok': False, 'error': '; '.join(exc.messages)}, status=400)
-    return JsonResponse({'ok': True, 'resultado': {
+    return JsonResponse({'ok': True, 'solo_informativa': solo_informativa, 'resultado': {
         clave: valor for clave, valor in _resultado_simulacion_json(resultado).items() if clave != 'fuente'
     }})
 

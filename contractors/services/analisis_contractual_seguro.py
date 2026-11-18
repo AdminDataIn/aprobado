@@ -13,7 +13,10 @@ from contractors.services.analisis_contrato_ia import analizar_contrato_con_open
 from contractors.services.extraccion_campos import CAMPOS, presente, limpiar_resultado, completar_faltantes, evidencia_campos, derivar_pendiente
 from contractors.validators import normalizar_nit
 from gestion_creditos.models import Empresa
-from gestion_creditos.services.horizonte_contractual import evidencia_calendario_en_texto
+from gestion_creditos.services.horizonte_contractual import (
+    evidencia_calendario_en_texto, marcador_periodos_documentados,
+    periodos_documentados_en_texto, usa_calendario_flexible,
+)
 
 
 MENSAJE_DOCUMENTO_DIFERENTE = (
@@ -71,6 +74,7 @@ def analizar_contrato_seguro(*, solicitud, documento):
     resultado = resultado_ia
     advertencias_previas = []
     fallback_reason = ''
+    fallback = None
     if resultado is not None:
         resultado = limpiar_resultado(resultado)
     if resultado is None or not resultado.disponible or any(not presente(getattr(resultado, c)) for c in CAMPOS):
@@ -86,11 +90,27 @@ def analizar_contrato_seguro(*, solicitud, documento):
 
     resultado = derivar_pendiente(resultado)
     calendario = evidencia_calendario_en_texto(texto_pdf)
+    periodos_documentados = periodos_documentados_en_texto(texto_pdf)
+    fechas_calendario = None
     if resultado.forma_pago == 'MENSUAL':
         # A payment date must be backed by PDF text, not by provider-generated prose.
         evidencia_pago = (f'Pagos mensuales; {calendario}' if calendario else
                           'Pagos mensuales (sin fecha de pago contractual identificada)')
+        if periodos_documentados is not None:
+            # A list of explicit due dates must not silently override another recognized rule.
+            if calendario:
+                periodos_documentados = []
+            evidencia_pago = marcador_periodos_documentados(periodos_documentados)
+        elif usa_calendario_flexible(calendario):
+            # A change to dates on the form must not re-anchor the PDF rule.
+            lectura = fallback or analizar_contrato_fallback(documento, texto_pdf=texto_pdf, motivo=motivo_pdf)
+            fechas_calendario = {
+                'inicio': lectura.fecha_inicio_contrato.isoformat() if lectura.fecha_inicio_contrato else '',
+                'fin': lectura.fecha_fin_contrato.isoformat() if lectura.fecha_fin_contrato else '',
+            }
         resultado = replace(resultado, evidencia_forma_pago=evidencia_pago)
+    else:
+        periodos_documentados = None
     advertencias = list(advertencias_previas) + list(resultado.advertencias)
     bloqueos = []
     documento_detectado = _solo_digitos(resultado.documento_contratista)
@@ -171,6 +191,8 @@ def analizar_contrato_seguro(*, solicitud, documento):
             'evidencia': datos['evidencia_forma_pago'],
             'confianza': datos['confianza_forma_pago'],
             'fuente': datos['fuente_forma_pago'],
+            **({'periodos_documentados_v1': periodos_documentados} if periodos_documentados is not None else {}),
+            **({'fechas_calendario_v1': fechas_calendario} if fechas_calendario is not None else {}),
         },
         'diagnostico': diagnostico,
     }
