@@ -30,6 +30,9 @@ from contractors.services.formalizacion import (
 from contractors.services.postfirma import preparar_transferencia_credito_prestador, confirmar_desembolso_credito_prestador
 from contractors.tests.test_aprobacion_interna_prestador import ClienteFirmaPrueba
 from contractors.tests.test_pipeline_financiero_e2e import FixturePipelineFinanciero
+from contractors.tests.test_orquestacion_evaluacion import CONFIGURACION, FixtureOrquestacion
+from contractors.services.orquestacion_evaluacion import ejecutar_job
+from contractors.services.estado_evaluacion import construir_seguimiento_evaluacion
 from django.core.files.uploadedfile import SimpleUploadedFile
 from gestion_creditos.models import Credito
 from integrations.tests.test_datacredito_snapshot_v2 import CONFIGURACION_DATACREDITO_PRUEBA
@@ -296,6 +299,49 @@ class RechazoSinteticoTest(FixtureDecisionV3, TestCase):
         self.assertEqual(self.decision(audit).resultado, REVISION)
         self.assertEqual(TimelinePrestador.objects.get(pk=previo.evento_id).metadata['resultado'], RECHAZADO)
         self.assert_sin_originacion()
+
+
+@override_settings(**CONFIGURACION)
+class JobDecisionTest(FixtureDecisionV3, FixtureOrquestacion, TestCase):
+    exclusiones_test = ('BANDA_REVISION',)
+
+    def comprobar_job(self, cierre, decision, publico, **fuentes):
+        with self.captureOnCommitCallbacks(execute=True):
+            job = self.reservar()
+            self.assertIsNotNone(job)
+            self.publicar.assert_not_called()
+        self.publicar.assert_called_once_with(args=[job.pk], retry=False)
+        with self.proveedores(**fuentes) as proveedores:
+            self.assertEqual(ejecutar_job(job.pk), cierre)
+            self.assertEqual(ejecutar_job(job.pk), cierre)
+            for proveedor in proveedores:
+                proveedor.assert_called_once()
+        self.solicitud.refresh_from_db()
+        self.assertEqual(self.solicitud.auditorias_predecision.count(), 1)
+        evento = self.solicitud.timeline_operativo.get(metadata__tipo=TIPO_EVENTO)
+        self.assertEqual(evento.metadata['resultado'], decision)
+        self.assertEqual(construir_seguimiento_evaluacion(self.solicitud)['estado'], publico)
+        self.assert_sin_originacion()
+
+    def test_favorable_condicionado(self):
+        self.comprobar_job('FINALIZADA', APROBADO, 'PENDIENTE_CONFIRMACION_EMPRESA')
+
+    def test_predecision_favorable_sin_facultad_de_aprobacion_queda_en_revision(self):
+        usuario = get_user_model()
+        original = usuario.has_perm
+
+        def sin_aprobacion(actor, permiso, obj=None):
+            return permiso != 'contractors.can_decide_contractor_internal_approval' and original(actor, permiso, obj)
+
+        with patch.object(usuario, 'has_perm', sin_aprobacion):
+            self.comprobar_job('REQUIERE_REVISION', REVISION, 'REVISION')
+        self.assertEqual(self.solicitud.auditorias_predecision.get().resultado, 'PREAPROBADO_READ_ONLY')
+
+    def test_rechazo_exclusivamente_sintetico(self):
+        self.comprobar_job('FINALIZADA', RECHAZADO, 'NO_APROBADO', score=0)
+
+    def test_fuente_indeterminada(self):
+        self.comprobar_job('REQUIERE_REVISION', REVISION, 'REVISION', hc='14', tx='05')
 
 
 @skipUnless(connection.vendor=='postgresql','Requires PostgreSQL row locks')
