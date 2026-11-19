@@ -71,6 +71,31 @@ test('request lento nunca genera polling solapado', async t => {
   release();
 });
 
+for (const width of [390, 1280]) {
+  test(`V3 actualiza la decision terminal sin recargar ni reenviar a ${width}px`, async t => {
+    const methods = [];
+    const f = await fixture(t, {width, response: async (route, call) => {
+      methods.push(route.request().method());
+      await route.fulfill({json: {
+        mensaje: call === 1 ? 'Estamos validando tu información' : 'Tu evaluación financiera fue favorable.',
+        etiqueta: call === 1 ? 'En evaluación' : 'Pendiente confirmación de la empresa',
+        procesando: call === 1, continuar_seguimiento: call === 1
+      }});
+    }});
+    let navigations = 0;
+    f.page.on('framenavigated', () => navigations++);
+    await f.page.clock.runFor(3001);
+    await f.page.waitForFunction(() => !document.querySelector('[data-evaluation-spinner]').hidden);
+    await f.page.clock.runFor(5000);
+    await f.page.waitForFunction(() => document.querySelector('[data-evaluation-message]').textContent.includes('favorable'));
+    await f.page.clock.runFor(125000);
+    assert.deepEqual(methods, ['GET', 'GET']);
+    assert.equal(navigations, 0);
+    assert.equal(await f.page.locator('[data-evaluation-spinner]').isVisible(), false);
+    assert.deepEqual(f.errors, []);
+  });
+}
+
 test('cierre de pagina detiene seguimiento sin POST ni cancelacion del job', async t => {
   const f = await fixture(t);
   await f.page.evaluate(() => window.dispatchEvent(new Event('pagehide')));

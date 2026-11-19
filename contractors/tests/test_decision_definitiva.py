@@ -324,7 +324,26 @@ class JobDecisionTest(FixtureDecisionV3, FixtureOrquestacion, TestCase):
         self.assert_sin_originacion()
 
     def test_favorable_condicionado(self):
-        self.comprobar_job('FINALIZADA', APROBADO, 'PENDIENTE_CONFIRMACION_EMPRESA')
+        lecturas = []
+        url = f'/mi-credito/solicitud/{self.solicitud.pk}/estado/'
+
+        def leer_antes_de_decidir(auditoria, *, actor):
+            lectura = self.client.get(url, HTTP_HOST=self.host).json()
+            lecturas.append((auditoria.resultado, lectura['estado'], lectura['continuar_seguimiento']))
+            return decidir_solicitud_prestador(auditoria, actor=actor)
+
+        with patch('contractors.services.decision_definitiva.decidir_solicitud_prestador',
+                   side_effect=leer_antes_de_decidir):
+            self.comprobar_job('FINALIZADA', APROBADO, 'PENDIENTE_CONFIRMACION_EMPRESA')
+        self.assertEqual(lecturas, [('PREAPROBADO_READ_ONLY', 'EN_EVALUACION', True)])
+        # The dashboard can have read the public label before the worker finished.
+        previo = dict(codigo='PREAPROBADO_READ_ONLY', titulo='Predecision', etiqueta='', detalle='')
+        final = construir_seguimiento_evaluacion(self.solicitud, estado_publico=previo)
+        self.assertEqual((final['estado'], final['continuar_seguimiento'], final['procesando']),
+                         ('PENDIENTE_CONFIRMACION_EMPRESA', False, False))
+        self.assertEqual(self.client.get(url, HTTP_HOST=self.host).json()['estado'], final['estado'])
+        self.assertEqual(self.solicitud.evaluacion_jobs.count(), 1)
+        self.assertEqual(self.solicitud.auditorias_predecision.count(), 1)
 
     def test_predecision_favorable_sin_facultad_de_aprobacion_queda_en_revision(self):
         usuario = get_user_model()
