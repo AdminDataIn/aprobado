@@ -1,0 +1,11 @@
+[Unit]
+Description=Recuperacion exclusiva de evaluaciones Prestadores
+
+[Timer]
+OnActiveSec=60s
+OnUnitInactiveSec=60s
+AccuracySec=5s
+Unit=prestadores-evaluaciones.service
+
+[Install]
+WantedBy=timers.target

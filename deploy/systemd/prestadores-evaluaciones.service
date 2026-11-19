@@ -1,0 +1,21 @@
+[Unit]
+Description=Publicar un tick del dispatcher Prestadores
+After=network.target
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+WorkingDirectory=/opt/aprobado-tick/current
+EnvironmentFile=/etc/aprobado-prestadores/tick.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/aprobado-tick/venv/bin/python manage.py operar_evaluacion_prestadores tick
+TimeoutStartSec=45s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+UMask=0077

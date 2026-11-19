@@ -65,6 +65,7 @@ from usuarios.models import PerfilPagador
 class FixturePipelineFinanciero:
     host = 'contratistas.localhost'
     ingreso_automatico = True
+    confirmar_en_fixture = True
     semantica_ingreso_test = 'NO_CONFIRMADA'
 
     def setUp(self):
@@ -182,6 +183,8 @@ class FixturePipelineFinanciero:
         sesion.refresh_from_db()
         self.assertEqual(sesion.estado, SesionCapturaDocumental.Estado.UTILIZADA)
         self.assertEqual(solicitud.documentos.count(), 4)
+        if not self.confirmar_en_fixture:
+            return solicitud
         respuesta = self.client.post('/simular/', {
             'solicitud_id': solicitud.pk, 'monto': monto, 'plazo_meses': plazo,
         }, HTTP_HOST=self.host)

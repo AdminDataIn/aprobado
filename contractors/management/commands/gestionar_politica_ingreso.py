@@ -26,6 +26,8 @@ class Command(BaseCommand):
         parser.add_argument('--version-destino', choices=(VERSION_INGRESO, VERSION_POLITICA), default=VERSION_INGRESO)
         parser.add_argument('--solicitud-id', type=int)
         parser.add_argument('--politica-id', type=int)
+        parser.add_argument('--reservar-al-adoptar', action='store_true',
+                            help='Solo V3: reservar al adoptar por primera vez; publicacion al commit.')
         modo = parser.add_mutually_exclusive_group()
         modo.add_argument('--aplicar', action='store_true')
         modo.add_argument('--dry-run', action='store_true')
@@ -48,6 +50,8 @@ class Command(BaseCommand):
             raise CommandError('estado=OPERACION_RECHAZADA') from None
 
     def _publicar(self, actor, options):
+        if options['reservar_al_adoptar']:
+            raise CommandError('estado=ARGUMENTOS_INCOMPATIBLES')
         if options['origen_id'] is None or not options['vigente_desde']:
             raise CommandError('estado=ORIGEN_Y_FECHA_REQUERIDOS')
         if options['solicitud_id'] is not None or options['politica_id'] is not None:
@@ -90,5 +94,6 @@ class Command(BaseCommand):
         resultado = adoptar_politica_ingreso(
             solicitud_id=solicitud.pk, politica_id=politica.pk,
             actor=actor, motivo=options['motivo'],
+            reservar_al_adoptar=options['reservar_al_adoptar'],
         )
         self.stdout.write(f'estado=ADOPTADA solicitud_id={resultado.pk} politica_id={politica.pk}')

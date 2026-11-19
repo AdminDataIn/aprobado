@@ -137,16 +137,22 @@ def publicar_politica_ingreso(*, origen_id, actor, motivo, vigente_desde,
 
 
 @transaction.atomic
-def adoptar_politica_ingreso(*, solicitud_id, politica_id, actor, motivo):
+def adoptar_politica_ingreso(*, solicitud_id, politica_id, actor, motivo, reservar_al_adoptar=False):
     _exigir_actor_autorizado(actor)
     if not actor.has_perm('contractors.can_evaluate_contractor_application'):
         raise PermissionDenied('Se requiere permiso de evaluacion.')
     if not str(motivo or '').strip():
         raise ValidationError('La adopcion requiere motivo.')
     politica = ConfiguracionScorePrestador.objects.select_for_update().get(pk=politica_id)
+    if reservar_al_adoptar:
+        from contractors.politica_decision import VERSION_POLITICA
+        if politica.version_politica != VERSION_POLITICA:
+            raise ValidationError('La reserva al adoptar requiere un mandato V3.')
     from contractors.services.archivo_solicitud import bloquear_solicitud_activa
     solicitud = bloquear_solicitud_activa(solicitud_id)
     if ingreso_automatico_aplica(solicitud, politica):
+        if reservar_al_adoptar and not solicitud.evaluacion_jobs.filter(contexto__version_politica=politica.version_politica).exists():
+            raise ValidationError('La politica ya fue adoptada sin reserva; no se reprocesa.')
         return solicitud
     if (not politica.politica_ingreso_evaluable or not _publicada(politica)
             or politica.fecha_vigencia_desde > timezone.localdate()
@@ -186,4 +192,9 @@ def adoptar_politica_ingreso(*, solicitud_id, politica_id, actor, motivo):
         descripcion=motivo.strip(), visible_cliente=False, creado_por=actor,
         metadata={'tipo': 'ADOPCION_INGRESO', 'version_politica': politica.version_politica, 'actor_id': actor.pk},
     )
+    if reservar_al_adoptar:
+        from contractors.services.orquestacion_evaluacion import reservar_evaluacion_automatica
+        job = reservar_evaluacion_automatica(solicitud)
+        if job is None or not job.actor.has_perm('contractors.can_decide_contractor_internal_approval'):
+            raise ValidationError('Reserva no disponible; adopcion no aplicada.')
     return solicitud
