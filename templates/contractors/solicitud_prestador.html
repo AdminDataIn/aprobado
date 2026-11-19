@@ -59,7 +59,7 @@
         {% if solicitud %}<input type="hidden" name="solicitud_id" value="{{ solicitud.id|unlocalize }}">{% endif %}
         {% if errores_solicitud %}
           <div class="alerta" id="resumen-errores-solicitud" role="alert" tabindex="-1">
-            <strong>No pudimos continuar. Revisa los siguientes datos; conservamos lo que escribiste.</strong>
+            <strong>No pudimos continuar. Estas observaciones corresponden al último envío; al continuar se validarán tus correcciones.</strong>
             <ul>
               {% for error in errores_solicitud %}
                 <li><a href="#{{ error.destino }}" data-error-step="{{ error.paso }}" data-error-target="{{ error.destino }}">{{ error.campo }}: {{ error.mensaje }}</a></li>
@@ -346,15 +346,16 @@
             </div>
           </div>
           {% if form.reconciliacion %}
+          <p id="revision-importes-actualizada" hidden>Importes modificados. Al continuar se compararán de nuevo con el documento.</p>
           <section class="authorization-card" aria-labelledby="reconciliacion-title">
-            <h3 id="reconciliacion-title">Revisa las diferencias</h3>
+            <h3 id="reconciliacion-title">Revisa las diferencias del último envío</h3>
             <dl class="contract-analysis-data-list">
               {% for fila in form.reconciliacion %}
                 {% if fila.estado == 'DIFIERE' or fila.estado == 'DIFERENCIA_TEMPORAL' or fila.campo == 'nit_empresa' and fila.estado == 'NO_COMPARABLE' %}
                 <div class="contract-analysis-data-item">
                   <dt>{{ fila.etiqueta }} ({% if fila.fuente == 'OCR_CEDULA_NO_IDENTIDAD' %}Lectura de la cédula{% elif fila.fuente == 'CONVENIO/CONTRATO' %}Empresa y contrato{% else %}Contrato{% endif %})</dt>
                   <dd>Tu formulario: {{ fila.formulario|default:"Sin dato" }}</dd>
-                  <dd>{% if fila.estado == 'DIFERENCIA_TEMPORAL' %}Pagado al corte del documento:{% else %}Documento:{% endif %} {{ fila.documento|default:"Sin dato" }}</dd>
+                  {% if fila.fuente != 'SALDO_DERIVADO_ACTUAL' %}<dd>{% if fila.estado == 'DIFERENCIA_TEMPORAL' %}Pagado al corte del documento:{% else %}Documento:{% endif %} {{ fila.documento|default:"Sin dato" }}</dd>{% endif %}
                   {% if fila.mensaje %}<dd>{{ fila.mensaje }}</dd>{% endif %}
                 </div>
                 {% endif %}
@@ -421,8 +422,8 @@
 </div>
 
 
-<script src="{% static 'js/contract_money.js' %}"></script>
-<script src="{% static 'js/contract_reconciliation.js' %}?v=p04e1-2"></script>
+<script src="{% static 'js/contract_money.js' %}?v=pagado-3"></script>
+<script src="{% static 'js/contract_reconciliation.js' %}?v=pagado-3"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     const formulario = document.getElementById('formularioPrestador');
@@ -963,6 +964,18 @@
       window.ContractReconciliation.refreshDerivedBalance(formulario, data.campos_extraidos || {});
     }
 
+    {% if saldo_derivado_reintento %}
+    window.ContractReconciliation.refreshDerivedBalance(formulario, {
+      valor_pendiente_cobrar: {fuente: 'DERIVADO_DETERMINISTICAMENTE'},
+    }, true);
+    {% endif %}
+    const avisoRevision = document.getElementById('revision-importes-actualizada');
+    if (avisoRevision) camposMonedaContrato.forEach(campo => campo.addEventListener('input', () => {
+      avisoRevision.hidden = false;
+      document.getElementById('reconciliacion-title').closest('section').hidden = true;
+      formulario.elements.namedItem('confirma_discrepancias').checked = false;
+      formulario.elements.namedItem('reconciliacion_token').value = '';
+    }));
     let revisionAnalisis = 0;
     async function ejecutarAnalisisContrato() {
       if (!botonAnalizarContrato || botonAnalizarContrato.disabled || analisisContratoEnCurso) return;

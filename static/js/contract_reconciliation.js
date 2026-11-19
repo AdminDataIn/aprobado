@@ -10,7 +10,7 @@
       field.editable && !field.encontrado && String(getValue(name) ?? '').trim() === ''
     ).map(([, field]) => field.etiqueta);
   }
-  function refreshDerivedBalance(form, fields) {
+  function refreshDerivedBalance(form, fields, resume = false) {
     const pending = form.querySelector('#id_valor_pendiente_cobrar');
     const total = form.querySelector('#id_valor_total_contrato');
     const paid = form.querySelector('#id_valor_pagado_contrato');
@@ -21,14 +21,16 @@
       return;
     }
     const money = root.ContractMoney;
-    if (money.normalize(pending.value) !== money.normalize(evidence.valor)) return;
-    pending.dataset.derivedValue = money.normalize(pending.value);
     const cents = text => {
       const value = money.normalize(text);
       if (value === null || value === '') return null;
       const [integer, fraction = ''] = value.split('.');
       return BigInt(integer) * 100n + BigInt(fraction.padEnd(2, '0'));
     };
+    const initial = cents(pending.value), t0 = cents(total.value), p0 = cents(paid.value);
+    if (initial === null || (initial !== cents(evidence.valor ?? '') &&
+        !(resume && t0 !== null && p0 !== null && initial === t0 - p0))) return;
+    pending.dataset.derivedValue = money.normalize(pending.value);
     const update = () => {
       if (money.normalize(pending.value) !== pending.dataset.derivedValue) return;
       const t = cents(total.value), p = cents(paid.value);

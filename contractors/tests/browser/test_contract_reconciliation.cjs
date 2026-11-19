@@ -10,7 +10,7 @@ let browser;
 before(async () => { browser = await chromium.launch({channel: process.env.CAPTURE_BROWSER_CHANNEL || 'msedge'}); });
 after(async () => { if (browser) await browser.close(); });
 
-function renderedForm(uat = false) {
+function renderedForm(uat = false, retry = false) {
   const python = process.env.DJANGO_TEST_PYTHON || path.resolve(__dirname, '../../../venv/Scripts/python.exe');
   return execFileSync(python, ['-c', `
 import os, sys
@@ -23,11 +23,45 @@ set_urlconf('aprobado_web.urls_contractors')
 from django.template.loader import render_to_string
 from contractors.forms import SolicitudPrestadorForm
 initial = {'numero_documento':'123456789', 'nombres':'Ana', 'empresa':'1', 'cargo':'Abogada'} if sys.argv[1] != 'uat' else {'numero_documento':'1006442329', 'nombres':'CARLOS DANIEL', 'apellidos':'ORTIZ ANGEL'}
+retry = sys.argv[1] == 'retry'
+if retry:
+    initial.update(valor_total_contrato='84000000', valor_pagado_contrato='41600000',
+                   valor_pendiente_cobrar='42400000', reconciliacion_token='previo')
 form = SolicitudPrestadorForm(initial=initial)
+if retry:
+    form.reconciliacion = [dict(campo='valor_pagado_contrato', estado='DIFERENCIA_TEMPORAL')]
 form.fields['empresa'] = forms.ChoiceField(choices=[('','Seleccione'),('1','Empresa elegida'),('2','PRUEBAS DATAIN')])
-print(render_to_string('contractors/solicitud_prestador.html', {'form':form, 'paso_activo':2, 'csrf_token':'x'*32}))
-`, uat ? 'uat' : 'manual'], {encoding:'utf8', env:{...process.env, PYTHONIOENCODING:'utf-8'}});
+print(render_to_string('contractors/solicitud_prestador.html', {'form':form, 'paso_activo':4 if retry else 2, 'saldo_derivado_reintento':retry, 'csrf_token':'x'*32}))
+`, retry ? 'retry' : uat ? 'uat' : 'manual'], {encoding:'utf8', env:{...process.env, PYTHONIOENCODING:'utf-8'}});
 }
+
+test('movil: corrige pago a cero tras POST invalido sin reenviar comparacion ni saldo obsoletos', async t => {
+  const page = await browser.newPage({viewport:{width:390,height:844}, isMobile:true, hasTouch:true});
+  t.after(() => page.close());
+  const html = renderedForm(false, true);
+  await page.route('**/*', route => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/solicitar/') return route.fulfill({contentType:'text/html', body:html});
+    if (pathname.startsWith('/static/')) {
+      const file = path.resolve(__dirname, '../../../static', pathname.slice(8));
+      if (fs.existsSync(file)) return route.fulfill({path:file});
+    }
+    return route.fulfill({status:404, body:''});
+  });
+  await page.goto('https://contratistas.localhost/solicitar/');
+  assert.equal(await page.locator('[name="reconciliacion_token"]').inputValue(), 'previo');
+  await page.locator('#id_valor_pagado_contrato').fill('0');
+  const values = await page.locator('#formularioPrestador').evaluate(form => {
+    const data = new FormData(form);
+    return ['valor_pagado_contrato','valor_pendiente_cobrar','reconciliacion_token'].map(k=>data.getAll(k));
+  });
+  assert.deepEqual(values, [['0'], ['84000000.00'], ['']]);
+  assert.equal(await page.locator('#revision-importes-actualizada').isVisible(), true);
+  assert.equal(await page.locator('#reconciliacion-title').isVisible(), false);
+  await page.locator('#id_valor_pendiente_cobrar').fill('75000000');
+  await page.locator('#id_valor_pagado_contrato').fill('100');
+  assert.equal(await page.locator('[name="valor_pendiente_cobrar"]').inputValue(), '75000000');
+});
 
 function uatResponse() {
   const python = process.env.DJANGO_TEST_PYTHON || path.resolve(__dirname, '../../../venv/Scripts/python.exe');

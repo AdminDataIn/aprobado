@@ -2442,6 +2442,38 @@ class PortalMinimoPrestadoresTest(TestCase):
         })
         return payload
 
+    def test_reintento_pago_cero_no_confirma_saldo_anterior(self):
+        payload = self._payload_calendario_uat(adenda='\nValor pagado: $0.')
+        payload.update(valor_pagado_contrato='41600000', valor_pendiente_cobrar='42400000')
+
+        def enviar():
+            for campo in ('contrato_actual', 'certificado_bancario'):
+                payload[campo].seek(0)
+            return self.client.post('/solicitar/', payload, HTTP_HOST=self.host)
+
+        def estados(form):
+            return {fila['campo']: fila['estado'] for fila in form.reconciliacion}
+
+        uno = enviar()
+        self.assertEqual(uno.status_code, 200)
+        form = uno.context['form']
+        self.assertEqual(estados(form)['valor_pagado_contrato'], 'DIFERENCIA_TEMPORAL')
+        payload.update(valor_pagado_contrato='0', confirma_discrepancias='on',
+                       reconciliacion_token=form['reconciliacion_token'].value())
+        dos = enviar()
+        self.assertEqual(dos.status_code, 200)
+        form = dos.context['form']
+        self.assertEqual(estados(form)['valor_pagado_contrato'], 'COINCIDE')
+        self.assertEqual(estados(form)['valor_pendiente_cobrar'], 'DIFIERE')
+        self.assertFalse(ContractorApplication.objects.exists())
+        payload.update(valor_pendiente_cobrar='84000000', confirma_discrepancias='', reconciliacion_token='')
+        tres = enviar()
+        self.assertEqual(tres.status_code, 302, tres.context and tres.context['form'].errors)
+        solicitud = ContractorApplication.objects.get()
+        self.assertEqual(solicitud.valor_pagado_contrato, 0)
+        self.assertEqual(solicitud.valor_pendiente_cobrar, solicitud.valor_total_contrato)
+        self.assertFalse(solicitud.metadata_analisis_contractual['reconciliacion']['confirmada'])
+
     def test_uat_datos_extraidos_y_derivados_continuan_a_simulador(self):
         payload = self._payload_contrato_uat()
         response = self.client.post('/solicitar/', payload, HTTP_HOST=self.host)

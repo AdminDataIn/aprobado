@@ -39,6 +39,15 @@ def reconciliar(metadata, datos, *, sesion=None):
                                  'el calendario no demuestra pagos efectivos.'))
         if fila['campo'] == 'valor_pendiente_cobrar' and saldo_es_derivado(metadata):
             fila.update(estado='NO_COMPARABLE', fuente='SALDO_DERIVADO_ACTUAL')
+            try:
+                total, pagado, saldo = (Decimal(str(datos.get(c))) for c in
+                    ('valor_total_contrato', 'valor_pagado_contrato', 'valor_pendiente_cobrar'))
+                if 0 <= pagado <= total and saldo != total - pagado:
+                    fila.update(estado='DIFIERE', documento='', mensaje=(
+                        f'Saldo declarado: {saldo}. Total menos pagado actual: {total - pagado}. '
+                        'Corrige el saldo o confirma la diferencia para revisión.'))
+            except (ArithmeticError, ValueError):
+                pass  # Incomplete preview; the form validates the submitted amounts.
     filas.append(comparar('titular', ' '.join(filter(None, (datos.get('nombres'), datos.get('apellidos')))),
                           extraidos.get('titular')))
     coincide = metadata.get('identidad', {}).get('documento_coincide')

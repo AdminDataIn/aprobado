@@ -53,10 +53,13 @@
     input.addEventListener('input', sync);
     input.addEventListener('change', sync);
     input.addEventListener('blur', format);
-    input.addEventListener('focus', () => {
+    input.addEventListener('beforeinput', () => {
+      if (!input.value.startsWith('$')) return;
       const canonical = sync();
       if (canonical === null || canonical === '') return;
       const old = input.value;
+      // Full replacement needs no remapping; keep the browser's selection intact.
+      if (input.selectionStart === 0 && input.selectionEnd === old.length) return;
       const decimalIndex = canonical.includes('.') ? Math.max(old.lastIndexOf('.'), old.lastIndexOf(',')) : -1;
       const position = (end) => Array.from(old.slice(0, end)).filter((char, index) =>
         /\d/.test(char) || index === decimalIndex).length;

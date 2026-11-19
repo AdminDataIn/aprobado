@@ -42,7 +42,7 @@ from contractors.services.horizonte_simulacion import (
     admite_estimacion_sin_calendario, horizonte_para_solicitud, plazo_maximo_respaldado,
 )
 from contractors.validators import documento_numerico
-from contractors.services.reconciliacion_contractual import confirmar_reconciliacion, reconciliar
+from contractors.services.reconciliacion_contractual import confirmar_reconciliacion, reconciliar, saldo_es_derivado
 from contractors.services.extraccion_campos import ESQUEMA
 from contractors.services.continuidad_solicitud import bloquear_solicitante, solicitud_en_proceso
 from contractors.services.solicitud import (
@@ -400,6 +400,7 @@ def _contexto_continuidad_solicitud(request, form, solicitud, *, paso_error_gene
         'archivos_sin_guardar': any(campo in request.FILES for campo in
                                    ('contrato_actual', 'certificado_bancario')),
         'analisis_contractual_vigente': analisis_vigente,
+        'saldo_derivado_reintento': saldo_es_derivado(getattr(form, 'metadata_contractual', {}) or {}),
     }
 
 
