@@ -56,9 +56,9 @@ class FixtureOrquestacion(FixturePipelineFinanciero):
         self.addCleanup(self.broker.stop)
 
     @contextmanager
-    def proveedores(self, *, hc='13', tx='02', timeout=False):
+    def proveedores(self, *, hc='13', tx='02', timeout=False, score=900):
         decisor = payload_pn(hc=hc, tx=tx, informacion=True)
-        decisor['content']['respuesta']['informacionRiesgo']['score'] = '900'
+        decisor['content']['respuesta']['informacionRiesgo']['score'] = str(score)
         hdc = deepcopy(hdc_fixtures.HDCPlusNormalizacionDualTest._payload_hdc())
         with patch('contractors.datacredito.adapter.consultar_midecisor_persona_natural', return_value=ResultadoMiDecisorRawSeguro(
             status_code=200, codigo_funcional=f'HC{hc}_TX{tx}', raw_sanitizado=decisor,

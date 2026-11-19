@@ -21,6 +21,7 @@ from contractors.services.evaluacion_formal import (
 )
 from contractors.services.evaluacion_versionado import construir_clave_idempotencia, construir_version_datos
 from contractors.services.solicitud import solicitud_tiene_documentos_obligatorios
+from contractors.politica_decision import VERSION_POLITICA as VERSION_DECISION
 from integrations.datacredito.readiness import evaluar_readiness_datacredito
 from integrations.datacredito.settings import obtener_configuracion_datacredito
 
@@ -215,8 +216,12 @@ def ejecutar_job(job_id):
         logger.warning('prestadores_ejecucion_incierta')
     else:
         auditoria_id = resultado.auditoria.pk
-        estado = (job.Estado.FINALIZADA if resultado.auditoria.resultado == PredecisionPrestadorAudit.Resultado.PREAPROBADO_READ_ONLY
-                  and not resultado.en_proceso else job.Estado.REQUIERE_REVISION)
+        if resultado.auditoria.version_politica == VERSION_DECISION:
+            from contractors.services.decision_definitiva import APROBADO, RECHAZADO
+            concluida = resultado.decision_definitiva in {APROBADO, RECHAZADO}
+        else:
+            concluida = resultado.auditoria.resultado == PredecisionPrestadorAudit.Resultado.PREAPROBADO_READ_ONLY
+        estado = job.Estado.FINALIZADA if concluida and not resultado.en_proceso else job.Estado.REQUIERE_REVISION
         codigo = 'evaluacion_en_curso' if resultado.en_proceso else ''
     EvaluacionPrestadorJob.objects.filter(pk=job.pk, estado=job.Estado.EN_EJECUCION, generacion=job.generacion).update(
         estado=estado, codigo_operativo=codigo, auditoria_id=auditoria_id,

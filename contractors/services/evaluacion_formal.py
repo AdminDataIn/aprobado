@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import timedelta
 import hashlib
 
@@ -43,6 +43,7 @@ class ResultadoEvaluacionFormalPrestador:
     reutilizada: bool = False
     en_proceso: bool = False
     requiere_reconfirmacion: bool = False
+    decision_definitiva: str | None = None
 
 
 def evaluar_solicitud_prestador(
@@ -173,7 +174,8 @@ def _integrar_decision_final(resultado, actor):
     if (actor is not None and not resultado.en_proceso
             and resultado.auditoria.version_politica == VERSION_POLITICA):
         from contractors.services.decision_definitiva import decidir_solicitud_prestador
-        decidir_solicitud_prestador(resultado.auditoria, actor=actor)
+        decision = decidir_solicitud_prestador(resultado.auditoria, actor=actor)
+        return replace(resultado, decision_definitiva=decision.resultado)
     return resultado
 
 
