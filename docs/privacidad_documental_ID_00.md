@@ -114,7 +114,54 @@ equivalente saneamiento; no suponer que el filtro Django los controla. Verificar
 error logs mediante fallos de prueba, pues errores de upstream pueden incluir la
 URI aunque access_log este saneado. Esto es puerta UAT, no seguridad ya demostrada.
 
-## Secuencia manual de despliegue seguro (no ejecutada)
+### Candidato focal 2026-11-21: minimizacion de access log
+
+El VPS en `80063b1846fa89e369391c62d6e5704fb8be7404` ya tenia el bloqueo
+general de `/media/`, las dos excepciones publicas y `/_protected_legacy/`
+interno en los cuatro hosts. `DEBUG=False` y X-Accel activo. Las 16 sondas
+anonimas, con nombres sinteticos y sin objetos reales, confirmaron 301 HTTP
+y 404 no-store HTTPS para media, ruta interna y endpoint documental. Esto
+no demuestra ni excluye accesos indebidos historicos. No se solicito un
+documento personal. La configuracion heredaba `combined` y las cuatro
+sondas del endpoint documental quedaron registradas con su query de prueba.
+
+El candidato corrige ese hallazgo sin cambiar almacenamiento ni respuestas:
+
+1. Instalar `aprobado_documental_log_http.conf` una sola vez bajo `http`.
+2. Incluir `aprobado_documental_log_server.conf` en los cuatro bloques HTTPS
+   autorizados y en su bloque de redireccion HTTP. Verificar la ruta del
+   access log, el formato heredado y que no haya un override de `access_log`
+   en rutas documentales. Conservar el `off` existente para media sensible y
+   X-Accel. No tocar staging, otros hosts, webhooks ni el servicio Django.
+3. Con respaldo de esos bloques, ejecutar `nginx -t` y recargar solo con
+   autorizacion. Por host, verificar con una marca sintetica que haya un
+   registro `ID00` sin ruta ni query. Usar una solicitud ordinaria de control:
+   debe conservar `combined`. Confirmar entrega autenticada de una referencia
+   sintetica existente, redireccion interna y acceso publico de marketplace.
+4. Si falla, retirar los includes nuevos y mantener los bloqueos de media y
+   permisos existentes. No borrar logs ni evidencia historica. Auditar
+   error logs, permisos y retencion por separado si el postcheck lo exige.
+
+La entrega protegida, el token temporal y los permisos no cambian. El
+formato redactado no purga URLs ya presentes en logs o caches.
+
+Validado: 71/71 regresiones PostgreSQL de `test_documentos_privados` y
+`test_captura_documental`; Django check limpio. Nginx 1.24.0 local: sintaxis,
+seis denegaciones con fixtures, entrega X-Accel intacta y sin cache,
+marketplace publico y separacion/redaccion de logs aprobadas. El upstream
+de Nginx para esta prueba es una simulacion; los permisos reales se prueban
+en Django. No se probo camara fisica ni descarga autenticada en produccion.
+
+Reproduccion Nginx desde la raiz del candidato, en PowerShell:
+
+```powershell
+$config = (Resolve-Path 'docs/nginx').Path
+docker run --rm --network none --tmpfs /var/log/nginx `
+  --mount "type=bind,source=$config,target=/id00,readonly" `
+  --entrypoint /bin/sh nginx:1.24.0-alpine /id00/tests/id00.sh
+```
+
+## Secuencia manual de despliegue seguro (historica)
 
 1. Revisar diff exclusivo ID-00 y dependencia ID-01A. Backup de config y evidencia
    de rutas/permissions; no copiar documentos a repositorio/logs. Validar en clon
