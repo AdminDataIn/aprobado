@@ -114,7 +114,7 @@ equivalente saneamiento; no suponer que el filtro Django los controla. Verificar
 error logs mediante fallos de prueba, pues errores de upstream pueden incluir la
 URI aunque access_log este saneado. Esto es puerta UAT, no seguridad ya demostrada.
 
-### Candidato focal 2026-11-21: minimizacion de access log
+### Candidato focal 2026-11-21: minimizacion de access log por host y ruta
 
 El VPS en `80063b1846fa89e369391c62d6e5704fb8be7404` ya tenia el bloqueo
 general de `/media/`, las dos excepciones publicas y `/_protected_legacy/`
@@ -125,40 +125,105 @@ no demuestra ni excluye accesos indebidos historicos. No se solicito un
 documento personal. La configuracion heredaba `combined` y las cuatro
 sondas del endpoint documental quedaron registradas con su query de prueba.
 
-El candidato corrige ese hallazgo sin cambiar almacenamiento ni respuestas:
+`b9779ed5de768ddf77bfd979e940af8dec8dbe26` no discriminaba el alias
+`www.aprobado.com.co` en el redirect HTTP compartido. El candidato corregido
+filtra por host literal y clase documental de la URI normalizada. Conserva
+`combined` para `www` y trafico ordinario, y los `access_log off` ya vigentes
+para media sensible y X-Accel. No cambia respuestas, permisos, proxies,
+redirecciones, certificados ni archivos. El registro `ID00` incluye ID de
+solicitud generado, metodo limitado, estado, tiempo, host y clase; no incluye
+URI, args, token, IP ni headers del cliente.
 
-1. Instalar `aprobado_documental_log_http.conf` una sola vez bajo `http`.
-2. Incluir `aprobado_documental_log_server.conf` en los cuatro bloques HTTPS
-   autorizados y en su bloque de redireccion HTTP. Verificar la ruta del
-   access log, el formato heredado y que no haya un override de `access_log`
-   en rutas documentales. Conservar el `off` existente para media sensible y
-   X-Accel. No tocar staging, otros hosts, webhooks ni el servicio Django.
-3. Con respaldo de esos bloques, ejecutar `nginx -t` y recargar solo con
-   autorizacion. Por host, verificar con una marca sintetica que haya un
-   registro `ID00` sin ruta ni query. Usar una solicitud ordinaria de control:
-   debe conservar `combined`. Confirmar entrega autenticada de una referencia
-   sintetica existente, redireccion interna y acceso publico de marketplace.
-4. Si falla, retirar los includes nuevos y mantener los bloqueos de media y
-   permisos existentes. No borrar logs ni evidencia historica. Auditar
-   error logs, permisos y retencion por separado si el postcheck lo exige.
+El vhost real tiene un redirect HTTP compartido por cinco nombres, un HTTPS
+exclusivo de `www` que redirige al apex y cuatro HTTPS de aplicacion. Hereda
+`combined` y no hay override de servidor ni formatos adicionales. El plan se
+contrasto en memoria con `/etc/nginx/sites-enabled/aprobado`: al retirar las
+cinco lineas de include se recuperan los bytes originales; el bloque HTTPS de
+`www` no cambia. Huella del origen leido, confirmable antes de instalar:
+`f6fea0d371577b4d801ed09a3dcfbefe477c8289a9cad6bf4bc706b0eb299f19`.
 
-La entrega protegida, el token temporal y los permisos no cambian. El
-formato redactado no purga URLs ya presentes en logs o caches.
+#### Gate y procedimiento de la ventana
 
-Validado: 71/71 regresiones PostgreSQL de `test_documentos_privados` y
-`test_captura_documental`; Django check limpio. Nginx 1.24.0 local: sintaxis,
-seis denegaciones con fixtures, entrega X-Accel intacta y sin cache,
-marketplace publico y separacion/redaccion de logs aprobadas. El upstream
-de Nginx para esta prueba es una simulacion; los permisos reales se prueban
-en Django. No se probo camara fisica ni descarga autenticada en produccion.
+Listo para autorizacion de **minimizacion de access log**. El E2E autenticado
+productivo permanece pendiente si no existe un archivo sintetico propio y
+sesiones autorizadas. No crear datos en produccion ni usar usuarios reales
+para habilitar este cambio. La disponibilidad y roles se acreditaron con
+fixtures aislados; eso no se presenta como un E2E autenticado del VPS.
 
-Reproduccion Nginx desde la raiz del candidato, en PowerShell:
+1. Revalidar base `80063b1846fa89e369391c62d6e5704fb8be7404` en VPS y remoto,
+   inventario, candidato limpio, sin operaciones Git ni cambios concurrentes.
+   Revisar `nginx -T` sin imprimir configuracion completa. Confirmar el link
+   publicado al vhost, la huella indicada, ambos destinos nuevos ausentes y
+   el `combined` heredado. Si cambia la topologia o se agrega un override,
+   detenerse. No actualizar otro vhost.
+2. Acreditar respaldo protegido y revalidar sus huellas contra los archivos
+   presentes en la ventana. Referencia de preflight: `/root/backups/id00-nginx-20261121T224440Z-qp85knny/nginx-id00.tar`,
+   SHA-256 `9c8b251ee4c1daf3c326e99d9f8faad79f9fdca5841bf4d01f21abdd3419c5ef`.
+   Contiene vhost, enlace publicado, `nginx.conf` e include de proteccion;
+   `manifest.json` registra metadatos y ausencia de los nuevos snippets.
+   Archivos `0600` en directorio `0700`. Si no coincide, detenerse antes de publicar.
+3. Publicar solo el SHA corregido a `release/prestadores-prod-2026-08-28`
+   sin force-push. En VPS actualizar al mismo SHA por fast-forward. No hay
+   migraciones, configuracion Django, collectstatic ni reinicios de la app.
+4. Con el SHA exacto comprobado, copiar los dos snippets al destino aprobado
+   (`/etc/nginx/conf.d/aprobado_documental_log_http.conf` y
+   `/etc/nginx/snippets/aprobado_documental_log_server.conf`, `0644 root:root`),
+   solo si siguen ausentes. El primer archivo lo carga el glob de `http`.
+   Preparar la copia del vhost con `id00_preparar_vhost.py` como se muestra
+   abajo, verificar cinco includes y metadatos; cambiar el archivo regular
+   de `sites-available` sin tocar el enlace de `sites-enabled`. Ejecutar
+   `nginx -t`; solo si pasa, `systemctl reload nginx` para relevo gradual de
+   workers. No reiniciar otros servicios ni tocar certificados o `.env`.
+5. Por host, probar HTTP `301` al mismo HTTPS, y HTTPS `404` con `no-store`
+   para `HEAD` sintetico anonimo en `/media/`, `/_protected_legacy/` y
+   `/documentos/` (objeto imposible `0`, sin resolver expedientes). Una query
+   de prueba no sensible en `/documentos/` no debe aparecer en los access/error
+   logs de esas sondas. Correlacionar por ventana, host, metodo, clase y estado
+   `ID00`; una ruta ordinaria de control debe conservar `combined`. Repetir
+   el control sintetico de `www`: HTTP al mismo host, HTTPS al apex, `combined`
+   en ambos. Validar salud publica de Libranza/Prestadores, ausencia de nuevos
+   5xx relacionados y registrar E2E autenticado productivo pendiente si no
+   hay fixture autorizado. No probar con tokens reales o expedientes existentes.
+6. Ante fallo, detener. Restaurar solo `sites-available/aprobado` desde el
+   respaldo a una ruta temporal con huella, propietario y modo validados;
+   sustituir de forma atomica y apartar solo los dos snippets nuevos. Ejecutar
+   `nginx -t`. Recargar gradualmente solo si el cambio ya se habia aplicado al
+   runtime. No restaurar el resto del arbol Nginx sobre cambios ajenos ni
+   reescribir Git. Preservar la proteccion previa de media y los logs.
+
+Preparacion de la copia dentro de un directorio de staging del mismo
+filesystem de `/etc/nginx/sites-available`, durante la ventana autorizada:
+
+```bash
+src=/etc/nginx/sites-available/aprobado
+tmp=$(mktemp -d /etc/nginx/sites-available/.id00.XXXXXX)
+python3 -B docs/nginx/id00_preparar_vhost.py "$src" "$tmp/aprobado" \
+  --sha256-base f6fea0d371577b4d801ed09a3dcfbefe477c8289a9cad6bf4bc706b0eb299f19
+chown --reference="$src" "$tmp/aprobado"
+chmod --reference="$src" "$tmp/aprobado"
+```
+
+Quedan pendientes el tratamiento de logs historicos y la evaluacion de
+error logs en escenarios no cubiertos por las sondas. No reescribir, purgar
+ni rotar manualmente registros. Archivos Nginx activos `0640`, `www-data:adm`,
+rotacion diaria y 14 rotaciones configuradas. El piloto no acredita que los
+historicos nunca contuvieran URLs privadas.
+
+#### Validacion aislada
+
+71/71 regresiones PostgreSQL de `test_documentos_privados` y
+`test_captura_documental`; Django check limpio. Nginx 1.24.0 sin red externa
+probo cuatro hosts y el alias, HTTP y HTTPS con TLS sintetico, marcadores
+sinteticos en URI/queries, `combined` ordinario, denegaciones y entrega
+X-Accel con misma huella y `no-store`. La simulacion del upstream prueba el
+transporte Nginx; los permisos reales se prueban por separado en Django.
+Se restauro la configuracion base en el contenedor y se volvieron a probar
+los redirects, el acceso protegido y los logs. No se hizo reload productivo.
+
+Reproduccion desde el worktree, con Docker, Nginx local y el venv del proyecto:
 
 ```powershell
-$config = (Resolve-Path 'docs/nginx').Path
-docker run --rm --network none --tmpfs /var/log/nginx `
-  --mount "type=bind,source=$config,target=/id00,readonly" `
-  --entrypoint /bin/sh nginx:1.24.0-alpine /id00/tests/id00.sh
+python -B docs/nginx/tests/id00_local.py
 ```
 
 ## Secuencia manual de despliegue seguro (historica)
