@@ -1,5 +1,6 @@
 import tempfile
 from datetime import timedelta
+from io import BytesIO
 from pathlib import Path
 from queue import Queue
 from threading import Barrier, Thread
@@ -16,6 +17,7 @@ from django.db import close_old_connections, connection, transaction
 from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 
 from contractors.models import ContractorApplication, ContractorApplicationDocument
 from gestion_creditos.models import (
@@ -67,6 +69,33 @@ class CapturaFixture:
 
 @override_settings(ALLOWED_HOSTS=['testserver', 'localhost', 'contratistas.localhost'])
 class CapturaDocumentalTest(CapturaFixture, TestCase):
+    def test_captura_recortada_orientada_sin_exif_y_reintento_idempotente(self):
+        self.canjear()
+        original = Image.new('RGB', (320, 512), 'white')
+        original.paste('blue', (0, 0, 320, 256))
+        exif = Image.Exif()
+        exif[274] = 6  # Store physically portrait; display rotated clockwise.
+        exif[270] = 'sensitive-camera-data'
+        encoded = BytesIO()
+        original.save(encoded, 'JPEG', exif=exif)
+
+        def recibir():
+            return servicio.recibir_captura(**self.params, vinculo='browser', lado='FRONTAL',
+                archivo=SimpleUploadedFile('recortada.jpg', encoded.getvalue(), content_type='image/jpeg'))
+
+        first = recibir()
+        self.assertEqual(recibir().pk, first.pk)
+        self.assertEqual(self.sesion.capturas.count(), 1)
+        self.assertEqual(self.sesion.eventos.filter(evento='FRONTAL_RECIBIDO').count(), 1)
+        with first.archivo.open() as stored, Image.open(stored) as photo:
+            self.assertEqual(photo.size, (512, 320))
+            self.assertFalse(photo.getexif())
+            self.assertNotIn('exif', photo.info)
+            r, g, b = photo.getpixel((400, 80))
+            self.assertGreater(b, max(r, g) + 100)
+        self.cargar('TRASERA', 'blue')
+        self.assertEqual(self.sesion.capturas.filter(activo=True).count(), 2)
+
     def test_finalizada_sobrevive_ttl_lectura_consumo_y_purga(self):
         for producto in ('LIBRANZA', 'PRESTADORES'):
             for vencida in (False, True):
@@ -160,8 +189,8 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
                                  'data-camera-instructions', 'data-confirm-quality', 'data-rotate'):
                     self.assertContains(response, atributo)
                 self.assertNotContains(response, 'type="file"')
-                self.assertContains(response, 'captura_documental.js?v=p04a-1')
-                self.assertContains(response, 'captura_quality.js?v=id01d-2')
+                self.assertContains(response, 'captura_documental.js?v=id01f-1')
+                self.assertContains(response, 'captura_quality.js?v=id01f-1')
                 self.assertContains(response, 'jsfeat-0.0.8.min.js')
                 self.assertFalse(Credito.objects.exists())
                 self.assertFalse(CreditoLibranza.objects.exists())
@@ -172,7 +201,7 @@ class CapturaDocumentalTest(CapturaFixture, TestCase):
         pagina = cliente.get(reverse('libranza:solicitar'))
         self.assertEqual(pagina.status_code, 200)
         for elemento in ('data-capture-qr', 'data-handoff-result', 'data-reintentar-estado',
-                         'qrcode-generator-1.4.4.js', 'captura_documental.js?v=p04a-1'):
+                         'qrcode-generator-1.4.4.js', 'captura_documental.js?v=id01f-1'):
             self.assertContains(pagina, elemento)
         url = reverse('captura:crear', args=['LIBRANZA'])
         cantidad = Sesion.objects.count()

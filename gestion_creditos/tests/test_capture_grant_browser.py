@@ -11,8 +11,11 @@ from django.conf import settings
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.core.cache import cache
 from django.test import Client, override_settings
+from PIL import Image
 
-from gestion_creditos.models import Credito, CreditoLibranza, SesionCapturaDocumental, EventoCapturaDocumental
+from gestion_creditos.models import (
+    CapturaDocumentoIdentidad, Credito, CreditoLibranza, EventoCapturaDocumental, SesionCapturaDocumental,
+)
 from gestion_creditos.tests.test_captura_documental import CapturaFixture
 
 
@@ -52,5 +55,17 @@ class CaptureGrantBrowserTest(CapturaFixture, StaticLiveServerTestCase):
         self.assertIn('cross-device HTTPS OK', result.stdout)
         self.assertEqual(SesionCapturaDocumental.objects.filter(estado='FINALIZADA').count(), 1)
         self.assertEqual(EventoCapturaDocumental.objects.filter(evento='FINALIZACION_DELEGADA').count(), 1)
+        photos = CapturaDocumentoIdentidad.objects.filter(activo=True)
+        self.assertEqual(set(photos.values_list('lado', flat=True)), {'FRONTAL', 'TRASERA'})
+        self.assertEqual(len(set(photos.values_list('hash_archivo', flat=True))), 2)
+        for photo in photos:
+            with photo.archivo.open() as stored, Image.open(stored) as image:
+                self.assertEqual(image.format, 'JPEG')
+                self.assertFalse(image.getexif())
+                self.assertTrue(810 < image.width < 900 and 510 < image.height < 600)
+                if photo.lado == 'FRONTAL' and (fixture := os.environ.get('CAPTURE_OCR_SYNTHETIC_DESTINATION')):
+                    stored.seek(0)
+                    with Path(fixture).open('xb') as output:
+                        output.write(stored.read())  # Generated test chart only, never a real identity capture.
         self.assertFalse(Credito.objects.exists())
         self.assertFalse(CreditoLibranza.objects.exists())

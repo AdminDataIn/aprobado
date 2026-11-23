@@ -10,18 +10,23 @@ function drawDocument(canvas, scene = 'sharp') {
     for (let row = 0; row < 5; row++) for (let col = 0; col < 12; col++) c.fillRect(w * (.07 + col * .075), h * (.35 + row * .052), w * .057, h * .039);
     return;
   }
-  let dw = Math.min(w * .75, h * .5 * 1.586), dh = dw / 1.586;
-  if (scene.includes('small')) { dw *= .4; dh *= .4; }
+  let dw = Math.round(Math.min(w * .75, h * .5 * 1.586));
+  if (scene.includes('small')) dw = Math.round(dw * .4);
+  const dh = Math.round(dw / 1.586);
   const x = scene === 'outside' || scene === 'cut-left' ? -dw * .15
-    : scene === 'cut-right' ? w - dw * .85 : (w - dw) / 2;
+    : scene === 'cut-right' ? w - dw * .85 : Math.round((w - dw) / 2);
   const y = scene === 'offcenter' ? h * .1 : scene === 'cut-top' ? -dh * .15
-    : scene === 'cut-bottom' ? h - dh * .85 : (h - dh) / 2;
+    : scene === 'cut-bottom' ? h - dh * .85 : Math.round((h - dh) / 2);
   if (scene === 'alternative') {
     c.fillStyle = '#ece6d3'; c.fillRect(w * .03, h * .02, w * .94, w * .94 / 1.586);
   }
+  if (scene === 'ambiguous') {
+    const outer = dw * 1.23, tall = outer / 1.586;
+    c.fillStyle = '#c2bdb1'; c.fillRect((w - outer) / 2, (h - tall) / 2, outer, tall);
+  }
   c.save();
   if (scene.startsWith('rotated')) {
-    c.translate(w / 2, h / 2); c.rotate(Math.PI / 2); c.translate(-w / 2, -h / 2);
+    c.setTransform(0, 1, -1, 0, (w + h) / 2, (h - w) / 2);
   }
   c.fillStyle = scene === 'white-card' ? '#ffffff' : '#ece6d3'; c.fillRect(x, y, dw, dh);
   if (scene === 'textureless') {
@@ -44,11 +49,21 @@ function drawDocument(canvas, scene = 'sharp') {
     c.fillStyle = '#151515';
     for (let offset = 0; offset < dw; offset += 18) c.fillRect(x + offset, y, 9, dh);
   }
+  if (scene === 'glare') {
+    c.fillStyle = '#ffffff'; c.fillRect(x + dw * .40, y + dh * .08, dw * .54, dh * .70);
+  }
+  if (scene === 'ocr') {
+    c.fillStyle = '#ece6d3'; c.fillRect(x + dw * .30, y + dh * .21, dw * .68, dh * .59);
+    c.fillStyle = '#142127'; c.font = `bold ${Math.round(dh * .105)}px sans-serif`;
+    c.fillText('DOCUMENTO', x + dw * .32, y + dh * .42);
+    c.fillText('99000123', x + dw * .32, y + dh * .67);
+  }
   c.restore();
   if (scene.includes('blur')) {
-    const copy = document.createElement('canvas'); copy.width = w; copy.height = h;
-    copy.getContext('2d').drawImage(canvas, 0, 0);
-    c.filter = `blur(${Math.max(w, h) / 65}px)`; c.drawImage(copy, 0, 0); c.filter = 'none';
+    // Downsample then interpolate so the fixture does not depend on Canvas filter support.
+    const copy = document.createElement('canvas'); copy.width = Math.round(w / 38); copy.height = Math.round(h / 38);
+    copy.getContext('2d').drawImage(canvas, 0, 0, copy.width, copy.height);
+    c.drawImage(copy, 0, 0, w, h);
     copy.width = copy.height = 0;
   }
   if (scene === 'dim') {

@@ -23,7 +23,9 @@ OCR_TASK = 'gestion_creditos.tasks.procesar_ocr_documental_task'
 
 class OCRRoutingTest(SimpleTestCase):
     def test_solo_ocr_tiene_ruta_dedicada(self):
-        self.assertEqual(settings.CELERY_TASK_ROUTES, {OCR_TASK: {'queue': 'ocr_documental'}})
+        dedicated = {task for task, route in settings.CELERY_TASK_ROUTES.items()
+                     if route.get('queue') == 'ocr_documental'}
+        self.assertEqual(dedicated, {OCR_TASK})
         route = production_app.amqp.router.route({}, OCR_TASK)
         self.assertEqual(route['queue'].name, 'ocr_documental')
 

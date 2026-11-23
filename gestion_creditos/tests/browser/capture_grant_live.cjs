@@ -26,6 +26,9 @@ const drawDocument = require('./document_fixture.cjs');
     const pc = await browser.newContext({ignoreHTTPSErrors: true});
     const mobile = await browser.newContext({ignoreHTTPSErrors: true, permissions: ['camera'],
       viewport: {width: 390, height: 844}, isMobile: true, hasTouch: true});
+    for (const context of [pc, mobile]) {
+      await context.route(/^https?:\/\//, route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+    }
     await pc.addCookies([{name: config.sessionName, value: config.pcSession, url: origin, httpOnly: true, secure: true}]);
     assert.equal((await mobile.cookies()).length, 0);
     const desktop = await pc.newPage(), phone = await mobile.newPage();
@@ -34,8 +37,9 @@ const drawDocument = require('./document_fixture.cjs');
     await phone.addInitScript(() => {
       navigator.mediaDevices.getUserMedia = async () => {
         const canvas = document.createElement('canvas'); canvas.width = 1080; canvas.height = 1920;
-        drawDocumentFixture(canvas);
-        const timer = setInterval(() => drawDocumentFixture(canvas), 100);
+        const draw = () => drawDocumentFixture(canvas, document.querySelector('[data-camera-step]').textContent.includes('Posterior') ? 'sharp' : 'ocr');
+        draw();
+        const timer = setInterval(draw, 100);
         const stream = canvas.captureStream(10), track = stream.getVideoTracks()[0], stop = track.stop.bind(track);
         track.stop = () => { clearInterval(timer); stop(); canvas.width = canvas.height = 0; };
         return stream;

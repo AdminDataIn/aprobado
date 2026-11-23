@@ -369,14 +369,15 @@ async function cameraSetup(t, opts = {}) {
   await page.addInitScript({content: `window.drawDocumentFixture = ${drawDocument.toString()};`});
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => logs.push(message.text()));
-  await page.addInitScript(({failure, delayed, nativeMode, photoWidth = 3200, photoHeight = 2000, caps, constraintFailure, largeBytes, portrait, qualityScene}) => {
+  await page.addInitScript(({failure, delayed, nativeAvailable, caps, constraintFailure, portrait, qualityScene, lowResolution}) => {
     window.cameraStats = {calls: [], tracks: [], stops: 0, constraints: [], encodes: [], nativeCalls: 0};
     document.addEventListener('DOMContentLoaded', () => {
       // Existing camera tests isolate acquisition; quality tests below run the real checker.
-      if (!qualityScene) window.DocumentCaptureQuality = {analyze: async () => ({decision: 'pass'})};
+      if (!qualityScene) window.DocumentCaptureQuality = {analyzeSource: async (_, w, h, {expected}) =>
+        ({decision: 'pass', region: expected, document: expected})};
       else {
-        const analyze = DocumentCaptureQuality.analyze;
-        window.DocumentCaptureQuality = {analyze: async (...args) => {
+        const analyze = DocumentCaptureQuality.analyzeSource;
+        window.DocumentCaptureQuality = {analyzeSource: async (...args) => {
           const result = await analyze(...args); cameraStats.quality = result; return result;
         }};
       }
@@ -386,20 +387,8 @@ async function cameraSetup(t, opts = {}) {
       cameraStats.encodes.push([this.width, this.height, ...args]);
       return encode.call(this, callback, ...args);
     };
-    window.ImageCapture = nativeMode ? class {
-      async takePhoto() {
-        cameraStats.nativeCalls++;
-        if (nativeMode === 'fail') throw new Error('PRIVATE-TECHNICAL-ERROR');
-        if (nativeMode === 'delayed') await new Promise(resolve => { window.allowPhoto = resolve; });
-        const canvas = document.createElement('canvas'); canvas.width = photoWidth; canvas.height = photoHeight;
-        const ctx = canvas.getContext('2d'); ctx.fillStyle = '#08a4a4'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        if (qualityScene) window.drawDocumentFixture(canvas, qualityScene);
-        let blob = await new Promise(resolve => encode.call(canvas, resolve, 'image/jpeg', .96));
-        canvas.width = canvas.height = 0;
-        if (largeBytes) blob = new Blob([blob, new Uint8Array(8 * 1024 * 1024)], {type: 'image/jpeg'});
-        cameraStats.nativeSize = blob.size;
-        return blob;
-      }
+    window.ImageCapture = nativeAvailable ? class {
+      async takePhoto() { cameraStats.nativeCalls++; return new Blob(['not used'], {type: 'image/heic'}); }
     } : undefined;
     if (failure === 'unsupported') {
       Object.defineProperty(navigator, 'mediaDevices', {value: undefined}); return;
@@ -412,7 +401,8 @@ async function cameraSetup(t, opts = {}) {
       let stream;
       try {
         if (portrait || qualityScene) {
-          const canvas = document.createElement('canvas'); canvas.width = 1080; canvas.height = 1920;
+          const canvas = document.createElement('canvas');
+          canvas.width = lowResolution ? 360 : 1080; canvas.height = lowResolution ? 640 : 1920;
           const ctx = canvas.getContext('2d');
           window.syntheticTimer = setInterval(() => {
             if (qualityScene) { window.drawDocumentFixture(canvas, qualityScene); return; }
@@ -537,26 +527,36 @@ test('visor dedicado y marco dentro del video real; rotacion y stream vertical',
   await ui.page.setViewportSize({width: 390, height: 844}); await ui.waitStep('live');
   assertFrame(await frameGeometry(ui.page));
 });
-for (const nativeMode of [undefined, 'fail', 'success']) {
-  test('captura intrinseca ImageCapture/fallback: ' + (nativeMode || 'ausente'), async t => {
-    const ui = await cameraSetup(t, {nativeMode}); await ui.openCamera();
-    const dimensions = await ui.page.locator('video').evaluate(v => [v.videoWidth, v.videoHeight]);
-    await ui.photo(); await ui.stopped();
-    const actual = await ui.page.locator('[data-camera-preview]').evaluate(img => [img.naturalWidth, img.naturalHeight]);
-    assert.deepEqual(actual, nativeMode === 'success' ? [3200, 2000] : dimensions);
-    assert.equal(await ui.page.evaluate(() => cameraStats.nativeCalls), nativeMode ? 1 : 0);
-    assert.equal(await ui.page.evaluate(() => cameraStats.encodes.length), nativeMode === 'success' ? 0 : 1);
-  });
-}
-for (const options of [{photoWidth: 5100, photoHeight: 4000}, {largeBytes: true}]) {
-  test('normalizacion solo por limites backend ' + JSON.stringify(options), async t => {
-    const ui = await cameraSetup(t, {nativeMode: 'success', ...options}); await ui.openCamera(); await ui.photo();
-    const photo = await ui.page.locator('[data-camera-preview]').evaluate(async img => ({w: img.naturalWidth, h: img.naturalHeight, size: (await (await fetch(img.src)).blob()).size}));
-    assert.ok(photo.w * photo.h <= 20000000 && photo.size <= 8 * 1024 * 1024 && photo.w > 2048);
-    assert.ok(await ui.page.evaluate(() => cameraStats.encodes.length > 0));
+for (const prestadores of [false, true]) {
+  test('recorte sin HEIC, vista previa identica al envio: ' + (prestadores ? 'PRESTADORES' : 'LIBRANZA'), async t => {
+    const ui = await cameraSetup(t, {nativeAvailable: true, qualityScene: 'sharp', prestadores});
+    await ui.openCamera(); await ui.photo();
+    const photo = await ui.page.locator('[data-camera-preview]').evaluate(async img => {
+      const jpeg = await (await fetch(img.src)).blob();
+      return {w: img.naturalWidth, h: img.naturalHeight, type: jpeg.type, bytes: [...new Uint8Array(await jpeg.arrayBuffer())]};
+    });
+    assert.equal(photo.type, 'image/jpeg');
+    assert.ok(photo.w > 810 && photo.w < 900 && photo.h > 510 && photo.h < 600);
+    assert.deepEqual(await ui.page.evaluate(() => cameraStats.encodes), [[photo.w, photo.h, 'image/jpeg', .95]]);
+    assert.equal(await ui.page.evaluate(() => cameraStats.nativeCalls), 0);
+    const bytes = Buffer.from(photo.bytes);
+    assert.equal(bytes.includes(Buffer.from('Exif\0\0')), false);
+    await ui.accept(); await ui.waitStep('ready');
+    const body = ui.requests.find(r => r.name === 'FRONTAL').body;
+    const start = body.indexOf(Buffer.from([255, 216, 255]));
+    assert.ok(start >= 0);
+    assert.deepEqual(body.subarray(start, start + bytes.length), bytes);
     await ui.stopped();
   });
 }
+test('resolucion insuficiente no permite enviar ni ampliar por software', async t => {
+  const ui = await cameraSetup(t, {qualityScene: 'sharp', lowResolution: true});
+  await ui.openCamera(); await ui.photo();
+  assert.match(await ui.page.locator('[data-capture-status]').textContent(), /resoluci/);
+  assert.equal(await ui.page.locator('[data-usar-foto]').isEnabled(), false);
+  assert.equal(await ui.page.evaluate(() => cameraStats.encodes.length), 0);
+  assert.equal(ui.requests.some(r => r.name === 'FRONTAL'), false);
+});
 test('zoom real y foco continuo solo con capacidades; sin escalado CSS', async t => {
   const ui = await cameraSetup(t, {caps: {zoom: {min: 1, max: 3, step: .5}, focusMode: ['continuous']}});
   await ui.openCamera();
@@ -581,8 +581,12 @@ test('fallo de zoom/foco es opcional y permite capturar', async t => {
   await ui.page.waitForFunction(() => document.querySelector('[data-zoom-control]').hidden);
   await ui.photo(); assert.deepEqual(ui.errors, []);
 });
-test('ImageCapture tardio tras salir no restaura preview ni deja tracks', async t => {
-  const ui = await cameraSetup(t, {nativeMode: 'delayed'}); await ui.openCamera();
+test('JPEG tardio tras salir no restaura preview ni deja tracks', async t => {
+  const ui = await cameraSetup(t); await ui.openCamera();
+  await ui.page.evaluate(() => {
+    const original = HTMLCanvasElement.prototype.toBlob;
+    HTMLCanvasElement.prototype.toBlob = function(...args) { window.allowPhoto = () => original.apply(this, args); };
+  });
   await ui.page.locator('[data-tomar-foto]').click();
   await ui.page.waitForFunction(() => !!window.allowPhoto);
   await ui.page.locator('[data-salir]').click();
@@ -631,7 +635,7 @@ for (const viewport of [{width: 390, height: 844}, {width: 360, height: 640}]) {
 }
 test('cache busting consistente entre handoff y camara', () => {
   for (const content of [html, cameraHTML]) {
-    assert.match(content, /captura_documental\.js\?v=p04a-1/);
+    assert.match(content, /captura_documental\.js\?v=id01f-1/);
     assert.match(content, /captura_documental\.css\?v=p04a-1/);
   }
   assert.match(html, /qrcode-generator-1\.4\.4\.js/);
@@ -660,7 +664,8 @@ test('P0-4A visor inmersivo y cambio de camara sin nuevo canje', async t => {
 });
 
 for (const [qualityScene, reason] of [['sharp', null], ['white-card', null], ['dim', null], ['blur', 'blur'], ['dark', 'dark'], ['bright', 'bright'],
-  ['wall', 'missing'], ['keyboard', 'missing'], ['blank', 'missing'], ['small', 'small'], ['outside', 'missing'], ['offcenter', 'framing']]) {
+  ['glare', 'bright'], ['ambiguous', 'ambiguous'], ['wall', 'missing'], ['keyboard', 'missing'], ['blank', 'missing'],
+  ['small', 'small'], ['outside', 'missing'], ['cut-right', 'missing'], ['cut-top', 'missing'], ['cut-bottom', 'missing'], ['offcenter', 'framing']]) {
   test('quality gate local: ' + qualityScene, async t => {
     const ui = await cameraSetup(t, {qualityScene}); await ui.openCamera(); await ui.photo();
     const result = await ui.page.evaluate(() => cameraStats.quality);
@@ -677,11 +682,9 @@ for (const [qualityScene, reason] of [['sharp', null], ['white-card', null], ['d
     if (process.env.HANDOFF_SCREENSHOTS) await ui.page.screenshot({path: path.join(process.env.HANDOFF_SCREENSHOTS, `quality-${qualityScene}.png`)});
   });
 }
-for (const nativeMode of [undefined, 'fail', 'success']) {
-  for (const qualityScene of ['low-contrast', 'rotated', 'outside']) {
-    test(`ID01D Android emulado quality y transporte: ${nativeMode || 'fallback'} / ${qualityScene}`, async t => {
-      const ui = await cameraSetup(t, {android: true, touch: true, nativeMode, qualityScene,
-        photoWidth: 1080, photoHeight: 1920});
+for (const qualityScene of ['low-contrast', 'rotated', 'outside']) {
+    test(`Android emulado quality y transporte: ${qualityScene}`, async t => {
+      const ui = await cameraSetup(t, {android: true, touch: true, qualityScene});
       await ui.openCamera(); await ui.photo();
       const result = await ui.page.evaluate(() => cameraStats.quality);
       assert.equal(result.decision, qualityScene === 'outside' ? 'reject' : 'pass');
@@ -694,10 +697,9 @@ for (const nativeMode of [undefined, 'fail', 'success']) {
         await ui.accept(); await ui.waitStep('ready');
         assert.equal(ui.requests.filter(r => r.name === 'FRONTAL').length, 1);
       }
-      assert.equal(await ui.page.evaluate(() => cameraStats.nativeCalls), nativeMode ? 1 : 0);
+      if (qualityScene === 'rotated') assert.equal(result.document.h * 1920 > result.document.w * 1080, true);
       assert.deepEqual(ui.errors, []);
     });
-  }
 }
 
 test('quality gate falla tecnicamente: revision manual explicita y sin bloqueo total', async t => {
@@ -706,6 +708,7 @@ test('quality gate falla tecnicamente: revision manual explicita y sin bloqueo t
   await ui.photo();
   assert.equal(await ui.page.locator('[data-usar-foto]').isEnabled(), false);
   assert.equal(await ui.page.locator('[data-manual-review]').isVisible(), true);
+  assert.equal(await ui.page.locator('[data-camera-preview]').evaluate(img => img.naturalWidth < 1080 && img.naturalHeight < 1920), true);
   await ui.page.locator('[data-confirm-quality]').check();
   await ui.accept(); await ui.waitStep('ready');
   assert.deepEqual(ui.errors, []);

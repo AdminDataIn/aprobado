@@ -283,7 +283,7 @@
   let facingMode = 'environment';
   let stream, blob, previewURL, monitor, cameraTimer, generation = 0;
   let trackSettings = {}, trackCaps = {};
-  let quality = null, expectedFrame = null, zoomTimer, zoomPending = false;
+  let quality = null, zoomTimer, zoomPending = false;
   const orientation = window.matchMedia('(orientation: landscape)');
   let resumePortrait = false;
   let step = 'ready', side = 'FRONTAL', busy = false, terminal = false, redeemed = false;
@@ -313,9 +313,9 @@
     const immersive = ['opening', 'live', 'checking', 'preview'].includes(next);
     mobile.classList.toggle('camera-immersive', immersive);
     exitCamera.hidden = !immersive;
-    find('camera-media').hidden = !immersive;
+    find('camera-media').hidden = !immersive || (next === 'preview' && !blob);
     find('viewfinder').hidden = next !== 'live';
-    preview.hidden = !['checking', 'preview'].includes(next);
+    preview.hidden = next !== 'preview' || !blob;
     find('camera-instructions').hidden = next !== 'ready';
     const example = mobile.querySelector('[data-example-side]');
     example.dataset.exampleSide = side;
@@ -334,16 +334,19 @@
     find('zoom-control').hidden = next !== 'live' || !zoomRange();
     if (next === 'live') requestAnimationFrame(updateGuide);
   }
+  function frameFor(width, height) {
+    const ratio = 85.60 / 53.98;
+    const w = Math.min(width * .90, height * .72 * ratio), h = w / ratio;
+    return {x: (width - w) / (2 * width), y: (height - h) / (2 * height), w: w / width, h: h / height};
+  }
   function updateGuide() {
     if (step !== 'live' || !video.videoWidth || !video.videoHeight) { guide.hidden = true; return; }
     // CSS fixes object-fit: contain and object-position: center. Exclude letterboxing.
     const box = video.getBoundingClientRect(), parent = find('viewfinder').getBoundingClientRect();
     const scale = Math.min(box.width / video.videoWidth, box.height / video.videoHeight);
     const width = video.videoWidth * scale, height = video.videoHeight * scale;
-    const ratio = 85.60 / 53.98;
-    const frameWidth = Math.min(width * .90, height * .72 * ratio);
-    const frameHeight = frameWidth / ratio;
-    expectedFrame = {x: (width - frameWidth) / (2 * width), y: (height - frameHeight) / (2 * height), w: frameWidth / width, h: frameHeight / height};
+    const frame = frameFor(video.videoWidth, video.videoHeight);
+    const frameWidth = frame.w * width, frameHeight = frame.h * height;
     guide.style.width = `${frameWidth}px`; guide.style.height = `${frameHeight}px`;
     guide.style.left = `${box.left - parent.left + (box.width - frameWidth) / 2}px`;
     guide.style.top = `${box.top - parent.top + (box.height - frameHeight) / 2}px`;
@@ -565,21 +568,37 @@
   });
 
   const MAX_BYTES = 8 * 1024 * 1024, MAX_PIXELS = 20000000;
+  const sufficientPixels = (w, h) => Math.min(w, h) >= 240 && Math.max(w, h) >= 384;
+  const resolutionMessage = 'El documento no tiene suficiente resoluci\u00f3n. Ac\u00e9rcalo sin cortar las esquinas y repite.';
   function withTimeout(promise, milliseconds) {
     let timer;
     return Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(problem('La camara tardo demasiado. Intenta nuevamente.')), milliseconds); })])
       .finally(() => clearTimeout(timer));
   }
-  async function encodePhoto(source, width, height) {
-    // Every attempt draws from the original, never from a previously compressed JPEG.
-    let scale = Math.min(1, Math.sqrt(MAX_PIXELS / (width * height)));
+  function freezeFrame() {
+    const scale = Math.min(1, Math.sqrt(MAX_PIXELS / (video.videoWidth * video.videoHeight)));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.floor(video.videoWidth * scale);
+    canvas.height = Math.floor(video.videoHeight * scale);
+    try {
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+      return canvas;
+    } catch (error) { canvas.width = canvas.height = 0; throw error; }
+  }
+  async function encodePhoto(source, region) {
+    // Round outward so the resized detector cannot shave off an edge.
+    const x = Math.floor(region.x * source.width), y = Math.floor(region.y * source.height);
+    const width = Math.min(source.width, Math.ceil((region.x + region.w) * source.width)) - x;
+    const height = Math.min(source.height, Math.ceil((region.y + region.h) * source.height)) - y;
+    let scale = 1;
     const canvas = document.createElement('canvas');
     try {
       for (let attempt = 0; attempt < 6; attempt++) {
-        canvas.width = Math.max(1, Math.floor(width * scale)); canvas.height = Math.max(1, Math.floor(height * scale));
+        canvas.width = Math.floor(width * scale); canvas.height = Math.floor(height * scale);
+        if (!sufficientPixels(canvas.width, canvas.height)) throw problem(resolutionMessage);
         const context = canvas.getContext('2d');
         if (!context) throw problem('No pudimos preparar la foto. Abre la camara e intenta nuevamente.');
-        context.drawImage(source, 0, 0, canvas.width, canvas.height);
+        context.drawImage(source, x, y, width, height, 0, 0, canvas.width, canvas.height);
         const photo = await withTimeout(new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .95)), 6000);
         if (!photo || !photo.size) throw problem('No pudimos guardar la foto. Intenta nuevamente.');
         if (photo.size <= MAX_BYTES) return photo;
@@ -588,58 +607,47 @@
       throw problem('La foto es demasiado grande. Repite la captura.');
     } finally { canvas.width = canvas.height = 0; }
   }
-  async function normalizeNative(photo) {
-    if (!photo || !photo.size) throw problem('No pudimos guardar la foto. Intenta nuevamente.');
-    const url = URL.createObjectURL(photo), image = new Image();
-    try {
-      await withTimeout(new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = url; }), 6000);
-      if (!image.naturalWidth || !image.naturalHeight) throw problem('Foto no disponible.');
-      if (['image/jpeg', 'image/png', 'image/webp'].includes(photo.type) && photo.size <= MAX_BYTES &&
-          image.naturalWidth * image.naturalHeight <= MAX_PIXELS) return photo;
-      return await encodePhoto(image, image.naturalWidth, image.naturalHeight);
-    } finally { image.onload = image.onerror = null; image.src = ''; URL.revokeObjectURL(url); }
-  }
-  async function capturePhoto(run) {
-    const track = stream.getVideoTracks()[0];
-    if (typeof window.ImageCapture === 'function') {
-      try {
-        const capture = new ImageCapture(track);
-        if (typeof capture.takePhoto === 'function') {
-          const native = await withTimeout(capture.takePhoto(), 6000);
-          if (run !== generation || terminal || document.hidden) return null;
-          return await normalizeNative(native);
-        }
-      } catch (_) { /* Unsupported/failed still capture falls back to the live frame. */ }
-    }
-    if (run !== generation || terminal || document.hidden) return null;
-    return encodePhoto(video, video.videoWidth, video.videoHeight);
-  }
   take.addEventListener('click', () => operation(async () => {
     if (!stream || !video.videoWidth || !video.videoHeight) throw problem('Espera a que la c\u00e1mara muestre el documento.');
-    const run = generation;
-    const geometry = {expected: expectedFrame, aspect: video.videoWidth / video.videoHeight};
-    let photo, current;
-    try { photo = await capturePhoto(run); }
-    finally { current = run === generation; if (current) stopCamera(); }
-    if (!current || terminal || document.hidden) return;
-    if (!photo || !photo.size) throw problem('No pudimos tomar la foto. Abre la c\u00e1mara y repite la captura.');
-    blob = photo; previewURL = URL.createObjectURL(blob); preview.src = previewURL;
+    // The frozen video frame shares the guide geometry; native stills can have a different field of view.
+    const frame = freezeFrame();
+    stopCamera();
     const analysisRun = generation;
+    const current = () => analysisRun === generation && !terminal && !document.hidden;
     show('checking', 'Revisando la foto...');
     try {
-      quality = await withTimeout(window.DocumentCaptureQuality.analyze(photo, geometry), 5000);
-      if (!quality || !['pass', 'reject', 'review'].includes(quality.decision)) throw new Error();
-    } catch (_) {
-      quality = {decision: 'review', message: 'No pudimos revisar la calidad. Repite o revisa la nitidez y las cuatro esquinas antes de continuar.'};
+      const expected = frameFor(frame.width, frame.height);
+      let result;
+      try {
+        result = await withTimeout(window.DocumentCaptureQuality.analyzeSource(frame, frame.width, frame.height, {expected}), 5000);
+      } catch (_) { /* Manual review can use only the visible guide, never the full frame. */ }
+      if (!current()) return;
+      result ||= {decision: 'review', message: 'No pudimos revisar la calidad. Repite o confirma que el recorte est\u00e1 n\u00edtido y completo.'};
+      let photo;
+      if (result.decision !== 'reject') {
+        const documentSize = result.document || expected;
+        if (!sufficientPixels(documentSize.w * frame.width, documentSize.h * frame.height)) {
+          result = {decision: 'reject', message: resolutionMessage};
+        } else {
+          photo = await encodePhoto(frame, result.decision === 'review' ? expected : result.region);
+        }
+      }
+      if (!current()) return;
+      if (photo) {
+        blob = photo; previewURL = URL.createObjectURL(blob); preview.src = previewURL;
+      }
+      quality = result;
+      show('preview', quality.message || 'Revisa el recorte: toda la informaci\u00f3n y las cuatro esquinas deben verse con nitidez.');
+    } catch (error) {
+      if (current()) throw error;
+    } finally {
+      frame.width = frame.height = 0;
     }
-    if (analysisRun !== generation || terminal || document.hidden) { quality = null; return; }
-    show('preview', quality.message || 'Revisa que toda la informaci\u00f3n est\u00e9 n\u00edtida y completa.');
   }));
   accept.addEventListener('click', () => operation(async () => {
     if (!canUsePhoto()) return;
     status.textContent = 'Enviando foto de forma segura...';
-    const extension = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
-    const body = new FormData(); body.set('archivo', blob, `captura.${extension}`);
+    const body = new FormData(); body.set('archivo', blob, 'captura.jpg');
     const data = await action(side, body);
     if (terminal || checkTerminal(data)) return;
     clearPhoto(); nextSide(data);

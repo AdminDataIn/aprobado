@@ -34,13 +34,13 @@
         <video data-camera-video autoplay muted playsinline aria-label="Vista de la cámara"></video>
         <div class="camera-guide" data-camera-guide hidden aria-hidden="true"></div>
       </div>
-      <img class="camera-preview" data-camera-preview alt="Foto del documento para revisar" hidden>
+      <img class="camera-preview" data-camera-preview alt="Recorte del documento que se enviará" hidden>
     </div>
     <p class="camera-hint" data-camera-hint>Las cuatro esquinas dentro del marco</p>
     <label class="camera-zoom" data-zoom-control hidden>
       <span>Zoom</span><input type="range" data-camera-zoom aria-label="Zoom de cámara"><output data-zoom-value></output>
     </label>
-    <label class="camera-manual-review" data-manual-review hidden><input type="checkbox" data-confirm-quality> Revisé que la foto esté nítida y que se vean las cuatro esquinas.</label>
+    <label class="camera-manual-review" data-manual-review hidden><input type="checkbox" data-confirm-quality> Revisé que el recorte esté nítido y que se vean las cuatro esquinas.</label>
     <div class="camera-actions">
       <button type="button" data-canjear>Abrir cámara</button>
       <button type="button" data-tomar-foto hidden>Tomar foto</button>
@@ -54,7 +54,7 @@
   <noscript>Activa JavaScript y abre este enlace en un navegador compatible con cámara.</noscript>
 </main>
 <script src="{% static 'js/vendor/jsfeat-0.0.8.min.js' %}" defer></script>
-<script src="{% static 'js/captura_quality.js' %}?v=id01d-2" defer></script>
-<script src="{% static 'js/captura_documental.js' %}?v=p04a-1" defer></script>
+<script src="{% static 'js/captura_quality.js' %}?v=id01f-1" defer></script>
+<script src="{% static 'js/captura_documental.js' %}?v=id01f-1" defer></script>
 </body>
 </html>
