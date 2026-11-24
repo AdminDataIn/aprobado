@@ -20,7 +20,7 @@ from gestion_creditos.models import (
     CreditoLibranza,
 )
 from .ocr import tesseract_adapter as motor
-from .ocr.parser_documento_colombia import VERSION, normalizar_numero, normalizar_texto, parsear
+from .ocr.parser_documento_colombia import VERSION, VERSIONES, normalizar_numero, normalizar_texto, parsear
 
 logger = logging.getLogger(__name__)
 TERMINALES = {'COMPLETADO', 'REQUIERE_REVISION', 'FALLIDO'}
@@ -154,13 +154,13 @@ def procesar(procesamiento_id):
         evento(p, 'OCR_INICIADO')
     error = ''
     try:
-        if p.version_parser != VERSION:
+        if p.version_parser not in VERSIONES or p.configuracion.get('parser') != p.version_parser:
             raise motor.ErrorOCR('OCR_VERSION_PARSER_INVALIDA')
         front = motor.extraer(p.captura_frontal, p.configuracion)
         back = motor.extraer(p.captura_trasera, p.configuracion)
         if front['version'] != back['version']:
             raise motor.ErrorOCR('OCR_VERSION_MOTOR_INVALIDA')
-        result = parsear(front, back)
+        result = parsear(front, back, version=p.version_parser)
     except motor.ErrorOCR as exc:
         error = exc.codigo
     except Exception:

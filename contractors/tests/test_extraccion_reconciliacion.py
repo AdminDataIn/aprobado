@@ -190,12 +190,19 @@ class PipelineContractualTest(TestCase):
                 sesion=sesion, captura_frontal=sesion.capturas.get(lado='FRONTAL'),
                 captura_trasera=sesion.capturas.get(lado='TRASERA'), estado='COMPLETADO',
                 version_parser='test', firma_configuracion='a' * 64, firma_inputs='b' * 64,
-                tipo_documento_detectado='CC', nombres_normalizado='Maria', numero_documento_normalizado='987654321')
+                tipo_documento_detectado='CC_COLOMBIA', nombres_normalizado='Maria', numero_documento_normalizado='987654321')
             datos = {'tipo_documento': 'CC', 'nombres': 'Ana', 'numero_documento': '123456789'}
             filas = reconciliar({}, datos, sesion=sesion)
             diferencias = [f for f in filas if f['fuente'] == 'OCR_CEDULA_NO_IDENTIDAD' and f['estado'] == 'DIFIERE']
             self.assertEqual(len(diferencias), 2)
             self.assertNotIn('987654321', str(filas))
+            ocr.estado = 'REQUIERE_REVISION'
+            ocr.save(update_fields=['estado'])
+            before = datos.copy()
+            self.assertFalse(any(f['fuente'] == 'OCR_CEDULA_NO_IDENTIDAD' for f in reconciliar({}, datos, sesion=sesion)))
+            self.assertEqual(datos, before)
+            ocr.estado = 'COMPLETADO'
+            ocr.save(update_fields=['estado'])
             ocr.vigente = False
             ocr.save(update_fields=['vigente'])
             self.assertFalse(any(f['fuente'] == 'OCR_CEDULA_NO_IDENTIDAD' for f in reconciliar({}, datos, sesion=sesion)))

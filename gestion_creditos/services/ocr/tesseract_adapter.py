@@ -9,6 +9,7 @@ import importlib.util
 from pathlib import Path
 
 from django.conf import settings
+from .parser_documento_colombia import VERSION
 
 
 class ErrorOCR(Exception):
@@ -54,14 +55,16 @@ def extraer(captura, configuracion):
                 input=json.dumps({'temporary': temporary, 'path': str(path),
                     'tessdata': str(tessdata.resolve()), 'executable': executable,
                     'version_motor': configuracion['version_motor'],
-                    'timeout': configuracion['timeout']}), capture_output=True, text=True,
+                    'timeout': configuracion['timeout'],
+                    'rescate_frontal': configuracion.get('parser') == VERSION and captura.lado == 'FRONTAL'}),
+                capture_output=True, text=True,
                 timeout=configuracion['timeout'] + 15, check=True)
             payload = json.loads(result.stdout)
             if payload.get('error'):
                 raise ErrorOCR(payload['error'])
             if payload['version'] != configuracion['version_motor']:
                 raise ErrorOCR('OCR_VERSION_MOTOR_INVALIDA')
-            return {'version': payload['version'], 'tokens': payload['tokens']}
+            return {k: payload[k] for k in ('version', 'tokens', 'rescate') if k in payload}
     except ErrorOCR:
         raise
     except ImportError:

@@ -71,7 +71,7 @@ def reconciliar(metadata, datos, *, sesion=None):
     if sesion and datos.get('tipo_documento') == 'CC':
         ocr = sesion.procesamientos_ocr.filter(vigente=True, purgado_en__isnull=True,
             estado='COMPLETADO', captura_frontal__activo=True, captura_trasera__activo=True,
-            tipo_documento_detectado='CC').order_by('-finalizado_en', '-pk').first()
+            tipo_documento_detectado__in=('CC', 'CC_COLOMBIA')).order_by('-finalizado_en', '-pk').first()
         if ocr:
             for campo in ('numero_documento', 'nombres', 'apellidos'):
                 fila = comparar(campo, datos.get(campo), getattr(ocr, campo + '_normalizado'), 'OCR_CEDULA_NO_IDENTIDAD')

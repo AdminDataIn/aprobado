@@ -38,7 +38,7 @@ con ese mismo servicio; no se instalan signals sobre modelos financieros.
 Subsanacion ya llama `consumir_documentos`: la sesion nueva desplaza la vigencia
 de resultados/comparaciones anteriores, conservando su evidencia historica.
 
-## Parser v1
+## Parser v1 (trabajos anteriores)
 
 `cc-etiquetas-1` soporta exclusivamente el contrato textual sintetico probado:
 cabeceras REPUBLICA DE COLOMBIA / CEDULA DE CIUDADANIA, campos rotulados
@@ -53,6 +53,51 @@ Solo fechas ISO inequívocas en v1; formatos ambiguos se remiten a revision.
 No corrige O/0 ni I/1. Nombres: espacios/mayusculas/tildes, sin fuzzy.
 Se conserva solo cada campo bruto/normalizado, confianza y codigos/layout;
 no el texto OCR completo ni bounding boxes de todo el documento.
+
+## Parser v2 (cc-espacial-2)
+
+El caso de referencia de ID-01F se reproduce: PSM 6 lee el numero, pero
+puede mezclar columnas y no leer `NUMERO` ni la cabecera completa. No es un
+descarte por discrepancia con el formulario. Con la version nueva, una
+etiqueta exacta (`NUMERO`, `NUMERO DE DOCUMENTO`, `NUMERO DE IDENTIFICACION`,
+`NUIP` o `NUM.`) puede asociarse a un unico valor a la derecha o debajo,
+ademas del formato en linea. Se mantiene el minimo 70 para etiqueta y valor.
+Numero de 6 a 10 digitos y NUIP de 10; solo un separador de miles coherente
+cuando existe. Los formatos fuera de alcance quedan en revision. No se
+completan digitos ni se toman secuencias sin etiqueta, fechas, numeros de
+serie o cadenas ambiguas como identificacion.
+
+Si falla la lectura principal del frontal, solo con indicios de cabecera de
+CC y un unico token numerico de confianza suficiente se releen, con el mismo
+Tesseract `spa`, hasta dos regiones acotadas (PSM 11). La etiqueta completa y
+la cabecera deben quedar confirmadas. La etiqueta recuperada se asocia por
+coordenadas al token original; no se copia el valor del formulario ni se
+combinan grupos sueltos. El plazo del adaptador por cara no aumenta. Si la
+relectura falla o agota el tiempo, no aporta evidencia. Las regiones se
+procesan bajo el mismo directorio temporal privado. No se guarda la imagen
+recortada adicional, ni sus tokens o coordenadas en bases/logs.
+
+El reverso sin cabecera puede reconocerse por anclas de nacimiento y
+expedicion, junto con un frontal CC. No se usa como fuente del numero; un
+numero explicito distinto invalida el campo. Un resultado parcial no rellena
+datos ni marca identidad. Prestadores solo reconcilia resultados completos
+y vigentes de CC, con numero enmascarado, por el flujo existente. La revision
+por OCR no sustituye los requisitos documentales ni bloquea por si sola.
+
+Los nuevos trabajos se firman con `cc-espacial-2`. Los pendientes
+`cc-etiquetas-1` se procesan con sus reglas y firma originales. No hay
+migracion, reencolado masivo ni reprocesamiento de historicos. Una futura
+ventana debe preparar primero el worker de la cola OCR para ambas versiones,
+antes de que Gunicorn emita la v2. En reversión conservar un worker compatible
+hasta cerrar los trabajos v2 pendientes. Verificar version y modelo
+efectivos del motor en el ambiente de destino antes de activar el cambio.
+
+Homologacion con Tesseract 5.5.0: se extrajo el mismo numero en Libranza y
+Prestadores a partir de los cuatro JPEG privados de ID-01F, sin usar el
+formulario como entrada. Ambos resultados conservaron `REQUIERE_REVISION`
+por texto nominal no legible. La cobertura sintetica distingue CC rotulada
+con `NUMERO`, `NUIP`, reverso biografico y controles contra falsos positivos.
+No certifica todos los formatos de la Registraduria.
 
 ## Privacidad y retencion
 

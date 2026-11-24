@@ -140,6 +140,17 @@ class OCRServicioTest(OCRFixture, TestCase):
         self.assertEqual(OCR.objects.count(), 1)
         self.assertEqual(self.p.numero_intentos, 1)
 
+    def test_pendiente_version_anterior_se_procesa_sin_actualizar_su_firma(self):
+        self.p.version_parser = parser.VERSION_ANTERIOR
+        self.p.configuracion['parser'] = parser.VERSION_ANTERIOR
+        self.p.firma_configuracion = servicio.firma(self.p.configuracion)
+        self.p.save(update_fields=['version_parser', 'configuracion', 'firma_configuracion'])
+        signature = self.p.firma_configuracion
+        self.run_ocr()
+        self.assertEqual(self.p.estado, 'COMPLETADO')
+        self.assertEqual(self.p.evidencia['layout'], parser.VERSION_ANTERIOR)
+        self.assertEqual(self.p.firma_configuracion, signature)
+
     def test_ocr_primero_comparacion_al_consumir(self):
         self.run_ocr()
         self.assertFalse(Comparacion.objects.exists())
