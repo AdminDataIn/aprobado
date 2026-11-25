@@ -142,3 +142,21 @@ class FacilidatDescargasTest(CierreSMEFixture, TransactionTestCase):
         CierreCarteraSME.objects.filter(pk=self.cierre.pk).update(contenido={})
         self.assertEqual(self.client.get(self.url('facilidat-sintetico')).status_code, 409)
         self.assertEqual(self.client.get(self.url('excepciones-xlsx')).status_code, 409)
+
+    def test_descargas_internas_nuevas_no_requieren_elegibilidad(self):
+        for clase, hoja in (('cartera-xlsx', 'Cartera'), ('facilidat-preparacion', 'Carga'),
+                            ('primera-positiva', 'Carga'), ('primera-mixta', 'Revision mora')):
+            with self.subTest(clase=clase):
+                r = self.client.get(self.url(clase))
+                self.assertEqual(r.status_code, 200)
+                self.assertEqual(r['X-Cierre-SHA256'], self.cierre.sha256)
+                self.assertIn('NO_REMITIR.xlsx', r['Content-Disposition'])
+                self.assertEqual(leer(r.content, hoja).max_row, 2 if clase == 'cartera-xlsx' else 1)
+        contenido = {**self.cierre.contenido, 'corte': '2026-10-30'}
+        CierreCarteraSME.objects.filter(pk=self.cierre.pk).update(
+            contenido=contenido, sha256=sha256(serializar(contenido)).hexdigest(),
+        )
+        self.assertEqual(self.client.get(self.url('cartera-xlsx')).status_code, 200)
+        self.assertEqual(self.client.get(self.url('facilidat-preparacion')).status_code, 409)
+        self.client.force_login(self.otro_staff)
+        self.assertEqual(self.client.get(self.url('cartera-xlsx')).status_code, 403)

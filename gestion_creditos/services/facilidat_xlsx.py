@@ -8,6 +8,10 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from gestion_creditos.services.facilidat_homologacion import (
+    PERFIL, campos_preparacion, escenarios_primera_entrega, fecha_corte_facilidat, ventana_operativa_mora,
+)
+
 
 REFERENCIA_FACILIDAT_SHA256 = 'dd57903ab11cfedd628b7d188d2610b5e7632b70f5cdca4149421a285b761e09'
 XLSX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -224,4 +228,102 @@ def xlsx_excepciones(cierre, huella, soportes_pendientes=None):
         ('Incidencias financieras', len(pendientes)),
         ('Sin importe', 'Celda vacia cuando el importe de la incidencia no consta; no significa cero.'),
     ))
+    return _bytes(libro)
+
+
+def _filas_internas(hoja, titulos, filas, *, montos=()):
+    _encabezado(hoja, titulos, [max(20, min(42, len(x) + 3)) for x in titulos])
+    for i, fila in enumerate(filas, 2):
+        for j, valor in enumerate(fila, 1):
+            celda = hoja.cell(i, j)
+            if j in montos and valor is not None:
+                celda.value = Decimal(valor)
+                celda.number_format = '#,##0.00'
+            else:
+                _texto(celda, valor)
+    hoja.auto_filter.ref = hoja.calculate_dimension()
+
+
+def _recuento(cierre):
+    filas = cierre['filas']
+    conciliadas = sum(f.get('categoria') in ('AL_DIA', 'VENCIDA', 'PAGADA') for f in filas)
+    return (('Corte', cierre['corte']), ('Inventariadas', len(filas)), ('Conciliadas', conciliadas),
+            ('Excepciones financieras', len(filas) - conciliadas), ('Habilitadas para remision', 0))
+
+
+def xlsx_cartera_interna(cierre, huella):
+    libro = _nuevo_libro('Cartera')
+    campos = (
+        ('Obligacion interna', 'numero_obligacion_interno'), ('Producto', 'producto'), ('Estado al corte', 'categoria'),
+        ('Desembolso acreditado', 'desembolso_acreditado'), ('Fecha de desembolso', 'fecha_desembolso_registrada'),
+        ('Aprobado COP', 'monto_aprobado'), ('Capital financiado COP', 'capital_financiado'),
+        ('Capital pendiente del plan COP', 'capital_pendiente'), ('Saldo total de cuotas COP', 'saldo_pendiente'),
+        ('Saldo vencido del plan COP', 'saldo_vencido'), ('Cuota pactada COP', 'cuota_pactada'),
+        ('Cuotas pactadas', 'cuotas_pactadas'), ('Cuotas pagadas', 'cuotas_pagadas'),
+        ('Cuotas vencidas', 'cuotas_vencidas'), ('Dias en mora', 'dias_mora'), ('Ultimo pago al corte', 'ultima_aplicacion'),
+        ('Incidencia financiera', 'incidencia_financiera'), ('Impedimentos de reporte', 'impedimentos_reporte'),
+    )
+    filas = []
+    for credito in cierre['filas']:
+        fila = [credito.get(clave) for _, clave in campos]
+        fila[0] = fila[0] or str(credito['credito_id_interno'])
+        fila[3] = 'SI' if fila[3] is True else 'NO'
+        fila[-1] = '; '.join(fila[-1] or ())
+        filas.append(fila)
+    _filas_internas(libro.active, [t for t, _ in campos], filas, montos=range(6, 12))
+    _control(libro, (
+        ('Uso', 'CARTERA INTERNA - NO REMITIR. Incluye casos no conciliados y no habilitados.'),
+        ('Huella del cierre', huella), *_recuento(cierre),
+        ('Saldos', 'Corresponden solo al subconjunto conciliado. Capital del plan y saldo con interes no son iguales.'),
+    ))
+    return _bytes(libro)
+
+
+def xlsx_preparacion_facilidat(cierre, huella, *, escenario=None):
+    if escenario not in (None, 'positiva', 'mixta'):
+        raise ValueError('ESCENARIO_NO_VALIDO')
+    corte = fecha_corte_facilidat(cierre['corte'])
+    libro = _nuevo_libro('Carga')
+    _encabezado(libro.active, ENCABEZADOS_FACILIDAT,
+                [max(17, min(35, len(x) * 0.7)) for x in ENCABEZADOS_FACILIDAT])
+    positivos, mora, cupo_teorico = escenarios_primera_entrega(cierre['filas'])
+    filas = positivos if escenario else [
+        f for f in cierre['filas'] if f.get('categoria') in ('AL_DIA', 'VENCIDA', 'PAGADA')
+    ]
+    cargadas = 0
+    for fila in filas:
+        preparados = campos_preparacion(fila, corte)   # Institutional history not accredited; do not emit 05.
+        if not preparados:
+            continue
+        cargadas += 1
+        for i in range(1, 37):
+            _texto(libro.active.cell(cargadas + 1, i), preparados.get(get_column_letter(i)))
+
+    descripcion = {
+        None: 'Preparacion parcial de conciliadas; incluye pagadas para seguimiento, no para primera entrega.',
+        'positiva': 'Simulacion positiva: activas al dia con saldo pendiente; no habilita reporte.',
+        'mixta': 'Simulacion mixta no conformada: Carga incluye base positiva; ninguna vencida fue seleccionada.',
+    }
+    _control(libro, (
+        ('Uso', 'PREPARACION INTERNA - NO REMITIR. No pegar este borrador como archivo de entrega.'),
+        ('Escenario', descripcion[escenario]),
+        ('Huella del cierre', huella), *_recuento(cierre),
+        ('Filas preparadas', cargadas),
+        ('Configuracion de referencia', PERFIL['version']),
+        ('Tipo de cartera', 'LBD propuesto solo para Libranza. Asignacion del suscriptor 287922 no acreditada.'),
+        ('Fecha fin propuesta', corte.strftime('%Y%m%d')),
+        ('Pendientes de celda', 'Vacio = dato/soporte no acreditado o posible autorrelleno Empresas no probado en SME.'),
+        ('Importes S y T', 'No usar monto aprobado, capital financiado ni saldo con intereses como sustituto.'),
+        ('Historia', 'Primera entrega institucional no acreditada; los cierres previos deben conciliarse.'),
+        ('Base positiva', len(positivos)), ('Mora conciliada en revision', len(mora)),
+        ('Tope teorico de mora 2:1', cupo_teorico), ('Negativas seleccionadas', 0),
+    ))
+    if escenario == 'mixta':
+        hoja = libro.create_sheet('Revision mora')
+        _filas_internas(hoja, ('Obligacion interna', 'Producto', 'Dias de mora', 'Ventana operativa al corte',
+                              'Soportes de reporte', 'Seleccion'), (
+            (f.get('numero_obligacion_interno') or str(f['credito_id_interno']), f['producto'],
+             f.get('dias_mora'), ventana_operativa_mora(f.get('dias_mora')), '; '.join(f.get('impedimentos_reporte', ())),
+             'NO SELECCIONADA') for f in mora
+        ))
     return _bytes(libro)

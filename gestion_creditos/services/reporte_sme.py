@@ -17,7 +17,7 @@ from gestion_creditos.services.accounting import get_platform_disbursed_creditos
 from gestion_creditos.services.libranza_rules import calcular_primera_fecha_pago_libranza, sumar_meses_con_dia_ancla
 
 
-VERSION_CIERRE = 'sme-conciliacion-interna-v2'
+VERSION_CIERRE = 'sme-conciliacion-interna-v3'
 ZONA = ZoneInfo('America/Bogota')
 CERO = Decimal('0.00')
 MEDIO_CENTAVO = Decimal('0.005')
@@ -300,6 +300,8 @@ def _conciliar(credito, corte, historial, desembolso):
             saldo_vencido += resto
             vencimientos.append(cuota.fecha_vencimiento)
     _exigir((estado == 'PAGADO') == (saldo_total == CERO), 'ESTADO_DE_CIERRE_NO_CONCILIA')
+    cuotas_del_mes = [q.fecha_vencimiento for q in credito.sme_cuotas
+                     if (q.fecha_vencimiento.year, q.fecha_vencimiento.month) == (corte.year, corte.month)]
     posteriores = posteriores or any(e.fecha >= limite and e.estado_nuevo in ('PAGADO', 'ANULADO')
                                       for e in credito.sme_estados)
     return {
@@ -315,6 +317,7 @@ def _conciliar(credito, corte, historial, desembolso):
         'cuotas_pendientes': len(credito.sme_cuotas) - pagadas, 'cuotas_vencidas': len(vencimientos),
         'dias_mora': (corte - min(vencimientos)).days if vencimientos else 0,
         'ultima_aplicacion': ultimo, 'fecha_vencimiento_final': credito.sme_cuotas[-1].fecha_vencimiento,
+        'fecha_cuota_mes_corte': cuotas_del_mes[0] if len(cuotas_del_mes) == 1 else None,
         'novedad_posterior': posteriores,
     }
 

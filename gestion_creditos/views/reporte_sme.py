@@ -16,12 +16,14 @@ from django.views.decorators.http import require_GET, require_http_methods
 
 from gestion_creditos.models import CierreCarteraSME
 from gestion_creditos.services.facilidat_xlsx import (
-    REFERENCIA_FACILIDAT_SHA256, XLSX_CONTENT_TYPE, xlsx_excepciones, xlsx_sintetico_facilidat,
+    REFERENCIA_FACILIDAT_SHA256, XLSX_CONTENT_TYPE, xlsx_cartera_interna, xlsx_excepciones,
+    xlsx_preparacion_facilidat, xlsx_sintetico_facilidat,
 )
 from gestion_creditos.services.reporte_sme import PRODUCTOS, construir_cierre, validar_parametros
 
 
 PERMISO = 'gestion_creditos.operar_cierre_cartera_sme'
+CLASES_PREPARACION = {'facilidat-preparacion': None, 'primera-positiva': 'positiva', 'primera-mixta': 'mixta'}
 
 
 def requiere_operador(func):
@@ -85,14 +87,15 @@ def cartera_sme(request, cierre_id=None):
 @requiere_operador
 @require_GET
 def descargar_cartera_sme(request, cierre_id, clase):
-    if clase not in ('conciliacion', 'excepciones', 'excepciones-xlsx', 'facilidat-sintetico', 'facilidat-real'):
+    if clase not in ('conciliacion', 'excepciones', 'excepciones-xlsx', 'cartera-xlsx',
+                     'facilidat-sintetico', 'facilidat-real', *CLASES_PREPARACION):
         raise Http404
     cierre = get_object_or_404(CierreCarteraSME, pk=cierre_id)
     contenido = serializar(cierre.contenido)
     if sha256(contenido).hexdigest() != cierre.sha256:
         return HttpResponse('Huella del cierre no coincide. Descarga bloqueada.', status=409)
     if clase == 'facilidat-real':
-        return HttpResponse('Carga real bloqueada: homologación y soportes no acreditados.', status=409)
+        return HttpResponse('Remisión no autorizada. Use las descargas internas NO REMITIR.', status=409)
     tipo = 'application/json; charset=utf-8'
     nombre = f'sme-interno-{clase}-{cierre.corte}-{cierre.pk}.json'
     if clase == 'excepciones':
@@ -111,6 +114,21 @@ def descargar_cartera_sme(request, cierre_id, clase):
         contenido = xlsx_sintetico_facilidat()
         tipo = XLSX_CONTENT_TYPE
         nombre = 'FACILIDAT_CARGA_SINTETICA_NO_REMITIR.xlsx'
+    elif clase == 'cartera-xlsx':
+        contenido = xlsx_cartera_interna(cierre.contenido, cierre.sha256)
+        tipo = XLSX_CONTENT_TYPE
+        nombre = f'SME_CARTERA_{cierre.corte}_NO_REMITIR.xlsx'
+    elif clase in CLASES_PREPARACION:
+        try:
+            contenido = xlsx_preparacion_facilidat(
+                cierre.contenido, cierre.sha256, escenario=CLASES_PREPARACION[clase],
+            )
+        except ValueError as exc:
+            if str(exc) != 'FACILIDAT_REQUIERE_ULTIMO_DIA_DEL_MES':
+                raise
+            return HttpResponse('Facilidat requiere el último día del mes. El cierre interno sigue disponible.', status=409)
+        tipo = XLSX_CONTENT_TYPE
+        nombre = f'SME_{clase.upper()}_{cierre.corte}_NO_REMITIR.xlsx'
     respuesta = HttpResponse(contenido, content_type=tipo)
     respuesta['Content-Disposition'] = f'attachment; filename="{nombre}"'
     respuesta['X-Content-Type-Options'] = 'nosniff'

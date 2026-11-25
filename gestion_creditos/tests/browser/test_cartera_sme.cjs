@@ -40,7 +40,9 @@ const { chromium } = require('playwright');
     assert.equal(snapshot.total.al_dia, 1);
     assert.equal(snapshot.total.reportables, 0);
     assert.equal(snapshot.filas.length, 1);
-    for (const name of ['Excepciones Excel', 'Carga Facilidat sintética']) {
+    await page.getByText('Simulaciones de primera entrega', { exact: true }).click();
+    for (const name of ['Excepciones Excel', 'Carga Facilidat sintética', 'Cartera Excel',
+      'Preparación Facilidat', 'Escenario positivo', 'Escenario mixto']) {
       const [excel] = await Promise.all([
         page.waitForEvent('download'),
         page.getByRole('link', { name, exact: true }).click(),

@@ -4,7 +4,30 @@
 `7327bae01e5b5382bc2c79cfaea483a91255d8b8`. Este frente no consulta HDC+,
 MiDecisor ni scoring. La salida de este candidato es **interna, no remitir**.
 
-## Excel intermedio y panel administrativo
+## Cierre administrativo con los documentos de capacitación
+
+El [manual operativo local](OPERAR_FACILIDAT_SME.md) identifica las páginas
+de los tres documentos de Experian y distingue Empresas de SME Resumida.
+Se versionó el perfil propuesto sin atribuir LBD al suscriptor ni asumir
+historial de reportes. El diccionario y la matriz nuevos conservan los
+36 encabezados y referencian el documento, página y alcance por campo.
+
+El panel descarga cartera completa, preparación Facilidat de conciliadas,
+simulaciones positiva y mixta, y conciliación y excepciones. Todo sale del
+mismo cierre guardado y queda marcado NO REMITIR, incluso los intermedios
+con datos reales. Los intermedios requieren fin de mes; el reporte interno
+no. El endpoint de remisión permanece bloqueado para todos los usuarios.
+
+En la copia de trabajo de octubre se verificaron por solo lectura 47 fechas
+de cuota del mes de 57 casos al día; no se cambiaron cifras ni registros
+productivos. La simulación positiva incluye los 57 candidatos financieros;
+la mixta conserva esos 57 y separa 32 vencidas para revisión, con un tope
+teórico de 28 y cero negativas seleccionadas. Quedan 90 conciliadas de
+122, 32 excepciones y ninguna obligación habilitada. El XLSX compatible de
+preparación está disponible; no equivale a una planilla diligenciada lista
+para validar o remitir. No se ejecutó ningún componente de Facilidat.
+
+## Excel intermedio y panel administrativo (entrega anterior)
 
 El panel genera archivos .xlsx con openpyxl en Linux. No usa Excel COM,
 no toca el .xls Facilidat y no genera TXT, ZIP de transmisión ni envía

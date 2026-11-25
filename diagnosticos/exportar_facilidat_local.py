@@ -4,7 +4,9 @@ from hashlib import sha256
 import json
 from pathlib import Path
 
-from gestion_creditos.services.facilidat_xlsx import xlsx_excepciones, xlsx_sintetico_facilidat
+from gestion_creditos.services.facilidat_xlsx import (
+    xlsx_cartera_interna, xlsx_excepciones, xlsx_preparacion_facilidat, xlsx_sintetico_facilidat,
+)
 
 
 def exportar_pendientes(cierre_bytes, pendientes, trazas_bytes):
@@ -34,11 +36,24 @@ def main():
     parser.add_argument('--cierre', type=Path)
     parser.add_argument('--pendientes', type=Path)
     parser.add_argument('--trazas', type=Path)
+    parser.add_argument('--tipo', choices=('cartera', 'preparacion', 'positiva', 'mixta'))
     args = parser.parse_args()
     fuentes = (args.cierre, args.pendientes, args.trazas)
     if not args.destino.name.endswith('_NO_REMITIR.xlsx'):
         parser.error('Se requiere un destino nuevo con sufijo _NO_REMITIR.xlsx.')
-    if any(fuentes):
+    if args.tipo:
+        if not args.cierre or args.pendientes or args.trazas:
+            parser.error('La preparación y la cartera reciben solo el cierre interno.')
+        if args.cierre.resolve().parent != args.destino.resolve().parent:
+            parser.error('El informe debe permanecer bajo la custodia del cierre.')
+        raw = args.cierre.read_bytes()
+        cierre, huella = json.loads(raw), sha256(raw).hexdigest()
+        if args.tipo == 'cartera':
+            contenido = xlsx_cartera_interna(cierre, huella)
+        else:
+            escenario = None if args.tipo == 'preparacion' else args.tipo
+            contenido = xlsx_preparacion_facilidat(cierre, huella, escenario=escenario)
+    elif any(fuentes):
         if not all(fuentes):
             parser.error('El informe requiere cierre, pendientes y trazas del mismo corte.')
         if any(f.resolve().parent != args.destino.resolve().parent for f in fuentes):
