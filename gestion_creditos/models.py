@@ -3330,3 +3330,19 @@ class ComparacionOCRDocumental(models.Model):
                                     name='ocr_comparacion_version_unica'),
         ]
 
+
+class CierreCarteraSME(models.Model):
+    """Immutable-by-workflow internal snapshot; no public file URL."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    corte = models.DateField()
+    producto = models.CharField(max_length=30, blank=True)
+    generado_en = models.DateTimeField(auto_now_add=True)
+    generado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    plantilla_sha256 = models.CharField(max_length=64)
+    sha256 = models.CharField(max_length=64)
+    contenido = models.JSONField()
+
+    class Meta:
+        ordering = ('-generado_en',)
+        permissions = [('operar_cierre_cartera_sme', 'Puede generar y descargar conciliaciones de cartera SME')]
+

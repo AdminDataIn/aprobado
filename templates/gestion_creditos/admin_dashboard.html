@@ -348,6 +348,11 @@
                         {% endfor %}
                     </div>
                     <div class="filter-actions">
+                        {% if perms.gestion_creditos.operar_cierre_cartera_sme %}
+                        <a href="{% url 'gestion:cartera_sme' %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-file-earmark-bar-graph me-1"></i>DataCrédito SME
+                        </a>
+                        {% endif %}
                         <button id="advancedFiltersToggle" type="button" class="btn btn-sm btn-outline-secondary" aria-expanded="{% if filtros_avanzados_activos %}true{% else %}false{% endif %}" aria-controls="advancedFilters">
                             <i class="bi bi-sliders me-1"></i>Filtros avanzados{% if filtros_avanzados_activos %}<span class="active-filter-dot" aria-label="Filtros activos"></span>{% endif %}
                         </button>

@@ -7,6 +7,7 @@ Rol: Staff members que aprueban/rechazan créditos
 from django.urls import path
 from django.views.generic import RedirectView
 from .. import views
+from ..views import reporte_sme
 
 app_name = 'gestion'
 
@@ -21,6 +22,10 @@ urlpatterns = [
         name='obligaciones_pendientes',
     ),
     path('exportar-reporte/', views.admin_dashboard_export_view, name='dashboard_export'),
+    path('reportes/centrales/datacredito/', reporte_sme.cartera_sme, name='cartera_sme'),
+    path('reportes/centrales/datacredito/<uuid:cierre_id>/', reporte_sme.cartera_sme, name='cartera_sme_detalle'),
+    path('reportes/centrales/datacredito/<uuid:cierre_id>/<str:clase>/',
+         reporte_sme.descargar_cartera_sme, name='cartera_sme_descarga'),
     path('pagos-breb/', views.admin_pagos_breb_view, name='pagos_breb'),
     path('pagos-breb/<int:pago_id>/decidir/', views.admin_decidir_pago_breb_view, name='pago_breb_decidir'),
     path(

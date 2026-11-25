@@ -1,0 +1,127 @@
+{% load static humanize %}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cartera DataCrédito SME - Aprobado</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{% static 'creditos/css/base_styles.css' %}" rel="stylesheet">
+    {% include 'base/favicon.html' %}
+</head>
+<body class="theme-gestion theme-applications">
+    <header class="page-header">
+        <div class="container py-2">
+            <a href="{% url 'gestion:dashboard' %}" aria-label="Dashboard de Aprobado">
+                <img src="{% static 'images/logo-dark.png' %}" alt="Aprobado" height="32">
+            </a>
+        </div>
+    </header>
+    <main class="container py-4">
+        <nav aria-label="Ubicación">
+            <ol class="breadcrumb small">
+                <li class="breadcrumb-item"><a href="{% url 'gestion:dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item">Reportes</li>
+                <li class="breadcrumb-item">Centrales de riesgo</li>
+                <li class="breadcrumb-item active" aria-current="page">DataCrédito</li>
+            </ol>
+        </nav>
+        <div class="d-flex flex-wrap align-items-baseline justify-content-between gap-2 mb-3">
+            <h1 class="h3 m-0">Cartera DataCrédito SME</h1>
+            <span class="fw-semibold small text-danger" role="status">Remisión oficial bloqueada</span>
+        </div>
+        <form method="post" action="{% url 'gestion:cartera_sme' %}" class="row g-3 align-items-end mb-4">
+            {% csrf_token %}
+            <div class="col-sm-4 col-lg-3">
+                <label class="form-label" for="{{ form.corte.id_for_label }}">{{ form.corte.label }}</label>
+                {{ form.corte }}
+                {% for error in form.corte.errors %}<div class="small text-danger">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-sm-4 col-lg-3">
+                <label class="form-label" for="{{ form.producto.id_for_label }}">{{ form.producto.label }}</label>
+                {{ form.producto }}
+                {% for error in form.producto.errors %}<div class="small text-danger">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel me-1" aria-hidden="true"></i>Previsualizar corte</button>
+            </div>
+            {% if form.non_field_errors %}<div class="col-12 text-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+        </form>
+        {% if cierre %}
+        {% with datos=cierre.contenido.total %}
+        <section aria-labelledby="titulo-cierre" class="border-top pt-3 mb-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                <div>
+                    <h2 class="h5" id="titulo-cierre">Corte {{ cierre.corte|date:"d/m/Y" }}</h2>
+                    <p class="small text-muted">{{ cierre.producto|default:"Todos los productos" }} · America/Bogota</p>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <a class="btn btn-sm btn-outline-primary" href="{% url 'gestion:cartera_sme_descarga' cierre.pk 'conciliacion' %}">
+                        <i class="bi bi-download me-1" aria-hidden="true"></i>Conciliación interna
+                    </a>
+                    <a class="btn btn-sm btn-outline-primary" href="{% url 'gestion:cartera_sme_descarga' cierre.pk 'excepciones' %}">
+                        <i class="bi bi-download me-1" aria-hidden="true"></i>Excepciones
+                    </a>
+                </div>
+            </div>
+            <dl class="row row-cols-2 row-cols-md-4 g-3 border-bottom pb-3 mb-3">
+                <div class="col"><dt class="small text-muted">Obligaciones inventariadas</dt><dd class="h5">{{ datos.obligaciones_inventariadas }}</dd></div>
+                <div class="col"><dt class="small text-muted">Reportables</dt><dd class="h5">{{ datos.reportables }}</dd></div>
+                <div class="col"><dt class="small text-muted">Con excepciones</dt><dd class="h5">{{ datos.con_excepciones }}</dd></div>
+                <div class="col"><dt class="small text-muted">Sin conciliación financiera</dt><dd class="h5">{{ datos.incidencias_financieras }}</dd></div>
+                <div class="col"><dt class="small text-muted">Al día</dt><dd class="h5">{{ datos.al_dia }}</dd></div>
+                <div class="col"><dt class="small text-muted">Vencidas</dt><dd class="h5">{{ datos.vencidas }}</dd></div>
+                <div class="col"><dt class="small text-muted">Capital conciliado (COP)</dt><dd class="h6">{% if datos.conciliadas %}{{ datos.capital_pendiente_conciliado }}{% else %}No acreditado{% endif %}</dd></div>
+                <div class="col"><dt class="small text-muted">Vencido conciliado (COP)</dt><dd class="h6">{% if datos.conciliadas %}{{ datos.saldo_vencido_conciliado }}{% else %}No acreditado{% endif %}</dd></div>
+            </dl>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <caption class="caption-top fw-semibold">Distribución por producto</caption>
+                    <thead><tr><th scope="col">Producto</th><th scope="col">Inventariadas</th><th scope="col">Conciliadas</th><th scope="col">Al día</th><th scope="col">Vencidas</th><th scope="col">Pagadas</th></tr></thead>
+                    <tbody>
+                    {% for producto, fila in cierre.contenido.por_producto.items %}
+                        <tr><th scope="row">{{ producto }}</th><td>{{ fila.obligaciones_inventariadas }}</td><td>{{ fila.conciliadas }}</td><td>{{ fila.al_dia }}</td><td>{{ fila.vencidas }}</td><td>{{ fila.pagadas }}</td></tr>
+                    {% empty %}<tr><td colspan="6">No hay obligaciones para este corte.</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <details class="border-top pt-2">
+                <summary class="fw-semibold">Inconsistencias de fuente</summary>
+                <div class="table-responsive mt-2">
+                    <table class="table table-sm align-middle">
+                        <thead><tr><th scope="col">ID interno</th><th scope="col">Producto</th><th scope="col">Motivo</th></tr></thead>
+                        <tbody>
+                        {% for fila in cierre.contenido.filas %}
+                            {% if fila.incidencia_financiera %}
+                            <tr><th scope="row">{{ fila.credito_id_interno }}</th><td>{{ fila.producto }}</td>
+                                <td class="small text-break">{{ fila.incidencia_financiera }}</td></tr>
+                            {% endif %}
+                        {% endfor %}
+                        {% if not datos.incidencias_financieras %}<tr><td colspan="3">Sin incidencias financieras.</td></tr>{% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        </section>
+        {% endwith %}
+        {% endif %}
+        <section aria-labelledby="sme-historial" class="border-top pt-3">
+            <h2 class="h5" id="sme-historial">Historial de cierres</h2>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th scope="col">Corte</th><th scope="col">Producto</th><th scope="col">Generado en</th><th scope="col">Operador</th><th scope="col">Huella</th></tr></thead>
+                    <tbody>
+                    {% for item in historial %}
+                        <tr><th scope="row"><a href="{% url 'gestion:cartera_sme_detalle' item.pk %}">{{ item.corte|date:"d/m/Y" }}</a></th>
+                            <td>{{ item.producto|default:"Todos" }}</td>
+                            <td>{{ item.generado_en|date:"d/m/Y H:i" }}</td>
+                            <td>{{ item.generado_por_id }}</td><td><code>{{ item.sha256|slice:":12" }}</code></td></tr>
+                    {% empty %}<tr><td colspan="5">No hay cierres guardados.</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+</body>
+</html>
