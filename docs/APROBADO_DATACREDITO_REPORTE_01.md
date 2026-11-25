@@ -4,6 +4,78 @@
 `7327bae01e5b5382bc2c79cfaea483a91255d8b8`. Este frente no consulta HDC+,
 MiDecisor ni scoring. La salida de este candidato es **interna, no remitir**.
 
+## Excel intermedio y panel administrativo
+
+El panel genera archivos .xlsx con openpyxl en Linux. No usa Excel COM,
+no toca el .xls Facilidat y no genera TXT, ZIP de transmisión ni envía
+información. La descarga real está bloqueada en el servidor; no se abre
+con un cambio de los indicadores del cierre. El XLSX de carga solo contiene
+los tres casos sintéticos ya ensayados; no lee datos financieros ni de
+identificación. Las 36 columnas exactas A:AJ, con encabezado en fila 1,
+se fijaron a partir del diccionario; las celdas de entrada son cadenas
+con formato de Excel Texto (@). Así se conservan ceros iniciales,
+identificadores extendidos, fechas AAAAMMDD y códigos de ejemplo.
+
+El operador encuentra en el detalle de un cierre **Carga Facilidat
+sintética** y **Excepciones Excel**, además de conciliación, excepciones
+JSON e historial. Las descargas requieren el permiso de SME, verifican
+la huella del cierre y no se almacenan en caché. El informe Excel se
+arma con las mismas filas del cierre que muestra el panel. En los
+cierres sin trazas monetarias enlazadas, deja el importe vacío; no
+consulta una tabla vigente ni presenta el monto aprobado como diferencia.
+
+**Pegado sintético previsto.** En el .xlsx, copiar Carga!A2:AJ4, sin
+encabezados. Usar Pegado especial → Valores en Hoja1!A5 de una copia
+de trabajo autorizada de Facilidat. No editar encabezados, configuración
+ni fórmulas. No guardar si Excel advierte pérdida de ActiveX; no
+desbloquear globalmente contenido. El paso de pegado no autoriza usar
+los botones del proveedor. No confundir la plantilla original, esta
+carga intermedia y el archivo oficial que generaría el operador.
+
+**Excepciones al 31/10/2026.** Se reutilizaron los JSON privados del
+cierre focal, pendientes y trazas, verificando sus huellas y el
+cotejo por obligación. La hoja Excepciones tiene filtros, producto,
+incidencia, importe sustentado en COP si existe, alcance del importe,
+fuente, evidencia y acción. Se conservan 12 casos sin comprobante de
+giro, 10 diferencias cuota/asientos, 5 cierres con residuo, 4 remanentes
+sin imputación y 1 reestructuración. Los residuos y diferencias son
+indicadores de su evidencia, no saldos ni ajustes. No se suman entre
+causas; los importes desconocidos no se presentan como cero.
+El informe local tiene 32 filas: 9 con importe sustentado y 23 sin
+importe acreditado.
+
+Verificación: 35/35 pruebas focales, incluidas las dos descargas en
+Chromium de escritorio y móvil. Excel nativo en Vista protegida leyó
+36/36 encabezados y 108/108 valores como texto, iguales a la muestra
+original. No se probó todavía el pegado manual ni los botones del
+proveedor. No se requiere una migración adicional a la del panel.
+
+### Documentación oficial requerida para la remisión
+
+El operador indica en su [comunicación a suscriptores](https://lmsdatacredito.com/imagescortes/2022/Julio/12/Carta_Comunicacion.pdf)
+que los manuales se descargan en **Empresas → Acceso a Suscriptores →
+Soporte → Manuales**. Se acreditó la ruta, no el contenido de la edición
+contratada. La [guía pública de Experian](https://www.datacredito.com.co/blogs/datablog/por-que-es-importante-reportar-a-un-cliente-en-datacredito-experian/)
+confirma el canal y el RAI, pero no el archivo exacto de este Facilidat.
+
+| Documento o anexo vigente que se necesita | Validación por cerrar |
+| --- | --- |
+| Manual de Entrega de Información de Cartera, Tarjeta de Crédito y CRT: diccionario y anexos de cartera aplicables a SME | Combinaciones I/J/K/M/O, significado de M=17, límites de bandas de mora J, fecha AC y AD cuando no hay pago o cuando está vencido. |
+| Catálogo de calificación para este reporte y política institucional aplicable | Q: AA/BB/CC y asignación autorizada de calificación. No usar scoring como reemplazo. |
+| Especificación de registro y obligatoriedad del layout SME resumido | Unidad/escala/redondeo de importes S:W; largo y caracteres de identidad/obligación/nombre; tratamiento de cupo no aplicable y valores sin dato; correspondencia, titular y roles acreditados. |
+| Procedimiento del operador para dato en discusión, novedades y rectificaciones de este canal | Registro del reclamo fuera de A:AJ, corrección de estados y confirmación de su procesamiento. No usar un código de mora/adjetivo por descarte. |
+| Instructivo vigente de Facilidat SME Resumida, Actualización Mensual, para la edición de la plantilla inspeccionada | Pegado soportado, control de seguridad local autorizado que conserve ActiveX, Validar, Generar Archivo para Enviar, formato/nombre/compresión admitidos y conciliación del RAI. |
+
+Los ejemplos públicos sobre TXT/ZIP no acreditan esta versión. No se
+ejecutó ningún botón ni se transmitió el ensayo. Obtener ese instructivo
+y sus anexos, verificar procedencia y hacer primero una validación
+sintética aislada. Si hace falta intervención del PM, limitarla a esa
+prueba local autorizada; no cambiar las políticas globales de Office.
+En paralelo, para casos reales deben acreditarse los soportes y las
+reglas de reporte positivo/negativo. No se cambió la habilitación:
+90 de 122 obligaciones están conciliadas, 32 tienen incidencias y
+0 pueden remitirse.
+
 ## Facilidat: evidencia del 25/11/2026
 
 Excel 365 para Windows abrió una copia byte a byte en Vista protegida,

@@ -40,6 +40,14 @@ const { chromium } = require('playwright');
     assert.equal(snapshot.total.al_dia, 1);
     assert.equal(snapshot.total.reportables, 0);
     assert.equal(snapshot.filas.length, 1);
+    for (const name of ['Excepciones Excel', 'Carga Facilidat sintética']) {
+      const [excel] = await Promise.all([
+        page.waitForEvent('download'),
+        page.getByRole('link', { name, exact: true }).click(),
+      ]);
+      assert.match(excel.suggestedFilename(), /_NO_REMITIR\.xlsx$/);
+      assert.equal(fs.readFileSync(await excel.path()).subarray(0, 2).toString(), 'PK');
+    }
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), ancho);
     if (process.env.SME_EVIDENCIA_NAVEGADOR) {
       await page.screenshot({ path: path.join(process.env.SME_EVIDENCIA_NAVEGADOR, `sme-${ancho}.png`),
