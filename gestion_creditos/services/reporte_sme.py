@@ -3,6 +3,7 @@ from collections import Counter, defaultdict
 from contextlib import contextmanager
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+import json
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
@@ -16,7 +17,7 @@ from gestion_creditos.services.accounting import get_platform_disbursed_creditos
 from gestion_creditos.services.libranza_rules import calcular_primera_fecha_pago_libranza, sumar_meses_con_dia_ancla
 
 
-VERSION_CIERRE = 'sme-conciliacion-interna-v1'
+VERSION_CIERRE = 'sme-conciliacion-interna-v2'
 ZONA = ZoneInfo('America/Bogota')
 CERO = Decimal('0.00')
 MEDIO_CENTAVO = Decimal('0.005')
@@ -99,7 +100,8 @@ def _obligaciones(corte, producto):
         'fecha_primera_cuota_forzada', 'estado', 'comision', 'iva_comision',
     ).prefetch_related(
         Prefetch('historial_estados', to_attr='sme_estados', queryset=HistorialEstado.objects.only(
-            'credito_id', 'fecha', 'estado_nuevo', 'comprobante_pago',
+            'credito_id', 'fecha', 'estado_nuevo', 'comprobante_pago', 'clave_idempotencia',
+            'motivo', 'usuario_modificacion_id',
         ).order_by('fecha', 'pk')),
         Prefetch('tabla_amortizacion', to_attr='sme_cuotas', queryset=CuotaAmortizacion.objects.only(
             'credito_id', 'numero_cuota', 'fecha_vencimiento', 'capital_a_pagar', 'interes_a_pagar',
@@ -110,7 +112,7 @@ def _obligaciones(corte, producto):
         ).order_by('fecha_aplicacion', 'pk').prefetch_related(
             Prefetch('detalles_contables', to_attr='sme_imputaciones', queryset=DetalleContablePago.objects.only(
                 'pago_id', 'credito_id', 'cuota_id', 'monto_total_aplicado', 'capital_aplicado', 'interes_aplicado',
-                'fecha_aplicacion',
+                'fecha_aplicacion', 'metodologia_calculo',
             )),
         )),
     ).order_by('pk')
@@ -173,10 +175,44 @@ def _plan(credito):
     return capital_financiado, capital_plan, diferencia_total, diferencia_capital
 
 
+def _cierres_auditados(credito, por_cuota, por_pago, recibido, limite):
+    cierres, cierres_al_corte = set(), set()
+    for evento in credito.sme_estados:
+        if not (evento.clave_idempotencia or '').startswith('reconciliacion-redondeo:cuota:'):
+            continue
+        try:
+            datos = json.loads(evento.motivo or '{}')
+            cuota, pago = por_cuota[datos['cuota_id']], por_pago[datos['pago_id']]
+            diferencia = Decimal(datos['diferencia'])
+            valido = (
+                evento.clave_idempotencia == f'reconciliacion-redondeo:cuota:{cuota.pk}'
+                and datos['evento'] == 'RECONCILIACION_REDONDEO' and datos['resultado'] == 'RECONCILIADA'
+                and datos['credito_id'] == credito.pk and datos['numero_cuota'] == cuota.numero_cuota
+                and evento.usuario_modificacion_id is not None and datos['actor_id'] == evento.usuario_modificacion_id
+                and pago.estado == HistorialPago.EstadoPago.EXITOSO and pago.fecha_aplicacion <= evento.fecha
+                and cuota.fecha_pago == pago.fecha_aplicacion and cuota.pagada
+                and any(d.cuota_id == cuota.pk for d in pago.sme_imputaciones)
+                and recibido[cuota.pk] == Decimal(datos['monto_pagado_real'])
+                and CERO < diferencia <= Decimal(datos['tolerancia'])
+                and cuota.valor_cuota - recibido[cuota.pk] == diferencia
+            )
+        except (KeyError, ArithmeticError, TypeError, ValueError):
+            continue
+        if valido:
+            cierres.add(cuota.pk)
+            if evento.fecha < limite:
+                cierres_al_corte.add(cuota.pk)
+    return cierres, cierres_al_corte
+
+
 def _imputaciones(credito, limite):
     por_cuota = {c.pk: c for c in credito.sme_cuotas}
-    al_corte = defaultdict(lambda: [CERO, CERO])
+    por_pago = {p.pk: p for p in credito.sme_pagos}
+    al_corte = defaultdict(lambda: [CERO, CERO, CERO])
     total_actual_contabilizado = defaultdict(lambda: CERO)
+    redondeos = Counter()
+    redondeos_al_corte = Counter()
+    efectivos_con_residuo_posterior = 0
     ultimo = None
     posteriores = False
     for pago in credito.sme_pagos:
@@ -190,27 +226,45 @@ def _imputaciones(credito, limite):
             continue
         _exigir(pago.monto > CERO, 'REVERSO_O_MOVIMIENTO_NO_ACREDITADO')
         _exigir(pago.sme_imputaciones, 'PAGO_EFECTIVO_SIN_DETALLE_CONTABLE')
-        _exigir(sum(d.monto_total_aplicado for d in pago.sme_imputaciones) == pago.monto,
-                'MONTO_PAGO_NO_CONCILIA_CON_IMPUTACIONES')
+        total_aplicado = sum(d.monto_total_aplicado for d in pago.sme_imputaciones)
+        if total_aplicado != pago.monto:
+            _exigir(not antes and CERO < total_aplicado < pago.monto, 'MONTO_PAGO_NO_CONCILIA_CON_IMPUTACIONES')
+            efectivos_con_residuo_posterior += 1
         for detalle in pago.sme_imputaciones:
             _exigir(detalle.credito_id == credito.pk and detalle.cuota_id in por_cuota
                     and detalle.fecha_aplicacion == pago.fecha_aplicacion, 'IMPUTACION_NO_CORRELACIONADA')
-            _exigir(detalle.capital_aplicado >= CERO and detalle.interes_aplicado >= CERO
-                    and detalle.capital_aplicado + detalle.interes_aplicado == detalle.monto_total_aplicado,
+            _exigir(detalle.capital_aplicado >= CERO and detalle.interes_aplicado >= CERO,
                     'DESGLOSE_O_REVERSO_NO_CONCILIADO')
+            brecha = detalle.monto_total_aplicado - detalle.capital_aplicado - detalle.interes_aplicado
+            if brecha:
+                cuota = por_cuota[detalle.cuota_id]
+                # The Core caps capital and interest independently after the legacy plan is rounded.
+                _exigir(credito.linea == 'LIBRANZA' and not credito.sme_prestador
+                        and detalle.metodologia_calculo == 'CUOTA_INTERES_PRIMERO'
+                        and brecha == cuota.valor_cuota - cuota.capital_a_pagar - cuota.interes_a_pagar == CENTAVO,
+                        'DESGLOSE_O_REVERSO_NO_CONCILIADO')
+                redondeos[detalle.cuota_id] += 1
+                if antes:
+                    redondeos_al_corte[detalle.cuota_id] += 1
             if antes:
                 al_corte[detalle.cuota_id][0] += detalle.capital_aplicado
                 al_corte[detalle.cuota_id][1] += detalle.interes_aplicado
+                al_corte[detalle.cuota_id][2] += detalle.monto_total_aplicado
                 ultimo = pago.fecha_aplicacion.astimezone(ZONA).date()
             total_actual_contabilizado[detalle.cuota_id] += detalle.monto_total_aplicado
+    cierres, cierres_al_corte = _cierres_auditados(credito, por_cuota, por_pago, total_actual_contabilizado, limite)
     for cuota in credito.sme_cuotas:
         observado = cuota.monto_pagado
         aplicado = total_actual_contabilizado[cuota.pk]
         _exigir(aplicado <= cuota.valor_cuota, 'IMPUTACION_EXCEDE_VALOR_CUOTA')
+        _exigir(not redondeos[cuota.pk] or (redondeos[cuota.pk] == 1 and aplicado == cuota.valor_cuota),
+                'DESGLOSE_O_REVERSO_NO_CONCILIADO')
+        _exigir(not redondeos_al_corte[cuota.pk] or (al_corte[cuota.pk][2] == cuota.valor_cuota),
+                'DESGLOSE_O_REVERSO_NO_CONCILIADO')
         _exigir((observado if observado is not None else CERO) == aplicado
-                and cuota.pagada == (aplicado == cuota.valor_cuota),
+                and cuota.pagada == (aplicado == cuota.valor_cuota or cuota.pk in cierres),
                 'CUOTA_CON_MOVIMIENTO_SIN_SOPORTE_CONTABLE')
-    return al_corte, ultimo, posteriores
+    return al_corte, ultimo, posteriores, cierres_al_corte, sum(redondeos_al_corte.values()), efectivos_con_residuo_posterior
 
 
 def _desembolso_acreditado(credito, historial):
@@ -227,18 +281,21 @@ def _conciliar(credito, corte, historial, desembolso):
     estado = historial[-1].estado_nuevo
     _exigir(estado in ESTADOS_OPERATIVOS, 'NOVEDAD_HISTORICA_REQUIERE_CONCILIACION')
     capital, capital_plan, diferencia_total, diferencia_capital = _plan(credito)
-    imputadas, ultimo, posteriores = _imputaciones(credito, limite)
+    imputadas, ultimo, posteriores, cierres, redondeos, residuales_posteriores = _imputaciones(credito, limite)
     capital_pendiente, saldo_total, saldo_vencido, pagadas = capital_plan, CERO, CERO, 0
     vencimientos = []
     for cuota in credito.sme_cuotas:
-        aplicado_capital, aplicado_interes = imputadas[cuota.pk]
+        aplicado_capital, aplicado_interes, efectivo = imputadas[cuota.pk]
         _exigir(aplicado_capital <= cuota.capital_a_pagar and aplicado_interes <= cuota.interes_a_pagar,
                 'IMPUTACION_EXCEDE_COMPONENTE')
         capital_pendiente -= aplicado_capital
-        resto = cuota.valor_cuota - aplicado_capital - aplicado_interes
+        # An operational closing does not convert the documented residual into received cash.
+        resto = cuota.valor_cuota - efectivo
         saldo_total += resto
         if resto == CERO:
             pagadas += 1
+        elif cuota.pk in cierres:
+            raise FuenteIncompleta('CIERRE_OPERATIVO_AUDITADO_CON_RESIDUO_FINANCIERO')
         elif cuota.fecha_vencimiento < corte:
             saldo_vencido += resto
             vencimientos.append(cuota.fecha_vencimiento)
@@ -252,6 +309,8 @@ def _conciliar(credito, corte, historial, desembolso):
         'saldo_pendiente': saldo_total, 'saldo_vencido': saldo_vencido,
         'diferencia_plan_vs_total_aprobado': diferencia_total,
         'diferencia_capital_plan_vs_financiado': diferencia_capital,
+        'cuotas_con_centavo_de_redondeo_contable': redondeos,
+        'pagos_posteriores_con_residuo_no_imputado': residuales_posteriores,
         'cuotas_pactadas': len(credito.sme_cuotas), 'cuotas_pagadas': pagadas,
         'cuotas_pendientes': len(credito.sme_cuotas) - pagadas, 'cuotas_vencidas': len(vencimientos),
         'dias_mora': (corte - min(vencimientos)).days if vencimientos else 0,
@@ -286,13 +345,16 @@ def _resumen(filas):
     }
 
 
-def construir_cierre(corte, producto=''):
+def construir_cierre(corte, producto='', *, ids_revision=None):
     validar_parametros(corte, producto)
     filas, excluidas = [], 0
     prueba_ids = set(getattr(settings, 'SME_CREDITOS_DE_PRUEBA_ACREDITADOS', ()))
     limite = fin_exclusivo(corte)
     with cierre_solo_lectura():
-        for credito in _obligaciones(corte, producto).iterator(chunk_size=100):
+        obligaciones = _obligaciones(corte, producto)
+        if ids_revision is not None:
+            obligaciones = obligaciones.filter(pk__in=ids_revision)
+        for credito in obligaciones.iterator(chunk_size=100):
             if credito.sme_prueba or credito.pk in prueba_ids:
                 excluidas += 1
                 continue

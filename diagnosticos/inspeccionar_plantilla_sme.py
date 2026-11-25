@@ -12,6 +12,10 @@ import sys
 import olefile
 
 
+class AperturaBloqueada(Exception):
+    """Expose only a stage code; library errors may contain workbook data."""
+
+
 def registros(stream, limit):
     while stream.tell() < limit:
         header = stream.read(4)
@@ -46,6 +50,7 @@ def inspeccionar(archivo):
 
 def inventariar(archivo, info, salida):
     import msoffcrypto
+    from msoffcrypto.exceptions import InvalidKeyError
     import xlrd
 
     claro = BytesIO()
@@ -54,14 +59,31 @@ def inventariar(archivo, info, salida):
             raise ValueError('FALTA_CONSOLA_LOCAL_INTERACTIVA')
         with archivo.open('rb') as f:
             paquete = msoffcrypto.OfficeFile(f)
-            paquete.load_key(password=getpass('Contraseña de apertura XLS (entrada oculta): '))
-            paquete.decrypt(claro)
-            del paquete
+            clave = getpass('Contraseña de apertura XLS (entrada oculta): ')
+            if not clave:
+                raise AperturaBloqueada('CLAVE_NO_SUMINISTRADA')
+            try:
+                paquete.load_key(password=clave)
+            except InvalidKeyError:
+                raise AperturaBloqueada('CLAVE_NO_ACEPTADA') from None
+            except Exception:
+                raise AperturaBloqueada('VERIFICACION_XLS_NO_COMPLETADA') from None
+            finally:
+                del clave
+            try:
+                paquete.decrypt(claro)
+            except Exception:
+                raise AperturaBloqueada('DESCIFRADO_XLS_NO_COMPLETADO') from None
+            finally:
+                del paquete
     else:
         claro.write(archivo.read_bytes())
 
     # xlrd reads cached cells, not the formula or VBA execution engines.
-    libro = xlrd.open_workbook(file_contents=claro.getvalue(), formatting_info=True, on_demand=True)
+    try:
+        libro = xlrd.open_workbook(file_contents=claro.getvalue(), formatting_info=True, on_demand=True)
+    except Exception:
+        raise AperturaBloqueada('LECTURA_BIFF8_NO_COMPLETADA') from None
     info['hojas'] = []
     for indice in range(libro.nsheets):
         hoja = libro.sheet_by_index(indice)
@@ -90,6 +112,8 @@ def main():
                 raise ValueError('DESTINO_EXISTENTE')
             inventariar(args.archivo, info, args.estructura)
             print('INVENTARIO_LOCAL=PASS; NO_MACROS=PASS')
+    except AperturaBloqueada as exc:
+        sys.exit(f'PLANTILLA=BLOCKED; CAUSA={exc}')
     except (OSError, ValueError, StopIteration):
         sys.exit('PLANTILLA=BLOCKED; falta una entrada válida o acceso local')
     except Exception:

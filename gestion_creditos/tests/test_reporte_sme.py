@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
+import json
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
@@ -177,6 +178,60 @@ class CierreCarteraSMETest(CierreSMEFixture, TransactionTestCase):
         self.pagar(c, fecha(10, 11), 400, Decimal('50.01'))
         self.assertEqual(self.fila()['incidencia_financiera'], 'IMPUTACION_EXCEDE_VALOR_CUOTA')
 
+    def test_centavo_en_cuota_cerrada_no_inventa_capital_ni_interes(self):
+        c = self.credito(fecha(8))
+        Credito.objects.filter(pk=c.pk).update(comision=50, iva_comision=0)
+        c.tabla_amortizacion.filter(numero_cuota=1).update(interes_a_pagar=Decimal('49.99'))
+        pago = self.pagar(c, fecha(10), 400, Decimal('49.99'))
+        HistorialPago.objects.filter(pk=pago.pk).update(monto=450)
+        pago.detalles_contables.update(monto_total_aplicado=450)
+        c.tabla_amortizacion.filter(numero_cuota=1).update(monto_pagado=450, pagada=True, fecha_pago=fecha(10))
+        f = self.fila()
+        self.assertEqual((f['cuotas_pagadas'], f['capital_pendiente'], f['saldo_vencido']), (1, 400, 450))
+        self.assertEqual(f['cuotas_con_centavo_de_redondeo_contable'], 1)
+
+    def test_centavo_inexplicado_no_pasa_como_redondeo(self):
+        c = self.credito(fecha(8))
+        Credito.objects.filter(pk=c.pk).update(comision=50, iva_comision=0)
+        pago = self.pagar(c, fecha(10), 400, Decimal('49.99'))
+        HistorialPago.objects.filter(pk=pago.pk).update(monto=450)
+        pago.detalles_contables.update(monto_total_aplicado=450)
+        self.assertEqual(self.fila()['incidencia_financiera'], 'DESGLOSE_O_REVERSO_NO_CONCILIADO')
+
+    def test_remanente_posterior_no_reduce_saldo_octubre_y_filtro_focal(self):
+        c = self.credito(fecha(8))
+        self.credito(fecha(8))
+        pago = self.pagar(c, fecha(11), 400, 50)
+        HistorialPago.objects.filter(pk=pago.pk).update(monto=451)
+        resultado = construir_cierre(CORTE, ids_revision=[c.pk])
+        self.assertEqual(len(resultado['filas']), 1)
+        f = resultado['filas'][0]
+        self.assertEqual((f['saldo_vencido'], f['cuotas_pagadas']), (900, 0))
+        self.assertEqual(f['pagos_posteriores_con_residuo_no_imputado'], 1)
+
+    def test_remanente_anterior_no_se_omite(self):
+        c = self.credito(fecha(8))
+        pago = self.pagar(c, fecha(10), 400, 50)
+        HistorialPago.objects.filter(pk=pago.pk).update(monto=451)
+        self.assertEqual(self.fila()['incidencia_financiera'], 'MONTO_PAGO_NO_CONCILIA_CON_IMPUTACIONES')
+
+    def test_acta_de_redondeo_no_convierte_residuo_en_dinero_recibido(self):
+        c = self.credito(fecha(8))
+        pago = self.pagar(c, fecha(10), 398, 50)
+        cuota = c.tabla_amortizacion.get(numero_cuota=1)
+        c.tabla_amortizacion.filter(pk=cuota.pk).update(pagada=True, fecha_pago=pago.fecha_aplicacion)
+        acta = HistorialEstado.objects.create(
+            credito=c, estado_nuevo='ACTIVO', usuario_modificacion=self.operador,
+            clave_idempotencia=f'reconciliacion-redondeo:cuota:{cuota.pk}',
+            motivo=json.dumps({'evento': 'RECONCILIACION_REDONDEO', 'resultado': 'RECONCILIADA',
+                'credito_id': c.pk, 'pago_id': pago.pk, 'cuota_id': cuota.pk, 'numero_cuota': 1,
+                'actor_id': self.operador.pk, 'monto_pagado_real': '448.00', 'diferencia': '2.00', 'tolerancia': '2.00'}),
+        )
+        HistorialEstado.objects.filter(pk=acta.pk).update(fecha=fecha(10, 11))
+        self.assertEqual(self.fila()['incidencia_financiera'], 'CIERRE_OPERATIVO_AUDITADO_CON_RESIDUO_FINANCIERO')
+        HistorialEstado.objects.filter(pk=acta.pk).update(fecha=fecha(11))
+        self.assertEqual(self.fila()['saldo_vencido'], 452)
+
     def test_reestructuracion_no_se_promueve_a_plan_historico(self):
         c = self.credito(fecha(8))
         ReestructuracionCredito.objects.create(credito=c, monto_abonado=450,
@@ -221,7 +276,7 @@ class CierreCarteraSMETest(CierreSMEFixture, TransactionTestCase):
             self.assertEqual(r.status_code, 302)
         self.assertEqual(CierreCarteraSME.objects.count(), 2)
         cierre = CierreCarteraSME.objects.first()
-        self.assertContains(self.client.get(r.url), 'Capital conciliado')
+        self.assertContains(self.client.get(r.url), 'Capital pendiente conciliado (COP)')
         plantilla = reverse('gestion:cartera_sme_descarga', args=[cierre.pk, 'oficial'])
         self.assertEqual(self.client.get(plantilla).status_code, 404)
         descarga = reverse('gestion:cartera_sme_descarga', args=[cierre.pk, 'conciliacion'])

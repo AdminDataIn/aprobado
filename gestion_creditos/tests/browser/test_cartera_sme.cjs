@@ -29,6 +29,9 @@ const { chromium } = require('playwright');
     await page.getByRole('button', { name: 'Previsualizar corte' }).click();
     await page.getByRole('heading', { name: 'Corte 31/10/2026' }).waitFor();
     assert.match(await page.getByRole('status').innerText(), /Remisi.n oficial bloqueada/);
+    for (const label of [/Pendientes de conciliaci.n/, /No habilitadas/, /Al d.a entre conciliadas/]) {
+      assert.equal(await page.getByText(label).count(), 1);
+    }
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('link', { name: 'Conciliación interna' }).click(),

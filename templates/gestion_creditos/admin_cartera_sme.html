@@ -67,13 +67,15 @@
             </div>
             <dl class="row row-cols-2 row-cols-md-4 g-3 border-bottom pb-3 mb-3">
                 <div class="col"><dt class="small text-muted">Obligaciones inventariadas</dt><dd class="h5">{{ datos.obligaciones_inventariadas }}</dd></div>
+                <div class="col"><dt class="small text-muted">Conciliadas</dt><dd class="h5">{{ datos.conciliadas }}</dd></div>
+                <div class="col"><dt class="small text-muted">Pendientes de conciliación</dt><dd class="h5">{{ datos.incidencias_financieras }}</dd></div>
                 <div class="col"><dt class="small text-muted">Reportables</dt><dd class="h5">{{ datos.reportables }}</dd></div>
-                <div class="col"><dt class="small text-muted">Con excepciones</dt><dd class="h5">{{ datos.con_excepciones }}</dd></div>
-                <div class="col"><dt class="small text-muted">Sin conciliación financiera</dt><dd class="h5">{{ datos.incidencias_financieras }}</dd></div>
-                <div class="col"><dt class="small text-muted">Al día</dt><dd class="h5">{{ datos.al_dia }}</dd></div>
-                <div class="col"><dt class="small text-muted">Vencidas</dt><dd class="h5">{{ datos.vencidas }}</dd></div>
-                <div class="col"><dt class="small text-muted">Capital conciliado (COP)</dt><dd class="h6">{% if datos.conciliadas %}{{ datos.capital_pendiente_conciliado }}{% else %}No acreditado{% endif %}</dd></div>
-                <div class="col"><dt class="small text-muted">Vencido conciliado (COP)</dt><dd class="h6">{% if datos.conciliadas %}{{ datos.saldo_vencido_conciliado }}{% else %}No acreditado{% endif %}</dd></div>
+                <div class="col"><dt class="small text-muted">No habilitadas</dt><dd class="h5">{{ datos.con_excepciones }}</dd></div>
+                <div class="col"><dt class="small text-muted">Al día entre conciliadas</dt><dd class="h5">{{ datos.al_dia }}</dd></div>
+                <div class="col"><dt class="small text-muted">Vencidas entre conciliadas</dt><dd class="h5">{{ datos.vencidas }}</dd></div>
+                <div class="col"><dt class="small text-muted">Pagadas entre conciliadas</dt><dd class="h5">{{ datos.pagadas }}</dd></div>
+                <div class="col"><dt class="small text-muted">Capital pendiente conciliado (COP)</dt><dd class="h6">{% if datos.conciliadas %}{{ datos.capital_pendiente_conciliado }}{% else %}No acreditado{% endif %}</dd></div>
+                <div class="col"><dt class="small text-muted">Saldo vencido conciliado (COP)</dt><dd class="h6">{% if datos.conciliadas %}{{ datos.saldo_vencido_conciliado }}{% else %}No acreditado{% endif %}</dd></div>
             </dl>
             <div class="table-responsive">
                 <table class="table table-sm align-middle">

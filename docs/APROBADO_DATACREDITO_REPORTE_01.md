@@ -4,6 +4,88 @@
 `7327bae01e5b5382bc2c79cfaea483a91255d8b8`. Este frente no consulta HDC+,
 MiDecisor ni scoring. La salida de este candidato es **interna, no remitir**.
 
+## Revisión focal posterior al cierre inicial
+
+Se conservó el cierre inicial como evidencia. En PostgreSQL forzado a solo
+lectura se revisaron sus 37 incidencias, se recalcularon únicamente esas
+filas y se mantuvieron intactas las 85 previamente conciliadas.
+
+| Corte 31/10/2026 | Resultado |
+| --- | ---: |
+| Inventariadas, Libranza | 122 |
+| Desembolsos acreditados | 110 |
+| Conciliadas | 90 |
+| Al día / vencidas / pagada entre conciliadas | 57 / 32 / 1 |
+| Capital pendiente entre conciliadas (COP) | 396.273.939,89 |
+| Saldo vencido entre conciliadas (COP) | 23.989.743,20 |
+| Habilitadas para remisión | 0 |
+
+Se resolvieron 4 casos de un centavo debido al redondeo del plan y al tope
+de capital e interés del Core, y un caso con diferencia de imputación
+exclusivamente posterior al corte. El centavo solo se acepta como tal si
+coincide con la diferencia de componentes del plan Libranza y la cuota
+está completamente cubierta. Se usa el efectivo aplicado para saldo de
+cuota y la imputación registrada para capital; no se añade capital ni
+interés. Un excedente no aplicado posterior no reduce el saldo de octubre.
+No se cambia ningún asiento ni se utiliza un acta de cierre como recibo.
+
+**Pendientes reales (32):** 12 activaciones anteriores al corte sin
+comprobante de desembolso correlacionado; 10 diferencias entre cuota y
+asientos o cierres sin acta verificable; 5 cierres operativos auditados
+con residuo financiero; 4 pagos anteriores con remanente sin imputación
+acreditada; un abono a capital con plan reestructurado no reconstruible.
+La revisión inicial detectó 8 diferencias de desglose de un centavo, no
+reversos demostrados. Tres desembolsos posteriores ya estaban fuera del
+inventario; no se deben volver a excluir del denominador de 122. Los 12
+sin comprobante no prueban ausencia de giro.
+
+**Pagador.** Entre las 32 vencidas al corte, 12 tienen pago parcial, 8
+tienen aplicaciones posteriores y 3 tienen pagos ligados al pagador, sin
+referencia de comprobante de lote para esos pagos. No se encontró un pago
+pendiente en el historial ni un Wompi aprobado o un BRE-B reportado sin
+aplicar en el grupo. No se acreditó un descuento de nómina retenido sin
+giro ni un incumplimiento imputable al titular. Para atribuir la causa,
+cotejar nómina, giro y recepción bancaria por obligación. Al 23/11/2026,
+31 de esas mismas 32 obligaciones seguían vencidas; una quedó sin
+conciliar por un pago que no coincide con sus asientos. El estado nominal
+del crédito no reemplaza la clasificación derivada de cuotas. Referencia:
+[Ley 1527, art. 6](https://www.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=47213).
+
+**Soportes de reporte.** El cierre identifica 57 candidatas financieras
+al día y una pagada, no registros positivos habilitados. La comunicación
+previa no bloquea por sí sola un reporte positivo. Para ambos tipos falta
+confirmar reglas de la planilla y reclamos/rectificaciones, el soporte de
+la obligación y la base aplicable, incluida autorización cuando proceda.
+Hay 110 pagarés v1.0 marcados firmados y ninguno de esos registros tiene
+un archivo firmado referenciado en el campo correspondiente. La plantilla
+v1.0 revisada no acredita una cláusula expresa de reporte, y el texto
+general de privacidad no demuestra una aceptación individual versionada.
+Para las 32 vencidas, 11 tenían una marca operativa de aviso al corte;
+ninguna marca sola acredita destinatario, contenido, envío ni plazo legal.
+No se identificó pequeña cuantía entre ellas en el filtro preliminar por
+monto original; no usar el saldo pendiente para esa decisión. No se
+generaron comunicaciones ni se declaró inexistencia de reclamos. Fuentes:
+[Ley 1266, arts. 6, 8, 12 y 16](https://www1.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=34488)
+y [orientación SIC sobre soporte y comunicación](https://sedeelectronica.sic.gov.co/publicaciones/boletin-juridico/concepto/el-reporte-negativo-de-informacion-financiera-debe-ser-sustentando-con-la-obligacion-respectiva).
+
+**Custodia.** El cierre focal, los soportes de vencidas y el informe
+`Pendientes_operativos_2026-10-31_NO_REMITIR.json` están en
+`%LOCALAPPDATA%\Aprobado\SME-2026-10-31-r3`. No contienen nombres,
+identificaciones ni archivos de titulares. No se publicaron ni enviaron.
+
+**Gates independientes.** El panel interno mantiene previsualización,
+historial y descargas privadas; muestra conciliación y remisión por
+separado. La descarga oficial y el gate de remisión están bloqueados.
+El usuario ejecutó la apertura local, pero la lectura no se completó.
+La copia actualmente bajo el mismo nombre sigue cifrada y su SHA-256 es
+`cdebe9515200a963b509099d83dc2c2e5a49357b269870c5e01b906fbaae4336`, distinto
+del observado al primer cierre. Antes de mapear campos se requiere la
+clave de apertura o la copia oficial abrible por el canal de entrega
+original y el instructivo si la propia planilla no define la remisión.
+El inspector separa clave no suministrada, clave no aceptada y fallo de
+lectura, sin escribir contraseñas ni ejecutar macros. No se generó XLS
+sintético ni real con encabezados o códigos supuestos.
+
 ## Planilla y formato
 
 `901949137.287922.PLANILLA__SME_RESUMIDA.xls`, 3.748.864 bytes, SHA-256
@@ -73,7 +155,7 @@ Capital pendiente interno se toma del capital amortizable del plan menos lo
 realmente imputado; la diferencia frente al capital financiado se conserva.
 Los agregados monetarios cubren exclusivamente las filas conciliadas.
 
-## Cierre interno de octubre
+## Cierre interno inicial de octubre (evidencia conservada)
 
 La lectura de producción del 24/11/2026 confirmó el SHA base y forzó
 PostgreSQL a solo lectura. Se inventariaron 122 obligaciones de Libranza:
