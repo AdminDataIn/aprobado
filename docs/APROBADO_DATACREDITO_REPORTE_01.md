@@ -4,6 +4,79 @@
 `7327bae01e5b5382bc2c79cfaea483a91255d8b8`. Este frente no consulta HDC+,
 MiDecisor ni scoring. La salida de este candidato es **interna, no remitir**.
 
+## Facilidat: evidencia del 25/11/2026
+
+Excel 365 para Windows abrió una copia byte a byte en Vista protegida,
+sin solicitar contraseña. No se descifró el libro ni se cambiaron políticas
+de Office. La lectura se ejecutó en una instancia COM exclusiva, sin
+eventos, actualización de vínculos, ejecución de VBA, activación de
+ActiveX ni autorización de XLM. El modelo de objetos expuso cero hojas XLM,
+cero conexiones y cero vínculos Excel/OLE. En Vista protegida Excel no
+expone el proyecto VBA: su presencia se verifica por el contenedor
+original, no por esa propiedad COM. SHA-256 de la copia inspeccionada:
+`dd57903ab11cfedd628b7d188d2610b5e7632b70f5cdca4149421a285b761e09`.
+
+- Hoja1: encabezados en fila 4, primera fila de entrada 5. Se verificaron
+  los **36 campos A:AJ**, todos con nota oficial y formato Excel de texto
+  en fila 5. Se leyeron las áreas de validación y búsqueda de fórmulas hasta
+  la fila 65.536. No se detectaron fórmulas en el área de datos A5:AJ65536.
+- Hoja2: configuración, referencias y anotaciones de homologación. Se
+  leyeron 54 nombres definidos y 33 notas de Hoja2. El formato de fecha
+  configurado es AAAAMMDD. La configuración de la copia todavía muestra
+  fechas de 2019: no se cambió ni representa el corte de octubre de 2026.
+- Nueve catálogos leídos: A, E, H, I, J, K, M, O y Q. Acreditado que en
+  J/M al día es 01/1 y pago total 05/3; M=2 es en mora y J utiliza
+  distintas bandas. No se acreditaron las fronteras exactas de las bandas.
+  M permite 17 sin descripción; Q permite AA, BB y CC sin descripción
+  y la nota no establece una política que se pueda aplicar a Libranza.
+  Algunas listas están interrumpidas y muchas tienen la alerta de validación
+  desactivada. El permiso de editar una celda o dejarla vacía no prueba
+  que el validador de remisión la acepte.
+- No hay una columna propia de reclamos en A:AJ. No se codifican como
+  mora ni como adjetivo por analogía. S pide valor desembolsado, no capital
+  financiado; T pide saldo total, y W pide capital e intereses vencidos.
+  Se dejan pendientes formato y unidad monetaria de transmisión,
+  obligatoriedad completa y los campos no sustentados por Aprobado.
+
+### Prueba de captura de 3 filas
+
+Excel COM escribió y leyó nuevamente 108 celdas ficticias de A5:AJ7
+en memoria; 27 celdas con lista se cotejaron con el catálogo. Los casos
+fueron al día, mora 30 y pago total. No prueban identidad ni validez ante
+el operador. Al intentar el guardado BIFF8 en una copia, el comprobador
+de compatibilidad advirtió que los controles ActiveX no inicializados
+de Hoja1 se perderían. **Se canceló.** No se desactivó el comprobador,
+no se habilitaron los controles, no se guardó un XLS degradado y no se
+convirtió a XLSX. La copia cancelada difiere como contenedor, pero sus
+34 flujos internos (libro, VBA y demás componentes) son idénticos a la
+referencia; no contiene las filas escritas en memoria.
+
+Se custodian fuera de Git el diccionario nativo, la matriz de los 36
+campos y el JSON sintético que conserva orden, encabezados y cadenas.
+No son el archivo oficial de octubre. El inspector Excel y el ensayo
+solo en memoria son herramientas locales Windows; no son dependencias
+del VPS.
+
+### Gates que quedan
+
+1. Obtener el procedimiento vigente de la edición contratada en el portal
+   de suscriptores, **Soporte → Manuales**, y acreditar el modo soportado
+   de validar/generar el artefacto sin degradar la plantilla. Los botones
+   no se ejecutaron. [Experian: canales, cargue y RAI](https://www.datacredito.com.co/blogs/datablog/por-que-es-importante-reportar-a-un-cliente-en-datacredito-experian/)
+   confirma Facilidat y entrega por archivo plano como opciones; no
+   identifica el resultado de los botones de este libro. No se presume que
+   el XLS editado sea el archivo final ni que sea TXT, plano comprimido u
+   otro formato. Primera validación: exclusivamente sintética y sin envío.
+2. Conciliar las 32 excepciones y acreditar elegibilidad de cada obligación
+   seleccionada. Siguen 90 conciliadas de 122, 110 desembolsos acreditados
+   y cero habilitadas. Esta intervención no aportó nuevos soportes
+   financieros ni cambió el cierre.
+3. Acreditado el formato y la elegibilidad, emitir en Linux datos ordenados
+   desde el mismo cierre SME para la etapa local de Facilidat. No usar un
+   conversor que pierda VBA, validaciones, catálogo o ActiveX. El JSON de
+   esta prueba demuestra el intercambio intermedio, no la remisión. No se
+   habilitó una exportación real ni cambió el Dashboard interno.
+
 ## Revisión focal posterior al cierre inicial
 
 Se conservó el cierre inicial como evidencia. En PostgreSQL forzado a solo
@@ -76,17 +149,15 @@ identificaciones ni archivos de titulares. No se publicaron ni enviaron.
 **Gates independientes.** El panel interno mantiene previsualización,
 historial y descargas privadas; muestra conciliación y remisión por
 separado. La descarga oficial y el gate de remisión están bloqueados.
-El usuario ejecutó la apertura local, pero la lectura no se completó.
+En esa revisión el usuario ejecutó el inspector anterior pero no se completó
+la lectura; ese hallazgo se conserva solo como antecedente.
 La copia actualmente bajo el mismo nombre sigue cifrada y su SHA-256 es
 `cdebe9515200a963b509099d83dc2c2e5a49357b269870c5e01b906fbaae4336`, distinto
-del observado al primer cierre. Antes de mapear campos se requiere la
-clave de apertura o la copia oficial abrible por el canal de entrega
-original y el instructivo si la propia planilla no define la remisión.
-El inspector separa clave no suministrada, clave no aceptada y fallo de
-lectura, sin escribir contraseñas ni ejecutar macros. No se generó XLS
-sintético ni real con encabezados o códigos supuestos.
+del observado al primer cierre. La prueba del 25/11 superó ese bloqueo
+con Excel nativo; en adelante no se pide clave ni se usa la vía de
+descifrado. No se generó XLS sintético ni real con encabezados supuestos.
 
-## Planilla y formato
+## Inspección del contenedor (antecedente)
 
 `901949137.287922.PLANILLA__SME_RESUMIDA.xls`, 3.748.864 bytes, SHA-256
 `0a80b2ee09d4de0bef0c4a806c303546dc263029a82812d018a0921568b8600d`.
@@ -94,18 +165,12 @@ Se comprobó contenedor OLE, BIFF8, registro `FILEPASS` (tipo y versión
 `010004000200`) y componentes VBA. Se preservan el archivo y las macros;
 no se ejecutaron ni se intentó ninguna clave.
 
-`diagnosticos/inspeccionar_plantilla_sme.py` inspecciona el contenedor sin
-Excel. Con `--estructura <ruta-local-nueva.json>` y una consola local,
-solicita la contraseña sin eco, descifra en memoria y enumera metadatos de
-las hojas; no guarda el libro sin cifrar. Requiere lectores locales
-`olefile==0.47`, `msoffcrypto-tool==5.4.2` y `xlrd==2.0.2`.
-El inventario estructural no demuestra reglas ni ejecución de fórmulas o
-VBA. Con la plantilla abierta hay que cotejar la hoja de instrucciones,
-rangos, encabezados, obligatoriedad, tipos, longitudes, formatos, catálogos,
-validaciones, fórmulas y salida de remisión. No se presume que se envíe el
-XLS mismo ni que un CSV o XLSX lo reemplace.
+El inspector previo confirma el contenedor sin Excel. FILEPASS no implica
+que Excel solicite una clave al abrir el libro ni impide la lectura con COM.
+Para esta edición usar `diagnosticos/inspeccionar_facilidat_excel.ps1` sobre
+la copia custodiada; no usar la ruta anterior de descifrado.
 
-## Matriz previa: sin nombres, códigos ni orden oficiales supuestos
+## Matriz preliminar histórica: antes de la lectura de Excel
 
 La primera columna queda sin acreditar para todas las filas hasta leer la
 planilla. Las fuentes abajo son para la conciliación interna, no para
@@ -221,9 +286,6 @@ pruebas, separación por línea, redondeo legacy, permisos, huella, historial
 y la prohibición de modificar movimientos en la transacción de cierre.
 No se ha probado fidelidad de la salida oficial: sigue bloqueada.
 
-Para cerrar el ticket hacen falta: (1) abrir la planilla con la credencial
-legítima o disponer de su instructivo/otra copia oficial autorizada, (2)
-acreditar formato y semántica de cartera cerrada, reclamos y novedades si
-el archivo no los define, (3) conciliar las incidencias de las obligaciones
-seleccionadas y acreditar evidencia de reporte antes de cualquier remisión.
-No despliegue, migración en producción, push ni envío sin revisión.
+Los gates actuales son los de la evidencia Facilidat del 25/11/2026, al
+inicio de este documento. No despliegue, migración en producción, push ni
+envío sin revisión.
