@@ -106,6 +106,7 @@ def gestionar_cambio_estado_credito(
     comprobante=None,
     componentes_financieros=None,
     clave_idempotencia=None,
+    por_recaudo_breb=False,
 ):
     """
     Centraliza todos los cambios de estado de un crédito, registrando el historial.
@@ -148,6 +149,7 @@ def gestionar_cambio_estado_credito(
         nuevo_estado == Credito.EstadoCredito.ACTIVO
         and estado_anterior != Credito.EstadoCredito.ACTIVO
         and not activacion_prestador
+        and not (por_recaudo_breb and estado_anterior == Credito.EstadoCredito.EN_MORA)
     ):
         activar_credito(credito)
 
@@ -163,11 +165,15 @@ def gestionar_cambio_estado_credito(
     logger.info(f"Crédito {credito.id} cambió de {estado_anterior} a {nuevo_estado}. Motivo: {motivo}")
 
     # Enviar notificación por email al cliente
-    try:
-        enviar_notificacion_cambio_estado(credito, nuevo_estado, motivo)
-        logger.info(f"Notificación de email enviada para crédito {credito.id} - Estado: {nuevo_estado}")
-    except Exception as e:
-        logger.error(f"Error al enviar notificación de email para crédito {credito.id}: {e}")
+    def notificar():
+        try:
+            enviar_notificacion_cambio_estado(credito, nuevo_estado, motivo)
+        except Exception:
+            logger.exception("Error al notificar el cambio de estado del credito %s", credito.pk)
+    if por_recaudo_breb:
+        transaction.on_commit(notificar)
+    else:
+        notificar()
 
     return historial
 
@@ -314,6 +320,7 @@ def actualizar_saldo_tras_pago(credito, monto_pagado, pago=None):
         None (actualiza el crédito directamente)
     """
     credito_id = credito.id
+    es_breb = pago is not None and pago.origen_registro == HistorialPago.OrigenRegistro.REPORTE_BREB
     credito = Credito.objects.select_for_update().get(id=credito_id)
 
     # ✅ Validar y completar datos críticos si faltan
@@ -452,7 +459,7 @@ def actualizar_saldo_tras_pago(credito, monto_pagado, pago=None):
 
     # 6. Validar si el crédito está completamente pagado
     credito_quedo_pagado = False
-    if credito.saldo_pendiente <= Decimal('0.01'):
+    if not es_breb and credito.saldo_pendiente <= Decimal('0.01'):
         credito.saldo_pendiente = Decimal('0.00')
         if credito.capital_pendiente is not None:
             credito.capital_pendiente = Decimal('0.00')
@@ -471,7 +478,7 @@ def actualizar_saldo_tras_pago(credito, monto_pagado, pago=None):
             gestionar_cambio_estado_credito(
                 credito=credito,
                 nuevo_estado=Credito.EstadoCredito.PAGADO,
-                motivo="Crédito saldado automáticamente por pago."
+                motivo="Crédito saldado automáticamente por pago.", por_recaudo_breb=es_breb,
             )
         credito_quedo_pagado = True
     else:
@@ -491,7 +498,7 @@ def actualizar_saldo_tras_pago(credito, monto_pagado, pago=None):
 
         # 8. Si estaba en mora y se puso al día, volver a ACTIVO
         hoy = timezone.now().date()
-        if credito.estado == Credito.EstadoCredito.EN_MORA and credito.fecha_proximo_pago and credito.fecha_proximo_pago > hoy:
+        if not es_breb and credito.estado == Credito.EstadoCredito.EN_MORA and credito.fecha_proximo_pago and credito.fecha_proximo_pago > hoy:
             gestionar_cambio_estado_credito(
                 credito=credito,
                 nuevo_estado=Credito.EstadoCredito.ACTIVO,
@@ -518,12 +525,16 @@ def actualizar_saldo_tras_pago(credito, monto_pagado, pago=None):
     )
 
     # Enviar confirmación de pago por email
+    if not es_breb:
+        _notificar_pago_aplicado(credito, monto_pagado, credito.saldo_pendiente)
+
+
+def _notificar_pago_aplicado(credito, monto, saldo):
+    from .email_service import enviar_confirmacion_pago
     try:
-        from .email_service import enviar_confirmacion_pago
-        enviar_confirmacion_pago(credito, monto_pagado, credito.saldo_pendiente)
-        logger.info(f"Confirmación de pago enviada por email para crédito {credito.numero_credito}")
-    except Exception as e:
-        logger.error(f"Error al enviar confirmación de pago por email para crédito {credito.numero_credito}: {e}")
+        enviar_confirmacion_pago(credito, monto, saldo)
+    except Exception:
+        logger.exception("Error al notificar el pago del credito %s", credito.pk)
 
 
 def _aplicar_pago_a_cuotas(credito, monto_pagado, pago=None):
@@ -1509,7 +1520,12 @@ def registrar_pago_credito(
         actualizar_saldo_tras_pago(credito, monto, pago=pago)
         credito.refresh_from_db()
         if credito.estado != Credito.EstadoCredito.PAGADO:
-            recalcular_credito_desde_tabla_amortizacion(credito, persist=True)
+            recalcular_credito_desde_tabla_amortizacion(
+                credito, persist=True, exigir_traza_parcial=origen_registro == HistorialPago.OrigenRegistro.REPORTE_BREB,
+            )
+        if origen_registro == HistorialPago.OrigenRegistro.REPORTE_BREB:
+            saldo_aplicado = credito.saldo_pendiente
+            transaction.on_commit(lambda: _notificar_pago_aplicado(credito, monto, saldo_aplicado))
     return pago, True
 
 
@@ -1805,7 +1821,7 @@ def calcular_cuotas_restantes(credito):
     return cuotas_pendientes
 
 
-def obtener_resumen_pagos_credito(credito, historial_pagos=None):
+def obtener_resumen_pagos_credito(credito, historial_pagos=None, *, exigir_traza_parcial=False):
     """
     Construye un resumen consistente del estado de pagos de un crédito.
 
@@ -1841,6 +1857,25 @@ def obtener_resumen_pagos_credito(credito, historial_pagos=None):
         )
 
         proxima_cuota = next((cuota for cuota in cuotas if not cuota.pagada), None)
+        parciales = {c.pk: c for c in cuotas if not c.pagada and c.monto_pagado}
+        if parciales:
+            from .models import DetalleContablePago
+            filas = DetalleContablePago.objects.filter(
+                credito=credito, cuota_id__in=parciales, pago__estado=HistorialPago.EstadoPago.EXITOSO,
+            ).order_by().values('cuota_id').annotate(
+                monto=Sum('monto_total_aplicado'), capital=Sum('capital_aplicado'),
+                breb=Count('pk', filter=Q(pago__origen_registro=HistorialPago.OrigenRegistro.REPORTE_BREB)),
+            )
+            trazas = {f['cuota_id']: f for f in filas}
+            for pk, cuota in parciales.items():
+                f = trazas.get(pk)
+                if not exigir_traza_parcial and not (f and f['breb']):
+                    continue
+                if not f or f['monto'] != cuota.monto_pagado or not 0 <= f['capital'] <= cuota.capital_a_pagar:
+                    if exigir_traza_parcial:
+                        raise ValidationError('La cuota parcial requiere conciliacion de sus asientos previos.')
+                    continue
+                capital_pendiente -= f['capital']
 
         return {
             'cuotas_pagadas': cuotas_pagadas,
@@ -1875,25 +1910,36 @@ def obtener_resumen_pagos_credito(credito, historial_pagos=None):
     }
 
 
-def recalcular_credito_desde_tabla_amortizacion(credito, persist=False):
+def recalcular_credito_desde_tabla_amortizacion(credito, persist=False, *, exigir_traza_parcial=False):
     """
     Recalcula saldos y próxima fecha de pago desde la tabla de amortización.
 
     Útil para créditos legacy o especiales donde la tabla ya representa la
     historia real y se necesita alinear los campos persistidos del crédito.
     """
-    resumen = obtener_resumen_pagos_credito(credito)
+    resumen = obtener_resumen_pagos_credito(credito, exigir_traza_parcial=exigir_traza_parcial)
 
     if persist:
         credito.saldo_pendiente = resumen['saldo_pendiente']
         credito.capital_pendiente = resumen['capital_pendiente']
         credito.fecha_proximo_pago = resumen['fecha_proximo_pago']
-        credito.estado = (
+        destino = (
             Credito.EstadoCredito.PAGADO
             if resumen['cuotas_restantes'] == 0
             else Credito.EstadoCredito.ACTIVO
         )
-        credito.save(update_fields=['saldo_pendiente', 'capital_pendiente', 'fecha_proximo_pago', 'estado'])
+        campos = ['saldo_pendiente', 'capital_pendiente', 'fecha_proximo_pago']
+        if exigir_traza_parcial:
+            credito.save(update_fields=campos)
+            if (destino == Credito.EstadoCredito.ACTIVO and credito.estado == Credito.EstadoCredito.EN_MORA
+                    and credito.fecha_proximo_pago <= timezone.localdate()):
+                destino = credito.estado
+            if destino != credito.estado:
+                gestionar_cambio_estado_credito(credito, destino, 'Recaudo BRE-B aplicado al plan vigente.',
+                                                por_recaudo_breb=True)
+        else:
+            credito.estado = destino
+            credito.save(update_fields=[*campos, 'estado'])
 
     return resumen
 

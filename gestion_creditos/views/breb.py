@@ -186,6 +186,8 @@ def admin_decidir_pago_breb_view(request, pago_id):
                 usuario=request.user,
                 valores_aprobados=valores_aprobados,
                 valor_aprobado=form.cleaned_data.get('valor_aprobado'),
+                importe_conciliado=request.POST.get('importe_conciliado'),
+                referencia_conciliada=request.POST.get('referencia_conciliada'),
             )
             if aplicado:
                 _notificar_breb_despues_commit('enviar_pago_breb_aprobado', pago)

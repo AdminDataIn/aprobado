@@ -225,7 +225,8 @@ class BrebNotificationsTest(AlertFixture, TransactionTestCase):
         motivo = ('Pago ya aplicado manualmente en cartera. Este reporte se cierra sin una nueva aplicacion. '
                   'No requiere realizar una nueva transferencia ni volver a reportar este pago.')
         with self.assertRaises(ValidationError):
-            aprobar_pago_breb(pago_breb=pago, usuario=self.revisor)
+            aprobar_pago_breb(pago_breb=pago, usuario=self.revisor, referencia_conciliada=pago.referencia_reportada,
+                               importe_conciliado=pago.valor_reportado)
         self.client.force_login(self.revisor)
         response = self.client.post(reverse('gestion:pago_breb_decidir', args=[pago.pk]),
                                     {'accion': 'rechazar', 'motivo_rechazo': motivo})

@@ -226,7 +226,7 @@ class PagoBREBAgrupadoTest(PagoBREBBaseMixin, TestCase):
 
     def test_obligacion_pagada_no_admite_nuevo_reporte(self):
         pago = self._reportar(referencia_reportada='PAGO-APROBADO-001')
-        aprobar_pago_breb(pago_breb=pago, usuario=self.revisor)
+        aprobar_pago_breb(pago_breb=pago, usuario=self.revisor, referencia_conciliada='PAGO-APROBADO-001', importe_conciliado='110000')
 
         with self.assertRaisesRegex(
             ValidationError,
@@ -283,7 +283,7 @@ class PagoBREBAgrupadoTest(PagoBREBBaseMixin, TestCase):
         self.assertEqual(pago.detalles.count(), 2)
         self.assertEqual(pago.valor_reportado, Decimal('220000.00'))
 
-        aprobado, aplicado = aprobar_pago_breb(pago_breb=pago, usuario=self.revisor)
+        aprobado, aplicado = aprobar_pago_breb(pago_breb=pago, usuario=self.revisor, referencia_conciliada='TRANSFERENCIA-001', importe_conciliado='220000')
 
         self.assertTrue(aplicado)
         self.assertEqual(aprobado.detalles.filter(historial_pago__isnull=False).count(), 2)
@@ -306,7 +306,7 @@ class PagoBREBAgrupadoTest(PagoBREBBaseMixin, TestCase):
         }])
 
         with self.assertRaisesRegex(ValidationError, 'ya no es la obligacion exigible'):
-            aprobar_pago_breb(pago_breb=pago, usuario=self.revisor)
+            aprobar_pago_breb(pago_breb=pago, usuario=self.revisor, referencia_conciliada='TRANSFERENCIA-001', importe_conciliado='110000')
 
         pago.refresh_from_db()
         self.assertEqual(pago.estado, PagoBREB.Estado.PENDIENTE_VERIFICACION)
@@ -349,7 +349,7 @@ class PagoBREBAgrupadoTest(PagoBREBBaseMixin, TestCase):
             {'credito_id': segundo.pk, 'valor_reportado': '90000.00'},
         ])
 
-        aprobado, creado = aprobar_pago_breb(pago_breb=pago, usuario=self.revisor)
+        aprobado, creado = aprobar_pago_breb(pago_breb=pago, usuario=self.revisor, referencia_conciliada='TRANSFERENCIA-001', importe_conciliado='200000')
 
         self.assertTrue(creado)
         self.assertEqual(aprobado.estado, PagoBREB.Estado.APROBADO)
@@ -372,6 +372,7 @@ class PagoBREBAgrupadoTest(PagoBREBBaseMixin, TestCase):
             pago_breb=pago,
             usuario=self.revisor,
             valores_aprobados={detalle.pk: Decimal('100000.00')},
+            referencia_conciliada='TRANSFERENCIA-001', importe_conciliado='100000',
         )
         detalle.refresh_from_db()
         self.assertEqual(detalle.valor_reportado, Decimal('110000.00'))
@@ -400,13 +401,16 @@ class PagoBREBAgrupadoTest(PagoBREBBaseMixin, TestCase):
             side_effect=aplicar_y_fallar,
         ):
             with self.assertRaisesRegex(RuntimeError, 'fallo en detalle dos'):
-                aprobar_pago_breb(pago_breb=pago, usuario=self.revisor)
+                aprobar_pago_breb(pago_breb=pago, usuario=self.revisor, referencia_conciliada='TRANSFERENCIA-001', importe_conciliado='200000')
 
         pago.refresh_from_db()
         self.assertEqual(pago.estado, PagoBREB.Estado.PENDIENTE_VERIFICACION)
         self.assertIsNone(pago.valor_aprobado)
         self.assertFalse(HistorialPago.objects.exists())
         self.assertFalse(PagoBREBDetalle.objects.filter(historial_pago__isnull=False).exists())
+        self.assertFalse(DetalleContablePago.objects.exists())
+        self.assertTrue(aprobar_pago_breb(pago_breb=pago, usuario=self.revisor,
+            referencia_conciliada='TRANSFERENCIA-001', importe_conciliado='200000')[1])
 
     def test_rechazo_no_modifica_cartera(self):
         pago = self._reportar()
@@ -522,6 +526,7 @@ class PagoBREBAgrupadoTest(PagoBREBBaseMixin, TestCase):
             reverse('gestion:pago_breb_decidir', args=[pago.pk]),
             {
                 'accion': 'aprobar',
+                'referencia_conciliada': 'TRANSFERENCIA-001', 'importe_conciliado': '110000',
                 f'valor_detalle_{detalle.pk}': '110000.00',
             },
             follow=True,
@@ -768,6 +773,7 @@ class PagoBREBConcurrenciaPostgresTest(PagoBREBBaseMixin, TransactionTestCase):
                 pago, creado = aprobar_pago_breb(
                     pago_breb=PagoBREB.objects.get(pk=self.pago.pk),
                     usuario=User.objects.get(pk=self.revisor.pk),
+                    referencia_conciliada='TRANSFERENCIA-001', importe_conciliado='110000',
                 )
                 resultados.put((pago.pk, creado))
             except Exception as exc:

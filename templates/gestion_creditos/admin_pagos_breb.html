@@ -162,6 +162,8 @@
                         </table>
                     </div>
                     <div class="row g-2 align-items-end mt-1">
+                        <div class="col-md-6"><label class="form-label small" for="importe-banco-{{ pago.pk }}">Importe abonado según el banco</label><input id="importe-banco-{{ pago.pk }}" class="form-control" name="importe_conciliado" type="number" step="0.01" min="0.01"></div>
+                        <div class="col-md-6"><label class="form-label small" for="ref-banco-{{ pago.pk }}">Referencia cotejada en el banco</label><input id="ref-banco-{{ pago.pk }}" class="form-control" name="referencia_conciliada" maxlength="120" autocomplete="off"></div>
                         <div class="col-lg-8"><label class="form-label small" for="motivo-{{ pago.id }}">Motivo de rechazo</label><textarea class="form-control form-control-sm" id="motivo-{{ pago.id }}" name="motivo_rechazo" rows="2" placeholder="Obligatorio al rechazar"></textarea></div>
                         <div class="col-lg-4 d-flex justify-content-lg-end gap-2"><button class="btn btn-sm btn-success" type="submit" name="accion" value="aprobar"><i class="bi bi-check2-circle me-1"></i>Aprobar y aplicar todo</button><button class="btn btn-sm btn-outline-danger" type="submit" name="accion" value="rechazar"><i class="bi bi-x-circle me-1"></i>Rechazar</button></div>
                     </div>

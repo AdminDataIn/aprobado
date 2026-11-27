@@ -1945,6 +1945,8 @@ class PagoBREB(models.Model):
     )
     fecha_pago_reportada = models.DateField()
     referencia_reportada = models.CharField(max_length=120, blank=True)
+    referencia_conciliada = models.CharField(max_length=120, null=True, blank=True)
+    importe_conciliado = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     notas = models.TextField(blank=True)
     comprobante = models.FileField(
         upload_to=ruta_archivo_breb,
@@ -2006,6 +2008,15 @@ class PagoBREB(models.Model):
                 ),
                 name='pago_breb_aprobado_con_aplicacion',
             ),
+            models.UniqueConstraint(
+                models.functions.Upper(models.functions.Trim(models.functions.Coalesce(
+                    'referencia_conciliada', 'referencia_reportada'))),
+                condition=models.Q(estado='APROBADO') & (
+                    models.Q(referencia_conciliada__isnull=False) | ~models.Q(referencia_reportada='')),
+                name='breb_ref_aplicada_unica'),
+            models.UniqueConstraint(fields=['hash_comprobante'],
+                condition=models.Q(estado='APROBADO') & ~models.Q(hash_comprobante=''),
+                name='breb_soporte_aplicado_unico'),
         ]
 
     def __str__(self):

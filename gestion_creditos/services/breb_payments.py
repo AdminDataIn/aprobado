@@ -3,8 +3,9 @@ import json
 from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import transaction, connection
 from django.db.models import Q
+from django.db.models.functions import Coalesce, Trim, Upper
 from django.utils import timezone
 
 from gestion_creditos import credit_services
@@ -100,10 +101,11 @@ def _normalizar_obligaciones(obligaciones):
 
 def _decimal_positivo(valor, *, mensaje):
     try:
-        monto = Decimal(str(valor)).quantize(CENTAVO)
+        original = Decimal(str(valor))
+        monto = original.quantize(CENTAVO)
     except (InvalidOperation, TypeError, ValueError):
         raise ValidationError(mensaje)
-    if monto <= Decimal('0.00'):
+    if not monto.is_finite() or monto != original or monto <= Decimal('0.00'):
         raise ValidationError(mensaje)
     return monto
 
@@ -129,7 +131,7 @@ def _resolver_obligaciones_bajo_lock(*, empresa, obligaciones):
         credito = creditos_map[item['credito_id']]
         if credito.empresa_relacionada != empresa:
             raise PermissionDenied('Una obligacion seleccionada no pertenece a tu empresa.')
-        if credito.linea != Credito.LineaCredito.LIBRANZA:
+        if credito.linea != Credito.LineaCredito.LIBRANZA or credito.detalle_libranza.es_prestador_servicios:
             raise ValidationError('BRE-B agrupado solo esta disponible para obligaciones de Libranza.')
         if credito.estado not in ESTADOS_CREDITO_REPORTABLES:
             raise ValidationError(
@@ -320,7 +322,8 @@ def _monto_aprobado_detalle(detalle, valores_aprobados):
 
 
 @transaction.atomic
-def aprobar_pago_breb(*, pago_breb, usuario, valores_aprobados=None, valor_aprobado=None):
+def aprobar_pago_breb(*, pago_breb, usuario, valores_aprobados=None, valor_aprobado=None,
+                      referencia_conciliada=None, importe_conciliado=None):
     pago = PagoBREB.objects.select_for_update(of=('self',)).get(pk=pago_breb.pk)
     _exigir_permiso_revision(usuario=usuario, pago_breb=pago)
 
@@ -353,6 +356,33 @@ def aprobar_pago_breb(*, pago_breb, usuario, valores_aprobados=None, valor_aprob
     if valor_aprobado is not None and len(detalles) == 1 and not valores_aprobados:
         valores_aprobados = {detalles[0].pk: valor_aprobado}
 
+    montos = {d.pk: _monto_aprobado_detalle(d, valores_aprobados) for d in detalles}
+    referencia_banco = (referencia_conciliada or '').strip().upper()
+    importe_banco = _decimal_positivo(importe_conciliado, mensaje='Indica el importe acreditado en el banco.')
+    if not referencia_banco or len(referencia_banco) > 120:
+        raise ValidationError('Indica la referencia del abono bancario verificado.')
+    if pago.referencia_reportada.strip() and pago.referencia_reportada.strip().upper() != referencia_banco:
+        raise ValidationError('La referencia bancaria no coincide con la reportada.')
+    if sum(d.valor_reportado for d in detalles) != pago.valor_reportado or sum(montos.values()) != importe_banco:
+        raise ValidationError('La cabecera, la distribucion reportada o el importe bancario no concilian.')
+    if not pago.comprobante or not pago.hash_comprobante:
+        raise ValidationError('El reporte no tiene soporte verificable.')
+    try:
+        with pago.comprobante.open('rb') as archivo:
+            if not archivo.size or calcular_hash_archivo(archivo) != pago.hash_comprobante:
+                raise ValidationError('El comprobante no coincide con su huella.')
+    except OSError:
+        raise ValidationError('No fue posible verificar el comprobante privado.') from None
+    # Different reports can lock disjoint credits while sharing a single bank transfer.
+    if connection.vendor == 'postgresql':
+        with connection.cursor() as cursor:
+            for clave in ('breb:ref:' + referencia_banco, 'breb:soporte:' + pago.hash_comprobante):
+                cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))', [clave])
+    anteriores = PagoBREB.objects.filter(estado=PagoBREB.Estado.APROBADO).annotate(
+        ref_banco=Upper(Trim(Coalesce('referencia_conciliada', 'referencia_reportada'))))
+    if anteriores.filter(Q(ref_banco=referencia_banco) | Q(hash_comprobante=pago.hash_comprobante)).exists():
+        raise ValidationError('La referencia bancaria o el comprobante ya respaldan un reporte aplicado.')
+
     ahora = timezone.now()
     total_aprobado = Decimal('0.00')
     for detalle in detalles:
@@ -362,6 +392,8 @@ def aprobar_pago_breb(*, pago_breb, usuario, valores_aprobados=None, valor_aprob
             credito.refresh_from_db()
         if not credito or credito.empresa_relacionada != pago.empresa:
             raise ValidationError('Una obligacion del reporte ya no pertenece a la empresa informada.')
+        if credito.linea != Credito.LineaCredito.LIBRANZA or credito.detalle_libranza.es_prestador_servicios:
+            raise ValidationError('BRE-B agrupado solo aplica a Libranza.')
         if credito.estado not in ESTADOS_CREDITO_REPORTABLES:
             raise ValidationError(f'El credito {credito.numero_credito} ya no admite la aplicacion del pago.')
         if cuota is None and detalle.cuota_id is None:
@@ -389,14 +421,21 @@ def aprobar_pago_breb(*, pago_breb, usuario, valores_aprobados=None, valor_aprob
             max(Decimal('0.00'), (cuota.valor_cuota or Decimal('0.00')) - (cuota.monto_pagado or Decimal('0.00'))),
             max(Decimal('0.00'), credito.saldo_pendiente or Decimal('0.00')),
         ).quantize(CENTAVO)
-        monto = _monto_aprobado_detalle(detalle, valores_aprobados)
+        monto = montos[detalle.pk]
+        if cuota.monto_pagado:
+            previos = list(cuota.detalles_contables_pago.values_list(
+                'monto_total_aplicado', 'pago__estado', 'credito_id'))
+            if (sum(v for v, _, _ in previos) != cuota.monto_pagado or any(
+                    (estado, pk) != (HistorialPago.EstadoPago.EXITOSO, credito.pk)
+                    for _, estado, pk in previos)):
+                raise ValidationError('La cuota parcial requiere conciliacion de sus asientos previos.')
         if monto > pendiente:
             raise ValidationError(
                 f'El valor aprobado para {credito.numero_credito} supera su obligacion pendiente.'
             )
 
         referencia = f'BREB-{pago.clave_idempotencia.hex}-{detalle.pk}'
-        historial, _ = credit_services.registrar_pago_credito(
+        historial, creado = credit_services.registrar_pago_credito(
             credito=credito,
             monto=monto,
             referencia_pago=referencia,
@@ -411,8 +450,21 @@ def aprobar_pago_breb(*, pago_breb, usuario, valores_aprobados=None, valor_aprob
                 f'Valor reportado: ${detalle.valor_reportado:,.2f}.'
             ),
         )
-        if historial.credito_id != credito.pk or historial.monto != monto:
+        if not creado or historial.credito_id != credito.pk or historial.monto != monto:
             raise ValidationError('La referencia idempotente BRE-B corresponde a otro movimiento.')
+        asientos = list(historial.detalles_contables.all())
+        if (sum(a.monto_total_aplicado for a in asientos) != monto
+                or any((a.cuota_id, a.credito_id, a.fecha_aplicacion) != (cuota.pk, credito.pk, ahora)
+                       for a in asientos)):
+            raise ValidationError('La imputacion del Core no concilia con la obligacion reportada.')
+        cuota.refresh_from_db()
+        for asiento in asientos:
+            residuo = asiento.monto_total_aplicado - asiento.capital_aplicado - asiento.interes_aplicado
+            centavo_plan = (residuo == CENTAVO and cuota.pagada and cuota.monto_pagado == cuota.valor_cuota
+                            and cuota.valor_cuota - cuota.capital_a_pagar - cuota.interes_a_pagar == CENTAVO)
+            if ((residuo and not centavo_plan) or asiento.capital_aplicado != asiento.capital_principal_aplicado
+                    + asiento.comision_aplicada + asiento.iva_aplicado):
+                raise ValidationError('Los componentes contables no concilian con el plan de la cuota.')
         detalle.valor_aprobado = monto
         detalle.historial_pago = historial
         detalle.aplicado_en = ahora
@@ -430,12 +482,15 @@ def aprobar_pago_breb(*, pago_breb, usuario, valores_aprobados=None, valor_aprob
         total_aprobado += monto
 
     pago.valor_aprobado = total_aprobado.quantize(CENTAVO)
+    pago.importe_conciliado = importe_banco
+    pago.referencia_conciliada = referencia_banco
     pago.estado = PagoBREB.Estado.APROBADO
     pago.revisado_por = usuario
     pago.revisado_en = ahora
     pago.motivo_rechazo = ''
     pago.save(update_fields=[
         'valor_aprobado',
+        'importe_conciliado', 'referencia_conciliada',
         'estado',
         'revisado_por',
         'revisado_en',
